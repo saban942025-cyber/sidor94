@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DeliveryMaster v34.1 - צג לוגים (Firebase)</title>
+    
+    <!-- 
+      v34.0 - Firebase SDK
+      אנחנו טוענים את הספריות החדשות של Firebase
+    -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore-compat.js"></script>
+
+    <style>
+        /* 1. Tailwind Base (Reset & Defaults) - מוטמע */
+        *, ::before, ::after { box-sizing: border-box; border-width: 0; border-style: solid; border-color: #e5e7eb; }
+        html { line-height: 1.5; -webkit-text-size-adjust: 100%; -moz-tab-size: 4; tab-size: 4; font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif; direction: rtl; }
+        body { margin: 0; line-height: inherit; background-color: #111827; color: #d1d5db; }
+        
+        /* 2. Tailwind Utilities (Subset used in this file) */
+        .container { width: 100%; }
+        .mx-auto { margin-left: auto; margin-right: auto; }
+        .max-w-7xl { max-width: 80rem; }
+        .p-4 { padding: 1rem; }
+        .p-8 { padding: 2rem; }
+        .p-3 { padding: 0.75rem; }
+        .p-2 { padding: 0.5rem; }
+        .py-2 { padding-top: 0.5rem; padding-bottom: 0.5rem; }
+        .px-4 { padding-left: 1rem; padding-right: 1rem; }
+        .mb-4 { margin-bottom: 1rem; }
+        .space-y-6 > :not([hidden]) ~ :not([hidden]) { margin-top: 1.5rem; }
+        .gap-4 { gap: 1rem; }
+        .gap-3 { gap: 0.75rem; }
+        .grid { display: grid; }
+        .grid-cols-1 { grid-template-columns: repeat(1, minmax(0, 1fr)); }
+        @media (min-width: 768px) {
+            .md\:p-8 { padding: 2rem; }
+            .md\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        }
+        .flex { display: flex; }
+        .items-center { align-items: center; }
+        .justify-between { justify-content: space-between; }
+        .w-full { width: 100%; }
+        .w-80 { width: 20rem; }
+        .min-w-full { min-width: 100%; }
+        .h-full { height: 100%; }
+        .rounded-lg { border-radius: 0.5rem; }
+        .rounded-xl { border-radius: 0.75rem; }
+        .shadow-lg { box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05); }
+        .overflow-hidden { overflow: hidden; }
+        .overflow-x-auto { overflow-x: auto; }
+        .text-sm { font-size: 0.875rem; }
+        .text-2xl { font-size: 1.5rem; }
+        .font-bold { font-weight: 700; }
+        .font-semibold { font-weight: 600; }
+        .font-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+        .text-white { color: #fff; }
+        .text-gray-200 { color: #e5e7eb; }
+        .text-gray-300 { color: #d1d5db; }
+        .text-gray-400 { color: #9ca3af; }
+        .text-gray-500 { color: #6b7280; }
+        .text-gray-700 { color: #374151; }
+        .text-cyan-300 { color: #67e8f9; }
+        .text-green-400 { color: #4ade80; }
+        .text-yellow-300 { color: #fde047; }
+        .text-yellow-400 { color: #facc15; }
+        .text-red-500 { color: #ef4444; }
+        .text-blue-500 { color: #3b82f6; }
+        .text-center { text-align: center; }
+        .text-right { text-align: right; }
+        .bg-gray-700 { background-color: #374151; }
+        .bg-gray-800 { background-color: #1f2937; }
+        .bg-gray-900 { background-color: #111827; }
+        .bg-blue-600 { background-color: #2563eb; }
+        .hover\:bg-gray-700:hover { background-color: #374151; }
+        .hover\:bg-blue-700:hover { background-color: #1d4ed8; }
+        .border { border-width: 1px; }
+        .border-b { border-bottom-width: 1px; }
+        .border-r-4 { border-right-width: 4px; }
+        .border-gray-500 { border-color: #6b7280; }
+        .border-gray-700 { border-color: #374151; }
+        .border-red-500 { border-color: #ef4444; }
+        .border-yellow-500 { border-color: #f59e0b; }
+        .divide-y > :not([hidden]) ~ :not([hidden]) { border-top-width: 1px; }
+        .divide-gray-700 > :not([hidden]) ~ :not([hidden]) { border-color: #374151; }
+        .focus\:border-blue-500:focus { border-color: #3b82f6; }
+        .focus\:ring-blue-500:focus { --tw-ring-color: #3b82f6; box-shadow: var(--tw-ring-inset) 0 0 0 calc(3px + var(--tw-ring-offset-width)) var(--tw-ring-color); }
+        input, select { -webkit-appearance: none; -moz-appearance: none; appearance: none; background-color: transparent; border: none; padding: 0; margin: 0; width: 100%; min-width: 0; display: block; }
+        select { background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3E%3C/svg%3E"); background-position: left 0.5rem center; background-repeat: no-repeat; background-size: 1.5em 1.5em; padding-left: 2.5rem; }
+
+        /* 3. Custom Glass UI & App Styles */
+        .glass-ui {
+            background-color: rgba(31, 41, 55, 0.7); /* bg-gray-800 bg-opacity-70 */
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-radius: 0.75rem; /* rounded-xl */
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+        }
+        .level-INFO { color: #3b82f6; }
+        .level-WARN { color: #f59e0b; }
+        .level-ERROR { color: #ef4444; font-weight: 600; }
+        .level-CLIENT_ERROR { color: #eab308; font-weight: 600; }
+        #toast-container {
+            position: fixed;
+            top: 1.25rem;
+            left: 1.25rem;
+            z-index: 50;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            direction: rtl;
+        }
+        .toast {
+            animation: slideIn 0.3s ease-out, fadeOut 0.5s ease-in 4.5s forwards;
+        }
+        @keyframes slideIn {
+            from { transform: translateX(-100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        @keyframes fadeOut {
+            from { opacity: 1; }
+            to { opacity: 0; transform: translateX(-100%); }
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container"></div>
+
+    <div class="container mx-auto max-w-7xl space-y-6">
+        
+        <!-- 1. Header -->
+        <header class="glass-ui p-4 flex justify-between items-center">
+            <div>
+                <h1 class="text-2xl font-bold text-white">צג לוגים (Firebase v34.1)</h1>
+                <p class="text-sm text-gray-400">ניטור פעולות מערכת בזמן אמת</p>
+            </div>
+            <div class="text-sm text-gray-400" id="connection-status">
+                <span class="text-yellow-400">מתחבר ל-Firebase...</span>
+            </div>
+        </header>
+
+        <!-- 2. Filters -->
+        <div class="glass-ui p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+            <input type="text" id="filter-text" class="w-full bg-gray-900 text-white p-2 rounded-lg border border-gray-700 focus:border-blue-500 focus:ring-blue-500" placeholder="סנן לפי הודעה, מקור...">
+            <select id="filter-level" class="w-full bg-gray-900 text-white p-2 rounded-lg border border-gray-700 focus:border-blue-500 focus:ring-blue-500">
+                <option value="">כל הרמות</option>
+                <option value="ERROR">שגיאה (ERROR)</option>
+                <option value="WARN">אזהרה (WARN)</option>
+                <option value="INFO">מידע (INFO)</option>
+            </select>
+            <!-- הכפתור הזה כבר לא נחוץ כי זה זמן אמת! -->
+            <button id="force-refresh" class="bg-gray-600 text-white font-bold py-2 px-4 rounded-lg" disabled>
+                עדכון אוטומטי (זמן אמת)
+            </button>
+        </div>
+
+        <!-- 3. Log Table -->
+        <div class="glass-ui overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="w-full min-w-full text-right">
+                    <thead class="border-b border-gray-700">
+                        <tr class="text-gray-400 text-sm">
+                            <th class="p-3">🕓 זמן</th>
+                            <th class="p-3">🏷️ רמה</th>
+                            <th class="p-3">🧩 מקור</th>
+                            <th class="p-3">💬 הודעה</th>
+                            <th class="p-3">💡 המלצה לפתרון</th>
+                        </tr>
+                    </thead>
+                    <tbody id="logs-table-body" class="divide-y divide-gray-700">
+                        <tr><td colspan="5" class="p-8 text-center text-gray-500">ממתין לנתונים...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- 1. Configuration v34.1 ---
+        
+        // אובייקט הקונפיגורציה של Firebase עודכן
+        const firebaseConfig = {
+          apiKey: "AIzaSyDq0oVwS6zbEfsgrYBRkeBq80dDUKMedzo",
+          authDomain: "saban94-78949.firebaseapp.com",
+          projectId: "saban94-78949",
+          storageBucket: "saban94-78949.firebasestorage.app",
+          messagingSenderId: "41553157903",
+          appId: "1:41553157903:web:cc33d252cff023be97a87a",
+          measurementId: "G-XV6RZDESSB"
+        };
+
+        // --- 2. Global State ---
+        let globalState = {
+            logs: [],
+            db: null,
+            unsubscribeLogs: null // פונקציה לניתוק המאזין
+        };
+
+        // --- 3. Firebase Initialization ---
+        document.addEventListener('DOMContentLoaded', () => {
+            try {
+                // אתחול Firebase
+                firebase.initializeApp(firebaseConfig);
+                globalState.db = firebase.firestore();
+                const auth = firebase.auth();
+
+                // התחברות אנונימית (כדי לעבור את חוקי האבטחה)
+                auth.signInAnonymously()
+                    .then(() => {
+                        console.log("Firebase Auth success (Anonymous)");
+                        document.getElementById('connection-status').innerHTML = `<span class="text-green-400">מחובר (מאזין לשינויים...)</span>`;
+                        // התחל להאזין ללוגים
+                        listenToLogs();
+                    })
+                    .catch((error) => {
+                        console.error("Firebase Auth Error", error);
+                        document.getElementById('connection-status').innerHTML = `<span class="text-red-500">שגיאת אימות Firebase</span>`;
+                        createToast('ERROR', `שגיאת אימות: ${error.message}`, 'Firebase');
+                    });
+
+                // הוספת מאזינים לפילטרים
+                document.getElementById('filter-text').addEventListener('input', renderLogs);
+                document.getElementById('filter-level').addEventListener('input', renderLogs);
+
+            } catch (error) {
+                console.error("Firebase Init Error", error);
+                document.getElementById('connection-status').innerHTML = `<span class="text-red-500">שגיאה קריטית ב-Firebase</span>`;
+                alert(`שגיאה קריטית באתחול Firebase: ${error.message}. \n\nהאם הדבקת את אובייקט ה-firebaseConfig הנכון?`);
+            }
+        });
+
+        // --- 4. Core Logic (Real-time!) ---
+        
+        /**
+         * v34.0 - הפונקציה החדשה
+         * נרשמת לשינויים ב-Firestore בזמן אמת.
+         * אין יותר Polling!
+         */
+        function listenToLogs() {
+            if (globalState.unsubscribeLogs) {
+                globalState.unsubscribeLogs(); // נתק מאזין קודם אם קיים
+            }
+
+            const logsCollection = globalState.db.collection('System_Logs')
+                                    .orderBy('Timestamp', 'desc')
+                                    .limit(100);
+
+            // onSnapshot: זה הקסם. הפונקציה הזו תרוץ
+            // אוטומטית בכל פעם שהמידע בשרת משתנה.
+            globalState.unsubscribeLogs = logsCollection.onSnapshot(
+                (snapshot) => {
+                    const newLogs = [];
+                    let newestTimestamp = globalState.lastLogTimestamp;
+
+                    snapshot.forEach(doc => {
+                        const log = doc.data();
+                        
+                        // המרה מ-Timestamp של Firebase ל-Date
+                        const timestamp = log.Timestamp.toDate();
+                        
+                        if (!newestTimestamp || timestamp > newestTimestamp) {
+                            newestTimestamp = timestamp;
+                        }
+                        
+                        // בדוק אם זה לוג חדש שצריך התראה
+                        if (globalState.lastLogTimestamp && timestamp > globalState.lastLogTimestamp) {
+                            if (log.Level === 'ERROR' || log.Level === 'WARN') {
+                                createToast(log.Level, log.Message, log.Origin);
+                            }
+                        }
+                        
+                        newLogs.push({ ...log, Timestamp: timestamp });
+                    });
+
+                    globalState.lastLogTimestamp = newestTimestamp;
+                    globalState.logs = newLogs;
+                    renderLogs();
+                },
+                (error) => {
+                    // שגיאה בהאזנה (למשל, אין הרשאות)
+                    console.error("Firebase Snapshot Error", error);
+                    document.getElementById('connection-status').innerHTML = `<span class="text-red-500">שגיאת האזנה (בדוק חוקים)</span>`;
+                    createToast('ERROR', `שגיאת האזנה: ${error.message}`, 'Firestore');
+                }
+            );
+        }
+
+        // --- 5. Render Functions ---
+        function renderLogs() {
+            const tableBody = document.getElementById('logs-table-body');
+            const filterText = document.getElementById('filter-text').value.toLowerCase();
+            const filterLevel = document.getElementById('filter-level').value;
+
+            const filteredLogs = globalState.logs.filter(log => {
+                const textMatch = !filterText ||
+                    (log.Message && log.Message.toLowerCase().includes(filterText)) ||
+                    (log.Origin && log.Origin.toLowerCase().includes(filterText)) ||
+                    (log.Hint && log.Hint.toLowerCase().includes(filterText));
+                const levelMatch = !filterLevel || (log.Level && log.Level === filterLevel);
+                return textMatch && levelMatch;
+            });
+
+            if (filteredLogs.length === 0) {
+                tableBody.innerHTML = `<tr><td colspan="5" class="p-8 text-center text-gray-500">לא נמצאו לוגים תואמים.</td></tr>`;
+                return;
+            }
+
+            tableBody.innerHTML = filteredLogs.map(log => {
+                const level = log.Level || 'INFO';
+                const levelClass = `level-${level.replace(' ', '_')}`;
+                
+                return `
+                    <tr class="hover:bg-gray-700 text-sm">
+                        <td class="p-3 text-gray-400">${log.Timestamp.toLocaleString('he-IL')}</td>
+                        <td class="p-3 font-bold ${levelClass}">${level}</td>
+                        <td class="p-3 text-cyan-300 font-mono">[${log.Origin}]</td>
+                        <td class="p-3 text-white">${log.Message || '---'}</td>
+                        <td class="p-3 text-yellow-300 font-mono">${log.Hint || '---'}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        // --- 6. Notification (Toast) System ---
+        function createToast(level, message, origin) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            
+            let borderColor = 'border-gray-500';
+            let icon = '🔔';
+            if (level === 'ERROR') { 
+                borderColor = 'border-red-500'; 
+                icon = '❌';
+            }
+            if (level === 'WARN') { 
+                borderColor = 'border-yellow-500';
+                icon = '⚠️';
+            }
+
+            toast.className = `toast glass-ui p-4 w-80 shadow-lg border-r-4 ${borderColor}`;
+            toast.innerHTML = `
+                <div class="flex items-center gap-3">
+                    <div class="text-2xl">${icon}</div>
+                    <div>
+                        <h4 class="font-bold text-white">התראה חדשה [${origin}]</h4>
+                        <p class="text-sm text-gray-200">${message}</p>
+                    </div>
+                </div>
+            `;
+            
+            container.prepend(toast);
+            setTimeout(() => { toast.remove(); }, 5000);
+        }
+
+    </script>
+</body>
+</html>
