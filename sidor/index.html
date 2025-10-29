@@ -3,17 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DeliveryMaster v31.9.1 (עם שעת אספקה)</title>
+    <title>DeliveryMaster v31.9.2 (סוגי הובלה נוספים)</title>
     <!-- 
-      DeliveryMaster Admin App v31.9.1
+      DeliveryMaster Admin App v31.9.2
       
       Changelog:
+      - v31.9.2 (הוספת סוגי הובלה):
+        - נוספו אפשרויות נוספות לשדה 'סוג הובלה' בטופס הזמנה חדשה.
       - v31.9.1 (הוספת שעת אספקה):
         - נוסף שדה <input type="time"> לטופס יצירת הזמנה חדשה.
         - עודכנה פונקציית submitNewOrder לשמור את השדה 'orderTime' ב-Firestore.
       - v31.9: Added Global Ping functionality.
-        - Added "Send Global Alert" button to main navigation.
-        - Added `sendGlobalPing` function.
       - v31.8: Added "Copy Link for Customer" feature.
       - v31.7.2 (FIX): Fixed DOM access and form submission errors.
       - v31.7: Added functionality to update order status directly.
@@ -702,25 +702,32 @@
                     <input type="text" id="order-number" placeholder="השאר ריק למזהה אוטומטי" class="w-full p-2 border rounded-md mb-4"> <!-- NEW FIELD -->
                  </div>
                 
-                <!-- *** START: EDITED SECTION FOR TIME *** -->
                 <div class="grid grid-cols-2 gap-4">
                     <div class="grid grid-cols-2 gap-2">
                         <input type="date" id="order-date" class="w-full p-2 border rounded-md" required>
                         <input type="time" id="order-time" class="w-full p-2 border rounded-md"> <!-- שדה חדש -->
                     </div>
+                    <!-- *** START: EDITED DELIVERY TYPES *** -->
                     <select id="order-delivery-type" class="w-full p-2 border rounded-md" required>
                         <option value="">סוג הובלה</option>
                         <option value="הובלת מנוף">הובלת מנוף</option>
                         <option value="הובלת משאית">הובלת משאית</option>
                         <option value="איסוף עצמי">איסוף עצמי</option>
+                        <option value="עבודת מנוף">עבודת מנוף</option>
+                        <option value="עבודת מנוף 15 מטר">עבודת מנוף 15 מטר</option>
+                        <option value="הצבת מכולה">הצבת מכולה</option>
+                        <option value="החלפת מכולה">החלפת מכולה</option>
+                        <option value="הוצאת מכולה">הוצאת מכולה</option>
+                        <option value="פינוי במקום">פינוי במקום</option>
+                        <option value="פריקה ידנית">פריקה ידנית</option>
                     </select>
+                    <!-- *** END: EDITED DELIVERY TYPES *** -->
                     <select id="order-warehouse" class="w-full p-2 border rounded-md" required>
                         <option value="">בחר מחסן</option>
                         <option value="החרש">החרש</option>
                         <option value="התלמיד">התלמיד</option>
                     </select>
                 </div>
-                <!-- *** END: EDITED SECTION FOR TIME *** -->
 
                 <textarea id="order-notes" rows="3" placeholder="הערות להזמנה..." class="w-full p-2 border rounded-md"></textarea>
             </div>
@@ -921,7 +928,7 @@
         });
         
         async function initializeApplication() {
-            SmartLog.info("v31.9.1-FB: Initializing...", "Init"); // Version bump
+            SmartLog.info("v31.9.2-FB: Initializing...", "Init"); // Version bump
             try {
                 updateStatus("מפעיל מפות...");
                 initMap(); // Dashboard map
@@ -2436,3 +2443,4 @@
     </script>
 </body>
 </html>
+
