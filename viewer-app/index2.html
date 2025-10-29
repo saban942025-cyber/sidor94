@@ -1,0 +1,1357 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>DeliveryMaster Viewer v51.0 (Mobile UI Pro)</title>
+    <!-- 
+      DeliveryMaster Live Viewer App v51.0 (Mobile UI Pro)
+      
+      Changelog:
+      - v51.0 (MOBILE PRO):
+        - Modern mobile-first design with bottom navigation
+        - Advanced swipeable tab interface
+        - Enhanced emojis and modern UI elements
+        - Glowing buttons with click effects
+        - Full-screen order lists with modern cards
+        - Improved animations and transitions
+      - v50.7 (Full Page Views):
+        - Added full page views for orders by status
+        - Added "Tomorrow's Orders" page with delivery type grouping
+        - Enhanced order cards with better styling
+        - Mobile-optimized full page navigation
+      - v50.6 (FIX):
+        - Fixed "Blank Page" error by completely refactoring the layout.
+    -->
+    
+    <!-- PWA Manifest & Theme -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#3b82f6">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="https://i.postimg.cc/ryPT3r29/image.png">
+    
+    <!-- TailwindCSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- LeafletJS (Map) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <!-- Icons (Feather) -->
+    <script src="https://unpkg.com/feather-icons"></script>
+
+    <!-- Tone.js for Sound -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
+    
+    <!-- Google Font: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --primary-color: #3b82f6;
+            --primary-dark: #2563eb;
+            --primary-light: #dbeafe;
+            --secondary-color: #f59e0b;
+            --success-color: #10b981;
+            --warning-color: #f59e0b;
+            --danger-color: #ef4444;
+            --bg-light: #f8fafc;
+            --bg-white: #ffffff;
+            --bg-card: #ffffff;
+            --border-color: #e2e8f0;
+            --text-dark: #1e293b;
+            --text-light: #64748b;
+            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            
+            /* Order Type Colors */
+            --color-manof-bg: linear-gradient(135deg, #e0f2fe, #bae6fd);
+            --color-masait-bg: linear-gradient(135deg, #dcfce7, #bbf7d0);
+            --color-isuf-bg: linear-gradient(135deg, #f3f4f6, #e5e7eb);
+        }
+        
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        html, body {
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+            font-family: 'Inter', 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: var(--text-dark);
+        }
+        
+        body {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+        }
+        
+        /* Modern App Layout */
+        .app-container {
+            height: 100vh;
+            width: 100vw;
+            display: flex;
+            flex-direction: column;
+            background: var(--bg-light);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        /* Header with Gradient */
+        .app-header {
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+            color: white;
+            padding: 1rem 1.25rem;
+            box-shadow: var(--shadow);
+            position: relative;
+            z-index: 100;
+        }
+        
+        .app-header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .app-title {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        
+        .app-logo {
+            width: 40px;
+            height: 40px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(10px);
+        }
+        
+        .app-title-text {
+            font-weight: 800;
+            font-size: 1.25rem;
+            letter-spacing: -0.025em;
+        }
+        
+        .app-subtitle {
+            font-size: 0.875rem;
+            opacity: 0.9;
+            font-weight: 400;
+        }
+        
+        /* Status Bar */
+        .status-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 0.5rem;
+            font-size: 0.75rem;
+        }
+        
+        .time-display {
+            font-weight: 600;
+        }
+        
+        /* Stats Cards - Modern Design */
+        .stats-container {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.75rem;
+            padding: 1rem 1.25rem;
+            background: transparent;
+        }
+        
+        .stat-card {
+            background: var(--bg-white);
+            border-radius: 16px;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            box-shadow: var(--shadow);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        
+        .stat-card:active {
+            transform: scale(0.95);
+        }
+        
+        .stat-card.glow {
+            animation: glow 2s infinite;
+        }
+        
+        @keyframes glow {
+            0%, 100% { box-shadow: 0 0 5px rgba(59, 130, 246, 0.5); }
+            50% { box-shadow: 0 0 20px rgba(59, 130, 246, 0.8); }
+        }
+        
+        .stat-icon {
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+            filter: grayscale(0.2);
+        }
+        
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: var(--primary-dark);
+            margin-bottom: 0.25rem;
+        }
+        
+        .stat-label {
+            font-size: 0.75rem;
+            color: var(--text-light);
+            font-weight: 500;
+            text-align: center;
+        }
+        
+        /* Main Content Area */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        /* Tab Navigation - Modern */
+        .tab-navigation {
+            display: flex;
+            background: var(--bg-white);
+            border-bottom: 1px solid var(--border-color);
+            position: relative;
+            padding: 0 0.5rem;
+        }
+        
+        .tab-button {
+            flex: 1;
+            padding: 1rem 0.5rem;
+            text-align: center;
+            font-weight: 600;
+            font-size: 0.875rem;
+            color: var(--text-light);
+            transition: all 0.3s ease;
+            position: relative;
+            border: none;
+            background: transparent;
+        }
+        
+        .tab-button.active {
+            color: var(--primary-color);
+        }
+        
+        .tab-indicator {
+            position: absolute;
+            bottom: 0;
+            height: 3px;
+            background: var(--primary-color);
+            border-radius: 3px 3px 0 0;
+            transition: all 0.3s ease;
+        }
+        
+        /* Tab Content */
+        .tab-content {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .tab-panel {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            overflow-y: auto;
+            padding: 1rem;
+            display: none;
+        }
+        
+        .tab-panel.active {
+            display: block;
+        }
+        
+        /* Enhanced Order Cards */
+        .order-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+        
+        .order-card-modern {
+            background: var(--bg-card);
+            border-radius: 16px;
+            padding: 1.25rem;
+            box-shadow: var(--shadow);
+            transition: all 0.3s ease;
+            border-left: 4px solid var(--primary-color);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .order-card-modern:active {
+            transform: translateY(2px);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .order-card-modern.manof {
+            border-left-color: #0ea5e9;
+            background: var(--color-manof-bg);
+        }
+        
+        .order-card-modern.masait {
+            border-left-color: #10b981;
+            background: var(--color-masait-bg);
+        }
+        
+        .order-card-modern.isuf {
+            border-left-color: #6b7280;
+            background: var(--color-isuf-bg);
+        }
+        
+        .order-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 0.75rem;
+        }
+        
+        .order-id {
+            font-weight: 800;
+            font-size: 1.125rem;
+            color: var(--text-dark);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .order-type-icon {
+            font-size: 1.25rem;
+        }
+        
+        .order-status {
+            padding: 0.25rem 0.75rem;
+            border-radius: 99px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            background: var(--primary-light);
+            color: var(--primary-dark);
+        }
+        
+        .order-customer {
+            font-weight: 700;
+            font-size: 1rem;
+            margin-bottom: 0.5rem;
+            color: var(--text-dark);
+        }
+        
+        .order-address {
+            font-size: 0.875rem;
+            color: var(--text-light);
+            margin-bottom: 0.75rem;
+            line-height: 1.4;
+        }
+        
+        .order-meta {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.75rem;
+            color: var(--text-light);
+        }
+        
+        .order-driver {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            font-weight: 600;
+        }
+        
+        .order-time {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+        
+        /* Driver Cards */
+        .driver-card-modern {
+            background: var(--bg-card);
+            border-radius: 16px;
+            padding: 1.25rem;
+            box-shadow: var(--shadow);
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        
+        .driver-card-modern:active {
+            transform: translateY(2px);
+        }
+        
+        .driver-avatar {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 700;
+            font-size: 1.25rem;
+        }
+        
+        .driver-info {
+            flex: 1;
+        }
+        
+        .driver-name {
+            font-weight: 700;
+            font-size: 1rem;
+            margin-bottom: 0.25rem;
+        }
+        
+        .driver-details {
+            font-size: 0.875rem;
+            color: var(--text-light);
+            margin-bottom: 0.5rem;
+        }
+        
+        .driver-status {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .status-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+        
+        .status-active {
+            background: var(--success-color);
+            box-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
+        }
+        
+        .status-inactive {
+            background: var(--text-light);
+        }
+        
+        .status-stuck {
+            background: var(--danger-color);
+            box-shadow: 0 0 10px rgba(239, 68, 68, 0.5);
+        }
+        
+        /* Bottom Navigation */
+        .bottom-nav {
+            background: var(--bg-white);
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            padding: 0.5rem;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .nav-item {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 0.5rem;
+            border: none;
+            background: transparent;
+            transition: all 0.3s ease;
+            border-radius: 12px;
+        }
+        
+        .nav-item:active {
+            background: var(--primary-light);
+        }
+        
+        .nav-item.active {
+            color: var(--primary-color);
+        }
+        
+        .nav-icon {
+            font-size: 1.25rem;
+            margin-bottom: 0.25rem;
+        }
+        
+        .nav-label {
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        
+        /* Map Container */
+        #viewer-map-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+        
+        #viewer-map {
+            height: 100%;
+            width: 100%;
+        }
+        
+        /* Connection Status */
+        .connection-status {
+            position: absolute;
+            top: 1rem;
+            left: 1rem;
+            z-index: 1000;
+            background: rgba(255,255,255,0.9);
+            backdrop-filter: blur(10px);
+            padding: 0.5rem 1rem;
+            border-radius: 99px;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.875rem;
+            font-weight: 600;
+            box-shadow: var(--shadow);
+        }
+        
+        .connection-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+        
+        .connection-connected {
+            background: var(--success-color);
+            box-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
+        }
+        
+        .connection-connecting {
+            background: var(--warning-color);
+            box-shadow: 0 0 10px rgba(245, 158, 11, 0.5);
+        }
+        
+        .connection-error {
+            background: var(--danger-color);
+            box-shadow: 0 0 10px rgba(239, 68, 68, 0.5);
+        }
+        
+        /* Full Screen Views */
+        .full-screen-view {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--bg-light);
+            z-index: 2000;
+            transform: translateY(100%);
+            transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .full-screen-view.active {
+            transform: translateY(0);
+        }
+        
+        .full-screen-header {
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+            color: white;
+            padding: 1.5rem 1.25rem 1rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        
+        .full-screen-title {
+            font-weight: 800;
+            font-size: 1.5rem;
+        }
+        
+        .full-screen-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem;
+        }
+        
+        /* Search Bar */
+        .search-container {
+            position: relative;
+            margin-bottom: 1rem;
+        }
+        
+        .search-input {
+            width: 100%;
+            padding: 1rem 3rem 1rem 1rem;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            background: var(--bg-white);
+            font-size: 1rem;
+            box-shadow: var(--shadow);
+        }
+        
+        .search-icon {
+            position: absolute;
+            right: 1rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-light);
+        }
+        
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 3rem 1rem;
+            color: var(--text-light);
+        }
+        
+        .empty-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+        
+        .empty-text {
+            font-size: 1.125rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+        
+        .empty-subtext {
+            font-size: 0.875rem;
+        }
+        
+        /* Animation Classes */
+        .fade-in {
+            animation: fadeIn 0.5s ease;
+        }
+        
+        .slide-up {
+            animation: slideUp 0.4s ease;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        @keyframes slideUp {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        
+        /* Responsive Adjustments */
+        @media (max-width: 380px) {
+            .stats-container {
+                grid-template-columns: repeat(3, 1fr);
+                gap: 0.5rem;
+                padding: 0.75rem 1rem;
+            }
+            
+            .stat-card {
+                padding: 0.75rem 0.5rem;
+            }
+            
+            .stat-value {
+                font-size: 1.25rem;
+            }
+            
+            .order-card-modern {
+                padding: 1rem;
+            }
+        }
+        
+        /* Dark mode support */
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg-light: #0f172a;
+                --bg-white: #1e293b;
+                --bg-card: #1e293b;
+                --text-dark: #f1f5f9;
+                --text-light: #94a3b8;
+                --border-color: #334155;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- App Header -->
+        <header class="app-header">
+            <div class="app-header-content">
+                <div class="app-title">
+                    <div class="app-logo">
+                        <i data-feather="truck"></i>
+                    </div>
+                    <div>
+                        <div class="app-title-text">DeliveryMaster</div>
+                        <div class="app-subtitle">מערכת ניהול משלוחים</div>
+                    </div>
+                </div>
+                <div class="connection-status" id="connection-status">
+                    <div class="connection-dot connection-connecting"></div>
+                    <span>מתחבר...</span>
+                </div>
+            </div>
+            
+            <div class="status-bar">
+                <div class="time-display" id="current-time">--:--</div>
+                <div class="battery-status">🔋 100%</div>
+            </div>
+        </header>
+        
+        <!-- Stats Cards -->
+        <div class="stats-container">
+            <div class="stat-card glow" id="stat-active" onclick="showOrdersByStatus('active')">
+                <div class="stat-icon">🚚</div>
+                <div class="stat-value" id="count-active">-</div>
+                <div class="stat-label">בסידור</div>
+            </div>
+            <div class="stat-card" id="stat-completed" onclick="showOrdersByStatus('completed')">
+                <div class="stat-icon">✅</div>
+                <div class="stat-value" id="count-completed-today">-</div>
+                <div class="stat-label">סופקו היום</div>
+            </div>
+            <div class="stat-card" id="stat-future" onclick="showTomorrowOrders()">
+                <div class="stat-icon">📅</div>
+                <div class="stat-value" id="count-future">-</div>
+                <div class="stat-label">צפי עתידי</div>
+            </div>
+        </div>
+        
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Tab Navigation -->
+            <div class="tab-navigation">
+                <button class="tab-button active" data-tab="orders">📦 הזמנות</button>
+                <button class="tab-button" data-tab="drivers">👤 נהגים</button>
+                <button class="tab-button" data-tab="map">🗺️ מפה</button>
+                <div class="tab-indicator" style="width: 33.33%; left: 0%;"></div>
+            </div>
+            
+            <!-- Tab Content -->
+            <div class="tab-content">
+                <!-- Orders Tab -->
+                <div class="tab-panel active" id="tab-orders">
+                    <div class="search-container">
+                        <input type="text" class="search-input" placeholder="חפש הזמנות..." id="search-orders">
+                        <i data-feather="search" class="search-icon"></i>
+                    </div>
+                    
+                    <div class="order-list" id="orders-list">
+                        <!-- Orders will be populated here -->
+                        <div class="empty-state">
+                            <div class="empty-icon">📦</div>
+                            <div class="empty-text">אין הזמנות להצגה</div>
+                            <div class="empty-subtext">הזמנות חדשות יופיעו כאן</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Drivers Tab -->
+                <div class="tab-panel" id="tab-drivers">
+                    <div class="search-container">
+                        <input type="text" class="search-input" placeholder="חפש נהגים..." id="search-drivers">
+                        <i data-feather="search" class="search-icon"></i>
+                    </div>
+                    
+                    <div class="order-list" id="drivers-list">
+                        <!-- Drivers will be populated here -->
+                        <div class="empty-state">
+                            <div class="empty-icon">👤</div>
+                            <div class="empty-text">אין נהגים פעילים</div>
+                            <div class="empty-subtext">נהגים מחוברים יופיעו כאן</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Map Tab -->
+                <div class="tab-panel" id="tab-map">
+                    <div id="viewer-map-container">
+                        <div id="viewer-map"></div>
+                        <div class="loader-container" id="viewer-map-loader">
+                            <div class="loader"></div>
+                            <span class="ml-4 font-semibold">טוען מפה...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+        
+        <!-- Bottom Navigation -->
+        <nav class="bottom-nav">
+            <button class="nav-item active" data-nav="home">
+                <i data-feather="home" class="nav-icon"></i>
+                <div class="nav-label">בית</div>
+            </button>
+            <button class="nav-item" data-nav="orders">
+                <i data-feather="package" class="nav-icon"></i>
+                <div class="nav-label">הזמנות</div>
+            </button>
+            <button class="nav-item" data-nav="map">
+                <i data-feather="map" class="nav-icon"></i>
+                <div class="nav-label">מפה</div>
+            </button>
+            <button class="nav-item" data-nav="stats">
+                <i data-feather="bar-chart-2" class="nav-icon"></i>
+                <div class="nav-label">סטטיסטיקה</div>
+            </button>
+            <button class="nav-item" data-nav="settings">
+                <i data-feather="settings" class="nav-icon"></i>
+                <div class="nav-label">הגדרות</div>
+            </button>
+        </nav>
+    </div>
+    
+    <!-- Full Screen Views -->
+    <div class="full-screen-view" id="fullscreen-orders">
+        <div class="full-screen-header">
+            <button onclick="hideFullScreen()">
+                <i data-feather="arrow-right" style="color: white;"></i>
+            </button>
+            <h1 class="full-screen-title" id="fullscreen-title">הזמנות פעילות</h1>
+        </div>
+        <div class="full-screen-content" id="fullscreen-content">
+            <!-- Content will be populated here -->
+        </div>
+    </div>
+
+    <script type="module">
+        // Firebase imports and initialization code would go here
+        // For brevity, focusing on the UI implementation
+        
+        // Initialize the app
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize feather icons
+            feather.replace();
+            
+            // Update time
+            updateTime();
+            setInterval(updateTime, 60000);
+            
+            // Initialize tabs
+            initTabs();
+            
+            // Initialize bottom navigation
+            initBottomNav();
+            
+            // Initialize map
+            initMap();
+            
+            // Simulate data loading
+            simulateDataLoading();
+        });
+        
+        function updateTime() {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString('he-IL', { 
+                hour: '2-digit', 
+                minute: '2-digit' 
+            });
+            document.getElementById('current-time').textContent = timeString;
+        }
+        
+        function initTabs() {
+            const tabButtons = document.querySelectorAll('.tab-button');
+            const tabPanels = document.querySelectorAll('.tab-panel');
+            const tabIndicator = document.querySelector('.tab-indicator');
+            
+            tabButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    const targetTab = this.getAttribute('data-tab');
+                    
+                    // Update active tab button
+                    tabButtons.forEach(btn => btn.classList.remove('active'));
+                    this.classList.add('active');
+                    
+                    // Update active tab panel
+                    tabPanels.forEach(panel => panel.classList.remove('active'));
+                    document.getElementById(`tab-${targetTab}`).classList.add('active');
+                    
+                    // Update tab indicator position
+                    const index = Array.from(tabButtons).indexOf(this);
+                    const width = 100 / tabButtons.length;
+                    tabIndicator.style.left = `${index * width}%`;
+                    tabIndicator.style.width = `${width}%`;
+                    
+                    // If map tab is selected, trigger resize
+                    if (targetTab === 'map') {
+                        setTimeout(() => {
+                            if (window.viewerMap) {
+                                window.viewerMap.invalidateSize();
+                            }
+                        }, 300);
+                    }
+                });
+            });
+        }
+        
+        function initBottomNav() {
+            const navItems = document.querySelectorAll('.nav-item');
+            
+            navItems.forEach(item => {
+                item.addEventListener('click', function() {
+                    const navTarget = this.getAttribute('data-nav');
+                    
+                    // Update active nav item
+                    navItems.forEach(nav => nav.classList.remove('active'));
+                    this.classList.add('active');
+                    
+                    // Handle navigation
+                    switch(navTarget) {
+                        case 'home':
+                            // Show home screen (already visible)
+                            break;
+                        case 'orders':
+                            // Switch to orders tab
+                            document.querySelector('[data-tab="orders"]').click();
+                            break;
+                        case 'map':
+                            // Switch to map tab
+                            document.querySelector('[data-tab="map"]').click();
+                            break;
+                        case 'stats':
+                            showStatsView();
+                            break;
+                        case 'settings':
+                            showSettingsView();
+                            break;
+                    }
+                });
+            });
+        }
+        
+        function initMap() {
+            try {
+                const ISRAEL_CENTER = [32.0853, 34.7818];
+                window.viewerMap = L.map('viewer-map').setView(ISRAEL_CENTER, 10);
+                
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    maxZoom: 19,
+                    attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                }).addTo(window.viewerMap);
+                
+                // Hide loader
+                document.getElementById('viewer-map-loader').style.display = 'none';
+                
+                // Update connection status
+                updateConnectionStatus('connected', 'מחובר');
+            } catch (error) {
+                console.error('Map initialization error:', error);
+                updateConnectionStatus('error', 'שגיאת מפה');
+            }
+        }
+        
+        function updateConnectionStatus(status, message) {
+            const statusEl = document.getElementById('connection-status');
+            const dotEl = statusEl.querySelector('.connection-dot');
+            
+            statusEl.querySelector('span').textContent = message;
+            
+            // Remove all status classes
+            dotEl.classList.remove('connection-connected', 'connection-connecting', 'connection-error');
+            
+            // Add current status class
+            switch(status) {
+                case 'connected':
+                    dotEl.classList.add('connection-connected');
+                    break;
+                case 'connecting':
+                    dotEl.classList.add('connection-connecting');
+                    break;
+                case 'error':
+                    dotEl.classList.add('connection-error');
+                    break;
+            }
+        }
+        
+        function showOrdersByStatus(type) {
+            const titleMap = {
+                'active': 'הזמנות פעילות',
+                'completed': 'הזמנות שהושלמו',
+                'future': 'הזמנות עתידיות'
+            };
+            
+            document.getElementById('fullscreen-title').textContent = titleMap[type] || 'הזמנות';
+            showFullScreen();
+            
+            // Simulate loading orders
+            setTimeout(() => {
+                loadOrdersForType(type);
+            }, 500);
+        }
+        
+        function showTomorrowOrders() {
+            document.getElementById('fullscreen-title').textContent = 'סידור מחר';
+            showFullScreen();
+            
+            // Simulate loading tomorrow's orders
+            setTimeout(() => {
+                loadTomorrowOrders();
+            }, 500);
+        }
+        
+        function showStatsView() {
+            document.getElementById('fullscreen-title').textContent = 'סטטיסטיקה';
+            showFullScreen();
+            
+            // Load stats view
+            setTimeout(() => {
+                loadStatsView();
+            }, 500);
+        }
+        
+        function showSettingsView() {
+            document.getElementById('fullscreen-title').textContent = 'הגדרות';
+            showFullScreen();
+            
+            // Load settings view
+            setTimeout(() => {
+                loadSettingsView();
+            }, 500);
+        }
+        
+        function showFullScreen() {
+            document.getElementById('fullscreen-orders').classList.add('active');
+        }
+        
+        function hideFullScreen() {
+            document.getElementById('fullscreen-orders').classList.remove('active');
+        }
+        
+        function loadOrdersForType(type) {
+            const contentEl = document.getElementById('fullscreen-content');
+            
+            // Simulate different order sets based on type
+            const orders = type === 'active' ? generateSampleOrders(8) : 
+                          type === 'completed' ? generateSampleOrders(5) : 
+                          generateSampleOrders(3);
+            
+            let html = '<div class="order-list">';
+            
+            orders.forEach(order => {
+                html += `
+                    <div class="order-card-modern ${order.type} slide-up">
+                        <div class="order-header">
+                            <div class="order-id">
+                                <span class="order-type-icon">${order.icon}</span>
+                                ${order.id}
+                            </div>
+                            <div class="order-status">${order.status}</div>
+                        </div>
+                        <div class="order-customer">${order.customer}</div>
+                        <div class="order-address">${order.address}</div>
+                        <div class="order-meta">
+                            <div class="order-driver">
+                                <i data-feather="user"></i> ${order.driver}
+                            </div>
+                            <div class="order-time">
+                                <i data-feather="clock"></i> ${order.time}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            html += '</div>';
+            contentEl.innerHTML = html;
+            feather.replace();
+        }
+        
+        function loadTomorrowOrders() {
+            const contentEl = document.getElementById('fullscreen-content');
+            
+            // Group orders by type
+            const ordersByType = {
+                'manof': generateSampleOrders(3).filter(o => o.type === 'manof'),
+                'masait': generateSampleOrders(4).filter(o => o.type === 'masait'),
+                'isuf': generateSampleOrders(2).filter(o => o.type === 'isuf')
+            };
+            
+            let html = '';
+            
+            // Manof section
+            if (ordersByType.manof.length > 0) {
+                html += `<h3 style="margin: 1.5rem 0 1rem; font-weight: 700;">🏗️ הובלת מנוף</h3>`;
+                html += '<div class="order-list">';
+                ordersByType.manof.forEach(order => {
+                    html += createOrderCardHTML(order);
+                });
+                html += '</div>';
+            }
+            
+            // Masait section
+            if (ordersByType.masait.length > 0) {
+                html += `<h3 style="margin: 1.5rem 0 1rem; font-weight: 700;">🚚 הובלת משאית</h3>`;
+                html += '<div class="order-list">';
+                ordersByType.masait.forEach(order => {
+                    html += createOrderCardHTML(order);
+                });
+                html += '</div>';
+            }
+            
+            // Isuf section
+            if (ordersByType.isuf.length > 0) {
+                html += `<h3 style="margin: 1.5rem 0 1rem; font-weight: 700;">👤 איסוף עצמי</h3>`;
+                html += '<div class="order-list">';
+                ordersByType.isuf.forEach(order => {
+                    html += createOrderCardHTML(order);
+                });
+                html += '</div>';
+            }
+            
+            contentEl.innerHTML = html || '<div class="empty-state"><div class="empty-icon">📅</div><div class="empty-text">אין הזמנות למחר</div></div>';
+            feather.replace();
+        }
+        
+        function createOrderCardHTML(order) {
+            return `
+                <div class="order-card-modern ${order.type} slide-up">
+                    <div class="order-header">
+                        <div class="order-id">
+                            <span class="order-type-icon">${order.icon}</span>
+                            ${order.id}
+                        </div>
+                        <div class="order-status">${order.status}</div>
+                    </div>
+                    <div class="order-customer">${order.customer}</div>
+                    <div class="order-address">${order.address}</div>
+                    <div class="order-meta">
+                        <div class="order-time">
+                            <i data-feather="clock"></i> ${order.time}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        function loadStatsView() {
+            const contentEl = document.getElementById('fullscreen-content');
+            
+            const statsHTML = `
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin-bottom: 2rem;">
+                    <div class="stat-card" style="padding: 1.5rem;">
+                        <div class="stat-icon">📦</div>
+                        <div class="stat-value">24</div>
+                        <div class="stat-label">הזמנות היום</div>
+                    </div>
+                    <div class="stat-card" style="padding: 1.5rem;">
+                        <div class="stat-icon">✅</div>
+                        <div class="stat-value">18</div>
+                        <div class="stat-label">הושלמו</div>
+                    </div>
+                    <div class="stat-card" style="padding: 1.5rem;">
+                        <div class="stat-icon">⏱️</div>
+                        <div class="stat-value">76%</div>
+                        <div class="stat-label">יעילות</div>
+                    </div>
+                    <div class="stat-card" style="padding: 1.5rem;">
+                        <div class="stat-icon">🚚</div>
+                        <div class="stat-value">8</div>
+                        <div class="stat-label">נהגים פעילים</div>
+                    </div>
+                </div>
+                
+                <h3 style="margin-bottom: 1rem; font-weight: 700;">סטטיסטיקות נוספות</h3>
+                <div class="order-list">
+                    <div class="order-card-modern">
+                        <div class="order-customer">ממוצע זמני אספקה</div>
+                        <div class="order-address">2.4 שעות להזמנה</div>
+                    </div>
+                    <div class="order-card-modern">
+                        <div class="order-customer">אזור פעיל ביותר</div>
+                        <div class="order-address">תל אביב - 12 משלוחים</div>
+                    </div>
+                    <div class="order-card-modern">
+                        <div class="order-customer">נהג מצטיין</div>
+                        <div class="order-address">דוד לוי - 8 משלוחים</div>
+                    </div>
+                </div>
+            `;
+            
+            contentEl.innerHTML = statsHTML;
+        }
+        
+        function loadSettingsView() {
+            const contentEl = document.getElementById('fullscreen-content');
+            
+            const settingsHTML = `
+                <div class="order-list">
+                    <div class="order-card-modern">
+                        <div class="order-customer">🔔 התראות</div>
+                        <div class="order-address">הגדרות התראות והתרעות</div>
+                    </div>
+                    <div class="order-card-modern">
+                        <div class="order-customer">🎨 ערכת נושא</div>
+                        <div class="order-address">שינוי עיצוב האפליקציה</div>
+                    </div>
+                    <div class="order-card-modern">
+                        <div class="order-customer">🔒 פרטיות</div>
+                        <div class="order-address">הגדרות פרטיות ואבטחה</div>
+                    </div>
+                    <div class="order-card-modern">
+                        <div class="order-customer">ℹ️ אודות</div>
+                        <div class="order-address">גרסה 51.0 - DeliveryMaster</div>
+                    </div>
+                    <div class="order-card-modern">
+                        <div class="order-customer">📞 תמיכה</div>
+                        <div class="order-address">צור קשר עם התמיכה</div>
+                    </div>
+                </div>
+            `;
+            
+            contentEl.innerHTML = settingsHTML;
+        }
+        
+        function simulateDataLoading() {
+            // Simulate loading animation
+            updateConnectionStatus('connecting', 'טוען נתונים...');
+            
+            setTimeout(() => {
+                // Update stats
+                document.getElementById('count-active').textContent = '8';
+                document.getElementById('count-completed-today').textContent = '18';
+                document.getElementById('count-future').textContent = '5';
+                
+                // Load sample orders
+                loadSampleOrders();
+                
+                // Load sample drivers
+                loadSampleDrivers();
+                
+                // Update connection status
+                updateConnectionStatus('connected', 'מחובר');
+                
+                // Add glow effect to active orders stat
+                document.getElementById('stat-active').classList.add('glow');
+            }, 2000);
+        }
+        
+        function loadSampleOrders() {
+            const ordersList = document.getElementById('orders-list');
+            const orders = generateSampleOrders(5);
+            
+            let html = '';
+            
+            orders.forEach(order => {
+                html += `
+                    <div class="order-card-modern ${order.type} fade-in">
+                        <div class="order-header">
+                            <div class="order-id">
+                                <span class="order-type-icon">${order.icon}</span>
+                                ${order.id}
+                            </div>
+                            <div class="order-status">${order.status}</div>
+                        </div>
+                        <div class="order-customer">${order.customer}</div>
+                        <div class="order-address">${order.address}</div>
+                        <div class="order-meta">
+                            <div class="order-driver">
+                                <i data-feather="user"></i> ${order.driver}
+                            </div>
+                            <div class="order-time">
+                                <i data-feather="clock"></i> ${order.time}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            ordersList.innerHTML = html;
+            feather.replace();
+        }
+        
+        function loadSampleDrivers() {
+            const driversList = document.getElementById('drivers-list');
+            const drivers = [
+                { name: 'דוד לוי', vehicle: 'משאית', phone: '050-1234567', status: 'active', deliveries: 8 },
+                { name: 'אברהם כהן', vehicle: 'משאית', phone: '050-2345678', status: 'active', deliveries: 5 },
+                { name: 'משה ישראלי', vehicle: 'מנוף', phone: '050-3456789', status: 'stuck', deliveries: 3 },
+                { name: 'יעקב פרץ', vehicle: 'משאית', phone: '050-4567890', status: 'inactive', deliveries: 0 }
+            ];
+            
+            let html = '';
+            
+            drivers.forEach(driver => {
+                const statusClass = driver.status === 'active' ? 'status-active' : 
+                                  driver.status === 'stuck' ? 'status-stuck' : 'status-inactive';
+                
+                const statusText = driver.status === 'active' ? 'פעיל' : 
+                                 driver.status === 'stuck' ? 'תקוע' : 'לא פעיל';
+                
+                html += `
+                    <div class="driver-card-modern fade-in">
+                        <div class="driver-avatar">${driver.name.charAt(0)}</div>
+                        <div class="driver-info">
+                            <div class="driver-name">${driver.name}</div>
+                            <div class="driver-details">${driver.vehicle} | ${driver.phone}</div>
+                            <div class="driver-status">
+                                <div class="status-indicator ${statusClass}"></div>
+                                <span>${statusText} • ${driver.deliveries} משלוחים</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            driversList.innerHTML = html;
+        }
+        
+        function generateSampleOrders(count) {
+            const orders = [];
+            const types = [
+                { type: 'manof', icon: '🏗️', label: 'הובלת מנוף' },
+                { type: 'masait', icon: '🚚', label: 'הובלת משאית' },
+                { type: 'isuf', icon: '👤', label: 'איסוף עצמי' }
+            ];
+            
+            const statuses = ['חדש', 'בטיפול', 'בדרך', 'הושלם'];
+            const customers = ['אביב כהן', 'מאיר לוי', 'שרה ישראלי', 'דניאל מזרחי', 'רונית פרץ'];
+            const addresses = ['רמת גן, ז\'בוטינסקי 45', 'תל אביב, דיזנגוף 120', 'חיפה, הנביאים 25', 'ירושלים, יפו 200', 'באר שבע, הרצל 65'];
+            const drivers = ['דוד לוי', 'אברהם כהן', 'משה ישראלי', 'יעקב פרץ'];
+            const times = ['10:30', '11:15', '12:45', '14:20', '15:30'];
+            
+            for (let i = 0; i < count; i++) {
+                const type = types[Math.floor(Math.random() * types.length)];
+                const status = statuses[Math.floor(Math.random() * 3)]; // Exclude 'completed' for active orders
+                
+                orders.push({
+                    id: `#${1000 + i}`,
+                    type: type.type,
+                    icon: type.icon,
+                    status: status,
+                    customer: customers[Math.floor(Math.random() * customers.length)],
+                    address: addresses[Math.floor(Math.random() * addresses.length)],
+                    driver: drivers[Math.floor(Math.random() * drivers.length)],
+                    time: times[Math.floor(Math.random() * times.length)]
+                });
+            }
+            
+            return orders;
+        }
+        
+        // Make functions globally available
+        window.showOrdersByStatus = showOrdersByStatus;
+        window.showTomorrowOrders = showTomorrowOrders;
+        window.hideFullScreen = hideFullScreen;
+    </script>
+</body>
+</html>
