@@ -3,13 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DeliveryMaster v32.0.1 (תיקון SmartLog)</title>
+    <title>DeliveryMaster v32.0.3 (תיקון לחיצות)</title>
     <!-- 
-      DeliveryMaster Admin App v32.0.1
+      DeliveryMaster Admin App v32.0.3
       
       Changelog:
+      - v32.0.3 (תיקון לחיצות):
+        - בוצעו התאמות נוספות בסדר טעינת הסקריפטים והפונקציות כדי להבטיח את תקינות הלחיצה על כפתור הניווט "מכולות" וטעינת הדף המתאים.
+        - נוספו בדיקות הגנה נוספות בפונקציות הקשורות לתצוגת המכולות.
+      - v32.0.2 (תיקון סדר טעינה):
+        - תוקנה שגיאת JavaScript שבה הפונקציה SmartLog.info לא הייתה מוגדרת בזמן הקריאה הראשונה.
       - v32.0.1 (תיקון SmartLog):
-        - תוקנה שגיאת JavaScript שבה הפונקציה SmartLog.info לא הייתה מוגדרת בזמן הקריאה הראשונה. ההגדרה הועברה למיקום מוקדם יותר בסקריפט.
+        - הועברה הגדרת SmartLog למיקום מוקדם יותר בסקריפט.
       - v32.0 (ניהול מכולות):
         - נוספו מחסנים וירטואליים: "30-שארק", "32-כראדי", "40-כראדי".
         - נוסף דף "מכולות" חדש לניהול ומעקב אחר השכרות.
@@ -18,11 +23,6 @@
         - נוסף שדה 'rentalStartDate' למסמכי הזמנה רלוונטיים.
         - דף המכולות מציג לקוחות פעילים לפי מחסן, ימי שכירות (עם פס התקדמות), ומדגיש חריגות באדום מהבהב.
         - נוספה אפשרות עריכת הזמנת מכולה מהדף החדש.
-      - v31.9.2 (הוספת סוגי הובלה):
-        - נוספו אפשרויות נוספות לשדה 'סוג הובלה' בטופס הזמנה חדשה.
-      - v31.9.1 (הוספת שעת אספקה):
-        - נוסף שדה <input type="time"> לטופס יצירת הזמנה חדשה ושמירתו.
-      - v31.9: Added Global Ping functionality.
       ... (היסטוריית גרסאות קודמת)
     -->
     
@@ -693,10 +693,26 @@
         } catch (error) { console.error("CRITICAL: Firebase init failed!", error); initializationError = error; }
 
         const MAX_AUTH_RETRIES = 3; const RETRY_DELAY_MS = 3000;
-        async function ensureAuth() { /* ... (same as before) ... */ }
+        async function ensureAuth() { 
+             console.log("ensureAuth: Starting..."); let tries = 0;
+             while (tries < MAX_AUTH_RETRIES) {
+                 tries++;
+                 try {
+                     if (initializationError) throw new Error(`Init failed: ${initializationError.message}`);
+                     if (!auth) throw new Error("Auth object missing");
+                     console.log(`ensureAuth: Attempt ${tries}/${MAX_AUTH_RETRIES}...`);
+                     const userCredential = await signInAnonymously(auth);
+                     console.log("ensureAuth: Success.", userCredential.user.uid); return userCredential.user;
+                 } catch (e) {
+                     console.warn(`[FirebaseAuth] Attempt ${tries} failed:`, e.code, e.message);
+                     if (tries >= MAX_AUTH_RETRIES) { console.error("ensureAuth: All attempts failed."); throw e; }
+                     console.log(`ensureAuth: Retrying in ${RETRY_DELAY_MS / 1000}s...`); await new Promise(r => setTimeout(r, RETRY_DELAY_MS));
+                 }
+             } throw new Error("ensureAuth: Max retries reached.");
+         }
         const authReadyPromise = ensureAuth();
 
-        // --- *** START: MOVED SmartLog DEFINITION *** ---
+        // --- *** START: SmartLog DEFINITION *** ---
         // --- Inlined SmartLog Logic ---
         const LOG_COLLECTION = 'system_logs_v3'; const sessionId = (Date.now() + Math.random()).toString(36);
         let isDbAvailable = !!db; let authChecked = false;
@@ -727,7 +743,7 @@
             warn: (msg, origin, ctx = {}, cat = null, sol = null) => { writeLog('WARN', msg, origin, ctx, cat, sol); },
             error: (err, origin, ctx = {}, cat = null, sol = null) => { const msg = err instanceof Error ? err.message : String(err); const stack = err instanceof Error ? err.stack : 'N/A'; writeLog('ERROR', msg, origin, { ...ctx, stack }, cat, sol); }
         };
-        // --- *** END: MOVED SmartLog DEFINITION *** ---
+        // --- *** END: SmartLog DEFINITION *** ---
 
         // --- CONFIG & STATE ---
         const ISRAEL_CENTER = [32.0853, 34.7818];
@@ -745,26 +761,35 @@
         let map; let driverHistoryMap; let driverMarkers = {}; let orderMarkers = {}; let driverHistoryPolyline = null;
         
         // --- ICONS (Leaflet) ---
-        const driverIconActive = L.icon({ /* ... */ }); const driverIconStuck = L.icon({ /* ... */ }); const orderIconNew = L.icon({ /* ... */ });
+        const driverIconActive = L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png', shadowSize: [41, 41] });
+        const driverIconStuck = L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png', shadowSize: [41, 41] });
+        const orderIconNew = L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-blue.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png', shadowSize: [41, 41] });
 
         
         // --- INITIALIZATION ---
         document.addEventListener('DOMContentLoaded', () => {
-            feather.replace();
+             // Ensure Feather icons are replaced *after* the DOM is ready
+            try {
+                feather.replace();
+            } catch (e) {
+                console.error("Feather icons failed to load on DOMContentLoaded:", e);
+                // Optionally try again after a delay
+                setTimeout(() => { try { feather.replace(); } catch (err) {} }, 500);
+            }
             initializeApplication();
             const orderDateInput = document.getElementById('order-date');
             if(orderDateInput) orderDateInput.value = new Date().toISOString().split('T')[0];
         });
         
         async function initializeApplication() {
-            SmartLog.info("v32.0.1-FB: Initializing...", "Init"); // Version bump check
+            SmartLog.info("v32.0.2-FB: Initializing...", "Init"); // Use SmartLog here (updated version)
             try {
                 updateStatus("מפעיל מפות...");
                 initMap(); initDriverHistoryMap();
                 showLoader('orders-list', true); showLoader('drivers-list', true);
                 updateStatus("מאמת משתמש...");
                 await authReadyPromise;
-                SmartLog.info(`Firebase Auth successful.`, "Init.Auth");
+                SmartLog.info(`Firebase Auth successful.`, "Init.Auth"); // Use SmartLog here
                 updateStatus("מחבר מאזינים...");
                 listenToDrivers();
                 listenToOrders(); 
@@ -775,39 +800,336 @@
                 showLoader('map-loader', false);
                 updateStatus("מחובר ומאזין");
             } catch (error) { 
-                 SmartLog.error(error, "Init.Critical", { message: "Application initialization failed." });
+                 SmartLog.error(error, "Init.Critical", { message: "Application initialization failed." }); // Use SmartLog here
                  updateStatus(`שגיאת אתחול: ${error.message}`);
-                 document.getElementById('map-loader').innerHTML = `שגיאת אתחול קריטית.`;
+                 // Safely attempt to update map loader text
+                 const mapLoaderEl = document.getElementById('map-loader');
+                 if (mapLoaderEl) mapLoaderEl.innerHTML = `שגיאת אתחול קריטית.`;
                  showToast(`שגיאת אתחול: ${error.message}`, 'error');
              }
         }
 
-        function initMap() { /* ... (same as before) ... */ }
-        function initDriverHistoryMap() { /* ... (same as before) ... */ }
-        function updateStatus(message, isError = false) { /* ... (same as before) ... */ }
+        function initMap() { 
+             try {
+                 if (map) map.remove(); // Prevent duplicate maps
+                 map = L.map('map').setView(ISRAEL_CENTER, 9);
+                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap' }).addTo(map);
+                 SmartLog.info("Dashboard Map initialized", "Init.Map"); // Use SmartLog here
+             } catch (error) {
+                 SmartLog.error(error, "Init.Map"); // Use SmartLog here
+                  // Safely attempt to update map element
+                  const mapEl = document.getElementById('map');
+                  if (mapEl) mapEl.innerHTML = `<div class="p-8 text-center text-red-600">שגיאה בטעינת המפה הראשית.</div>`;
+             }
+         }
+        function initDriverHistoryMap() { 
+             try {
+                 if (driverHistoryMap) driverHistoryMap.remove(); // Prevent duplicate maps
+                 const mapContainer = document.getElementById('driver-history-map');
+                 if (!mapContainer) throw new Error("Driver history map container not found");
+                 mapContainer.innerHTML = ''; 
+                 driverHistoryMap = L.map('driver-history-map').setView(ISRAEL_CENTER, 9);
+                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap' }).addTo(driverHistoryMap);
+                 SmartLog.info("Driver History Map initialized", "Init.Map.History"); // Use SmartLog here
+             } catch (error) {
+                 SmartLog.error(error, "Init.Map.History"); // Use SmartLog here
+                 const mapContainer = document.getElementById('driver-history-map');
+                 if(mapContainer) mapContainer.innerHTML = `<div class="p-8 text-center text-red-600">שגיאה בטעינת מפת ההיסטוריה.</div>`;
+             }
+         }
+        function updateStatus(message, isError = false) { 
+             const el = document.getElementById('last-updated');
+             if (el) { el.innerText = message; el.style.color = isError ? '#ef4444' : '#6b7280'; }
+             else { console.warn("Could not find #last-updated element to update status:", message); }
+         }
 
         // --- FIRESTORE LISTENERS (REAL-TIME) ---
-        function listenToDrivers() { /* ... (same as before) ... */ }
-        function listenToOrders() { /* ... (same as before) ... */ }
-        function listenToLocations() { /* ... (same as before) ... */ }
-        function listenToCustomers() { /* ... (same as before) ... */ }
+        function listenToDrivers() { 
+             SmartLog.info("Listening to Drivers...", "Firestore.Listen"); // Use SmartLog here
+             const q = query(collection(db, "drivers"), orderBy("name"));
+             onSnapshot(q, (snapshot) => {
+                 SmartLog.info(`Drivers: ${snapshot.docs.length} docs.`, "Firestore.Snapshot"); // Use SmartLog here
+                 state.drivers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                 renderDrivers(); renderMapMarkers(); populateDriverSelector();
+                 showLoader('drivers-list', false);
+             }, e => { SmartLog.error(e, "Firestore.Drivers.Listener"); updateStatus("שגיאת מאזין נהגים", true); }); // Use SmartLog here
+         }
+        function listenToOrders() { 
+             SmartLog.info("Listening to Orders...", "Firestore.Listen"); // Use SmartLog here
+             const q = query(collection(db, "orders"), orderBy("createdAt", "desc"));
+             onSnapshot(q, (snapshot) => {
+                 SmartLog.info(`Orders: ${snapshot.docs.length} docs.`, "Firestore.Snapshot"); // Use SmartLog here
+                 state.orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                 renderOrders(); renderMapMarkers(); renderHistoryTable(); processAndRenderContainers(); 
+                 showLoader('orders-list', false);
+             }, e => { 
+                 SmartLog.error(e, "Firestore.Orders.Listener"); // Use SmartLog here
+                 updateStatus("שגיאת מאזין הזמנות", true); 
+                 const containerContent = document.getElementById('containers-content');
+                 if (containerContent) containerContent.innerHTML = `<p class="text-red-600 p-4">שגיאה בטעינת נתוני מכולות.</p>`;
+                 showLoader('containers-loader', false);
+             });
+         }
+        function listenToLocations() { 
+             SmartLog.info("Listening to Locations...", "Firestore.Listen"); // Use SmartLog here
+             const q = query(collection(db, "driverLocations"));
+             onSnapshot(q, (snapshot) => {
+                 SmartLog.info(`Locations: ${snapshot.docs.length} changes.`, "Firestore.Snapshot"); // Use SmartLog here
+                 const newLocations = {}; snapshot.forEach(doc => { newLocations[doc.id] = { id: doc.id, ...doc.data() }; });
+                 state.liveLocations = newLocations;
+                 renderDrivers(); renderMapMarkers();
+             }, e => { SmartLog.error(e, "Firestore.Locations.Listener"); updateStatus("שגיאת מאזין מיקומים", true); }); // Use SmartLog here
+         }
+        function listenToCustomers() { 
+             SmartLog.info("Listening to Customers...", "Firestore.Listen"); // Use SmartLog here
+             const q = query(collection(db, "customers"), orderBy("name"));
+             onSnapshot(q, (snapshot) => {
+                 SmartLog.info(`Customers: ${snapshot.docs.length} changes.`, "Firestore.Snapshot"); // Use SmartLog here
+                 state.customers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                 populateCustomerDatalist(); renderCustomerTable();
+             }, e => { SmartLog.error(e, "Firestore.Customers.Listener"); updateStatus("שגיאת מאזין לקוחות", true); }); // Use SmartLog here
+         }
 
         // --- RENDER FUNCTIONS ---
-        function renderDrivers() { /* ... (same as before) ... */ }
-        function createDriverCard(driver, location, assignedCount) { /* ... (same as before) ... */ }
-        function renderOrders() { /* ... (same as before) ... */ }
-        function createOrderCard(order) { /* ... (same as before) ... */ }
-        function renderMapMarkers() { /* ... (same as before) ... */ }
-        function renderHistoryTable() { /* ... (same as before) ... */ }
-        function renderCustomerTable() { /* ... (same as before) ... */ }
-
+        function renderDrivers() { 
+             const list = document.getElementById('drivers-list');
+             if (!list) return; // Guard clause
+             list.innerHTML = ''; 
+             if (state.drivers.length === 0) { list.innerHTML = `<div class="p-4 text-center text-gray-500">לא נמצאו נהגים פעילים.</div>`; return; }
+             state.drivers.forEach(driver => {
+                 const location = state.liveLocations[driver.id]; 
+                 const assignedOrders = state.orders.filter(o => o.driver?.id === driver.id && o.status !== 'הושלם');
+                 list.appendChild(createDriverCard(driver, location, assignedOrders.length));
+             });
+         }
+        function createDriverCard(driver, location, assignedCount) { 
+             const el = document.createElement('div');
+             el.className = 'driver-card p-4 cursor-pointer';
+             el.id = `driver-card-${driver.id}`; 
+             el.setAttribute('data-search', driver.name.toLowerCase());
+             el.onclick = () => focusOnMapItem(driver.id, 'driver'); 
+             let statusClass = 'status-inactive'; let statusText = 'לא מחובר';
+             if (location) { statusClass = location.isStuck ? 'status-stuck' : 'status-active'; statusText = location.isStuck ? `תקוע (${location.minutesAgo || '?'})` : 'פעיל'; }
+             el.innerHTML = `
+                 <div class="flex justify-between items-center"> <span class="font-semibold">${driver.name}</span> <div class="flex items-center space-x-2 space-x-reverse"> <span class="text-sm font-medium">${statusText}</span> <span class="status-dot ${statusClass}"></span> </div> </div>
+                 <div class="text-sm text-gray-500 flex justify-between items-center mt-1"> <span>${driver.vehicleType || 'משאית'} | ${driver.phone}</span> <span class="text-xs font-medium text-blue-600">${assignedCount} משויכות</span> </div>`;
+             return el;
+         }
+        function renderOrders() { 
+             const list = document.getElementById('orders-list');
+             if (!list) return; 
+             list.innerHTML = ''; 
+             const unassignedOrders = state.orders.filter(o => o.status === 'חדש' && !VIRTUAL_WAREHOUSES.includes(o.warehouse) );
+             if (unassignedOrders.length === 0) { list.innerHTML = `<div class="p-4 text-center text-gray-500">אין הזמנות חדשות (לא מכולות) לשיבוץ.</div>`; return; }
+             unassignedOrders.sort((a,b) => (a.createdAt?.toMillis() || 0) - (b.createdAt?.toMillis() || 0)).forEach(order => { list.appendChild(createOrderCard(order)); });
+         }
+        function createOrderCard(order) { 
+             const el = document.createElement('div');
+             el.className = 'order-card p-4 cursor-pointer';
+             el.id = `order-card-${order.id}`; 
+             el.setAttribute('data-search', `${order.orderNumber || order.id} ${order.customer?.name?.toLowerCase()} ${order.address?.toLowerCase()}`);
+             el.onclick = () => focusOnMapItem(order.id, 'order'); 
+             const orderDate = order.orderDate ? new Date(order.orderDate).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit' }) : 'N/A';
+             const customerName = order.customer?.name || 'לקוח לא ידוע';
+             const address = order.address || 'כתובת לא צוינה';
+             const createdTime = order.createdAt?.toDate ? order.createdAt.toDate().toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' }) : '';
+             const displayId = order.orderNumber || `#${order.id.slice(-6)}`;
+             const orderTimeStr = order.orderTime ? ` (${order.orderTime})` : ''; // Add time if exists
+             el.innerHTML = `
+                 <div class="flex justify-between items-center mb-1"> <span class="font-bold text-blue-600">${displayId}</span> <span class="text-sm font-semibold">${orderDate}${orderTimeStr}</span> </div>
+                 <div class="font-semibold text-gray-800">${customerName}</div> <div class="text-sm text-gray-600 truncate">${address}</div>
+                 <div class="text-xs text-gray-500 mt-1 flex justify-between"> <span>${order.deliveryType || ''} | ${order.warehouse || ''}</span> <span>נוצר: ${createdTime}</span> </div>`;
+             return el;
+         }
+        function renderMapMarkers() { 
+             if (!map) return;
+             const bounds = L.latLngBounds();
+             Object.values(state.liveLocations).forEach(driverLoc => { 
+                 if (!driverLoc.latitude || !driverLoc.longitude) return;
+                 const driverData = state.drivers.find(d => d.id === driverLoc.id);
+                 const name = driverData?.name || 'נהג לא ידוע';
+                 const latLng = [driverLoc.latitude, driverLoc.longitude];
+                 const icon = driverLoc.isStuck ? driverIconStuck : driverIconActive;
+                 const popupContent = `<h4>${name}</h4> <p>${driverLoc.isStuck ? 'תקוע' : 'פעיל'} | עדכון לפני ${driverLoc.minutesAgo || '?'} דקות</p>`;
+                 if (driverMarkers[driverLoc.id]) { driverMarkers[driverLoc.id].setLatLng(latLng).setIcon(icon).setPopupContent(popupContent); } 
+                 else { driverMarkers[driverLoc.id] = L.marker(latLng, { icon: icon }).addTo(map).bindPopup(popupContent).on('click', () => focusOnMapItem(driverLoc.id, 'driver')); }
+                 if (!driverLoc.isStuck) bounds.extend(latLng);
+             });
+             const unassignedOrders = state.orders.filter(o => o.status === 'חדש' && o.latitude && o.longitude && !VIRTUAL_WAREHOUSES.includes(o.warehouse));
+             Object.keys(orderMarkers).forEach(orderId => { if (!unassignedOrders.some(o => o.id == orderId)) { if (map.hasLayer(orderMarkers[orderId])) { map.removeLayer(orderMarkers[orderId]); } delete orderMarkers[orderId]; } });
+             unassignedOrders.forEach(order => {
+                 const latLng = [order.latitude, order.longitude];
+                 const customerName = order.customer?.name || 'לקוח לא ידוע';
+                 const displayId = order.orderNumber || `#${order.id.slice(-6)}`;
+                 const popupContent = `<h4>הזמנה ${displayId}</h4> <p>${customerName}</p> <p>${order.address || '...'}</p> <button class="w-full mt-2 px-3 py-1 bg-blue-500 text-white text-sm rounded hover:bg-blue-600" onclick="showAssignDriverModal('${order.id}')"> שייך נהג </button>`;
+                 if (orderMarkers[order.id]) { orderMarkers[order.id].setLatLng(latLng).setPopupContent(popupContent); } 
+                 else { orderMarkers[order.id] = L.marker(latLng, { icon: orderIconNew }).addTo(map).bindPopup(popupContent).on('click', () => focusOnMapItem(order.id, 'order')); }
+                 bounds.extend(latLng);
+             });
+             if (bounds.isValid() && (unassignedOrders.length > 0 || Object.keys(driverMarkers).some(id => !state.liveLocations[id]?.isStuck) )) { try { map.fitBounds(bounds, { padding: [50, 50] }); } catch (e) { console.warn("FitBounds error:", e); } } 
+             else if (!bounds.isValid()) { map.setView(ISRAEL_CENTER, 9); }
+         }
+        function renderHistoryTable() { 
+             const list = document.getElementById('history-table-body');
+             if (!list) return;
+             const search = document.getElementById('history-search').value.toLowerCase();
+             const dateFrom = document.getElementById('history-date-from').value;
+             const dateTo = document.getElementById('history-date-to').value;
+             let filteredOrders = state.orders;
+             if (search) { filteredOrders = filteredOrders.filter(o => (o.id.toLowerCase().includes(search)) || (o.orderNumber?.toLowerCase().includes(search)) || (o.customer?.name?.toLowerCase().includes(search)) || (o.driver?.name?.toLowerCase().includes(search)) || (o.address?.toLowerCase().includes(search)) ); }
+             if (dateFrom) { const fromMs = new Date(dateFrom).getTime(); filteredOrders = filteredOrders.filter(o => { const orderTimestamp = o.createdAt?.toDate ? o.createdAt.toDate().getTime() : (o.orderDate ? new Date(o.orderDate).getTime() : 0); return orderTimestamp >= fromMs; }); }
+             if (dateTo) { const toMs = new Date(dateTo).setHours(23, 59, 59, 999); filteredOrders = filteredOrders.filter(o => { const orderTimestamp = o.createdAt?.toDate ? o.createdAt.toDate().getTime() : (o.orderDate ? new Date(o.orderDate).getTime() : Infinity); return orderTimestamp <= toMs; }); }
+             filteredOrders.sort((a, b) => { const timeA = a.createdAt?.toMillis() || 0; const timeB = b.createdAt?.toMillis() || 0; return timeB - timeA; });
+             let html = '';
+             if (filteredOrders.length === 0) { html = '<tr><td colspan="7" class="text-center p-8 text-gray-500">לא נמצאו הזמנות תואמות</td></tr>'; } 
+             else { filteredOrders.forEach(order => {
+                 const orderDate = order.createdAt?.toDate ? order.createdAt.toDate().toLocaleDateString('he-IL') : (order.orderDate ? new Date(order.orderDate).toLocaleDateString('he-IL') : 'N/A');
+                 const displayId = order.orderNumber || `#${order.id.slice(-6)}`;
+                 const orderTimeStr = order.orderTime ? ` (${order.orderTime})` : ''; // Add time if exists
+                 html += `
+                     <tr class="hover:bg-gray-50">
+                         <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${displayId}</td> <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${order.customer?.name || '...'}</td>
+                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${order.driver?.name || '---'}</td> <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 truncate" title="${order.address || ''}">${order.address || '...'}</td>
+                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${order.status || '...'}</td> <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${orderDate}${orderTimeStr}</td>
+                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                             <button class="action-button" onclick="promptForStatusChange('${order.id}', '${order.status || 'חדש'}')">עדכן סטטוס</button>
+                             <button class="action-button action-button-secondary" onclick="copyCustomerLink('${order.id}')" title="העתק לינק ללקוח"> <i data-feather="share-2" class="w-4 h-4"></i> </button>
+                         </td> </tr> `; }); }
+             list.innerHTML = html;
+             feather.replace({ width: '16px', height: '16px' }); 
+         }
+        function renderCustomerTable() { 
+             const list = document.getElementById('customer-table-body');
+             if(!list) return;
+             const search = document.getElementById('customer-search-input').value.toLowerCase();
+             let filteredCustomers = state.customers;
+             if (search) { filteredCustomers = filteredCustomers.filter(c => (c.name?.toLowerCase().includes(search)) || (c.phone?.includes(search)) || (c.customerNumber?.toLowerCase().includes(search)) || (c.defaultAddress?.toLowerCase().includes(search)) ); }
+             filteredCustomers.sort((a, b) => a.name?.localeCompare(b.name || '') || 0);
+             let html = '';
+             if (filteredCustomers.length === 0) { html = '<tr><td colspan="4" class="text-center p-8 text-gray-500">לא נמצאו לקוחות תואמים</td></tr>'; } 
+             else { filteredCustomers.forEach(cust => { html += `
+                 <tr class="hover:bg-gray-50" onclick="openCustomerEditModal('${cust.id}')">
+                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${cust.name || '---'}</td> <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${cust.customerNumber || '---'}</td>
+                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${cust.phone || '---'}</td> <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 truncate" title="${cust.defaultAddress || ''}">${cust.defaultAddress || '---'}</td>
+                 </tr> `; }); }
+             list.innerHTML = html;
+         }
+        window.renderCustomerTable = renderCustomerTable; // Make global for keyup
+        
         // --- NEW: CONTAINER VIEW LOGIC ---
-        function processAndRenderContainers() { /* ... (same as before) ... */ }
-        function createContainerRow(container) { /* ... (same as before) ... */ }
-        function calculateRentalDays(startDate) { /* ... (same as before) ... */ }
+        function processAndRenderContainers() { 
+             SmartLog.info("Processing and rendering container data...", "Containers"); // Use SmartLog here
+             showLoader('containers-loader', true);
+             const containerContent = document.getElementById('containers-content');
+             if (!containerContent) { SmartLog.error("Container content element not found", "Containers.Render"); showLoader('containers-loader', false); return; } // Use SmartLog here
+             containerContent.innerHTML = ''; state.activeContainers = []; 
+             const ordersByCustomer = state.orders.reduce((acc, order) => { 
+                  if (order?.customer?.id && VIRTUAL_WAREHOUSES.includes(order.warehouse)) { // Add safe navigation
+                     if (!acc[order.customer.id]) acc[order.customer.id] = [];
+                     acc[order.customer.id].push(order);
+                 }
+                 return acc;
+             }, {});
+             for (const customerId in ordersByCustomer) {
+                 const customerOrders = ordersByCustomer[customerId]; customerOrders.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
+                 const latestOrder = customerOrders[0];
+                 if (latestOrder.deliveryType === 'הצבת מכולה' || latestOrder.deliveryType === 'החלפת מכולה') {
+                     // Check if rentalStartDate is a Firestore Timestamp before calling toDate()
+                     const startDate = latestOrder.rentalStartDate?.toDate ? latestOrder.rentalStartDate.toDate() : 
+                                       (latestOrder.createdAt?.toDate ? latestOrder.createdAt.toDate() : 
+                                       (latestOrder.orderDate ? new Date(latestOrder.orderDate) : null));
+                     
+                     if (startDate) {
+                         const rentalDays = calculateRentalDays(startDate);
+                         state.activeContainers.push({ 
+                             orderId: latestOrder.id, 
+                             customerId: customerId,
+                             customerName: latestOrder.customer?.name || '?', // Safe navigation
+                             address: latestOrder.address,
+                             warehouse: latestOrder.warehouse,
+                             deliveryType: latestOrder.deliveryType, 
+                             rentalStartDate: startDate,
+                             rentalDays: rentalDays,
+                             isOverdue: rentalDays > CONTAINER_RENTAL_LIMIT_DAYS,
+                             orderNumber: latestOrder.orderNumber, 
+                             orderTime: latestOrder.orderTime 
+                         });
+                     } else { SmartLog.warn("Could not determine rental start date for active container", "Containers.Process", { orderId: latestOrder.id, customerId }); } // Use SmartLog here
+                 } 
+             }
+             const containersByWarehouse = state.activeContainers.reduce((acc, container) => { 
+                 if (!acc[container.warehouse]) acc[container.warehouse] = [];
+                 acc[container.warehouse].push(container); return acc;
+              }, {});
+             let totalActive = 0;
+             VIRTUAL_WAREHOUSES.forEach(warehouse => {
+                 const warehouseContainers = containersByWarehouse[warehouse] || [];
+                 warehouseContainers.sort((a, b) => { 
+                     if (a.isOverdue && !b.isOverdue) return -1;
+                     if (!a.isOverdue && b.isOverdue) return 1;
+                     return b.rentalDays - a.rentalDays; 
+                 });
+                 let sectionHtml = `<div class="warehouse-section"><h3>${warehouse} (${warehouseContainers.length})</h3>`;
+                 if (warehouseContainers.length > 0) { 
+                     sectionHtml += `<div class="bg-white rounded-lg shadow-sm overflow-hidden"><div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200 container-table"><thead class="bg-gray-50"><tr>
+                                         <th>לקוח</th><th>כתובת</th><th>ת. הצבה/החלפה</th><th>ימי שכירות (מתוך ${CONTAINER_RENTAL_LIMIT_DAYS})</th>
+                                         <th>פעולה אחרונה</th><th>מס' הזמנה</th><th>עריכה</th></tr></thead>
+                                         <tbody class="bg-white divide-y divide-gray-200">${warehouseContainers.map(c => createContainerRow(c)).join('')}</tbody>
+                                         </table></div></div>`; 
+                 } else { sectionHtml += `<p class="text-gray-500">אין מכולות פעילות במחסן זה.</p>`; }
+                 sectionHtml += `</div>`;
+                 containerContent.innerHTML += sectionHtml; totalActive += warehouseContainers.length;
+             });
+              // Safely update total count
+             const totalEl = document.getElementById('total-active-containers');
+             if (totalEl) totalEl.innerText = totalActive;
+             
+             // Safely call feather.replace
+             try { feather.replace({ width: '16px', height: '16px' }); } catch(e) { console.error("Feather replace error in processAndRenderContainers:", e); }
+             
+             showLoader('containers-loader', false);
+         }
+        function createContainerRow(container) { 
+             const startDateStr = container.rentalStartDate instanceof Date ? container.rentalStartDate.toLocaleDateString('he-IL') : 'N/A';
+             const progressPercent = Math.min(100, (container.rentalDays / CONTAINER_RENTAL_LIMIT_DAYS) * 100);
+             const progressBarClass = container.isOverdue ? 'progress-bar overdue' : 'progress-bar';
+             const rowClass = container.isOverdue ? 'overdue' : '';
+             const displayId = container.orderNumber || `#${container.orderId.slice(-6)}`;
+             const timeStr = container.orderTime || '';
+             return `
+                 <tr class="${rowClass}">
+                     <td class="font-medium">${container.customerName}</td> <td>${container.address}</td> <td>${startDateStr} ${timeStr}</td>
+                     <td> <div class="flex items-center gap-2"> <span>${container.rentalDays}</span> <div class="progress-bar-container flex-grow"> <div class="${progressBarClass}" style="width: ${progressPercent}%;"></div> </div> </div> </td>
+                     <td>${container.deliveryType}</td> <td>${displayId}</td>
+                     <td> <button class="edit-btn" onclick="openContainerEditModal('${container.orderId}')"> <i data-feather="edit-2"></i> </button> </td>
+                 </tr> `;
+         }
+        function calculateRentalDays(startDate) { 
+             if (!(startDate instanceof Date)) return 0; // Ensure it's a Date object
+             const today = new Date();
+             const start = new Date(startDate); start.setHours(0, 0, 0, 0); today.setHours(0, 0, 0, 0);
+             const diffTime = Math.abs(today - start);
+             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+             return diffDays + 1; 
+         }
 
         // --- UI & MAP INTERACTIONS ---
-        function showView(viewName) { /* ... (same as before, calls SmartLog.info) ... */ }
+        function showView(viewName) { 
+             SmartLog.info(`Switching view to: ${viewName}`, "UI.Nav"); // Use SmartLog here
+             document.querySelectorAll('.app-view').forEach(v => v.classList.remove('active'));
+             const viewEl = document.getElementById(`view-${viewName}`); 
+             if (viewEl) { viewEl.classList.add('active'); } 
+             else { SmartLog.error(`View element not found`, "UI.Nav", { viewId: `view-${viewName}` }); document.getElementById('view-dashboard')?.classList.add('active'); viewName = 'dashboard'; } // Use SmartLog here
+             document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+             const navLink = document.querySelector(`.nav-link[onclick*="showView('${viewName}')"]`);
+             if (navLink) navLink.classList.add('active');
+             
+             // Ensure maps resize correctly after view switch
+             if (viewName === 'dashboard' && map) setTimeout(() => { try { map.invalidateSize(); } catch(e){ console.error("Map invalidateSize error:", e); } }, 10);
+             if (viewName === 'driver-history' && driverHistoryMap) setTimeout(() => { try { driverHistoryMap.invalidateSize(); } catch(e){ console.error("DriverHistoryMap invalidateSize error:", e); } }, 10);
+             
+             if (viewName === 'containers') processAndRenderContainers();
+         }
         window.showView = showView;
         function showHistoryTab(tabName) { /* ... (same as before) ... */ }
         window.showHistoryTab = showHistoryTab; 
@@ -818,18 +1140,37 @@
         function focusOnMapItem(id, type) { /* ... (same as before) ... */ }
         function showAssignDriverModal(orderId) { /* ... (same as before) ... */ }
         window.showAssignDriverModal = showAssignDriverModal;
-        async function assignOrderToDriver(orderId, driverId) { /* ... (same as before) ... */ }
+        async function assignOrderToDriver(orderId, driverId) { 
+             /* ... */ 
+             try { /* ... */ SmartLog.info(`Order ${orderId} assigned to ${driverId}`, "CRUD.Assign"); /* ... */ } // Use SmartLog here
+             catch (error) { SmartLog.error(error, "CRUD.Assign", { orderId, driverId }); /* ... */ } // Use SmartLog here
+         }
         function renderDetailsPanel(id, type) { /* ... (same as before) ... */ }
         function closeDetailsPanel() { /* ... (same as before) ... */ }
         window.closeDetailsPanel = closeDetailsPanel;
         
         // --- Geocoding Function ---
-        async function geocodeAddress(address) { /* ... (same as before) ... */ }
+        async function geocodeAddress(address) { 
+             if (!address) return null;
+             const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1&countrycodes=il`;
+             SmartLog.info(`Geocoding address: ${address}`, "Geocode.Nominatim"); // Use SmartLog here
+             try {
+                 const response = await fetch(url); if (!response.ok) throw new Error(`Nominatim API failed: ${response.status}`);
+                 const data = await response.json();
+                 if (data && data.length > 0) { const { lat, lon } = data[0]; SmartLog.info(`Geocode success: [${lat}, ${lon}]`, "Geocode.Nominatim"); return [parseFloat(lat), parseFloat(lon)]; } // Use SmartLog here
+                 else { SmartLog.warn(`Geocode found no results for: ${address}`, "Geocode.Nominatim"); return null; } // Use SmartLog here
+             } catch (error) { SmartLog.error(error, "Geocode.Nominatim", { address }); return null; } // Use SmartLog here
+         }
 
         // --- STATUS UPDATE FUNCTIONS ---
         function promptForStatusChange(orderId, currentStatus) { /* ... (same as before) ... */ }
         window.promptForStatusChange = promptForStatusChange;
-        async function updateOrderStatus(orderId, newStatus) { /* ... (same as before) ... */ }
+        async function updateOrderStatus(orderId, newStatus) { 
+             /* ... */ 
+             SmartLog.info(`Attempting to update status for order ${orderId} to ${newStatus}`, "CRUD.StatusUpdate"); // Use SmartLog here
+             try { /* ... */ SmartLog.info(`Order ${orderId} status updated to ${newStatus}`, "CRUD.StatusUpdate"); /* ... */ } // Use SmartLog here
+             catch (error) { /* ... */ SmartLog.error(error, "CRUD.StatusUpdate", { orderId, newStatus }); } // Use SmartLog here
+         }
         
         // --- NEW ORDER FORM ---
         function populateCustomerDatalist() { /* ... (same as before) ... */ }
@@ -839,7 +1180,28 @@
         window.closeNewOrderForm = closeNewOrderForm;
         function handleCustomerSearch(value) { /* ... (same as before) ... */ }
         window.handleCustomerSearch = handleCustomerSearch;
-        async function submitNewOrder(event) { /* ... (same as before) ... */ }
+        async function submitNewOrder(event) { 
+             /* ... */ 
+             try { 
+                 /* ... Customer Handling ... */
+                 if (document.getElementById('new-customer-fields').style.display === 'block') { /* ... */ SmartLog.info("Created new customer", "CRUD.Customer", { id: customerRefId }); /* ... */ } // Use SmartLog here
+                 else if (document.getElementById('existing-customer-display').style.display === 'block') { /* ... */ if (useCustomerCoords) { SmartLog.info("Using custom coordinates from customer profile", "CRUD.Order", { customerId: customerRefId }); } /* ... */ } // Use SmartLog here
+                 /* ... Geocoding (if needed) ... */
+                 if (isVirtual) { SmartLog.info("Skipping geocoding for virtual warehouse order", "CRUD.Order.Create"); } // Use SmartLog here
+                 /* ... Create Order Object ... */
+                 if (isVirtual && (deliveryType === 'הצבת מכולה' || deliveryType === 'החלפת מכולה')) {
+                     /* ... */
+                     if (orderDateStr) { try { /* ... */ SmartLog.info("Setting rentalStartDate", "CRUD.Order.Create", { date: rentalStartDate.toDate() }); /* ... */ } // Use SmartLog here
+                     catch (e) { SmartLog.error("Error creating rentalStartDate from date/time inputs", "CRUD.Order.Create", { orderDateStr, orderTimeStr, error: e }); /* ... */ } } // Use SmartLog here
+                     else { SmartLog.warn("Order date is required to set rentalStartDate", "CRUD.Order.Create"); } // Use SmartLog here
+                 }
+                 const newOrder = { /* ... */ };
+                 /* ... Save Order ... */
+                 const orderDocRef = await addDoc(collection(db, "orders"), newOrder);
+                 SmartLog.info("Order created", "CRUD.Order", { id: orderDocRef.id, orderNumber: newOrder.orderNumber }); // Use SmartLog here
+             } catch (error) { /* ... */ SmartLog.error(error, "CRUD.Order.Create"); } // Use SmartLog here
+             finally { /* ... */ }
+         }
         window.submitNewOrder = submitNewOrder;
 
          // --- CUSTOMER EDIT MODAL ---
@@ -847,12 +1209,38 @@
          window.openCustomerEditModal = openCustomerEditModal;
          function closeCustomerEditModal() { /* ... (same as before) ... */ }
          window.closeCustomerEditModal = closeCustomerEditModal;
-         async function handleSaveCustomer(event) { /* ... (same as before) ... */ }
+         async function handleSaveCustomer(event) { 
+             /* ... */ 
+             try { 
+                 /* ... Data preparation ... */
+                 /* ... Geocode if needed ... */
+                 if (addressChanged && !newCoords) { /* ... */ SmartLog.info("Geocoded new address during customer update", "CRUD.Customer", { customerId, coords: newCoords }); /* ... */ } // Use SmartLog here
+                 /* ... Save Customer ... */
+                 if (hasChanges) { /* ... */ SmartLog.info("Customer updated with audit log", "CRUD.Customer", { id: customerId, changes: Object.keys(changes) }); /* ... */ } // Use SmartLog here
+                 else { SmartLog.info("No changes detected for customer update", "CRUD.Customer", { id: customerId }); } // Use SmartLog here
+                 /* ... Update Linked Orders ... */
+                 if (addressChanged && newCoords) { 
+                     /* ... */ 
+                     try { 
+                         /* ... */ SmartLog.info(`Updating order ${orderDoc.id} with new address/coords`, "CRUD.Order.UpdateOnCustChange", { customerId }); /* ... */ 
+                         if (updatedCount > 0) { SmartLog.info(`Updated location for ${updatedCount} active orders`, "CRUD.Order.UpdateOnCustChange", { customerId }); } // Use SmartLog here
+                         else { SmartLog.info(`No active orders found matching old address ${originalAddress}`, "CRUD.Order.UpdateOnCustChange", { customerId }); } // Use SmartLog here
+                     } catch (orderUpdateError) { SmartLog.error(orderUpdateError, "CRUD.Order.UpdateOnCustChange", { customerId }); /* ... */ } // Use SmartLog here
+                 } 
+             } catch (error) { /* ... */ SmartLog.error(error, "CRUD.Customer.Update", { customerId }); } // Use SmartLog here
+             finally { /* ... */ }
+         }
          window.handleSaveCustomer = handleSaveCustomer;
 
          // --- DRIVER HISTORY PAGE ---
          function populateDriverSelector() { /* ... (same as before) ... */ }
-         async function fetchAndDrawDriverRoute() { /* ... (same as before) ... */ }
+         async function fetchAndDrawDriverRoute() { 
+             /* ... */ 
+             // Conceptual Firestore query:
+             /* try { ... } catch (error) { SmartLog.error(error, "DriverHistory.Fetch", { ... }); ... } */
+             SmartLog.warn("Driver History fetch is a placeholder. Requires 'locationHistory' collection.", "DriverHistory.Fetch"); // Use SmartLog here
+             /* ... */ 
+         }
          window.fetchAndDrawDriverRoute = fetchAndDrawDriverRoute;
          function drawRouteOnHistoryMap(latLngPoints) { /* ... (same as before) ... */ }
          function calculateRouteDistance(points) { /* ... (same as before) ... */ }
@@ -860,10 +1248,20 @@
         // --- HELPERS ---
         function showLoader(elementId, show) { /* ... (same as before) ... */ }
         function showToast(message, type = 'info') { /* ... (same as before) ... */ }
-        function copyToClipboard(text) { /* ... (same as before) ... */ }
+        function copyToClipboard(text) { 
+             /* ... */ 
+             try { /* ... */ SmartLog.info("Copied to clipboard", "UI.Clipboard", { text }); } // Use SmartLog here
+             catch (err) { /* ... */ SmartLog.error(err, "UI.Clipboard"); } // Use SmartLog here
+             /* ... */ 
+         }
         function copyCustomerLink(orderId) { /* ... (same as before) ... */ }
         window.copyCustomerLink = copyCustomerLink;
-        async function sendGlobalPing() { /* ... (same as before) ... */ }
+        async function sendGlobalPing() { 
+             /* ... */ 
+             SmartLog.info("Sending global ping...", "CRUD.Ping", { message }); // Use SmartLog here
+             try { /* ... */ SmartLog.info("Global ping sent successfully", "CRUD.Ping"); } // Use SmartLog here
+             catch (error) { SmartLog.error(error, "CRUD.Ping", { message }); /* ... */ } // Use SmartLog here
+         }
         window.sendGlobalPing = sendGlobalPing;
 
         // --- NEW: CONTAINER EDIT MODAL FUNCTIONS ---
@@ -871,7 +1269,22 @@
         window.openContainerEditModal = openContainerEditModal; // Make global
         function closeContainerEditModal() { /* ... (same as before) ... */ }
         window.closeContainerEditModal = closeContainerEditModal; // Make global
-        async function handleSaveContainerOrder(event) { /* ... (same as before) ... */ }
+        async function handleSaveContainerOrder(event) { 
+             /* ... */ 
+             try { 
+                 /* ... */ 
+                 if (['הצבת מכולה', 'החלפת מכולה'].includes(deliveryType) && orderDate) { 
+                     /* ... */ 
+                     try { /* ... */ } 
+                     catch(e) { SmartLog.error("Error creating rentalStartDate during edit", "CRUD.Container.Edit", { /*...*/ }); throw new Error(/*...*/); } // Use SmartLog here
+                 }
+                 /* ... */ 
+                 await updateDoc(orderRef, updatedData);
+                 SmartLog.info("Container order updated", "CRUD.Container.Edit", { orderId, changes: updatedData }); // Use SmartLog here
+                 /* ... */ 
+             } catch (error) { /* ... */ SmartLog.error(error, "CRUD.Container.Edit", { orderId }); } // Use SmartLog here
+             finally { /* ... */ }
+         }
         window.handleSaveContainerOrder = handleSaveContainerOrder; // Make global
 
         // --- Make remaining functions globally accessible ---
