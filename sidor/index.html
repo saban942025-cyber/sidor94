@@ -3,17 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DeliveryMaster v31.9 (Global Ping)</title>
+    <title>DeliveryMaster v31.9.1 (עם שעת אספקה)</title>
     <!-- 
-      DeliveryMaster Admin App v31.9 (Global Ping)
+      DeliveryMaster Admin App v31.9.1
       
       Changelog:
+      - v31.9.1 (הוספת שעת אספקה):
+        - נוסף שדה <input type="time"> לטופס יצירת הזמנה חדשה.
+        - עודכנה פונקציית submitNewOrder לשמור את השדה 'orderTime' ב-Firestore.
       - v31.9: Added Global Ping functionality.
         - Added "Send Global Alert" button to main navigation.
-        - Added `sendGlobalPing` function:
-          - Prompts admin for a message.
-          - Creates a new document in `globalPings` collection.
-          - This ping can be heard by all other apps (Viewer, Driver, Warehouse).
+        - Added `sendGlobalPing` function.
       - v31.8: Added "Copy Link for Customer" feature.
       - v31.7.2 (FIX): Fixed DOM access and form submission errors.
       - v31.7: Added functionality to update order status directly.
@@ -701,8 +701,13 @@
                     <label for="order-number" class="block text-sm font-medium mb-1">מספר הזמנה (אופציונלי)</label>
                     <input type="text" id="order-number" placeholder="השאר ריק למזהה אוטומטי" class="w-full p-2 border rounded-md mb-4"> <!-- NEW FIELD -->
                  </div>
+                
+                <!-- *** START: EDITED SECTION FOR TIME *** -->
                 <div class="grid grid-cols-2 gap-4">
-                    <input type="date" id="order-date" class="w-full p-2 border rounded-md" required>
+                    <div class="grid grid-cols-2 gap-2">
+                        <input type="date" id="order-date" class="w-full p-2 border rounded-md" required>
+                        <input type="time" id="order-time" class="w-full p-2 border rounded-md"> <!-- שדה חדש -->
+                    </div>
                     <select id="order-delivery-type" class="w-full p-2 border rounded-md" required>
                         <option value="">סוג הובלה</option>
                         <option value="הובלת מנוף">הובלת מנוף</option>
@@ -715,6 +720,8 @@
                         <option value="התלמיד">התלמיד</option>
                     </select>
                 </div>
+                <!-- *** END: EDITED SECTION FOR TIME *** -->
+
                 <textarea id="order-notes" rows="3" placeholder="הערות להזמנה..." class="w-full p-2 border rounded-md"></textarea>
             </div>
             
@@ -914,7 +921,7 @@
         });
         
         async function initializeApplication() {
-            SmartLog.info("v31.9-FB: Initializing...", "Init"); // Version bump
+            SmartLog.info("v31.9.1-FB: Initializing...", "Init"); // Version bump
             try {
                 updateStatus("מפעיל מפות...");
                 initMap(); // Dashboard map
@@ -1144,10 +1151,13 @@
             const createdTime = order.createdAt?.toDate ? order.createdAt.toDate().toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' }) : '';
             const displayId = order.orderNumber || `#${order.id.slice(-6)}`; // Show custom number or fallback
             
+            // v31.9.1 - Display order time if available
+            const displayTime = order.orderTime ? `| ${order.orderTime}` : '';
+
             el.innerHTML = `
                 <div class="flex justify-between items-center mb-1">
                     <span class="font-bold text-blue-600">${displayId}</span>
-                    <span class="text-sm font-semibold">${orderDate}</span>
+                    <span class="text-sm font-semibold">${orderDate} ${displayTime}</span>
                 </div>
                 <div class="font-semibold text-gray-800">${customerName}</div>
                 <div class="text-sm text-gray-600 truncate">${address}</div>
@@ -1291,8 +1301,12 @@
                 html = '<tr><td colspan="7" class="text-center p-8 text-gray-500">לא נמצאו הזמנות תואמות</td></tr>'; // Updated colspan
             } else {
                 filteredOrders.forEach(order => {
-                    const orderDate = order.createdAt?.toDate ? order.createdAt.toDate().toLocaleDateString('he-IL') : (order.orderDate ? new Date(order.orderDate).toLocaleDateString('he-IL') : 'N/A');
+                    const orderDateStr = order.createdAt?.toDate ? order.createdAt.toDate().toLocaleDateString('he-IL') : (order.orderDate ? new Date(order.orderDate).toLocaleDateString('he-IL') : 'N/A');
                     const displayId = order.orderNumber || `#${order.id.slice(-6)}`; // Show custom number or fallback
+                    
+                    // v31.9.1 - Add time to history table
+                    const displayTime = order.orderTime ? ` ${order.orderTime}` : '';
+                    
                     html += `
                         <tr class="hover:bg-gray-50">
                             <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${displayId}</td>
@@ -1300,7 +1314,7 @@
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${order.driver?.name || '---'}</td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 truncate" title="${order.address || ''}">${order.address || '...'}</td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${order.status || '...'}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${orderDate}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${orderDateStr}${displayTime}</td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                 <button class="action-button" onclick="promptForStatusChange('${order.id}', '${order.status || 'חדש'}')">עדכן סטטוס</button>
                                 <button class="action-button action-button-secondary" onclick="copyCustomerLink('${order.id}')" title="העתק לינק ללקוח">
@@ -1589,9 +1603,12 @@
                 const displayId = order.orderNumber || `#${order.id.slice(-6)}`;
                 const currentStatus = order.status || 'חדש';
                 
+                // v31.9.1 - Display order time in details panel
+                const displayTime = order.orderTime ? ` (שעה: ${order.orderTime})` : '';
+
                 html += `
                     <div id="details-panel-header">
-                        <h4>הזמנה ${displayId}</h4>
+                        <h4>הזמנה ${displayId}${displayTime}</h4>
                         <div>
                              <i id="details-copy-link-btn" data-feather="share-2" onclick="copyCustomerLink('${order.id}')" title="העתק לינק ללקוח" style="margin-left: 10px;"></i>
                             <i id="details-close-btn" data-feather="x" onclick="closeDetailsPanel()"></i>
@@ -1917,11 +1934,13 @@
                 }
 
                 // Step 2: Create Order
+                // *** START: EDITED SECTION FOR TIME ***
                 const newOrder = {
                     customer: customerDataForOrder, // Use the prepared customer object
                     address: customerAddress, 
                     orderNumber: document.getElementById('order-number').value.trim() || null, 
                     orderDate: document.getElementById('order-date').value,
+                    orderTime: document.getElementById('order-time').value.trim() || null, // <-- שדה חדש שהתווסף
                     deliveryType: document.getElementById('order-delivery-type').value,
                     warehouse: document.getElementById('order-warehouse').value,
                     notes: document.getElementById('order-notes').value.trim(),
@@ -1931,7 +1950,8 @@
                     createdAt: serverTimestamp(), // Use server timestamp for creation time
                     lastModified: serverTimestamp() // Use server timestamp for modification time
                 };
-                
+                // *** END: EDITED SECTION FOR TIME ***
+
                  // Final basic validation before saving order
                  if (!newOrder.orderDate || !newOrder.deliveryType || !newOrder.warehouse) {
                      throw new Error("תאריך, סוג הובלה ומחסן הם שדות חובה בהזמנה.");
