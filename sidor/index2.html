@@ -3,11 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DeliveryMaster v32.0.3 (תיקון לחיצות)</title>
+    <title>DeliveryMaster v32.0.4 (תיקון לולאה)</title>
     <!-- 
-      DeliveryMaster Admin App v32.0.3
+      DeliveryMaster Admin App v32.0.4
       
       Changelog:
+      - v32.0.4 (תיקון לולאה):
+        - תוקנה בעיה שגרמה לקריאות חוזרות לפונקציה `processAndRenderContainers` בכל עדכון הזמנה. הפונקציה נקראת כעת רק כאשר תצוגת המכולות פעילה.
       - v32.0.3 (תיקון לחיצות):
         - בוצעו התאמות נוספות בסדר טעינת הסקריפטים והפונקציות כדי להבטיח את תקינות הלחיצה על כפתור הניווט "מכולות" וטעינת הדף המתאים.
         - נוספו בדיקות הגנה נוספות בפונקציות הקשורות לתצוגת המכולות.
@@ -860,7 +862,17 @@
              onSnapshot(q, (snapshot) => {
                  SmartLog.info(`Orders: ${snapshot.docs.length} docs.`, "Firestore.Snapshot"); // Use SmartLog here
                  state.orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                 renderOrders(); renderMapMarkers(); renderHistoryTable(); processAndRenderContainers(); 
+                 renderOrders(); 
+                 renderMapMarkers(); 
+                 renderHistoryTable(); 
+                 
+                 // --- START: FIX - Only process containers if view is active ---
+                 const containerView = document.getElementById('view-containers');
+                 if (containerView && containerView.classList.contains('active')) {
+                     processAndRenderContainers(); 
+                 }
+                 // --- END: FIX ---
+                 
                  showLoader('orders-list', false);
              }, e => { 
                  SmartLog.error(e, "Firestore.Orders.Listener"); // Use SmartLog here
