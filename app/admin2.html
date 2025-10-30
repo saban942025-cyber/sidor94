@@ -2,507 +2,136 @@
 <html lang="he" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>DeliveryMaster Viewer v50.9 (Final)</title>
-    <!-- 
-      DeliveryMaster Live Viewer App v50.9
-      קובץ מקורי של המשתמש, עם השתלה כירורגית של Firebase v9 ומערכת תקשורת.
-      כל המבנה והפונקציות המקוריות נשמרו.
-      מותאם לאינדקסים שהוגדרו.
-    -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>מנהל - DeliveryMaster v9</title>
     
-    <!-- External Libraries (Unchanged) -->
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.1/chart.min.js"></script>
+    
+    <!-- Font Awesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
-    <!-- User's Original CSS (Unchanged) -->
     <style>
-        :root {
-            --header-height: 140px;
-            --nav-height: 60px;
-            --map-height-mobile: 35vh;
-            --list-height-mobile: calc(65vh - var(--header-height) - var(--nav-height));
-            --map-height-desktop: calc(100vh - var(--header-height));
-            --list-height-desktop: calc(100vh - var(--header-height));
-        }
-
         body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            background-color: #f0f2f5;
-            display: flex;
-            flex-direction: column;
-            height: 100vh;
-            overflow: hidden; /* Prevent body scrolling */
+            font-family: 'Inter', sans-serif;
+            background-color: #f1f5f9; /* slate-100 */
         }
         
-        #main-header {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: var(--header-height);
-            background-color: white;
-            z-index: 100;
-            border-bottom: 1px solid #e5e7eb;
-            padding: 1rem;
-            padding-top: calc(1rem + env(safe-area-inset-top));
+        /* אנימציית הבהוב לפעמון */
+        @keyframes ring {
+            0% { transform: rotate(0); }
+            10% { transform: rotate(15deg); }
+            20% { transform: rotate(-15deg); }
+            30% { transform: rotate(10deg); }
+            40% { transform: rotate(-10deg); }
+            50% { transform: rotate(0); }
+            100% { transform: rotate(0); }
+        }
+        .ring-animation {
+            animation: ring 1.5s ease-in-out;
+        }
+        
+        /* סגנון לכרטיס הודעה חדשה */
+        .new-message-card {
+            background-color: #fefce8; /* yellow-50 */
+            border-color: #facc15; /* yellow-400 */
         }
 
-        #main-content {
-            display: flex;
-            flex-direction: column;
-            flex: 1;
-            padding-top: var(--header-height);
-            padding-bottom: var(--nav-height);
-            height: calc(100vh - var(--header-height) - var(--nav-height));
-        }
-        
-        #map-container {
-            height: var(--map-height-mobile);
-            background-color: #e0e0e0;
-            position: relative;
-        }
-        
-        #viewer-map-loader {
-            position: absolute;
-            top: 0; left: 0; right: 0; bottom: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: rgba(255,255,255,0.8);
-            z-index: 10;
-        }
-
-        #active-orders-page {
-            flex: 1;
-            overflow-y: auto;
-            -webkit-overflow-scrolling: touch;
-        }
-        
-        .order-card {
-            background-color: #ffffff;
-            border-radius: 0.75rem;
-            border: 1px solid #e5e7eb;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-            margin-bottom: 0.75rem;
-            padding: 1rem;
-            transition: all 0.2s ease;
-        }
-        .order-card.selected {
-            border-color: #2563eb;
-            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
-            transform: translateY(-2px);
-        }
-
-        #bottom-nav {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            height: calc(var(--nav-height) + env(safe-area-inset-bottom));
-            padding-bottom: env(safe-area-inset-bottom);
-            background-color: #ffffff;
-            border-top: 1px solid #e0e0e0;
-            z-index: 100;
-            display: flex;
-            justify-content: around;
-            align-items: center;
-        }
-        #bottom-nav button {
-            flex: 1;
-            text-align: center;
-            color: #4b5563;
-            padding-top: 0.5rem;
-        }
-        #bottom-nav button.active {
-            color: #2563eb;
-            font-weight: 600;
-        }
-        
-        .page-content {
-            display: none;
-            padding: 1rem;
-            height: calc(100vh - var(--header-height) - var(--nav-height));
-            overflow-y: auto;
-            -webkit-overflow-scrolling: touch;
-        }
-        .page-content.active {
-            display: block;
-        }
-
-        #full-page-view {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background-color: rgba(0, 0, 0, 0.6);
-            z-index: 200;
-            display: none;
-            align-items: center;
-            justify-content: center;
-            padding: 1rem;
-            backdrop-filter: blur(5px);
-        }
-        #full-page-view.show {
-            display: flex;
-        }
-        
-        #modal-content {
-            background-color: #f0f2f5;
-            width: 100%;
-            max-width: 600px;
-            height: 90vh;
-            max-height: 800px;
-            border-radius: 0.75rem;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
-        #modal-header {
-            background-color: white;
-            padding: 1rem 1.5rem;
-            border-bottom: 1px solid #e5e7eb;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        #modal-body {
-            flex: 1;
-            overflow-y: auto;
-            -webkit-overflow-scrolling: touch;
-        }
-        #modal-body-content {
-            padding: 1.5rem;
-        }
-        #modal-footer {
-            background-color: white;
-            padding: 1rem 1.5rem;
-            border-top: 1px solid #e5e7eb;
-            display: none; /* Hidden by default, shown by specific modals */
-        }
-        
-        .toast-container {
-            position: fixed;
-            top: calc(var(--header-height) + 1rem);
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 9999;
-            width: 90%;
-            max-width: 400px;
-        }
-        .toast {
-            background-color: #333;
-            color: white;
-            padding: 1rem;
-            border-radius: 0.5rem;
-            margin-bottom: 0.5rem;
-            text-align: center;
-            opacity: 0;
-            transform: translateY(-20px);
-            transition: all 0.3s ease;
-        }
-        .toast.show {
-            opacity: 1;
-            transform: translateY(0);
-        }
-        .toast.success { background-color: #28a745; }
-        .toast.error { background-color: #dc3545; }
-        .toast.info { background-color: #17a2b8; }
-        
-        /* ---------------------------------- */
-        /* --- הוספות קוד עבור שדרוג תקשורת --- */
-        /* ---------------------------------- */
-        
-        /* אייקון מנורה מהבהב */
-        .pulse-light {
-            color: #f59e0b; /* yellow-500 */
-            animation: pulse-light 1.5s infinite;
-        }
-        @keyframes pulse-light {
-            0% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.3; transform: scale(0.9); }
-            100% { opacity: 1; transform: scale(1); }
-        }
-
-        /* בועות צ'אט */
-        .chat-bubble {
-            max-width: 85%;
-            padding: 0.75rem 1rem;
-            border-radius: 1rem;
-            margin-bottom: 0.75rem;
-            word-wrap: break-word;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-        }
-        .chat-bubble-admin {
-            background-color: #e2e8f0; /* gray-200 */
-            color: #1e293b; /* gray-800 */
-            border-bottom-left-radius: 0.25rem;
-            align-self: flex-start;
-        }
-        .chat-bubble-customer {
-            background-color: #2563eb; /* blue-600 */
-            color: white;
-            border-bottom-right-radius: 0.25rem;
-            align-self: flex-end;
-        }
-         .chat-bubble-note {
-            background-color: #fef9c3; /* yellow-100 */
-            color: #713f12; /* yellow-900 */
-            border: 1px solid #fde047; /* yellow-400 */
-            align-self: center;
-            width: 100%;
-            max-width: 100%;
-            text-align: right;
-            font-style: italic;
-        }
-        .chat-timestamp {
-            font-size: 0.75rem;
-            color: #64748b; /* gray-500 */
-            margin-top: 0.25rem;
-            display: block;
-        }
-        .chat-bubble-customer .chat-timestamp {
-            color: #dbeafe; /* blue-100 */
-        }
-        /* ---------------------------------- */
-        
-        @media (min-width: 768px) {
-            body {
-                flex-direction: row;
-            }
-            #main-header {
-                height: 100vh;
-                width: 350px;
-                position: fixed;
-                padding-top: 1.5rem;
-                padding-bottom: env(safe-area-inset-bottom);
-                border-bottom: none;
-                border-left: 1px solid #e5e7eb;
-                display: flex;
-                flex-direction: column;
-            }
-            #main-content {
-                padding-top: 0;
-                padding-bottom: 0;
-                padding-right: 350px; /* Offset for header */
-                flex-direction: row;
-                height: 100vh;
-            }
-            #map-container {
-                width: 60%;
-                height: var(--map-height-desktop);
-            }
-            #active-orders-page {
-                width: 40%;
-                height: var(--list-height-desktop);
-                border-left: 1px solid #e5e7eb;
-            }
-            #bottom-nav {
-                display: none; /* Hide on desktop */
-            }
-            .page-content {
-                padding: 0; /* Remove padding for desktop full-height sections */
-                height: var(--list-height-desktop);
-            }
-            .page-content.active {
-                width: 40%;
-            }
-            /* Adjust header items for vertical layout */
-            #main-header .grid {
-                flex-direction: column;
-                margin-top: 1rem;
-            }
-            #main-header .grid button {
-                padding: 1rem;
-            }
-            #main-header .flex-1 {
-                flex: 0;
-            }
-            /* Desktop app-like nav */
-            #desktop-nav {
-                display: flex;
-                flex-direction: column;
-                gap: 0.5rem;
-                margin-top: auto; /* Push to bottom */
-                padding-top: 1rem;
-                border-top: 1px solid #e5e7eb;
-            }
-             #desktop-nav button {
-                display: flex;
-                align-items: center;
-                gap: 0.75rem;
-                padding: 0.75rem 1rem;
-                border-radius: 0.5rem;
-                font-medium;
-                color: #374151;
-             }
-             #desktop-nav button:hover {
-                background-color: #f3f4f6;
-             }
-             #desktop-nav button.active {
-                background-color: #e0e7ff;
-                color: #3730a3;
-             }
+        /* סגנון לכרטיס התראה שנשלחה */
+        .sent-alert-card {
+            background-color: #f0f9ff; /* sky-50 */
+            border-color: #7dd3fc; /* sky-300 */
         }
     </style>
 </head>
-<body class="antialiased">
+<body class="min-h-screen">
 
-    <!-- Header (Sidebar on Desktop) -->
-    <header id="main-header">
-        <div class="flex-1 overflow-y-auto">
-            <div class="flex justify-between items-center mb-4">
-                <h1 class="text-3xl font-bold text-gray-800">DeliveryMaster</h1>
-                <div id="user-info" class="text-left">
-                    <span class="font-semibold block" id="user-name-display">טוען...</span>
-                    <span class="text-sm text-gray-500" id="user-role-display">Viewer v50.9</span>
-                </div>
-            </div>
+    <!-- כותרת עליונה -->
+    <header class="bg-white shadow-md sticky top-0 z-50">
+        <div class="container mx-auto max-w-5xl p-4 flex justify-between items-center">
+            <h1 class="text-3xl font-bold text-gray-800">דשבורד מנהל</h1>
             
-            <input type="text" id="search-box" class="border rounded-full py-2.5 px-4 w-full text-base" placeholder="חפש לקוח, כתובת, מחסן...">
-            
-            <div class="grid grid-cols-3 gap-2 text-center mt-4">
-                <button id="header-active" onclick="showActiveListPage()" class="bg-blue-100 text-blue-800 p-2 rounded-lg">
-                    <span class="font-bold text-2xl" id="count-active">0</span>
-                    <span class="text-xs block">בסידור</span>
-                </button>
-                <button id="header-completed" onclick="showCompletedTodayListPage()" class="bg-green-100 text-green-800 p-2 rounded-lg">
-                    <span class="font-bold text-2xl" id="count-completed">0</span>
-                    <span class="text-xs block">סופקו היום</span>
-                </button>
-                <button id="header-future" onclick="showFutureListPage()" class="bg-gray-100 text-gray-800 p-2 rounded-lg">
-                    <span class="font-bold text-2xl" id="count-future">0</span>
-                    <span class="text-xs block">צפי עתידי</span>
-                </button>
+            <div class="relative">
+                <i class="fas fa-bell fa-2x text-gray-600"></i>
+                <span id="notification-badge" class="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center hidden">
+                    0
+                </span>
             </div>
         </div>
-
-        <!-- Desktop Navigation (Replaces Bottom Nav) -->
-        <nav id="desktop-nav" class="hidden md:flex">
-            <button id="desktop-nav-materials" onclick="showMaterialsPage()" class="active">
-                <i class="fas fa-hard-hat fa-lg fa-fw"></i>
-                <span>חומרי בנין</span>
-            </button>
-            <button id="desktop-nav-containers" onclick="showContainersPage()">
-                <i class="fas fa-truck-loading fa-lg fa-fw"></i>
-                <span>מכולות</span>
-            </button>
-            <button id="desktop-nav-reports" onclick="showReportsPage()">
-                <i class="fas fa-chart-line fa-lg fa-fw"></i>
-                <span>דוחות</span>
-            </button>
-        </nav>
     </header>
 
-    <!-- Main Content Area -->
-    <main id="main-content">
-        <!-- Page 1: Materials (Default) -->
-        <div id="materials-page" class="page-content active !p-0 md:!flex">
-            <!-- Map Container -->
-            <div id="map-container">
-                <iframe id="viewer-map" width="100%" height="100%" frameborder="0" scrolling="no" marginheight="0" marginwidth="0"
-                    src="https://maps.google.com/maps?width=100%25&amp;height=100%25&amp;hl=he&amp;q=Saban%20H.%20Building%20Materials%20Ltd,%20%D7%94%D7%AA%D7%9C%D7%9E%D7%99%D7%93%206,%20%D7%94%D7%95%D7%93%20%D7%94%D7%A9%D7%A8%D7%95%D7%9F+(%D7%97.%20%D7%A1%D7%91%D7%9F%20%D7%97%D7%95%D7%9E%D7%A8%D7%99%20%D7%91%D7%A0%D7%99%D7%9F)&amp;t=&amp;z=14&amp;ie=UTF8&amp;iwloc=B&amp;output=embed">
-                </iframe>
-                <div id="viewer-map-loader">
-                    <i class="fas fa-spinner fa-spin fa-3x text-blue-600"></i>
-                </div>
-            </div>
-            <!-- Active Orders List -->
-            <div id="active-orders-page" class="p-4 md:p-6">
-                 <p id="loading-orders" class="text-center text-gray-600 mt-10">
-                    <i class="fas fa-spinner fa-spin fa-2x"></i>
-                    <span class="block mt-2">טוען הזמנות...</span>
-                </p>
-                <!-- Order cards will be injected here by JS -->
+    <!-- תוכן ראשי -->
+    <main class="container mx-auto max-w-5xl p-4 mt-6">
+
+        <!-- בורר לשוניות -->
+        <div class="mb-6">
+            <div class="border-b border-gray-300">
+                <nav class="flex -mb-px space-x-reverse space-x-6">
+                    <button id="tab-messages" onclick="showTab('messages')" class="py-4 px-1 border-b-2 border-blue-500 font-medium text-blue-600">
+                        <i class="fas fa-inbox mr-2"></i> הודעות מלקוחות
+                    </button>
+                    <button id="tab-alerts" onclick="showTab('alerts')" class="py-4 px-1 border-b-2 border-transparent font-medium text-gray-500 hover:text-gray-700 hover:border-gray-300">
+                        <i class="fas fa-paper-plane mr-2"></i> התראות שנשלחו
+                    </button>
+                </nav>
             </div>
         </div>
-        
-        <!-- Page 2: Containers -->
-        <div id="containers-page" class="page-content">
-            <h2 class="text-2xl font-semibold mb-4 text-gray-800">ניהול מכולות</h2>
-            <p class="text-center text-gray-500">דף ניהול מכולות יפותח כאן.</p>
+
+        <!-- לשונית 1: הודעות מלקוחות -->
+        <div id="tab-content-messages" class="space-y-4">
+            <p id="loading-messages" class="text-center text-gray-600 p-10">
+                <i class="fas fa-spinner fa-spin fa-2x"></i>
+                <span class="block mt-2">טוען הודעות חדשות...</span>
+            </p>
+            <!-- כרטיסי הודעות יוכנסו כאן -->
         </div>
-        
-        <!-- Page 3: Reports -->
-        <div id="reports-page" class="page-content">
-            <h2 class="text-2xl font-semibold mb-4 text-gray-800">דוחות וניתוחים</h2>
-            <!-- Date Filters -->
-            <div class="grid grid-cols-2 gap-4 mb-4">
-                <div>
-                    <label for="start-date" class="block text-sm font-medium text-gray-700">מתאריך</label>
-                    <input type="date" id="start-date" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
-                </div>
-                <div>
-                    <label for="end-date" class="block text-sm font-medium text-gray-700">עד תאריך</label>
-                    <input type="date" id="end-date" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
-                </div>
-            </div>
-            <button onclick="renderReports()" class="w-full bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg mb-6">הצג דוח</button>
-            
-            <!-- Charts -->
-            <div class="space-y-6">
-                <div class="bg-white p-4 rounded-lg shadow">
-                    <h3 class="font-semibold mb-2">הזמנות לפי מחסן</h3>
-                    <canvas id="warehouse-chart"></canvas>
-                </div>
-                <div class="bg-white p-4 rounded-lg shadow">
-                    <h3 class="font-semibold mb-2">הזמנות לאורך זמן</h3>
-                    <canvas id="time-chart"></canvas>
-                </div>
-                <div class="bg-white p-4 rounded-lg shadow">
-                    <h3 class="font-semibold mb-2">לקוחות שסופקו (לפי טווח)</h3>
-                    <ul id="completed-customers-list" class="divide-y divide-gray-200 max-h-60 overflow-y-auto">
-                        <!-- List items will be injected here -->
-                    </ul>
-                </div>
-            </div>
+
+        <!-- לשונית 2: התראות שנשלחו -->
+        <div id="tab-content-alerts" class="space-y-4 hidden">
+             <p id="loading-alerts" class="text-center text-gray-600 p-10">
+                <i class="fas fa-spinner fa-spin fa-2x"></i>
+                <span class="block mt-2">טוען התראות שנשלחו...</span>
+            </p>
+            <!-- כרטיסי התראות יוכנסו כאן -->
         </div>
+
     </main>
     
-    <!-- Toast Container -->
-    <div id="toast-container" class="toast-container"></div>
-
-    <!-- Bottom Navigation (Mobile Only) -->
-    <nav id="bottom-nav" class="md:hidden">
-        <button id="mobile-nav-materials" onclick="showMaterialsPage()" class="active">
-            <i class="fas fa-hard-hat fa-lg"></i>
-            <span class="block text-xs mt-1">חומרי בנין</span>
-        </button>
-        <button id="mobile-nav-containers" onclick="showContainersPage()">
-            <i class="fas fa-truck-loading fa-lg"></i>
-            <span class="block text-xs mt-1">מכולות</span>
-        </button>
-        <button id="mobile-nav-reports" onclick="showReportsPage()">
-            <i class="fas fa-chart-line fa-lg"></i>
-            <span class="block text-xs mt-1">דוחות</span>
-        </button>
-    </nav>
-    
-    <!-- Full Page Modal (Used by Lists & Reports) -->
-    <div id="full-page-view" onclick="hideFullPageView()">
-        <div id="modal-content" onclick="event.stopPropagation()">
-            <!-- Modal Header -->
-            <div id="modal-header">
-                <h3 id="modal-title" class="text-xl font-semibold text-gray-800">...</h3>
-                <button onclick="hideFullPageView()" class="text-gray-400 hover:text-gray-600">
+    <!-- מודל שליחת התראה -->
+    <div id="alert-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-[100] hidden">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-lg mx-4">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-semibold">שלח התראה ללקוח</h3>
+                <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600">
                     <i class="fas fa-times fa-lg"></i>
                 </button>
             </div>
+            <p class="mb-2"><strong>הזמנה:</strong> <span id="modal-order-id-display"></span></p>
+            <p class="mb-4"><strong>לקוח:</strong> <span id="modal-customer-name"></span></p>
             
-            <!-- Modal Body (Scrollable) -->
-            <div id="modal-body">
-                <div id="modal-body-content">
-                    <!-- Dynamic Content Injected Here -->
-                </div>
-            </div>
+            <input type="hidden" id="modal-order-id">
             
-            <!-- Modal Footer (for actions) -->
-            <div id="modal-footer">
-                <button id="modal-save-button" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg">
-                    שמור
+            <textarea id="modal-alert-text" class="w-full p-3 border border-gray-300 rounded-lg" rows="4" placeholder="כתוב את ההתראה ללקוח..."></textarea>
+            
+            <button onclick="sendNotification()" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-4 rounded-lg mt-4">
+                שלח התראה
+            </button>
+        </div>
+    </div>
+    
+    <!-- מודל אישור סימון כנקרא -->
+    <div id="confirm-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-[100] hidden">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-sm mx-4">
+            <h3 class="text-xl font-semibold mb-4">אישור</h3>
+            <p class="mb-6">האם אתה בטוח שברצונך לסמן הודעה זו כ"נקראה"? היא תיעלם מרשימה זו.</p>
+            <input type="hidden" id="confirm-message-id">
+            <input type="hidden" id="confirm-order-id">
+            <div class="flex justify-end gap-3">
+                <button onclick="closeConfirmModal()" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg">
+                    ביטול
+                </button>
+                 <button onclick="markAsRead()" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg">
+                    סמן כנקראה
                 </button>
             </div>
         </div>
@@ -510,38 +139,28 @@
     
     <!-- 
       ==========================================================
-      ===               תחילת סקריפט ראשי (v50.9)            ===
+      ===        שדרוג ל-Firebase v9 (Modular SDK)            ===
       ==========================================================
     -->
     <script type="module">
-        // ==========================================================
-        // ===         השתלת Firebase v9 (Modular) SDK            ===
-        // ==========================================================
+        // ייבוא פונקציות Firebase v9
         import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
         import { 
             getFirestore, onSnapshot, collection, query, where, 
-            orderBy, serverTimestamp, addDoc, limit, doc, getDocs,
-            runTransaction, writeBatch
+            orderBy, serverTimestamp, addDoc, limit, doc, 
+            collectionGroup, updateDoc
         } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         
-        // --- Globals for Firebase ---
+        // --- Globals ---
         let db;
         let auth;
-        let unsubscribeActiveOrders = null; // מאזין ראשי
-        let messageUnsubscribeListeners = {}; // אובייקט לשמירת מאזיני הודעות
-        let unsubscribeModalMessages = null; // מאזין למודל
-        // ==========================================================
-
-        // --- User's Original Globals ---
-        let allOrders = []; // Cached orders for searching
-        let warehouseChartInstance = null;
-        let timeChartInstance = null;
-        let selectedOrderCard = null; // Track selected card
-
-        // --- User's Original DOMContentLoaded (MODIFIED) ---
+        let unsubscribeMessages = null;
+        let unsubscribeAlerts = null;
+        
+        // --- אתחול האפליקציה ---
         document.addEventListener('DOMContentLoaded', async () => {
-            // --- הוספת אתחול Firebase ---
+            // 1. אתחול Firebase v9
             try {
                 const fallbackConfig = {
                     apiKey: "AIzaSyDq0oVwS6zbEfsgrYBRkeBq80dDUKMedzo", 
@@ -561,729 +180,276 @@
                     firebaseConfig = fallbackConfig;
                 }
 
-                if (firebaseConfig.apiKey) {
-                    let app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
-                    db = getFirestore(app);
-                    auth = getAuth(app);
-                    
-                    let userCredential;
-                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                        userCredential = await signInWithCustomToken(auth, __initial_auth_token);
-                    } else {
-                        userCredential = await signInAnonymously(auth);
-                    }
-                    console.log("Firebase Initialized & User Signed In:", userCredential.user.uid);
-                    document.getElementById('user-name-display').innerText = userCredential.user.isAnonymous ? 'סדרן אנונימי' : 'סדרן מחובר';
-                    
-                    // --- סוף אתחול Firebase ---
-                    
-                    // User's original init logic
-                    showMaterialsPage(); // Show default page
-                    setupEventListeners();
-                    setInitialDates();
-                    
-                } else {
-                    console.error("Firebase config is missing.");
-                    showToast("שגיאת תצורת Firebase", "error");
-                    document.getElementById('loading-orders').innerText = "שגיאת תצורה.";
+                if (!firebaseConfig.apiKey) {
+                    throw new Error("Firebase config is missing.");
                 }
-            } catch (e) {
-                console.error("Error initializing Firebase:", e);
-                showToast("שגיאת אתחול Firebase", "error");
-                document.getElementById('loading-orders').innerText = "שגיאת אתחול.";
+
+                let app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+
+                // 2. אימות
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+                console.log("Firebase Initialized & Admin Signed In:", auth.currentUser.uid);
+
+                // 3. התחל להאזין
+                listenForNewMessages();
+                listenForSentAlerts();
+
+            } catch (error) {
+                console.error('Error initializing Firebase:', error);
+                document.getElementById('loading-messages').innerText = "שגיאה קריטית בהתחברות ל-Firebase.";
+                document.getElementById('loading-alerts').innerText = "שגיאה קריטית בהתחברות ל-Firebase.";
             }
         });
-
-        // --- User's Original Functions (Unchanged) ---
-        function setupEventListeners() {
-            document.getElementById('search-box').addEventListener('input', (e) => {
-                filterAndRenderOrders(allOrders, e.target.value);
-            });
-            
-            document.getElementById('viewer-map').addEventListener('load', () => {
-                hideLoader('viewer-map-loader');
-            });
-        }
         
-        function setInitialDates() {
-            const today = new Date().toISOString().split('T')[0];
-            document.getElementById('start-date').value = today;
-            document.getElementById('end-date').value = today;
-        }
+        // --- האזנה להודעות חדשות מלקוחות (v9) ---
+        // תואם לאינדקס: messages (type ASC, readByViewer ASC)
+        function listenForNewMessages() {
+            if (unsubscribeMessages) unsubscribeMessages();
+            
+            const messagesContainer = document.getElementById('tab-content-messages');
+            const loadingEl = document.getElementById('loading-messages');
 
-        // --- Page Navigation (Unchanged) ---
-        function showMaterialsPage() {
-            document.querySelectorAll('.page-content').forEach(p => p.classList.remove('active'));
-            document.getElementById('materials-page').classList.add('active');
-            
-            document.querySelectorAll('#bottom-nav button, #desktop-nav button').forEach(b => b.classList.remove('active'));
-            document.getElementById('mobile-nav-materials').classList.add('active');
-            document.getElementById('desktop-nav-materials').classList.add('active');
-            
-            // This function now fetches from Firebase
-            fetchAndRenderOrders();
-        }
-
-        function showContainersPage() {
-            document.querySelectorAll('.page-content').forEach(p => p.classList.remove('active'));
-            document.getElementById('containers-page').classList.add('active');
-            
-            document.querySelectorAll('#bottom-nav button, #desktop-nav button').forEach(b => b.classList.remove('active'));
-            document.getElementById('mobile-nav-containers').classList.add('active');
-            document.getElementById('desktop-nav-containers').classList.add('active');
-            
-            // Stop listening to orders if not needed
-            if (unsubscribeActiveOrders) unsubscribeActiveOrders();
-        }
-
-        function showReportsPage() {
-            document.querySelectorAll('.page-content').forEach(p => p.classList.remove('active'));
-            document.getElementById('reports-page').classList.add('active');
-            
-            document.querySelectorAll('#bottom-nav button, #desktop-nav button').forEach(b => b.classList.remove('active'));
-            document.getElementById('mobile-nav-reports').classList.add('active');
-            document.getElementById('desktop-nav-reports').classList.add('active');
-            
-            // Stop listening to orders if not needed
-            if (unsubscribeActiveOrders) unsubscribeActiveOrders();
-            renderReports(); // Initial render for reports
-        }
-        
-        // --- Full Page List Modals (Unchanged) ---
-        function showActiveListPage() {
-            const activeOrders = allOrders.filter(o => o.status !== 'סופק' && o.status !== 'מבוטל');
-            renderListInModal("הזמנות בסידור", activeOrders);
-        }
-        
-        function showCompletedTodayListPage() {
-            // Placeholder: Needs logic to fetch completed *today*
-            const completedOrders = allOrders.filter(o => o.status === 'סופק');
-            renderListInModal("הזמנות שסופקו היום", completedOrders);
-        }
-        
-        function showFutureListPage() {
-            // Placeholder: Needs logic to fetch future orders
-            const futureOrders = []; // Example
-            renderListInModal("צפי הזמנות עתידי", futureOrders);
-        }
-
-        function renderListInModal(title, orders) {
-            document.getElementById('modal-title').innerText = title;
-            const contentDiv = document.getElementById('modal-body-content');
-            
-            if (orders.length === 0) {
-                contentDiv.innerHTML = '<p class="text-center text-gray-500">לא נמצאו הזמנות.</p>';
-            } else {
-                contentDiv.innerHTML = orders.map(order => createOrderCard(order, true).outerHTML).join('');
-            }
-            document.getElementById('modal-footer').style.display = 'none';
-            showFullPageView();
-        }
-
-        // --- MODIFIED: Fetches from Firebase ---
-        function fetchAndRenderOrders() {
-            console.log("Fetching orders from Firebase...");
-            const ordersListDiv = document.getElementById('active-orders-page');
-            
-            // נתק מאזין קודם אם קיים
-            if (unsubscribeActiveOrders) unsubscribeActiveOrders();
-            // נקה מאזיני הודעות קודמים
-            Object.values(messageUnsubscribeListeners).forEach(unsub => unsub());
-            messageUnsubscribeListeners = {};
-
-            // v9 Query:
-            // !!! אינדקס נדרש: orders (status ASC, delivery_date DESC) - *** התיקון למטה ***
-            // תיקון: אי אפשר לסנן ב-IN/NOT-IN ולמיין לפי שדה אחר.
-            // לכן נסנן לפי סטטוס ונמיין לפי סטטוס, ואת המיון לפי תאריך נעשה ב-JS.
             const q = query(
-                collection(db, 'orders'),
-                where('status', 'in', ['חדש', 'בטיפול', 'בדרך']), // שינוי מ-not-in ל-in
-                orderBy('status') // הסרנו את המיון הנוסף לפי תאריך
-                // orderBy('delivery_date', 'desc'), // <-- זו הייתה הבעיה
+                collectionGroup(db, 'messages'),
+                where('type', '==', 'message_to_admin'),
+                where('readByViewer', '==', false),
+                limit(30) // ללא מיון, כי אין אינדקס על זמן
             );
-
-            unsubscribeActiveOrders = onSnapshot(q, (querySnapshot) => {
-                // תיקון קריסה: בדוק אם אלמנט הטעינה עדיין קיים
-                const loadingEl = document.getElementById('loading-orders');
-                if (loadingEl) {
-                    loadingEl.style.display = 'none';
-                }
+            
+            unsubscribeMessages = onSnapshot(q, (snapshot) => {
+                loadingEl.style.display = 'none';
+                messagesContainer.innerHTML = ''; // נקה רשימה ישנה
                 
-                if (querySnapshot.empty) {
-                    ordersListDiv.innerHTML = '<p class="text-center text-gray-500">לא נמצאו הזמנות פעילות.</p>';
-                    allOrders = [];
+                const newMessagesCount = snapshot.size;
+                updateNotificationBadge(newMessagesCount);
+                
+                if (snapshot.empty) {
+                    messagesContainer.innerHTML = '<p class="text-center text-gray-500 p-10">אין הודעות חדשות מלקוחות.</p>';
                     return;
                 }
                 
-                allOrders = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                
-                // --- הוספת מיון ידני ב-JS ---
-                // ממיין קודם לפי סטטוס (כמו ב-FS), ואז לפי תאריך יורד
-                allOrders.sort((a, b) => {
-                    const statusOrder = { 'חדש': 1, 'בטיפול': 2, 'בדרך': 3 };
-                    const statusA = statusOrder[a.status] || 99;
-                    const statusB = statusOrder[b.status] || 99;
-                    
-                    if (statusA !== statusB) {
-                        return statusA - statusB;
-                    }
-                    
-                    // מיון משני: תאריך יורד (החדש ביותר למעלה)
-                    const dateA = a.delivery_date || '';
-                    const dateB = b.delivery_date || '';
-                    return dateB.localeCompare(dateA); // B מול A
+                snapshot.forEach(doc => {
+                    const message = doc.data();
+                    // ההודעה נמצאת ב- /orders/{orderId}/messages/{messageId}
+                    const orderId = doc.ref.parent.parent.id;
+                    const messageId = doc.id;
+                    messagesContainer.appendChild(createMessageCard(message, orderId, messageId));
                 });
-                // --- סוף מיון ---
-
-                // עדכון ספירות (לוגיקה לדוגמה)
-                document.getElementById('count-active').innerText = allOrders.length;
-                // כאן תצטרך שאילתות נפרדות עבור "סופקו היום" ו"עתידי"
-                // getCountCompletedToday(); 
                 
-                filterAndRenderOrders(allOrders, document.getElementById('search-box').value);
-
             }, (error) => {
-                console.error("Error fetching orders: ", error);
-                // תיקון קריסה: בדוק אם האלמנט קיים לפני שדורסים
-                const loadingEl = document.getElementById('loading-orders');
-                if (loadingEl) {
-                    loadingEl.innerHTML = `
-                        <p class="text-red-500">שגיאה בטעינת הזמנות.</p>
-                        <p class="text-sm text-gray-600 mt-2">ייתכן שנדרש אינדקס ב-Firestore. בדוק ב-Console (F12) אם יש קישור ליצירת אינדקס.</p>`;
+                console.error("Error listening for messages:", error);
+                loadingEl.innerHTML = `
+                    <p class="text-red-500">שגיאה בטעינת הודעות.</p>
+                    <p class="text-sm text-gray-600 mt-2">ייתכן שנדרש אינדקס ב-Firestore. בדוק ב-Console (F12).</p>`;
+            });
+        }
+        
+        // --- האזנה להתראות שנשלחו (v9) ---
+        function listenForSentAlerts() {
+            if (unsubscribeAlerts) unsubscribeAlerts();
+            
+            const alertsContainer = document.getElementById('tab-content-alerts');
+            const loadingEl = document.getElementById('loading-alerts');
+            
+            const q = query(
+                collectionGroup(db, 'messages'),
+                where('type', '==', 'notification_to_customer'),
+                orderBy('timestamp', 'desc'), // דורש אינדקס: messages (type ASC, timestamp DESC)
+                limit(30)
+            );
+            
+            unsubscribeAlerts = onSnapshot(q, (snapshot) => {
+                loadingEl.style.display = 'none';
+                alertsContainer.innerHTML = ''; // נקה רשימה
+                
+                if (snapshot.empty) {
+                    alertsContainer.innerHTML = '<p class="text-center text-gray-500 p-10">טרם נשלחו התראות.</p>';
+                    return;
                 }
-                showToast("שגיאה בטעינת הזמנות", "error");
+                
+                snapshot.forEach(doc => {
+                    const alertMsg = doc.data();
+                    const orderId = doc.ref.parent.parent.id;
+                    alertsContainer.appendChild(createAlertCard(alertMsg, orderId));
+                });
+                
+            }, (error) => {
+                console.error("Error listening for alerts:", error);
+                 loadingEl.innerHTML = `
+                    <p class="text-red-500">שגיאה בטעינת התראות.</p>
+                    <p class="text-sm text-gray-600 mt-2">ייתכן שנדרש אינדקס (messages: type ASC, timestamp DESC).</p>`;
             });
         }
         
-        // --- User's Original Functions (Unchanged) ---
-        function filterAndRenderOrders(orders, searchTerm) {
-            const lowerSearchTerm = searchTerm.toLowerCase();
-            const filteredOrders = orders.filter(order => {
-                return (order.customer_name?.toLowerCase().includes(lowerSearchTerm) ||
-                        order.customer_address?.toLowerCase().includes(lowerSearchTerm) ||
-                        order.warehouse?.toLowerCase().includes(lowerSearchTerm) ||
-                        order.delivery_date?.includes(lowerSearchTerm)
-                       );
-            });
-            
-            renderOrderList(filteredOrders);
-        }
-        
-        function renderOrderList(orders) {
-            const ordersListDiv = document.getElementById('active-orders-page');
-            ordersListDiv.innerHTML = ''; // Clear list
-            
-            if (orders.length === 0) {
-                 ordersListDiv.innerHTML = '<p class="text-center text-gray-500 mt-10">לא נמצאו הזמנות תואמות לחיפוש.</p>';
-                 return;
-            }
-            
-            orders.forEach(order => {
-                ordersListDiv.appendChild(createOrderCard(order, false));
-            });
-        }
-        
-        // --- MODIFIED: Added Message Icon & Buttons ---
-        function createOrderCard(order, isModal) {
+        // --- יצירת כרטיסים ---
+        function createMessageCard(message, orderId, messageId) {
             const card = document.createElement('div');
-            card.className = 'order-card';
-            card.id = `card-${order.id}`;
+            card.className = 'bg-white border border-gray-200 rounded-lg shadow-sm p-4 new-message-card';
             
-            const orderId = order.order_id || order.id.substring(0, 6);
-            const customer = order.customer_name || 'ללא שם';
-            const address = order.customer_address || 'ללא כתובת';
-            const warehouse = order.warehouse || 'לא ידוע';
-            const date = order.delivery_date || 'לא ידוע';
-            const time = order.delivery_time || '';
-
+            const time = message.timestamp ? message.timestamp.toDate().toLocaleString('he-IL') : 'לא ידוע';
+            
             card.innerHTML = `
                 <div class="flex justify-between items-start mb-2">
-                    <h3 class="text-lg font-semibold text-blue-600 truncate flex-1" title="${customer}">
-                        ${orderId} - ${customer}
-                    </h3>
-                    <!-- 
-                      הוספה: אייקון מנורה מהבהב 
-                      ה-ID ייחודי לכל כרטיס
-                    -->
-                    <i id="msg-icon-${order.id}" class="fas fa-lightbulb fa-lg pulse-light hidden ml-2"></i>
+                    <div>
+                        <span class="font-bold text-lg text-gray-800">${message.senderName || 'לקוח'}</span>
+                        <span class="text-sm text-gray-600">(הזמנה: ${orderId.substring(0, 6)})</span>
+                    </div>
+                    <span class="text-xs text-gray-500">${time}</span>
                 </div>
-                <p class="text-sm text-gray-700 truncate" title="${address}">
-                    <i class="fas fa-map-marker-alt fa-fw text-gray-500 ml-2"></i>${address}
-                </p>
-                <div class="flex justify-between text-sm text-gray-600 mt-3 pt-3 border-t border-gray-100">
-                    <span><i class="fas fa-warehouse fa-fw ml-1"></i> ${warehouse}</span>
-                    <span><i class="fas fa-calendar-alt fa-fw ml-1"></i> ${date} ${time}</span>
-                </div>
-                
-                <!-- 
-                  הוספה: כפתורי תקשורת 
-                -->
-                <div class="flex gap-2 mt-4">
-                    <button onclick="window.showMessagesModal('${order.id}')" class="flex-1 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium py-2 px-3 rounded-lg">
-                        <i class="fas fa-comments ml-1"></i> צפה בהודעות
+                <p class="text-gray-700 mb-4">${message.text}</p>
+                <div class="flex gap-2">
+                    <button onclick="openModal('${orderId}', '${message.senderName || 'לקוח'}')" class="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-3 rounded-lg">
+                        <i class="fas fa-reply mr-2"></i>שלח תשובה / התראה
                     </button>
-                    <button onclick="window.showAddNoteModal('${order.id}')" class="flex-1 bg-yellow-500 hover:bg-yellow-600 text-yellow-900 text-sm font-medium py-2 px-3 rounded-lg">
-                        <i class="fas fa-sticky-note ml-1"></i> הוסף הערה
+                    <button onclick="openConfirmModal('${orderId}', '${messageId}')" class="flex-1 bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-3 rounded-lg">
+                        <i class="fas fa-check mr-2"></i>סמן כנקרא
                     </button>
                 </div>
             `;
-            
-            if (!isModal) {
-                // הדגשת כרטיס שנבחר
-                card.onclick = () => {
-                    if (selectedOrderCard) {
-                        selectedOrderCard.classList.remove('selected');
-                    }
-                    card.classList.add('selected');
-                    selectedOrderCard = card;
-                    // כאן תוסיף לוגיקה לעדכון המפה
-                };
-                
-                // האזן להודעות חדשות רק בכרטיסים שברשימה הראשית
-                listenForNewMessages(order.id);
-            }
-            
             return card;
         }
 
-        // --- Reports Page (MODIFIED to use new index) ---
-        async function renderReports() {
-            const startDate = document.getElementById('start-date').value;
-            const endDate = document.getElementById('end-date').value;
+        function createAlertCard(alertMsg, orderId) {
+            const card = document.createElement('div');
+            card.className = 'bg-white border border-gray-200 rounded-lg shadow-sm p-4 sent-alert-card';
             
-            if (!startDate || !endDate) {
-                showToast("נא לבחור טווח תאריכים", "error");
+            const time = alertMsg.timestamp ? alertMsg.timestamp.toDate().toLocaleString('he-IL') : 'לא ידוע';
+
+            card.innerHTML = `
+                <div class="flex justify-between items-start mb-2">
+                    <div>
+                        <span class="font-bold text-lg text-gray-800">התראה נשלחה ללקוח</span>
+                        <span class="text-sm text-gray-600">(הזמנה: ${orderId.substring(0, 6)})</span>
+                    </div>
+                    <span class="text-xs text-gray-500">${time}</span>
+                </div>
+                <p class="text-gray-700 italic">"${alertMsg.text}"</p>
+                <p class="text-sm text-gray-500 mt-2">נשלח על ידי: ${alertMsg.senderName || 'מנהל'}</p>
+            `;
+            return card;
+        }
+        
+        // --- ניהול מודלים (v9) ---
+        
+        window.openModal = function(orderId, customerName) {
+            document.getElementById('modal-order-id').value = orderId;
+            document.getElementById('modal-order-id-display').innerText = orderId.substring(0, 6);
+            document.getElementById('modal-customer-name').innerText = customerName;
+            document.getElementById('alert-modal').classList.remove('hidden');
+        }
+        
+        window.closeModal = function() {
+            document.getElementById('alert-modal').classList.add('hidden');
+            document.getElementById('modal-alert-text').value = '';
+        }
+        
+        window.openConfirmModal = function(orderId, messageId) {
+            document.getElementById('confirm-order-id').value = orderId;
+            document.getElementById('confirm-message-id').value = messageId;
+            document.getElementById('confirm-modal').classList.remove('hidden');
+        }
+
+        window.closeConfirmModal = function() {
+            document.getElementById('confirm-modal').classList.add('hidden');
+        }
+
+        /**
+         * שולח התראה ללקוח (v9)
+         */
+        window.sendNotification = async function() {
+            const orderId = document.getElementById('modal-order-id').value;
+            const text = document.getElementById('modal-alert-text').value.trim();
+            
+            if (!orderId || !text) {
+                alert("נא למלא תוכן התראה.");
                 return;
             }
             
-            // המרה לפורמט תאריך נכון עבור השאילתה
-            const start = new Date(startDate);
-            const end = new Date(endDate);
-            end.setHours(23, 59, 59, 999); // כל היום
-            
-            showToast("טוען נתוני דוח...", "info");
-            
-            // v9 Query:
-            // !!! אינדקס נדרש: orders (status ASC, delivery_date ASC)
-            const q = query(
-                collection(db, 'orders'),
-                where('status', '==', 'סופק'),
-                where('delivery_date', '>=', startDate),
-                where('delivery_date', '<=', endDate),
-                orderBy('delivery_date', 'asc') // הוספת מיון שתואם לאינדקס השני
-            );
-            
-            try {
-                const querySnapshot = await getDocs(q);
-                const completedOrders = querySnapshot.docs.map(doc => doc.data());
-                
-                if (completedOrders.length === 0) {
-                     showToast("לא נמצאו הזמנות שסופקו בטווח התאריכים", "info");
-                     // נקה תרשימים קודמים
-                     if (warehouseChartInstance) warehouseChartInstance.destroy();
-                     if (timeChartInstance) timeChartInstance.destroy();
-                     document.getElementById('completed-customers-list').innerHTML = '<li class="p-3 text-center text-gray-500">לא נמצאו לקוחות.</li>';
-                     return;
-                }
-                
-                renderWarehouseChart(completedOrders);
-                renderTimeChart(completedOrders);
-                renderCompletedCustomers(completedOrders);
-
-            } catch (error) {
-                 console.error("Error fetching reports data: ", error);
-                 showToast("שגיאה בהפקת הדוח", "error");
-            }
-        }
-        
-        function renderWarehouseChart(orders) {
-            const ctx = document.getElementById('warehouse-chart').getContext('2d');
-            const warehouseCounts = orders.reduce((acc, order) => {
-                const warehouse = order.warehouse || 'לא ידוע';
-                acc[warehouse] = (acc[warehouse] || 0) + 1;
-                return acc;
-            }, {});
-            
-            if (warehouseChartInstance) warehouseChartInstance.destroy();
-            warehouseChartInstance = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: Object.keys(warehouseCounts),
-                    datasets: [{
-                        label: 'הזמנות',
-                        data: Object.values(warehouseCounts),
-                        backgroundColor: '#3b82f6',
-                    }]
-                },
-                options: { responsive: true, indexAxis: 'y' }
-            });
-        }
-        
-        function renderTimeChart(orders) {
-            const ctx = document.getElementById('time-chart').getContext('2d');
-            const ordersByDate = orders.reduce((acc, order) => {
-                const date = order.delivery_date || 'לא ידוע';
-                acc[date] = (acc[date] || 0) + 1;
-                return acc;
-            }, {});
-            
-            const sortedDates = Object.keys(ordersByDate).sort();
-            
-            if (timeChartInstance) timeChartInstance.destroy();
-            timeChartInstance = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: sortedDates,
-                    datasets: [{
-                        label: 'הזמנות ליום',
-                        data: sortedDates.map(date => ordersByDate[date]),
-                        borderColor: '#10b981',
-                        fill: false,
-                        tension: 0.1
-                    }]
-                },
-                options: { responsive: true }
-            });
-        }
-        
-        function renderCompletedCustomers(orders) {
-            const listEl = document.getElementById('completed-customers-list');
-            // ספירת לקוחות ייחודיים
-            const customers = [...new Set(orders.map(o => o.customer_name || 'לקוח אנונימי'))];
-            
-            if (customers.length === 0) {
-                 listEl.innerHTML = '<li class="p-3 text-center text-gray-500">לא נמצאו לקוחות.</li>';
-                 return;
-            }
-            
-            listEl.innerHTML = customers.map(customer => `
-                <li class="p-3">
-                    <span class="font-medium text-gray-800">${customer}</span>
-                </li>
-            `).join('');
-        }
-
-        // --- Utility Functions (Unchanged) ---
-        function showFullPageView() {
-            document.getElementById('full-page-view').classList.add('show');
-        }
-
-        function hideFullPageView() {
-            document.getElementById('full-page-view').classList.remove('show');
-            // הוספה: נתק מאזין של מודל כשסוגרים
-            if (unsubscribeModalMessages) {
-                unsubscribeModalMessages();
-                unsubscribeModalMessages = null;
-            }
-        }
-        
-        function showLoader(elementId) {
-            const container = document.getElementById('full-page-view');
-            const content = document.getElementById('modal-body-content');
-            if (elementId === 'viewer-map-loader') {
-                 document.getElementById(elementId).style.display = 'flex';
-            } else {
-                 content.innerHTML = `<div class="text-center p-10"><i class="fas fa-spinner fa-spin fa-3x text-blue-600"></i></div>`;
-                 container.style.display = 'flex';
-            }
-        }
-        
-        function hideLoader(elementId) {
-             const container = document.getElementById(elementId);
-             if (container) {
-                 if (elementId === 'viewer-map-loader') {
-                     container.style.display = 'none';
-                 }
-            }
-        }
-        
-        function showToast(message, type = 'info') {
-             console.log(`[Toast-${type.toUpperCase()}]: ${message}`);
-            
-            const container = document.getElementById('toast-container'); 
-            if (!container) { 
-                 console.error("Toast container not found!");
-                 return;
-            }
-            const toast = document.createElement('div');
-            toast.className = `toast ${type}`; 
-            toast.innerText = message;
-            container.appendChild(toast);
-            setTimeout(() => toast.classList.add('show'), 10);
-            setTimeout(() => {
-                toast.classList.remove('show');
-                setTimeout(() => { if (container.contains(toast)) container.removeChild(toast); }, 300);
-            }, 5000); 
-        }
-
-        // --- User's Original Global Functions (Unchanged) ---
-        window.showMaterialsPage = showMaterialsPage;
-        window.showContainersPage = showContainersPage;
-        window.showReportsPage = showReportsPage;
-        window.renderReports = renderReports; // For filter button
-        window.hideFullPageView = hideFullPageView;
-        window.showActiveListPage = showActiveListPage;
-        window.showCompletedTodayListPage = showCompletedTodayListPage;
-        window.showFutureListPage = showFutureListPage;
-
-        // ==========================================================
-        // ===     פונקציות חדשות עבור מערכת התקשורת (v9)        ===
-        // ==========================================================
-        
-        /**
-         * מאזין להודעות חדשות עבור כרטיס הזמנה ספציפי.
-         * מדליק את המנורה אם יש הודעה חדשה שלא נקראה.
-         * תואם לאינדקס: messages (type ASC, readByViewer ASC)
-         */
-        function listenForNewMessages(orderId) {
-            // נתק מאזין קודם אם קיים עבור ההזמנה הזו
-            if (messageUnsubscribeListeners[orderId]) {
-                messageUnsubscribeListeners[orderId]();
-            }
-
-            const q = query(
-                collection(db, 'orders', orderId, 'messages'),
-                where('type', '==', 'message_to_admin'),
-                where('readByViewer', '==', false), // חפש הודעות שלא נקראו (תואם לאינדקס)
-                limit(1)
-            );
-            
-            messageUnsubscribeListeners[orderId] = onSnapshot(q, (snapshot) => {
-                const icon = document.getElementById(`msg-icon-${orderId}`);
-                if (icon) {
-                    if (!snapshot.empty) {
-                        icon.classList.remove('hidden'); // הדלק מנורה
-                    } else {
-                        icon.classList.add('hidden'); // כבה מנורה
-                    }
-                }
-            }, (error) => {
-                console.error(`Error listening for messages on ${orderId}:`, error);
-            });
-        }
-        
-        /**
-         * פותח את המודל הקיים ומציג בו את היסטוריית הצ'אט.
-         * וגם מסמן את ההודעות כ"נקראו".
-         */
-        window.showMessagesModal = async function(orderId) {
-            if (!orderId) return;
-
-            // 1. כבה את המנורה (מכיוון שהמשתמש נכנס לראות)
-            const icon = document.getElementById(`msg-icon-${orderId}`);
-            if (icon) {
-                icon.classList.add('hidden');
-            }
-            
-            // 2. עדכן הודעות כ"נקראו" (באצווה)
-            await updateMessagesAsRead(orderId);
-            
-            // 3. הצג את המודל הקיים
-            document.getElementById('modal-title').innerText = `תקשורת (הזמנה ${orderId.substring(0,6)})`;
-            const contentDiv = document.getElementById('modal-body-content');
-            contentDiv.innerHTML = `
-                <div id="messages-chat-log" class="h-96 bg-gray-100 rounded-lg p-4 overflow-y-auto flex flex-col space-y-2 mb-4">
-                    <p id="loading-messages" class="text-center text-gray-500">טוען הודעות...</p>
-                </div>
-            `;
-            document.getElementById('modal-footer').style.display = 'none'; // הסתר פוטר שמירה
-            showFullPageView();
-            
-            // 4. טען את ההודעות
-            loadOrderMessages(orderId);
-        }
-
-        /**
-         * פונקציה חדשה שמעדכנת את כל ההודעות ללקוח כנקראו
-         */
-        async function updateMessagesAsRead(orderId) {
-            console.log(`Marking messages as read for order ${orderId}...`);
-            // 1. מצא את כל ההודעות שטרם נקראו
-            const q = query(
-                collection(db, 'orders', orderId, 'messages'),
-                where('type', '==', 'message_to_admin'),
-                where('readByViewer', '==', false)
-            );
-            
-            try {
-                const snapshot = await getDocs(q);
-                if (snapshot.empty) {
-                    console.log("No new messages to mark as read.");
-                    return; // אין מה לעדכן
-                }
-                
-                // 2. צור אצווה (Batch) לעדכון כל ההודעות בבת אחת
-                const batch = writeBatch(db);
-                snapshot.docs.forEach(docRef => {
-                    batch.update(docRef.ref, { readByViewer: true });
-                });
-                
-                // 3. בצע את האצווה
-                await batch.commit();
-                console.log(`Marked ${snapshot.size} messages as read.`);
-
-            } catch (error) {
-                console.error("Error marking messages as read: ", error);
-                // אל תחסום את המשתמש, פשוט תרשום שגיאה
-            }
-        }
-
-        /**
-         * טוען את כל ההודעות (לקוח, מנהל, הערות) למודל.
-         */
-        function loadOrderMessages(orderId) {
-            // נתק מאזין מודל קודם
-            if (unsubscribeModalMessages) unsubscribeModalMessages();
-
-            const messagesContainer = document.getElementById('messages-chat-log');
-            
-            const q = query(
-                collection(db, 'orders', orderId, 'messages'),
-                orderBy('timestamp', 'asc') // הצג מהישן לחדש
-            );
-            
-            unsubscribeModalMessages = onSnapshot(q, (querySnapshot) => {
-                const loadingEl = document.getElementById('loading-messages');
-                if (loadingEl) loadingEl.remove();
-                
-                if (querySnapshot.empty) {
-                    messagesContainer.innerHTML = '<p class="text-center text-gray-500">אין הודעות או הערות להזמנה זו.</p>';
-                    return;
-                }
-                
-                messagesContainer.innerHTML = ''; // נקה
-                querySnapshot.forEach((doc) => {
-                    messagesContainer.appendChild(createMessageBubble(doc.data()));
-                });
-                
-                messagesContainer.scrollTop = messagesContainer.scrollHeight; // גלול לתחתית
-            }, (error) => {
-                console.error("Error loading messages: ", error);
-                messagesContainer.innerHTML = '<p class="text-center text-red-500">שגיאה בטעינת הודעות.</p>';
-            });
-        }
-        
-        /**
-         * יוצר בועת צ'אט מעוצבת לפי סוג ההודעה.
-         */
-        function createMessageBubble(msg) {
-            const wrapper = document.createElement('div');
-            wrapper.className = 'flex flex-col';
-            
-            let bubbleClass = '';
-            let senderName = '';
-            
-            switch(msg.type) {
-                case 'message_to_admin':
-                    bubbleClass = 'chat-bubble chat-bubble-customer';
-                    senderName = msg.senderName || 'לקוח';
-                    wrapper.classList.add('items-end'); // ישר לימין
-                    break;
-                case 'notification_to_customer':
-                    bubbleClass = 'chat-bubble chat-bubble-admin';
-                    senderName = msg.senderName || 'מנהל';
-                    wrapper.classList.add('items-start'); // ישר לשמאל
-                    break;
-                case 'internal_note':
-                    bubbleClass = 'chat-bubble chat-bubble-note';
-                    senderName = `${msg.senderName || 'סדרן'} (הערה פנימית)`;
-                    wrapper.classList.add('items-center'); // ישר למרכז
-                    break;
-                default:
-                    bubbleClass = 'chat-bubble chat-bubble-admin';
-                    senderName = msg.senderName || 'מערכת';
-                    wrapper.classList.add('items-start');
-            }
-            
-            const time = msg.timestamp ? msg.timestamp.toDate().toLocaleString('he-IL') : 'שולח...';
-            
-            wrapper.innerHTML = `
-                <div class="${bubbleClass}">
-                    <strong class="font-semibold block">${senderName}</strong>
-                    <p class="mt-1">${msg.text}</p>
-                    <span class="chat-timestamp text-right mt-2">${time}</span>
-                </div>
-            `;
-            return wrapper;
-        }
-
-        /**
-         * פותח את המודל הקיים ומציג טופס הוספת הערה.
-         */
-        window.showAddNoteModal = function(orderId) {
-            if (!orderId) return;
-
-            document.getElementById('modal-title').innerText = `הוסף הערה (הזמנה ${orderId.substring(0,6)})`;
-            const contentDiv = document.getElementById('modal-body-content');
-            
-            contentDiv.innerHTML = `
-                <input type="hidden" id="current-order-id-for-note" value="${orderId}">
-                <div class="mb-4">
-                    <label for="note-author" class="block text-sm font-medium text-gray-700 mb-1">שם הכותב:</label>
-                    <input type="text" id="note-author" class="w-full p-2 border border-gray-300 rounded-lg" placeholder="השם שלך (לדוגמה: יוסי)">
-                </div>
-                <div>
-                    <label for="note-text" class="block text-sm font-medium text-gray-700 mb-1">תוכן ההערה:</label>
-                    <textarea id="note-text" class="w-full p-2 border border-gray-300 rounded-lg" rows="5" placeholder="כתוב כאן הערה פנימית לתיעוד..."></textarea>
-                </div>
-            `;
-            
-            // הגדר את כפתור השמירה בפוטר
-            const saveButton = document.getElementById('modal-save-button');
-            saveButton.innerText = 'שמור הערה';
-            saveButton.onclick = saveInternalNote; // חבר פונקציה חדשה
-            
-            document.getElementById('modal-footer').style.display = 'block'; // הצג פוטר שמירה
-            showFullPageView();
-        }
-        
-        /**
-         * שומר את ההערה הפנימית ב-Firestore.
-         */
-        async function saveInternalNote() {
-            const orderId = document.getElementById('current-order-id-for-note').value;
-            const author = document.getElementById('note-author').value.trim();
-            const text = document.getElementById('note-text').value.trim();
-            const saveButton = document.getElementById('modal-save-button');
-
-            if (!orderId || !author || !text) {
-                showToast("נא למלא שם ותוכן הערה", "error");
-                return;
-            }
-            
-            const noteDoc = {
+            const alertData = {
                 text: text,
-                senderName: author,
-                senderId: auth.currentUser ? auth.currentUser.uid : "viewer_user",
+                senderName: "שירות לקוחות", // או שם מנהל
+                senderId: auth.currentUser.uid,
                 timestamp: serverTimestamp(),
-                type: "internal_note" // סוג ההודעה
+                type: 'notification_to_customer'
             };
             
-            saveButton.disabled = true;
-            saveButton.innerText = 'שומר...';
-
             try {
                 const messagesColRef = collection(db, 'orders', orderId, 'messages');
-                await addDoc(messagesColRef, noteDoc);
+                await addDoc(messagesColRef, alertData);
                 
-                showToast("ההערה נשמרה בהצלחה!", "success");
-                hideFullPageView();
-
+                alert("ההתראה נשלחה בהצלחה!");
+                closeModal();
+                
             } catch (error) {
-                console.error("Error adding note:", error);
-                showToast("שגיאה בשמירת ההערה", "error");
-            } finally {
-                saveButton.disabled = false;
-                saveButton.innerText = 'שמור הערה';
+                console.error("Error sending notification:", error);
+                alert("שגיאה בשליחת ההתראה.");
             }
         }
         
-        // --- חשיפה גלובלית של פונקציות התקשורת ---
-        window.showMessagesModal = showMessagesModal;
-        window.showAddNoteModal = showAddNoteModal;
+        /**
+         * מסמן הודעה כנקראה (v9)
+         */
+        window.markAsRead = async function() {
+            const orderId = document.getElementById('confirm-order-id').value;
+            const messageId = document.getElementById('confirm-message-id').value;
+            
+            if (!orderId || !messageId) return;
+
+            const messageRef = doc(db, 'orders', orderId, 'messages', messageId);
+            
+            try {
+                await updateDoc(messageRef, {
+                    readByViewer: true
+                });
+                console.log(`Message ${messageId} marked as read.`);
+                closeConfirmModal();
+            } catch (error) {
+                console.error("Error marking as read:", error);
+                alert("שגיאה בסימון ההודעה.");
+            }
+        }
+
+        // --- פונקציות עזר ---
+        function updateNotificationBadge(count) {
+            const badge = document.getElementById('notification-badge');
+            if (count > 0) {
+                badge.innerText = count;
+                badge.classList.remove('hidden');
+                badge.parentElement.classList.add('ring-animation');
+                // הסר אנימציה אחרי זמן מה
+                setTimeout(() => {
+                    badge.parentElement.classList.remove('ring-animation');
+                }, 1500);
+            } else {
+                badge.classList.add('hidden');
+            }
+        }
+        
+        window.showTab = function(tabName) {
+            // הסתר את כל הלשוניות
+            document.getElementById('tab-content-messages').classList.add('hidden');
+            document.getElementById('tab-content-alerts').classList.add('hidden');
+            // הסר אקטיבציה מכל הכפתורים
+            document.getElementById('tab-messages').classList.remove('border-blue-500', 'text-blue-600');
+            document.getElementById('tab-messages').classList.add('border-transparent', 'text-gray-500', 'hover:text-gray-700', 'hover:border-gray-300');
+            document.getElementById('tab-alerts').classList.remove('border-blue-500', 'text-blue-600');
+            document.getElementById('tab-alerts').classList.add('border-transparent', 'text-gray-500', 'hover:text-gray-700', 'hover:border-gray-300');
+            
+            // הצג את הלשונית הרצויה
+            document.getElementById(`tab-content-${tabName}`).classList.remove('hidden');
+            // סמן את הכפתור הרצוי
+            const tabButton = document.getElementById(`tab-${tabName}`);
+            tabButton.classList.add('border-blue-500', 'text-blue-600');
+            tabButton.classList.remove('border-transparent', 'text-gray-500', 'hover:text-gray-700', 'hover:border-gray-300');
+        }
 
     </script>
 </body>
 </html>
-
 
