@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel - ניהול משלוחים</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .tab-button {
+            transition: all 0.3s ease;
+        }
+        .tab-button.active {
+            border-color: #3b82f6; /* blue-500 */
+            background-color: #eff6ff; /* blue-50 */
+            color: #2563eb; /* blue-600 */
+        }
+        /* Notification bell */
+        #notification-bell {
+            position: relative;
+            cursor: pointer;
+        }
+        #notification-badge {
+            position: absolute;
+            top: -5px;
+            right: -10px;
+            width: 20px;
+            height: 20px;
+            background-color: #ef4444; /* red-500 */
+            color: white;
+            border-radius: 50%;
+            display: none; /* Hidden by default */
+            font-size: 0.75rem;
+            font-weight: bold;
+            line-height: 20px; /* Center text */
+            text-align: center;
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            70% { transform: scale(1.1); box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+            100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+
+    <header class="bg-white shadow-md">
+        <nav class="container mx-auto px-4 py-4 flex justify-between items-center">
+            <h1 class="text-3xl font-bold text-blue-600">מערכת ניהול (Admin)</h1>
+            <div class="flex items-center space-x-6">
+                <div id="notification-bell" onclick="showTab('messages')">
+                    <i class="fas fa-bell fa-2x text-gray-600 hover:text-blue-500"></i>
+                    <span id="notification-badge">0</span>
+                </div>
+                <span id="user-display" class="text-gray-700">טוען משתמש...</span>
+            </div>
+        </nav>
+        <!-- Tabs -->
+        <div class="container mx-auto px-4 border-b-2 border-gray-200">
+            <div class="flex space-x-4 space-x-reverse -mb-0.5">
+                <button id="tab-deliveries" class="tab-button active py-3 px-6 font-semibold text-gray-600 border-b-4 border-transparent" onclick="showTab('deliveries')">
+                    <i class="fas fa-truck ml-2"></i> ניהול משלוחים
+                </button>
+                <button id="tab-messages" class="tab-button py-3 px-6 font-semibold text-gray-600 border-b-4 border-transparent" onclick="showTab('messages')">
+                    <i class="fas fa-comments ml-2"></i> הודעות מלקוחות
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="container mx-auto p-4">
+
+        <!-- Tab 1: Deliveries -->
+        <div id="tab-content-deliveries" class="tab-content">
+            <h2 class="text-2xl font-semibold text-gray-800 mb-4">משלוחים פעילים</h2>
+            <div class="bg-white p-6 rounded-lg shadow">
+                <table class="w-full text-right">
+                    <thead class="border-b-2 border-gray-200">
+                        <tr>
+                            <th class="p-3">מס' הזמנה</th>
+                            <th class="p-3">לקוח</th>
+                            <th class="p-3">כתובת</th>
+                            <th class="p-3">נהג</th>
+                            <th class="p-3">סטטוס</th>
+                            <th class="p-3">פעולות</th>
+                        </tr>
+                    </thead>
+                    <tbody id="deliveries-table-body">
+                        <tr>
+                            <td colspan="6" class="text-center p-6 text-gray-500">
+                                <i class="fas fa-spinner fa-spin ml-2"></i> טוען משלוחים...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- Tab 2: Customer Messages -->
+        <div id="tab-content-messages" class="tab-content hidden">
+            <h2 class="text-2xl font-semibold text-gray-800 mb-4">הודעות נכנסות מלקוחות</h2>
+            <div id="messages-list" class="bg-white p-6 rounded-lg shadow space-y-4">
+                <p id="loading-messages" class="text-center p-6 text-gray-500">
+                    <i class="fas fa-spinner fa-spin ml-2"></i> טוען הודעות...
+                </p>
+                <!-- Messages will be injected here -->
+            </div>
+        </div>
+
+    </main>
+    
+    <!-- Send Notification Modal (Example) -->
+    <div id="notification-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 hidden z-50">
+        <div class="bg-white rounded-lg shadow-2xl w-full max-w-lg" onclick.stop>
+            <div class="flex justify-between items-center p-5 border-b border-gray-200">
+                <h3 class="text-xl font-semibold">שלח התראה ללקוח</h3>
+                <button onclick="closeNotificationModal()" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times fa-lg"></i>
+                </button>
+            </div>
+            <div class="p-6">
+                <p class="mb-4">ההתראה תישלח ללקוח <strong id="modal-notif-customer-name"></strong>
+                   <br> בנוגע להזמנה <strong id="modal-notif-order-id"></strong>
+                </p>
+                <input type="hidden" id="modal-notif-order-doc-id">
+                
+                <textarea id="notification-text" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" rows="4" placeholder="תוכן ההתראה (לדוגמה: הזמנה אושרה ותועבר לאריזה)"></textarea>
+                
+                <button onclick="sendNotificationToCustomer()" class="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg">
+                    <i class="fas fa-paper-plane ml-2"></i> שלח התראה
+                </button>
+                <p id="notification-status" class="text-green-600 text-center mt-2"></p>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
+
+    <script>
+        // --- Firebase Config ---
+        let db;
+        let auth;
+        let adminUser = { name: "מנהל המערכת" }; // Placeholder
+        let unreadMessages = new Set(); // To track unread message IDs
+
+        document.addEventListener('DOMContentLoaded', () => {
+            try {
+                const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+                if (firebaseConfig.apiKey) {
+                    firebase.initializeApp(firebaseConfig);
+                    db = firebase.firestore();
+                    auth = firebase.auth();
+                    
+                     if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                         auth.signInWithCustomToken(__initial_auth_token)
+                            .then(startApp)
+                            .catch(handleAuthError);
+                    } else {
+                        auth.signInAnonymously()
+                            .then(startApp)
+                            .catch(handleAuthError);
+                    }
+                } else {
+                    console.error("Firebase config is missing.");
+                }
+            } catch (e) {
+                console.error("Error initializing Firebase:", e);
+            }
+        });
+        
+        function handleAuthError(error) {
+            console.error("Firebase auth error:", error);
+            document.getElementById('user-display').innerText = "שגיאת אימות";
+        }
+        
+        function startApp(userCredential) {
+            const user = userCredential.user;
+            document.getElementById('user-display').innerText = `מחובר: ${user.isAnonymous ? 'אנונימי' : user.uid}`;
+            // In a real app, you'd fetch adminUser's name from a 'users' collection
+            
+            showTab('deliveries'); // Show default tab
+            loadDeliveries();
+            listenForNewCustomerMessages();
+        }
+        
+        // --- Tab Navigation ---
+        function showTab(tabName) {
+            // Hide all content
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.add('hidden');
+            });
+            // Deactivate all buttons
+            document.querySelectorAll('.tab-button').forEach(button => {
+                button.classList.remove('active');
+            });
+            // Show selected content
+            document.getElementById(`tab-content-${tabName}`).classList.remove('hidden');
+            // Activate selected button
+            document.getElementById(`tab-${tabName}`).classList.add('active');
+            
+            if (tabName === 'messages') {
+                // When messages tab is viewed, clear the badge (basic logic)
+                unreadMessages.clear();
+                updateNotificationBadge();
+            }
+        }
+        
+        // --- Load Deliveries (Tab 1) ---
+        function loadDeliveries() {
+            const tableBody = document.getElementById('deliveries-table-body');
+            
+            db.collection('deliveries').limit(20) // Get top 20
+              .onSnapshot((querySnapshot) => {
+                  if (querySnapshot.empty) {
+                      tableBody.innerHTML = '<tr><td colspan="6" class="text-center p-6 text-gray-500">לא נמצאו משלוחים.</td></tr>';
+                      return;
+                  }
+                  
+                  tableBody.innerHTML = ''; // Clear
+                  querySnapshot.forEach(doc => {
+                      const delivery = doc.data();
+                      delivery.docId = doc.id; // Store the Firestore document ID
+                      tableBody.appendChild(createDeliveryRow(delivery));
+                  });
+                  
+              }, (error) => {
+                  console.error("Error loading deliveries: ", error);
+                  tableBody.innerHTML = '<tr><td colspan="6" class="text-center p-6 text-red-500">שגיאה בטעינת משלוחים.</td></tr>';
+              });
+        }
+        
+        function createDeliveryRow(delivery) {
+            const row = document.createElement('tr');
+            row.className = 'border-b border-gray-100 hover:bg-gray-50';
+            
+            const orderId = delivery.order_id || delivery.docId;
+            
+            row.innerHTML = `
+                <td class="p-3 font-medium text-blue-600">${orderId.substring(0, 10)}...</td>
+                <td class="p-3">${delivery.customer_name || '...'}</td>
+                <td class="p-3">${delivery.customer_address || '...'}</td>
+                <td class="p-3">${delivery.driver_name || 'טרם שויך'}</td>
+                <td class="p-3">
+                    <span class="font-medium bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full text-sm">
+                        ${delivery.status || 'לא ידוע'}
+                    </span>
+                </td>
+                <td class="p-3">
+                    <button class="text-blue-500 hover:text-blue-700" title="שלח התראה ללקוח">
+                        <i class="fas fa-comment-dots"></i>
+                    </button>
+                    <!-- Add more actions here, e.g., edit -->
+                </td>
+            `;
+            
+            // Add click listener for sending notification
+            row.querySelector('button').onclick = () => {
+                openNotificationModal(delivery);
+            };
+            
+            return row;
+        }
+
+        // --- Listen for Messages (Tab 2 & Badge) ---
+        function listenForNewCustomerMessages() {
+            const messagesList = document.getElementById('messages-list');
+            
+            // This query is complex and requires a composite index in Firestore.
+            // For simplicity, we'll query all orders, then query messages for each.
+            // A better production approach: a dedicated 'admin_messages' collection
+            // where customer-app writes directly.
+            
+            // Simple (but less efficient) approach: query all 'messages' subcollections
+            db.collectionGroup('messages')
+              .where('type', '==', 'message_to_admin')
+              .orderBy('timestamp', 'desc')
+              .limit(20) // Get 20 most recent messages
+              .onSnapshot((querySnapshot) => {
+                   document.getElementById('loading-messages').classList.add('hidden');
+                   
+                   if (querySnapshot.empty) {
+                       messagesList.innerHTML = '<p class="text-center p-6 text-gray-500">אין הודעות חדשות מלקוחות.</p>';
+                       return;
+                   }
+                   
+                   // Don't clear list, just check for changes
+                   querySnapshot.docChanges().forEach((change) => {
+                       if (change.type === 'added') {
+                           const msg = change.doc.data();
+                           msg.id = change.doc.id;
+                           const orderId = change.doc.ref.parent.parent.id; // Get parent 'orders' doc ID
+                           
+                           // Add to unread list
+                           unreadMessages.add(msg.id);
+                           
+                           // Prepend to list
+                           messagesList.prepend(createMessageCard(msg, orderId));
+                       }
+                   });
+                   
+                   updateNotificationBadge();
+                   
+              }, (error) => {
+                  console.error("Error listening for messages: ", error);
+                  document.getElementById('loading-messages').innerText = 'שגיאה בטעינת הודעות. ייתכן שנדרש אינדקס ב-Firestore.';
+              });
+        }
+        
+        function createMessageCard(msg, orderId) {
+            const card = document.createElement('div');
+            card.id = `msg-card-${msg.id}`;
+            card.className = 'border border-gray-200 p-4 rounded-lg shadow-sm bg-yellow-50';
+            
+            const time = msg.timestamp ? msg.timestamp.toDate().toLocaleString('he-IL') : 'לא זמין';
+            
+            card.innerHTML = `
+                <div class="flex justify-between items-center mb-2">
+                    <h4 class="font-semibold text-lg text-gray-800">
+                        פנייה מ: <span class="text-blue-600">${msg.senderName || 'לקוח'}</span>
+                    </h4>
+                    <span class="text-sm text-gray-500">${time}</span>
+                </div>
+                <p class="text-gray-700 mb-3">
+                    <strong>הזמנה:</strong> ${orderId}
+                </p>
+                <p class="bg-white p-3 rounded-md border border-gray-200">${msg.text}</p>
+                <div class="mt-4 flex gap-4">
+                    <button class="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-lg"
+                            onclick="openNotificationModal({ order_id: '${orderId}', customer_name: '${msg.senderName}', docId: '${orderId}' })">
+                        <i class="fas fa-reply ml-2"></i> שלח תשובה / התראה
+                    </button>
+                    <button class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 py-2 px-4 rounded-lg"
+                            onclick="markMessageAsRead('${msg.id}')">
+                        <i class="fas fa-check ml-2"></i> סמן כטופל
+                    </button>
+                </div>
+            `;
+            return card;
+        }
+
+        function markMessageAsRead(msgId) {
+            // In a real app, you'd update this message in Firestore, e.g., set 'read: true'
+            // For this demo, we just remove it from the UI.
+            const card = document.getElementById(`msg-card-${msgId}`);
+            if (card) {
+                card.style.opacity = 0;
+                setTimeout(() => card.remove(), 500);
+            }
+            unreadMessages.delete(msgId);
+            updateNotificationBadge();
+        }
+        
+        function updateNotificationBadge() {
+            const badge = document.getElementById('notification-badge');
+            const count = unreadMessages.size;
+            
+            if (count > 0 && document.getElementById('tab-messages').classList.contains('active')) {
+                // If user is on the messages tab, auto-clear
+                unreadMessages.clear();
+                updateNotificationBadge();
+                return;
+            }
+            
+            if (count > 0) {
+                badge.innerText = count > 9 ? '9+' : count;
+                badge.style.display = 'flex';
+                badge.style.alignItems = 'center';
+                badge.style.justifyContent = 'center';
+            } else {
+                badge.style.display = 'none';
+            }
+        }
+
+        // --- Notification Modal Logic ---
+        function openNotificationModal(delivery) {
+            const orderId = delivery.order_id || delivery.docId;
+            
+            document.getElementById('modal-notif-customer-name').innerText = delivery.customer_name || 'לקוח';
+            document.getElementById('modal-notif-order-id').innerText = orderId;
+            document.getElementById('modal-notif-order-doc-id').value = orderId; // Use the actual doc ID
+            
+            document.getElementById('notification-text').value = ''; // Clear old text
+            document.getElementById('notification-status').innerText = ''; // Clear status
+            
+            document.getElementById('notification-modal').classList.remove('hidden');
+        }
+        
+        function closeNotificationModal() {
+             document.getElementById('notification-modal').classList.add('hidden');
+        }
+        
+        function sendNotificationToCustomer() {
+            const orderId = document.getElementById('modal-notif-order-doc-id').value;
+            const text = document.getElementById('notification-text').value;
+            const statusEl = document.getElementById('notification-status');
+            
+            if (text.trim() === '') {
+                statusEl.innerText = 'נא למלא תוכן התראה.';
+                statusEl.className = 'text-red-600 text-center mt-2';
+                return;
+            }
+            
+            const notificationDoc = {
+                text: text,
+                senderName: adminUser.name,
+                senderId: auth.currentUser ? auth.currentUser.uid : "admin_user",
+                timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                type: "notification_to_customer"
+            };
+
+            db.collection('orders').doc(orderId).collection('messages').add(notificationDoc)
+                .then(() => {
+                    statusEl.innerText = 'ההתראה נשלחה ללקוח בהצלחה!';
+                    statusEl.className = 'text-green-600 text-center mt-2';
+                    setTimeout(() => {
+                        closeNotificationModal();
+                    }, 2000);
+                })
+                .catch((error) => {
+                    console.error("Error sending notification:", error);
+                    statusEl.innerText = 'שגיאה בשליחת ההתראה.';
+                    statusEl.className = 'text-red-600 text-center mt-2';
+                });
+        }
+        
+    </script>
+</body>
+</html>
