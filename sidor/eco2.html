@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ניהול מכולות | DeliveryMaster</title>
+    
+    <style>
+        /* ... (סגנונות CSS זהים לקובץ הקודם) ... */
+        html, body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            direction: rtl;
+            background-color: #f0f2f5;
+            margin: 0;
+            padding: 0;
+            scroll-behavior: smooth;
+        }
+        * { box-sizing: border-box; }
+        .mock-header {
+            background: #2c3e50;
+            color: white;
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        .mock-header h1 { margin: 0; font-size: 1.5rem; }
+        #openEcoDashboardButton {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 1rem;
+            font-weight: bold;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        #openEcoDashboardButton:hover { background-color: #2980b9; }
+        .mock-content { padding: 30px; text-align: center; font-size: 1.2rem; color: #555; }
+        #ecoModalOverlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(5px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+        #ecoModalOverlay.visible { opacity: 1; pointer-events: all; }
+        #ecoDashboard {
+            width: 90%;
+            max-width: 1400px;
+            height: 90vh;
+            background: #f4f7f6;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transform: scale(0.95);
+            transition: transform 0.3s ease;
+        }
+        #ecoModalOverlay.visible #ecoDashboard { transform: scale(1); }
+        .eco-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 24px;
+            background: #ffffff;
+            border-bottom: 1px solid #dfe4e8;
+            flex-shrink: 0;
+        }
+        .eco-header h2 { margin: 0; color: #1a3b58; font-size: 1.4rem; }
+        .eco-controls { display: flex; gap: 15px; align-items: center; }
+        .eco-add-btn {
+            background-color: #28a745;
+            color: white;
+            border: none;
+            padding: 8px 14px;
+            font-size: 0.9rem;
+            font-weight: bold;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .eco-add-btn:hover { background-color: #218838; }
+        .eco-add-btn.back-btn { background-color: #ffc107; color: #212529; }
+        .eco-add-btn.back-btn:hover { background-color: #e0a800; }
+        .eco-search-box {
+            padding: 8px 12px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            width: 250px;
+            transition: box-shadow 0.2s;
+        }
+        .eco-search-box:focus {
+            outline: none;
+            box-shadow: 0 0 0 2px #3498db80;
+            border-color: #3498db;
+        }
+        .eco-close-btn {
+            font-size: 2.5rem;
+            color: #888;
+            cursor: pointer;
+            line-height: 1;
+            padding: 0 5px;
+            transition: color 0.2s;
+        }
+        .eco-close-btn:hover { color: #333; }
+        #ecoAddForm {
+            padding: 24px;
+            background: #ffffff;
+            flex-grow: 1;
+            overflow-y: auto;
+        }
+        .eco-form-group { margin-bottom: 16px; }
+        .eco-form-group label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 600;
+            color: #333;
+        }
+        .eco-form-group input[type="text"],
+        .eco-form-group input[type="date"],
+        .eco-form-group select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 1rem;
+            font-family: inherit;
+        }
+        /* [חדש] סגנון לשדה לקריאה בלבד */
+        .eco-form-group input[readonly] {
+            background-color: #e9ecef;
+            color: #6c757d;
+            cursor: not-allowed;
+        }
+        .eco-form-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 24px;
+            border-top: 1px solid #eee;
+            padding-top: 20px;
+        }
+        .eco-form-btn {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 1rem;
+            transition: background-color 0.2s;
+        }
+        .eco-form-btn-save { background-color: #007bff; color: white; }
+        .eco-form-btn-save:hover { background-color: #0069d9; }
+        .eco-form-btn-save:disabled { background-color: #aaa; cursor: not-allowed; }
+        #ecoContainerGrid {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 24px;
+            background: #f4f7f6;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+            gap: 20px;
+        }
+        .eco-card {
+            background: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.07);
+            display: flex;
+            flex-direction: column;
+            padding: 16px 20px;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            border: 1px solid transparent;
+        }
+        .eco-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
+        }
+        .eco-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 12px;
+            margin-bottom: 12px;
+        }
+        .eco-customer-name {
+            font-weight: 600;
+            font-size: 1.2rem;
+            color: #2c3e50;
+        }
+        .eco-warehouse {
+            font-size: 0.9rem;
+            color: #555;
+            background: #e9ecef;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-weight: 500;
+        }
+        .eco-address {
+            font-size: 0.95rem;
+            color: #777;
+            margin-bottom: 16px;
+        }
+        .eco-progress-container {
+            position: relative;
+            width: 100%;
+            padding-top: 30px; 
+            margin-bottom: 10px;
+        }
+        .eco-progress-bar-container {
+            width: 100%;
+            height: 12px;
+            background: #e0e0e0;
+            border-radius: 6px;
+            overflow: hidden;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .eco-progress-bar {
+            height: 100%;
+            border-radius: 6px 0 0 6px;
+            transition: width 0.5s ease-out, background-color 0.5s;
+            background-color: #66bb6a; 
+        }
+        .eco-progress-bar.green { background: linear-gradient(90deg, #66bb6a, #43a047); }
+        .eco-progress-bar.yellow { background: linear-gradient(90deg, #ffee58, #fdd835); }
+        .eco-progress-bar.red { background: linear-gradient(90deg, #ef5350, #e53935); }
+        .eco-truck-indicator {
+            position: absolute;
+            top: 0; 
+            right: 0%; 
+            transition: right 0.5s ease-out;
+            transform: translateX(50%); 
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .eco-truck-label {
+            font-size: 0.8rem;
+            font-weight: bold;
+            color: #333;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 2px 5px;
+            border-radius: 4px;
+            margin-bottom: 2px;
+            white-space: nowrap;
+        }
+        .eco-truck-icon { font-size: 1.5rem; }
+        .eco-card.alert {
+            border-color: #e53935;
+            box-shadow: 0 0 15px rgba(229, 57, 53, 0.4);
+        }
+        .eco-card.alert .eco-progress-bar.red { animation: pulse-red 1s infinite; }
+        .eco-card.alert .eco-truck-label {
+            animation: pulse-text 1s infinite;
+            color: #d32f2f;
+            font-weight: 700;
+        }
+        @keyframes pulse-red { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
+        @keyframes pulse-text { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
+        .eco-actions { display: flex; gap: 10px; margin-top: auto; padding-top: 16px; }
+        .eco-btn {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.9rem;
+            transition: background-color 0.2s, transform 0.1s;
+        }
+        .eco-btn:active { transform: scale(0.98); }
+        .eco-btn-primary { background-color: #007bff; color: white; }
+        .eco-btn-primary:hover { background-color: #0069d9; }
+        .eco-btn-secondary { background-color: #6c757d; color: white; }
+        .eco-btn-secondary:hover { background-color: #5a6268; }
+        @media (max-width: 768px) {
+            #ecoDashboard { width: 100%; height: 100%; border-radius: 0; }
+            #ecoContainerGrid { grid-template-columns: 1fr; padding: 16px; }
+            .eco-header { flex-direction: column; gap: 10px; padding: 12px 16px; }
+            .eco-controls { width: 100%; flex-direction: column; align-items: stretch; }
+            .eco-search-box { width: 100%; }
+            .eco-add-btn { width: 100%; }
+            #ecoAddForm { padding: 16px; }
+        }
+        .eco-card.hidden { display: none; }
+        .eco-hidden { display: none !important; }
+    </style>
+
+    <!-- [משודרג] טעינת ספריות Firebase v9.15.0 + פונקציות עריכה/מחיקה -->
+    <script type="module">
+        import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+        // [חדש] הוספנו פונקציות מלאות: C.R.U.D
+        import { 
+            getFirestore, collection, onSnapshot, query, where, orderBy, 
+            addDoc, Timestamp, doc, updateDoc, deleteDoc
+        } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+
+        // --- Mandatory Firebase Config & Auth (using globals) ---
+        const fallbackConfig = {
+            apiKey: "AIzaSyDq0oVwS6zbEfsgrYBRkeBq80dDUKMedzo", authDomain: "saban94-76543.firebaseapp.com", projectId: "saban94-76543",
+            storageBucket: "saban94-76543.appspot.com", messagingSenderId: "41553157903", appId: "1:41553157903:web:cc33d252cff023be97a87a", measurementId: "G-XV6RZDESSB"
+        };
+        const firebaseConfig = typeof __firebase_config !== 'undefined'
+            ? JSON.parse(__firebase_config)
+            : fallbackConfig;
+        const providedToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        
+        const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        
+        // [חדש] חשיפת כל השירותים הנדרשים לסקריפט הראשי
+        window.firebaseServices = { 
+            db, auth, collection, onSnapshot, query, where, orderBy, 
+            addDoc, Timestamp, doc, updateDoc, deleteDoc
+        };
+
+        // --- אימות ---
+        try {
+            if (providedToken) {
+                console.log("EcoModal: Authenticating with provided token...");
+                await signInWithCustomToken(auth, providedToken);
+            } else {
+                console.warn("EcoModal: No provided token, signing in anonymously...");
+                await signInAnonymously(auth);
+            }
+            console.log("EcoModal: Auth successful.", auth.currentUser?.uid);
+            window.firebaseAuthReady = true;
+            document.dispatchEvent(new Event('firebaseAuthReady'));
+        } catch (error) {
+            console.error("EcoModal: Critical auth failure.", error);
+            window.firebaseAuthReady = false;
+        }
+    </script>
+    <!-- סוף טעינת Firebase -->
+
+</head>
+<body>
+
+    <!-- סביבת הדגמה ... -->
+    <div class="mock-header" id="mockDashboardHeader">
+        <h1>DeliveryMaster</h1>
+        <button id="openEcoDashboardButton">פתח דשבורד מכולות (Eco)</button>
+    </div>
+    <div class="mock-content">
+        <p>זהו התוכן של הדף הראשי במערכת.</p>
+    </div>
+    <!-- סוף סביבת הדגמה -->
+
+
+    <!-- =========== דשבורד ניהול מכולות (Eco System) =========== -->
+    
+    <div id="ecoModalOverlay">
+        
+        <div id="ecoDashboard">
+            
+            <header class="eco-header">
+                <h2>ניהול מכולות (Eco System)</h2>
+                <div class="eco-controls">
+                    <input type="search" id="ecoSearchInput" class="eco-search-box" placeholder="חיפוש לפי לקוח, כתובת...">
+                    <button id="ecoAddButton" class="eco-add-btn">הוסף מכולה</button>
+                </div>
+                <span class="eco-close-btn" id="ecoCloseModalButton">&times;</span>
+            </header>
+            
+            <!-- [משודרג] טופס הוספת מכולה עם חיפוש לקוחות -->
+            <form id="ecoAddForm" class="eco-hidden" novalidate>
+                
+                <!-- [חדש] שדה נסתר לאחסון ID הלקוח שנבחר -->
+                <input type="hidden" id="ecoFormCustomerID">
+                
+                <div class="eco-form-group">
+                    <label for="ecoFormCustomerSearch">חפש לקוח (שם, מספר לקוח, טלפון)</label>
+                    <!-- [חדש] קשור ל-datalist -->
+                    <input type="text" id="ecoFormCustomerSearch" list="ecoCustomerList" required autocomplete="off">
+                    <!-- [חדש] רשימת הצעות אוטומטית שתתמלא מ-Firebase -->
+                    <datalist id="ecoCustomerList"></datalist>
+                </div>
+                <div class="eco-form-group">
+                    <label for="ecoFormAddress">כתובת</label>
+                    <!-- [חדש] הפכנו את השדה ל-readonly, הוא יתמלא אוטומטית -->
+                    <input type="text" id="ecoFormAddress" required readonly>
+                </div>
+                <div class="eco-form-group">
+                    <label for="ecoFormWarehouse">מחסן</label>
+                    <select id="ecoFormWarehouse" required>
+                        <option value="">בחר מחסן...</option>
+                        <option value="מחסן 30 - (שארק)">מחסן 30 - (שארק)</option>
+                        <option value="מחסן 32 - (כראדי)">מחסן 32 - (כראדי)</option>
+                        <option value="מחסן 40 - (שי שרון)">מחסן 40 - (שי שרון)</option>
+                    </select>
+                </div>
+                <div class="eco-form-group">
+                    <label for="ecoFormDeliveryNote">מספר תעודת משלוח (אופציונלי)</label>
+                    <input type="text" id="ecoFormDeliveryNote">
+                </div>
+                <div class="eco-form-group">
+                    <label for="ecoFormStartDate">תאריך התחלה</label>
+                    <input type="date" id="ecoFormStartDate" required>
+                </div>
+                <div class="eco-form-actions">
+                    <button type="submit" id="ecoSaveButton" class="eco-form-btn eco-form-btn-save">שמור מכולה</button>
+                </div>
+            </form>
+
+            <!-- רשת הכרטיסים -->
+            <main id="ecoContainerGrid">
+                <p style="padding: 20px; text-align: center;">טוען נתונים מ-Firebase...</p>
+            </main>
+
+        </div>
+    </div>
+
+    <template id="ecoCardTemplate">
+        <div class="eco-card">
+            <div class="eco-card-header">
+                <span class="eco-customer-name">שם לקוח</span>
+                <span class="eco-warehouse">מחסן</span>
+            </div>
+            <p class="eco-address">כתובת הלקוח</p>
+            <div class="eco-progress-container">
+                <div class="eco-truck-indicator">
+                    <span class="eco-truck-label">0 ימים</span>
+                    <span class="eco-truck-icon">🚚</span>
+                </div>
+                <div class="eco-progress-bar-container">
+                    <div class="eco-progress-bar green" style="width: 0%;"></div>
+                </div>
+            </div>
+            <div class="eco-actions">
+                <button class="eco-btn eco-btn-primary btn-replace">החלפה</button>
+                <button class="eco-btn eco-btn-secondary btn-remove">הוצאה</button>
+            </div>
+        </div>
+    </template>
+    
+    <!-- =========== סוף דשבורד ניהול מכולות =========== -->
+
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+
+            // --- איתור אלמנטים מרכזיים ---
+            const modalOverlay = document.getElementById('ecoModalOverlay');
+            const dashboardPanel = document.getElementById('ecoDashboard');
+            const openButton = document.getElementById('openEcoDashboardButton');
+            const closeButton = document.getElementById('ecoCloseModalButton');
+            const grid = document.getElementById('ecoContainerGrid');
+            const cardTemplate = document.getElementById('ecoCardTemplate');
+            const searchInput = document.getElementById('ecoSearchInput');
+            
+            // --- אלמנטי הטופס ---
+            const addButton = document.getElementById('ecoAddButton');
+            const addForm = document.getElementById('ecoAddForm');
+            const saveButton = document.getElementById('ecoSaveButton');
+            
+            // --- [חדש] אלמנטי טופס חיפוש ---
+            const customerSearchInput = document.getElementById('ecoFormCustomerSearch');
+            const customerDatalist = document.getElementById('ecoCustomerList');
+            const customerAddressInput = document.getElementById('ecoFormAddress');
+            const customerIdInput = document.getElementById('ecoFormCustomerID');
+
+            // --- משתני State ---
+            let allContainersData = [];
+            let allCustomersData = []; // [חדש] מערך לאחסון כל הלקוחות
+            const MAX_RENTAL_DAYS_VIEW = 10;
+
+            // --- פתיחה וסגירה של המודאל ---
+            window.openEcoModal = () => {
+                modalOverlay.classList.add('visible');
+                showContainerList(); 
+            };
+            const closeEcoModal = () => {
+                modalOverlay.classList.remove('visible');
+            };
+
+            if (openButton) openButton.addEventListener('click', window.openEcoModal);
+            if (closeButton) closeButton.addEventListener('click', closeEcoModal);
+            modalOverlay.addEventListener('click', (e) => {
+                if (e.target === modalOverlay) closeEcoModal();
+            });
+
+            // --- ניהול תצוגת טופס/רשימה ---
+            const showAddForm = () => {
+                grid.classList.add('eco-hidden');
+                searchInput.classList.add('eco-hidden');
+                addForm.classList.remove('eco-hidden');
+                addButton.textContent = 'חזור לרשימה';
+                addButton.classList.add('back-btn');
+                addForm.reset();
+                customerIdInput.value = ''; // [חדש] איפוס מזהה נסתר
+                document.getElementById('ecoFormStartDate').valueAsDate = new Date();
+            };
+            const showContainerList = () => {
+                grid.classList.remove('eco-hidden');
+                searchInput.classList.remove('eco-hidden');
+                addForm.classList.add('eco-hidden');
+                addButton.textContent = 'הוסף מכולה';
+                addButton.classList.remove('back-btn');
+            };
+            addButton.addEventListener('click', () => {
+                if (addForm.classList.contains('eco-hidden')) showAddForm();
+                else showContainerList();
+            });
+
+
+            // --- לוגיקת חיבור נתונים ---
+            
+            // משתנים גלובליים לשירותי Firebase
+            let db, auth, collection, onSnapshot, query, where, orderBy, addDoc, Timestamp, doc, updateDoc, deleteDoc;
+            let appId, userId;
+
+            const initializeEcoApp = () => {
+                const services = window.firebaseServices;
+                if (!services || !services.db) {
+                    console.error("EcoModal: Firebase services not available.");
+                    grid.innerHTML = '<p style="padding: 20px; text-align: center; color: red;">שגיאה קריטית: אין חיבור לבסיס הנתונים.</p>';
+                    return;
+                }
+                
+                // שיוך כל שירותי ה-Firebase
+                ({ db, auth, collection, onSnapshot, query, where, orderBy, addDoc, Timestamp, doc, updateDoc, deleteDoc } = services);
+                
+                appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+                userId = auth.currentUser?.uid;
+
+                if (!userId) {
+                    console.error("EcoModal: Auth completed but user ID is not available.");
+                    return;
+                }
+                
+                // הפעלת המאזינים
+                listenToContainers();
+                listenToCustomers(); // [חדש] הפעלת מאזין הלקוחות
+            };
+
+            /**
+             * [חדש] מאזין לקולקשן הלקוחות
+             */
+            const listenToCustomers = () => {
+                try {
+                    // הנחת נתיב: /artifacts/{appId}/public/data/customers
+                    // אם הלקוחות פרטיים, הנתיב צריך להיות /artifacts/{appId}/users/{userId}/customers
+                    // נשתמש בנתיב ציבורי כברירת מחדל
+                    const customersColPath = `/artifacts/${appId}/public/data/customers`;
+                    console.log(`EcoModal: Listening to customers at: ${customersColPath}`);
+                    
+                    const q = query(collection(db, customersColPath), orderBy("name")); // מיון לפי שם
+                    
+                    onSnapshot(q, (snapshot) => {
+                        allCustomersData = snapshot.docs.map(doc => ({
+                            id: doc.id,
+                            ...doc.data()
+                        }));
+                        
+                        populateCustomerDatalist(); // [חדש] עדכון הרשימה הנפתחת
+                        console.log(`EcoModal: Loaded ${allCustomersData.length} customers.`);
+                        
+                    }, (error) => {
+                        console.error("EcoModal: Error listening to Customers collection:", error);
+                    });
+
+                } catch (error) {
+                    console.error("EcoModal: Failed to set up Customers listener.", error);
+                }
+            };
+            
+            /**
+             * [חדש] ממלא את ה-Datalist עם הלקוחות
+             */
+            const populateCustomerDatalist = () => {
+                if (!customerDatalist) return;
+                customerDatalist.innerHTML = ''; // נקה אופציות קיימות
+                
+                allCustomersData.forEach(cust => {
+                    const option = document.createElement('option');
+                    option.value = cust.name; // מה שהמשתמש רואה ובוחר
+                    option.dataset.id = cust.id; // שמירת המזהה
+                    option.dataset.address = cust.defaultAddress || cust.address || ''; // שמירת הכתובת
+                    
+                    // טקסט עזר שמופיע בדרופדאון (לא חובה, תלוי דפדפן)
+                    let label = `${cust.customerNumber || 'ללא מספר'} | ${cust.phone || 'ללא טלפון'}`;
+                    option.label = label;
+                    option.textContent = label; // Fallback
+                    
+                    customerDatalist.appendChild(option);
+                });
+            };
+
+            /**
+             * [חדש] מטפל בבחירת לקוח מהרשימה
+             */
+            const handleCustomerSearch = (event) => {
+                const value = event.target.value;
+                let found = false;
+
+                // נסה למצוא התאמה ב-Datalist
+                const options = customerDatalist.options;
+                for (let i = 0; i < options.length; i++) {
+                    if (options[i].value === value) {
+                        const selectedOption = options[i];
+                        customerAddressInput.value = selectedOption.dataset.address || '';
+                        customerIdInput.value = selectedOption.dataset.id || '';
+                        found = true;
+                        break;
+                    }
+                }
+
+                if (!found) {
+                    // אם המשתמש מקליד משהו שלא ברשימה, נקה את השדות
+                    customerAddressInput.value = '';
+                    customerIdInput.value = '';
+                }
+            };
+
+            // [חדש] חיבור האירוע לתיבת חיפוש הלקוחות
+            customerSearchInput.addEventListener('input', handleCustomerSearch);
+
+
+            /**
+             * מאזין לקולקשן המכולות
+             */
+            const listenToContainers = () => {
+                const containersColPath = `/artifacts/${appId}/public/data/containers`;
+                console.log(`EcoModal: Listening to collection: ${containersColPath}`);
+                const q = query(collection(db, containersColPath));
+
+                try {
+                    onSnapshot(q, (snapshot) => {
+                        const containers = snapshot.docs.map(doc => {
+                            const data = doc.data();
+                            const jsDate = data.startDate?.toDate ? data.startDate.toDate() : null;
+                            if (!jsDate) return null; 
+                            return {
+                                id: doc.id,
+                                // [משודרג] תומך גם במבנה הישן (string) וגם בחדש (object)
+                                customerName: data.customer?.name || data.customerName || 'N/A',
+                                address: data.address || 'N/A',
+                                warehouse: data.warehouse || 'N/A',
+                                startDate: jsDate 
+                            };
+                        }).filter(c => c !== null); 
+                        allContainersData = containers; 
+                        renderData(allContainersData); 
+                    }, (error) => {
+                        console.error("EcoModal: Error listening to Firestore:", error);
+                        grid.innerHTML = '<p style="padding: 20px; text-align: center; color: red;">שגיאה בקבלת נתוני מכולות.</p>';
+                    });
+                } catch (error) {
+                    console.error("EcoModal: Failed to set up onSnapshot listener.", error);
+                }
+            };
+
+            /**
+             * מרנדר את כל כרטיסי המכולות לגריד
+             */
+            const renderData = (containers) => {
+                grid.innerHTML = ''; 
+                if (containers.length === 0) {
+                    grid.innerHTML = '<p style="padding: 20px; text-align: center;">לא נמצאו מכולות פעילות.</p>';
+                    return;
+                }
+                containers.sort((a, b) => b.startDate.getTime() - a.startDate.getTime());
+                containers.forEach(container => {
+                    const card = createContainerCard(container);
+                    grid.appendChild(card);
+                });
+            };
+
+            /**
+             * יוצר אלמנט HTML של כרטיס מכולה בודד
+             */
+            const createContainerCard = (container) => {
+                const cardFragment = cardTemplate.content.cloneNode(true);
+                const cardElement = cardFragment.querySelector('.eco-card');
+                cardElement.dataset.id = container.id;
+                
+                // [משודרג] קורא את שם הלקוח (שיכול להגיע עכשיו מהאובייקט)
+                cardElement.querySelector('.eco-customer-name').textContent = container.customerName;
+                cardElement.querySelector('.eco-warehouse').textContent = container.warehouse;
+                cardElement.querySelector('.eco-address').textContent = container.address;
+
+                try {
+                    const rentalDays = calculateRentalDays(container.startDate);
+                    updateProgressBar(cardElement, rentalDays);
+                } catch (e) {
+                    console.error(`Error calculating days for container ${container.id}:`, e);
+                    cardElement.querySelector('.eco-progress-container').style.display = 'none';
+                }
+
+                cardElement.querySelector('.btn-replace').addEventListener('click', () => {
+                    handleReplace(container.id, container.customerName);
+                });
+                cardElement.querySelector('.btn-remove').addEventListener('click', () => {
+                    handleRemove(container.id, container.customerName);
+                });
+                return cardElement;
+            };
+
+            // --- פונקציות ליבה (לוגיקה) ---
+            const calculateRentalDays = (startDateInput) => {
+                if (!startDateInput) throw new Error("Invalid start date input");
+                const startDate = new Date(startDateInput);
+                const today = new Date();
+                startDate.setHours(0, 0, 0, 0);
+                today.setHours(0, 0, 0, 0);
+                const diffTime = today.getTime() - startDate.getTime();
+                if (diffTime < 0) return 0; 
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                return diffDays + 1; 
+            };
+            const updateProgressBar = (cardElement, days) => {
+                const progressBar = cardElement.querySelector('.eco-progress-bar');
+                const truckIndicator = cardElement.querySelector('.eco-truck-indicator');
+                const truckLabel = cardElement.querySelector('.eco-truck-label');
+                if (!progressBar || !truckIndicator || !truckLabel) return;
+                let percentage = (days / MAX_RENTAL_DAYS_VIEW) * 100;
+                if (percentage > 100) percentage = 100;
+                if (percentage < 0) percentage = 0;
+                progressBar.style.width = percentage + '%';
+                truckIndicator.style.right = percentage + '%';
+                truckLabel.textContent = `${days} ימים`;
+                progressBar.classList.remove('green', 'yellow', 'red');
+                cardElement.classList.remove('alert');
+                if (days >= 10) {
+                    progressBar.classList.add('red');
+                    cardElement.classList.add('alert'); 
+                } else if (days >= 8) {
+                    progressBar.classList.add('yellow');
+                } else {
+                    progressBar.classList.add('green');
+                }
+            };
+
+            // --- [משודרג] לוגיקת שמירת טופס ---
+            const handleSaveContainer = async (event) => {
+                event.preventDefault();
+                
+                // [משודרג] קבלת הערכים מהטופס
+                const customerId = customerIdInput.value;
+                const customerName = customerSearchInput.value.trim();
+                const address = customerAddressInput.value.trim();
+                const warehouse = document.getElementById('ecoFormWarehouse').value;
+                const startDateValue = document.getElementById('ecoFormStartDate').value;
+                const deliveryNote = document.getElementById('ecoFormDeliveryNote').value.trim();
+
+                // [משודרג] ולידציה: מוודא שלקוח *נבחר*
+                if (!customerId || !customerName) {
+                    alert("יש לבחור לקוח קיים מהרשימה.");
+                    return;
+                }
+                if (!address || !warehouse || !startDateValue) {
+                    alert("אנא מלא את כל השדות.");
+                    return;
+                }
+                
+                saveButton.disabled = true;
+                saveButton.textContent = 'שומר...';
+
+                try {
+                    // [משודרג] שמירת הנתונים במבנה אובייקט
+                    const newContainerData = {
+                        customer: {
+                            id: customerId,
+                            name: customerName
+                        },
+                        address: address, // הכתובת שנשלפה אוטומטית
+                        warehouse: warehouse,
+                        deliveryNote: deliveryNote || null,
+                        startDate: Timestamp.fromDate(new Date(startDateValue)),
+                        createdAt: Timestamp.now(),
+                        createdBy: userId
+                    };
+
+                    const containersColPath = `/artifacts/${appId}/public/data/containers`;
+                    const docRef = await addDoc(collection(db, containersColPath), newContainerData);
+                    
+                    console.log("EcoModal: New container saved successfully!", docRef.id);
+                    alert("המכולה נשמרה בהצלחה!");
+                    showContainerList();
+                } catch (error) {
+                    console.error("EcoModal: Error saving new container:", error);
+                    alert("שגיאה בשמירת המכולה. בדוק את הלוגים.");
+                } finally {
+                    saveButton.disabled = false;
+                    saveButton.textContent = 'שמור מכולה';
+                }
+            };
+            addForm.addEventListener('submit', handleSaveContainer);
+
+
+            // --- מטפלי אירועים (כפתורים וחיפוש) ---
+            const handleReplace = (containerId, customerName) => {
+                console.log(`בקשת החלפה עבור מכולה ${containerId} (${customerName})`);
+                alert(`עדיין לא מחובר: החלפה עבור\n${customerName} (ID: ${containerId})`);
+            };
+            const handleRemove = (containerId, customerName) => {
+                console.log(`בקשת הוצאה עבור מכולה ${containerId} (${customerName})`);
+                alert(`עדיין לא מחובר: הוצאה עבור\n${customerName} (ID: ${containerId})`);
+            };
+
+            searchInput.addEventListener('input', (e) => {
+                const searchTerm = e.target.value.toLowerCase().trim();
+                const cards = grid.querySelectorAll('.eco-card');
+                cards.forEach(card => {
+                    const customerName = card.querySelector('.eco-customer-name').textContent.toLowerCase();
+                    const address = card.querySelector('.eco-address').textContent.toLowerCase();
+                    const isVisible = customerName.includes(searchTerm) || address.includes(searchTerm);
+                    card.style.display = isVisible ? 'flex' : 'none';
+                });
+            });
+
+            // --- התחלת האפליקציה ---
+            if (window.firebaseAuthReady) {
+                initializeEcoApp();
+            } else {
+                document.addEventListener('firebaseAuthReady', () => {
+                    initializeEcoApp();
+                });
+            }
+
+        });
+    </script>
+
+</body>
+</html>
+
