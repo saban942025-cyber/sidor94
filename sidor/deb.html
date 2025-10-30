@@ -1,0 +1,1093 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DeliveryMaster v33.0 (Full System)</title>
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Leaflet Maps -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <!-- Feather Icons -->
+    <script src="https://unpkg.com/feather-icons"></script>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --primary-color: #3b82f6;
+            --primary-dark: #2563eb;
+            --bg-light: #f3f4f6;
+            --bg-white: #ffffff;
+            --border-color: #e5e7eb;
+            --text-dark: #1f2937;
+            --text-light: #6b7280;
+            --text-dark-nav: #d1d5db;
+            --bg-dark-nav: #1f2937;
+            --bg-dark-nav-hover: #374151;
+            --danger-soft: #fee2e2;
+            --danger-medium: #f87171;
+            --danger-dark: #dc2626;
+            --warning-color: #f59e0b;
+            --success-color: #10b981;
+            --eco-orange: #f97316;
+            --eco-purple: #8b5cf6;
+        }
+
+        body {
+            font-family: 'Inter', 'Arial', sans-serif;
+            background-color: var(--bg-light);
+            color: var(--text-dark);
+            overflow: hidden;
+        }
+
+        /* Layout */
+        .app-layout {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            height: 100vh;
+        }
+
+        /* App Views */
+        .app-view {
+            width: 100%;
+            height: 100vh;
+            overflow: hidden;
+            display: none;
+        }
+        .app-view.active {
+            display: block;
+        }
+
+        #view-dashboard {
+            display: grid;
+            grid-template-columns: 1fr 350px;
+            overflow: hidden;
+        }
+        .app-view.active#view-dashboard { display: grid; }
+
+        #view-history, #view-containers {
+            overflow-y: auto;
+            padding: 1.5rem 2.5rem;
+        }
+
+        #view-driver-history {
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            height: 100vh;
+        }
+        .app-view.active#view-driver-history { display: grid; }
+
+        /* Map Styles */
+        #map-container {
+            position: relative;
+            background-color: #e0e0e0;
+        }
+        #map {
+            height: 100%;
+            width: 100%;
+        }
+
+        /* Navbar */
+        #navbar {
+            background-color: var(--bg-dark-nav);
+            border-left: 1px solid var(--border-color);
+            color: white;
+            z-index: 10;
+        }
+        #navbar .text-xl { color: white; }
+        .nav-link { transition: all 0.2s; color: var(--text-dark-nav); }
+        .nav-link:hover { background-color: var(--bg-dark-nav-hover); color: white; }
+        .nav-link.active { background-color: var(--primary-color); color: white; border-right: 3px solid #60a5fa; }
+        .nav-link-special { color: var(--text-dark-nav); background-color: var(--bg-dark-nav-hover); }
+        .nav-link-special:hover { background-color: var(--primary-color); color: white; }
+
+        /* Side Panel */
+        #side-panel {
+            background-color: var(--bg-white);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+        #side-panel-lists { flex: 1; overflow-y: auto; position: relative; }
+        .panel-list { overflow-y: auto; position: relative; }
+        .order-card, .driver-card { padding: 1rem; border-bottom: 1px solid var(--border-color); transition: background-color 0.2s; }
+        .order-card:hover, .driver-card:hover { background-color: #fafafa; }
+        .order-card.active, .driver-card.active { background-color: #eff6ff; border-right: 3px solid var(--primary-color); }
+
+        /* ECO System Styles */
+        .eco-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .eco-card {
+            background: var(--bg-white);
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.07);
+            padding: 16px 20px;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            border: 1px solid transparent;
+        }
+
+        .eco-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
+        }
+
+        .eco-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 12px;
+            margin-bottom: 12px;
+        }
+
+        .eco-customer-name {
+            font-weight: 600;
+            font-size: 1.2rem;
+            color: #2c3e50;
+        }
+
+        .eco-warehouse {
+            font-size: 0.9rem;
+            color: #555;
+            background: #e9ecef;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-weight: 500;
+        }
+
+        .eco-progress-container {
+            position: relative;
+            width: 100%;
+            padding-top: 30px;
+            margin-bottom: 10px;
+        }
+
+        .eco-progress-bar-container {
+            width: 100%;
+            height: 12px;
+            background: #e0e0e0;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
+        .eco-progress-bar {
+            height: 100%;
+            border-radius: 6px 0 0 6px;
+            transition: width 0.5s ease-out, background-color 0.5s;
+        }
+
+        .eco-progress-bar.green { background: linear-gradient(90deg, #66bb6a, #43a047); }
+        .eco-progress-bar.yellow { background: linear-gradient(90deg, #ffee58, #fdd835); }
+        .eco-progress-bar.red { background: linear-gradient(90deg, #ef5350, #e53935); }
+
+        .eco-truck-indicator {
+            position: absolute;
+            top: 0;
+            right: 0%;
+            transition: right 0.5s ease-out;
+            transform: translateX(50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .eco-truck-label {
+            font-size: 0.8rem;
+            font-weight: bold;
+            color: #333;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 2px 5px;
+            border-radius: 4px;
+            margin-bottom: 2px;
+        }
+
+        .eco-card.alert {
+            border-color: #e53935;
+            box-shadow: 0 0 15px rgba(229, 57, 53, 0.4);
+        }
+
+        .eco-card.alert .eco-progress-bar.red { animation: pulse-red 1s infinite; }
+
+        @keyframes pulse-red {
+            0% { opacity: 1; }
+            50% { opacity: 0.4; }
+            100% { opacity: 1; }
+        }
+
+        /* Container Table */
+        .container-table th, .container-table td {
+            padding: 0.75rem 1rem;
+            text-align: right;
+            border-bottom: 1px solid var(--border-color);
+            vertical-align: middle;
+        }
+
+        .container-table tbody tr.overdue {
+            background-color: var(--danger-soft);
+            animation: subtle-pulse 1.5s infinite ease-in-out;
+        }
+
+        @keyframes subtle-pulse {
+            0% { background-color: var(--danger-soft); }
+            50% { background-color: #fecaca; }
+            100% { background-color: var(--danger-soft); }
+        }
+
+        /* Custom Icons for Map */
+        .eco-orange-icon {
+            background-color: var(--eco-orange);
+            border: 3px solid white;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        }
+
+        .eco-purple-icon {
+            background-color: var(--eco-purple);
+            border: 3px solid white;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        }
+
+        /* Loader */
+        .loader-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255,255,255,0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+        }
+
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid var(--primary-color);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            #view-dashboard { grid-template-columns: 1fr; }
+            #side-panel {
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                height: 40vh;
+                z-index: 2000;
+                border-right: none;
+                border-top: 1px solid var(--border-color);
+                transform: translateY(100%);
+                transition: transform 0.3s ease;
+            }
+            #side-panel.open { transform: translateY(0); }
+            #navbar { display: flex; width: 100%; z-index: 2001; border-left: none; border-bottom: 1px solid var(--border-color); }
+            .app-layout { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+            .nav-link { flex: 1; justify-content: center; }
+            .nav-link span { display: none; }
+            .nav-link.active { border-right: none; border-bottom: 3px solid var(--primary-color); }
+            #view-driver-history { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+            .eco-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body class="antialiased">
+
+    <!-- Main App Layout -->
+    <div class="app-layout">
+        <!-- Navigation Sidebar -->
+        <nav id="navbar" class="w-20 lg:w-64 flex flex-col p-4 space-y-4">
+            <div class="hidden lg:flex items-center space-x-2 space-x-reverse px-2 mb-4">
+                <i data-feather="truck" class="w-8 h-8 text-blue-500"></i>
+                <span class="text-xl font-bold">DeliveryMaster</span>
+            </div>
+
+            <a href="#" class="nav-link active flex items-center p-3 space-x-4 space-x-reverse rounded-lg" onclick="showView('dashboard')">
+                <i data-feather="map" class="w-6 h-6"></i>
+                <span class="font-semibold text-lg hidden lg:block">דשבורד</span>
+            </a>
+            <a href="#" class="nav-link flex items-center p-3 space-x-4 space-x-reverse rounded-lg" onclick="showView('history')">
+                <i data-feather="archive" class="w-6 h-6"></i>
+                <span class="font-semibold text-lg hidden lg:block">היסטוריה ולקוחות</span>
+            </a>
+            <a href="#" class="nav-link flex items-center p-3 space-x-4 space-x-reverse rounded-lg" onclick="showView('driver-history')">
+                <i data-feather="navigation" class="w-6 h-6"></i>
+                <span class="font-semibold text-lg hidden lg:block">היסטוריית נהגים</span>
+            </a>
+            <a href="#" class="nav-link flex items-center p-3 space-x-4 space-x-reverse rounded-lg" onclick="showView('containers')">
+                <i data-feather="hard-drive" class="w-6 h-6"></i>
+                <span class="font-semibold text-lg hidden lg:block">מכולות ECO</span>
+            </a>
+            <a href="#" class="nav-link flex items-center p-3 space-x-4 space-x-reverse rounded-lg" onclick="openNewOrderForm()">
+                <i data-feather="plus-circle" class="w-6 h-6"></i>
+                <span class="font-semibold text-lg hidden lg:block">הזמנה חדשה</span>
+            </a>
+            <a href="log.html" target="_blank" class="nav-link flex items-center p-3 space-x-4 space-x-reverse rounded-lg">
+                <i data-feather="file-text" class="w-6 h-6"></i>
+                <span class="font-semibold text-lg hidden lg:block">לוגים</span>
+            </a>
+
+            <div class="flex-grow"></div>
+
+            <a href="#" class="nav-link nav-link-special flex items-center p-3 space-x-4 space-x-reverse rounded-lg" onclick="sendGlobalPing()">
+                <i data-feather="bell" class="w-6 h-6"></i>
+                <span class="font-semibold text-lg hidden lg:block">שלח התראה גלובלית</span>
+            </a>
+
+            <div class="hidden lg:block border-t border-gray-700 pt-4 mt-4">
+                <div class="text-sm">שלום, <span class="font-semibold">מנהל</span></div>
+                <div id="last-updated" class="text-xs">מתחבר...</div>
+            </div>
+        </nav>
+
+        <!-- Main Content Area -->
+        <div class="relative">
+            <!-- Dashboard View -->
+            <main id="view-dashboard" class="app-view active">
+                <div id="map-container">
+                    <div id="map"></div>
+                    <div id="map-loader" class="loader-container">
+                        <div class="loader"></div>
+                        <span class="ml-4 font-semibold">טוען מפה ומאמת...</span>
+                    </div>
+                </div>
+
+                <aside id="side-panel">
+                    <div class="flex border-b border-gray-200">
+                        <button id="tab-orders" class="flex-1 p-4 font-semibold text-center border-b-2 border-blue-500 text-blue-500" onclick="showPanelTab('orders')">
+                            הזמנות
+                        </button>
+                        <button id="tab-drivers" class="flex-1 p-4 font-semibold text-center border-b-2 border-transparent text-gray-500" onclick="showPanelTab('drivers')">
+                            נהגים
+                        </button>
+                    </div>
+
+                    <div class="p-3 border-b border-gray-200">
+                        <input type="text" id="search-input" placeholder="חפש הזמנה או נהג..." class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300" onkeyup="filterLists()">
+                    </div>
+
+                    <div id="side-panel-lists" class="relative">
+                        <div id="orders-list" class="panel-list">
+                            <div class="loader-container"><div class="loader"></div></div>
+                        </div>
+                        <div id="drivers-list" class="panel-list" style="display: none;">
+                            <div class="loader-container"><div class="loader"></div></div>
+                        </div>
+                    </div>
+                </aside>
+            </main>
+
+            <!-- History View -->
+            <div id="view-history" class="app-view">
+                <div class="flex border-b border-gray-200 mb-6">
+                    <button class="tab-button active" onclick="showHistoryTab('orders')">היסטוריית הזמנות</button>
+                    <button class="tab-button" onclick="showHistoryTab('customers')">ניהול לקוחות</button>
+                </div>
+
+                <div id="history-orders-content">
+                    <h2 class="text-2xl font-bold mb-4">היסטוריית הזמנות</h2>
+                    <div class="bg-white rounded-lg shadow-sm overflow-hidden">
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-200 history-table">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">מס' הזמנה</th>
+                                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">לקוח</th>
+                                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">נהג</th>
+                                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">כתובת</th>
+                                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">סטטוס</th>
+                                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">תאריך</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="history-table-body" class="bg-white divide-y divide-gray-200">
+                                    <tr><td colspan="6" class="text-center p-8 text-gray-500">טוען היסטוריה...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="history-customers-content" style="display: none;">
+                    <h2 class="text-2xl font-bold mb-4">ניהול לקוחות</h2>
+                    <div class="bg-white rounded-lg shadow-sm overflow-hidden">
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-200 customer-table">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">שם</th>
+                                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">מספר לקוח</th>
+                                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">טלפון</th>
+                                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">כתובת</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="customer-table-body" class="bg-white divide-y divide-gray-200">
+                                    <tr><td colspan="4" class="text-center p-8 text-gray-500">טוען לקוחות...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Driver History View -->
+            <div id="view-driver-history" class="app-view">
+                <aside id="driver-history-sidebar" class="bg-white p-4 border-l border-gray-200">
+                    <h3 class="text-xl font-semibold mb-4">היסטוריית נהג</h3>
+                    <div>
+                        <label for="driver-select" class="block text-sm font-medium text-gray-700 mb-1">בחר נהג</label>
+                        <select id="driver-select" class="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                            <option value="">טוען נהגים...</option>
+                        </select>
+                    </div>
+                    <button id="driver-history-filter-btn" class="w-full px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 mt-4">
+                        הצג מסלול
+                    </button>
+                </aside>
+                <div id="driver-history-map" class="relative">
+                    <div class="w-full h-full bg-gray-300 flex items-center justify-center text-gray-500">
+                        טוען מפת היסטוריה...
+                    </div>
+                </div>
+            </div>
+
+            <!-- ECO Containers View -->
+            <div id="view-containers" class="app-view">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl font-bold">ניהול מכולות ECO</h2>
+                    <button onclick="openEcoAddForm()" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg flex items-center">
+                        <i data-feather="plus" class="w-4 h-4 mr-2"></i>
+                        הוסף מכולה
+                    </button>
+                </div>
+
+                <div class="mb-4">
+                    <input type="text" id="eco-search-input" placeholder="חיפוש לפי לקוח, כתובת..." class="w-full p-3 border border-gray-300 rounded-lg">
+                </div>
+
+                <div class="loader-container" id="containers-loader">
+                    <div class="loader"></div>
+                    <span class="ml-2">טוען נתוני מכולות...</span>
+                </div>
+
+                <!-- ECO Grid View -->
+                <div id="eco-container-grid" class="eco-grid"></div>
+
+                <!-- ECO Add Form -->
+                <div id="eco-add-form" class="bg-white p-6 rounded-lg shadow-sm hidden">
+                    <h3 class="text-xl font-bold mb-4">הוספת מכולה חדשה</h3>
+                    <form onsubmit="handleSaveContainer(event)">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label class="block text-sm font-medium mb-1">שם לקוח</label>
+                                <input type="text" id="eco-customer-name" class="w-full p-2 border rounded-md" required>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1">כתובת</label>
+                                <input type="text" id="eco-address" class="w-full p-2 border rounded-md" required>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1">מחסן</label>
+                                <select id="eco-warehouse" class="w-full p-2 border rounded-md" required>
+                                    <option value="">בחר מחסן</option>
+                                    <option value="מחסן 30 - (שארק)">מחסן 30 - (שארק)</option>
+                                    <option value="מחסן 32 - (כראדי)">מחסן 32 - (כראדי)</option>
+                                    <option value="מחסן 40 - (שי שרון)">מחסן 40 - (שי שרון)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1">תאריך התחלה</label>
+                                <input type="date" id="eco-start-date" class="w-full p-2 border rounded-md" required>
+                            </div>
+                        </div>
+                        <div class="flex gap-2">
+                            <button type="button" onclick="closeEcoAddForm()" class="px-4 py-2 bg-gray-500 text-white rounded-md">ביטול</button>
+                            <button type="submit" class="px-4 py-2 bg-blue-500 text-white rounded-md">שמור מכולה</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+        import { getFirestore, collection, onSnapshot, query, orderBy, addDoc, updateDoc, serverTimestamp, doc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyDq0oVwS6zbEfsgrYBRkeBq80dDUKMedzo",
+            authDomain: "saban94-78949.firebaseapp.com",
+            projectId: "saban94-78949",
+            storageBucket: "saban94-78949.firebasestorage.app",
+            messagingSenderId: "41553157903",
+            appId: "1:41553157903:web:cc33d252cff023be97a87a"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // Make Firebase available globally
+        window.firebase = { db, auth, collection, onSnapshot, query, orderBy, addDoc, updateDoc, serverTimestamp, doc };
+
+        // Initialize auth
+        signInAnonymously(auth).then(() => {
+            console.log("Firebase authenticated anonymously");
+            window.dispatchEvent(new Event('firebaseReady'));
+        }).catch(error => {
+            console.error("Firebase auth error:", error);
+        });
+    </script>
+
+    <!-- Main Application Script -->
+    <script>
+        // Global State
+        let state = {
+            orders: [],
+            drivers: [],
+            customers: [],
+            containers: [],
+            liveLocations: {}
+        };
+
+        // Map Variables
+        let map, driverHistoryMap;
+        let orderMarkers = {};
+        let driverMarkers = {};
+        let containerMarkers = {};
+
+        // Configuration
+        const ISRAEL_CENTER = [32.0853, 34.7818];
+        const MAX_RENTAL_DAYS = 10;
+
+        // Custom Icons
+        const containerIcon = L.divIcon({
+            className: 'eco-orange-icon',
+            html: '',
+            iconSize: [20, 20]
+        });
+
+        const overdueContainerIcon = L.divIcon({
+            className: 'eco-purple-icon',
+            html: '',
+            iconSize: [20, 20]
+        });
+
+        // Initialize Application
+        document.addEventListener('DOMContentLoaded', async () => {
+            await waitForFirebase();
+            initializeApplication();
+        });
+
+        async function waitForFirebase() {
+            return new Promise(resolve => {
+                if (window.firebase) {
+                    resolve();
+                } else {
+                    window.addEventListener('firebaseReady', resolve);
+                }
+            });
+        }
+
+        function initializeApplication() {
+            feather.replace();
+            initMap();
+            setupFirestoreListeners();
+            setupEventListeners();
+            updateStatus("מערכת מוכנה");
+        }
+
+        function initMap() {
+            map = L.map('map').setView(ISRAEL_CENTER, 9);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '&copy; OpenStreetMap'
+            }).addTo(map);
+        }
+
+        function setupFirestoreListeners() {
+            // Listen to orders
+            const ordersQuery = query(collection(window.firebase.db, "orders"), orderBy("createdAt", "desc"));
+            onSnapshot(ordersQuery, (snapshot) => {
+                state.orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                renderOrders();
+                renderMapMarkers();
+            });
+
+            // Listen to drivers
+            const driversQuery = query(collection(window.firebase.db, "drivers"), orderBy("name"));
+            onSnapshot(driversQuery, (snapshot) => {
+                state.drivers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                renderDrivers();
+                renderMapMarkers();
+            });
+
+            // Listen to customers
+            const customersQuery = query(collection(window.firebase.db, "customers"), orderBy("name"));
+            onSnapshot(customersQuery, (snapshot) => {
+                state.customers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            });
+
+            // Listen to containers (ECO System)
+            const containersQuery = query(collection(window.firebase.db, "containers"));
+            onSnapshot(containersQuery, (snapshot) => {
+                state.containers = snapshot.docs.map(doc => {
+                    const data = doc.data();
+                    return {
+                        id: doc.id,
+                        customerName: data.customerName,
+                        address: data.address,
+                        warehouse: data.warehouse,
+                        startDate: data.startDate?.toDate(),
+                        createdAt: data.createdAt?.toDate()
+                    };
+                });
+                renderEcoContainers();
+                renderMapMarkers();
+            });
+
+            // Listen to driver locations
+            const locationsQuery = query(collection(window.firebase.db, "driverLocations"));
+            onSnapshot(locationsQuery, (snapshot) => {
+                snapshot.forEach(doc => {
+                    state.liveLocations[doc.id] = { id: doc.id, ...doc.data() };
+                });
+                renderDrivers();
+                renderMapMarkers();
+            });
+        }
+
+        function setupEventListeners() {
+            // Search functionality
+            document.getElementById('eco-search-input').addEventListener('input', filterEcoContainers);
+            
+            // Driver history
+            document.getElementById('driver-history-filter-btn').addEventListener('click', showDriverHistory);
+        }
+
+        // View Management
+        function showView(viewName) {
+            document.querySelectorAll('.app-view').forEach(view => view.classList.remove('active'));
+            document.getElementById(`view-${viewName}`).classList.add('active');
+            
+            document.querySelectorAll('.nav-link').forEach(link => link.classList.remove('active'));
+            event.currentTarget.classList.add('active');
+
+            // Update maps when switching views
+            setTimeout(() => {
+                if (map) map.invalidateSize();
+                if (driverHistoryMap) driverHistoryMap.invalidateSize();
+            }, 100);
+        }
+
+        function showPanelTab(tabName) {
+            const ordersList = document.getElementById('orders-list');
+            const driversList = document.getElementById('drivers-list');
+            const ordersTab = document.getElementById('tab-orders');
+            const driversTab = document.getElementById('tab-drivers');
+
+            if (tabName === 'orders') {
+                ordersList.style.display = 'block';
+                driversList.style.display = 'none';
+                ordersTab.classList.add('border-blue-500', 'text-blue-500');
+                ordersTab.classList.remove('border-transparent', 'text-gray-500');
+                driversTab.classList.add('border-transparent', 'text-gray-500');
+                driversTab.classList.remove('border-blue-500', 'text-blue-500');
+            } else {
+                ordersList.style.display = 'none';
+                driversList.style.display = 'block';
+                ordersTab.classList.remove('border-blue-500', 'text-blue-500');
+                ordersTab.classList.add('border-transparent', 'text-gray-500');
+                driversTab.classList.remove('border-transparent', 'text-gray-500');
+                driversTab.classList.add('border-blue-500', 'text-blue-500');
+            }
+        }
+
+        function showHistoryTab(tabName) {
+            const ordersContent = document.getElementById('history-orders-content');
+            const customersContent = document.getElementById('history-customers-content');
+            const tabs = document.querySelectorAll('.tab-button');
+
+            tabs.forEach(tab => tab.classList.remove('active'));
+            event.currentTarget.classList.add('active');
+
+            if (tabName === 'orders') {
+                ordersContent.style.display = 'block';
+                customersContent.style.display = 'none';
+            } else {
+                ordersContent.style.display = 'none';
+                customersContent.style.display = 'block';
+            }
+        }
+
+        // Rendering Functions
+        function renderOrders() {
+            const ordersList = document.getElementById('orders-list');
+            if (!ordersList) return;
+
+            const activeOrders = state.orders.filter(order => 
+                order.status !== 'הושלם' && order.status !== 'בוטל'
+            );
+
+            if (activeOrders.length === 0) {
+                ordersList.innerHTML = '<div class="p-4 text-center text-gray-500">אין הזמנות פעילות</div>';
+                return;
+            }
+
+            ordersList.innerHTML = activeOrders.map(order => `
+                <div class="order-card" onclick="focusOnOrder('${order.id}')">
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="font-bold text-blue-600">${order.orderNumber || `#${order.id.slice(-6)}`}</span>
+                        <span class="text-sm font-semibold">${formatDate(order.createdAt)}</span>
+                    </div>
+                    <div class="font-semibold text-gray-800">${order.customer?.name || 'לקוח לא ידוע'}</div>
+                    <div class="text-sm text-gray-600 truncate">${order.address || 'כתובת לא צוינה'}</div>
+                    <div class="text-xs text-gray-500 mt-1">${order.deliveryType || ''} | ${order.status || 'חדש'}</div>
+                </div>
+            `).join('');
+        }
+
+        function renderDrivers() {
+            const driversList = document.getElementById('drivers-list');
+            if (!driversList) return;
+
+            driversList.innerHTML = state.drivers.map(driver => {
+                const location = state.liveLocations[driver.id];
+                const assignedOrders = state.orders.filter(order => 
+                    order.driver?.id === driver.id && 
+                    order.status !== 'הושלם' && 
+                    order.status !== 'בוטל'
+                );
+
+                return `
+                    <div class="driver-card" onclick="focusOnDriver('${driver.id}')">
+                        <div class="flex justify-between items-center">
+                            <span class="font-semibold">${driver.name}</span>
+                            <div class="flex items-center space-x-2">
+                                <span class="text-sm font-medium">${location ? 'פעיל' : 'לא מחובר'}</span>
+                                <span class="status-dot ${location ? 'status-active' : 'status-inactive'}"></span>
+                            </div>
+                        </div>
+                        <div class="text-sm text-gray-500 flex justify-between items-center mt-1">
+                            <span>${driver.vehicleType || 'משאית'} | ${driver.phone}</span>
+                            <span class="text-xs font-medium text-blue-600">${assignedOrders.length} משויכות</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderMapMarkers() {
+            if (!map) return;
+
+            // Clear existing markers
+            Object.values(orderMarkers).forEach(marker => map.removeLayer(marker));
+            Object.values(driverMarkers).forEach(marker => map.removeLayer(marker));
+            Object.values(containerMarkers).forEach(marker => map.removeLayer(marker));
+
+            orderMarkers = {};
+            driverMarkers = {};
+            containerMarkers = {};
+
+            // Add order markers
+            state.orders.filter(order => order.latitude && order.longitude).forEach(order => {
+                const marker = L.marker([order.latitude, order.longitude])
+                    .addTo(map)
+                    .bindPopup(`
+                        <div class="p-2">
+                            <h4 class="font-bold">הזמנה ${order.orderNumber || `#${order.id.slice(-6)}`}</h4>
+                            <p>${order.customer?.name || 'לקוח לא ידוע'}</p>
+                            <p class="text-sm text-gray-600">${order.address}</p>
+                            <button onclick="assignOrder('${order.id}')" class="w-full mt-2 px-3 py-1 bg-blue-500 text-white text-sm rounded hover:bg-blue-600">
+                                שייך נהג
+                            </button>
+                        </div>
+                    `);
+                orderMarkers[order.id] = marker;
+            });
+
+            // Add driver markers
+            Object.values(state.liveLocations).forEach(location => {
+                if (location.latitude && location.longitude) {
+                    const driver = state.drivers.find(d => d.id === location.id);
+                    if (driver) {
+                        const marker = L.marker([location.latitude, location.longitude])
+                            .addTo(map)
+                            .bindPopup(`
+                                <div class="p-2">
+                                    <h4 class="font-bold">${driver.name}</h4>
+                                    <p>${driver.vehicleType || 'משאית'}</p>
+                                    <p class="text-sm">${location.isStuck ? 'תקוע' : 'פעיל'}</p>
+                                </div>
+                            `);
+                        driverMarkers[driver.id] = marker;
+                    }
+                }
+            });
+
+            // Add container markers (ECO System)
+            state.containers.forEach(container => {
+                if (container.latitude && container.longitude) {
+                    const rentalDays = calculateRentalDays(container.startDate);
+                    const isOverdue = rentalDays > MAX_RENTAL_DAYS;
+                    
+                    const marker = L.marker([container.latitude, container.longitude], {
+                        icon: isOverdue ? overdueContainerIcon : containerIcon
+                    })
+                    .addTo(map)
+                    .bindPopup(`
+                        <div class="p-2 min-w-48">
+                            <h4 class="font-bold">${container.customerName}</h4>
+                            <p class="text-sm text-gray-600">${container.address}</p>
+                            <div class="mt-2">
+                                <span class="text-sm ${isOverdue ? 'text-red-600 font-bold' : 'text-gray-700'}">
+                                    ${rentalDays} ימי שכירות
+                                </span>
+                            </div>
+                            <button onclick="replaceContainer('${container.id}')" class="w-full mt-2 px-3 py-1 bg-orange-500 text-white text-sm rounded hover:bg-orange-600">
+                                החלפה
+                            </button>
+                        </div>
+                    `);
+                    containerMarkers[container.id] = marker;
+                }
+            });
+        }
+
+        // ECO System Functions
+        function renderEcoContainers() {
+            const grid = document.getElementById('eco-container-grid');
+            const loader = document.getElementById('containers-loader');
+            
+            if (state.containers.length === 0) {
+                grid.innerHTML = '<div class="col-span-full text-center p-8 text-gray-500">לא נמצאו מכולות פעילות</div>';
+                loader.style.display = 'none';
+                return;
+            }
+
+            grid.innerHTML = state.containers.map(container => {
+                const rentalDays = calculateRentalDays(container.startDate);
+                const progressPercent = Math.min(100, (rentalDays / MAX_RENTAL_DAYS) * 100);
+                const isOverdue = rentalDays > MAX_RENTAL_DAYS;
+                
+                let progressClass = 'green';
+                if (rentalDays >= 8) progressClass = 'yellow';
+                if (isOverdue) progressClass = 'red';
+
+                return `
+                    <div class="eco-card ${isOverdue ? 'alert' : ''}">
+                        <div class="eco-card-header">
+                            <span class="eco-customer-name">${container.customerName}</span>
+                            <span class="eco-warehouse">${container.warehouse}</span>
+                        </div>
+                        <p class="eco-address">${container.address}</p>
+                        <div class="eco-progress-container">
+                            <div class="eco-truck-indicator" style="right: ${progressPercent}%">
+                                <span class="eco-truck-label">${rentalDays} ימים</span>
+                                <span class="eco-truck-icon">🚚</span>
+                            </div>
+                            <div class="eco-progress-bar-container">
+                                <div class="eco-progress-bar ${progressClass}" style="width: ${progressPercent}%"></div>
+                            </div>
+                        </div>
+                        <div class="eco-actions">
+                            <button class="eco-btn eco-btn-primary" onclick="replaceContainer('${container.id}')">החלפה</button>
+                            <button class="eco-btn eco-btn-secondary" onclick="removeContainer('${container.id}')">הוצאה</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            loader.style.display = 'none';
+        }
+
+        function filterEcoContainers() {
+            const searchTerm = document.getElementById('eco-search-input').value.toLowerCase();
+            const cards = document.querySelectorAll('.eco-card');
+            
+            cards.forEach(card => {
+                const customerName = card.querySelector('.eco-customer-name').textContent.toLowerCase();
+                const address = card.querySelector('.eco-address').textContent.toLowerCase();
+                const isVisible = customerName.includes(searchTerm) || address.includes(searchTerm);
+                card.style.display = isVisible ? 'flex' : 'none';
+            });
+        }
+
+        function openEcoAddForm() {
+            document.getElementById('eco-container-grid').style.display = 'none';
+            document.getElementById('eco-add-form').classList.remove('hidden');
+            document.getElementById('eco-search-input').style.display = 'none';
+            document.getElementById('eco-start-date').valueAsDate = new Date();
+        }
+
+        function closeEcoAddForm() {
+            document.getElementById('eco-container-grid').style.display = 'grid';
+            document.getElementById('eco-add-form').classList.add('hidden');
+            document.getElementById('eco-search-input').style.display = 'block';
+        }
+
+        async function handleSaveContainer(event) {
+            event.preventDefault();
+            
+            const containerData = {
+                customerName: document.getElementById('eco-customer-name').value,
+                address: document.getElementById('eco-address').value,
+                warehouse: document.getElementById('eco-warehouse').value,
+                startDate: window.firebase.serverTimestamp(),
+                createdAt: window.firebase.serverTimestamp()
+            };
+
+            try {
+                await addDoc(collection(window.firebase.db, "containers"), containerData);
+                closeEcoAddForm();
+                showToast('מכולה נוספה בהצלחה', 'success');
+            } catch (error) {
+                console.error('Error adding container:', error);
+                showToast('שגיאה בהוספת מכולה', 'error');
+            }
+        }
+
+        // Utility Functions
+        function calculateRentalDays(startDate) {
+            if (!startDate) return 0;
+            const start = new Date(startDate);
+            const today = new Date();
+            start.setHours(0, 0, 0, 0);
+            today.setHours(0, 0, 0, 0);
+            const diffTime = today.getTime() - start.getTime();
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            return Math.max(0, diffDays);
+        }
+
+        function formatDate(date) {
+            if (!date) return 'N/A';
+            const jsDate = date.toDate ? date.toDate() : new Date(date);
+            return jsDate.toLocaleDateString('he-IL');
+        }
+
+        function updateStatus(message) {
+            const statusEl = document.getElementById('last-updated');
+            if (statusEl) statusEl.textContent = message;
+        }
+
+        function showToast(message, type = 'info') {
+            // Simple toast implementation
+            const toast = document.createElement('div');
+            toast.className = `fixed bottom-4 left-4 px-4 py-2 rounded-lg text-white ${
+                type === 'success' ? 'bg-green-500' : 
+                type === 'error' ? 'bg-red-500' : 'bg-blue-500'
+            }`;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            
+            setTimeout(() => {
+                document.body.removeChild(toast);
+            }, 3000);
+        }
+
+        // Placeholder functions for future implementation
+        function focusOnOrder(orderId) {
+            const order = state.orders.find(o => o.id === orderId);
+            if (order && order.latitude && order.longitude) {
+                map.setView([order.latitude, order.longitude], 15);
+                if (orderMarkers[orderId]) {
+                    orderMarkers[orderId].openPopup();
+                }
+            }
+        }
+
+        function focusOnDriver(driverId) {
+            const location = state.liveLocations[driverId];
+            if (location && location.latitude && location.longitude) {
+                map.setView([location.latitude, location.longitude], 15);
+                if (driverMarkers[driverId]) {
+                    driverMarkers[driverId].openPopup();
+                }
+            }
+        }
+
+        function assignOrder(orderId) {
+            showToast('פונקציית שיבוץ נהג - בפיתוח', 'info');
+        }
+
+        function replaceContainer(containerId) {
+            showToast('פונקציית החלפת מכולה - בפיתוח', 'info');
+        }
+
+        function removeContainer(containerId) {
+            showToast('פונקציית הוצאת מכולה - בפיתוח', 'info');
+        }
+
+        function showDriverHistory() {
+            showToast('פונקציית היסטוריית נהגים - בפיתוח', 'info');
+        }
+
+        function openNewOrderForm() {
+            showToast('פונקציית הזמנה חדשה - בפיתוח', 'info');
+        }
+
+        function sendGlobalPing() {
+            showToast('פונקציית התראה גלובלית - בפיתוח', 'info');
+        }
+
+        function filterLists() {
+            const searchTerm = document.getElementById('search-input').value.toLowerCase();
+            
+            document.querySelectorAll('.order-card').forEach(card => {
+                const text = card.textContent.toLowerCase();
+                card.style.display = text.includes(searchTerm) ? 'flex' : 'none';
+            });
+            
+            document.querySelectorAll('.driver-card').forEach(card => {
+                const text = card.textContent.toLowerCase();
+                card.style.display = text.includes(searchTerm) ? 'flex' : 'none';
+            });
+        }
+
+        // Make functions globally available
+        window.showView = showView;
+        window.showPanelTab = showPanelTab;
+        window.showHistoryTab = showHistoryTab;
+        window.filterLists = filterLists;
+        window.openEcoAddForm = openEcoAddForm;
+        window.closeEcoAddForm = closeEcoAddForm;
+        window.handleSaveContainer = handleSaveContainer;
+        window.replaceContainer = replaceContainer;
+        window.removeContainer = removeContainer;
+        window.assignOrder = assignOrder;
+        window.openNewOrderForm = openNewOrderForm;
+        window.sendGlobalPing = sendGlobalPing;
+    </script>
+</body>
+</html>
