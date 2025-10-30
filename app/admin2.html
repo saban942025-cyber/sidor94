@@ -140,63 +140,55 @@
     </div>
 
 
-    <!-- Firebase SDKs -->
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
-
-    <script>
-        
-        <!-- טעינת Firebase -->
+    <!-- ========================================================== -->
+    <!-- ===               שדרוג ל-Firebase v9 (Modular)           === -->
+    <!-- ========================================================== -->
+    
+    <!-- Firebase SDKs v9 (Modular) -->
     <script type="module">
-        // עדכון: שינוי לגרסה 9.15.0 והוספת פונקציות Timestamp, getApps, getApp
         import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
         import { 
-            getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot, 
-            collection, query, where, Timestamp, runTransaction, getDocs, orderBy, serverTimestamp 
+            getFirestore, onSnapshot, collection, query, where, 
+            orderBy, serverTimestamp, collectionGroup, addDoc, limit
         } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-        import { setLogLevel } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-        
-        // --- Mandatory Firebase Config & Auth (using globals) ---
-        // עדכון: שימוש במפתחות שסופקו כברירת מחדל (Fallback)
-        const fallbackConfig = {
-            apiKey: "AIzaSyDq0oVwS6zbEfsgrYBRkeBq80dDUKMedzo", 
-            authDomain: "saban94-76543.firebaseapp.com", 
-            projectId: "saban94-76543",
-            storageBucket: "saban94-76543.appspot.com", 
-            messagingSenderId: "41553157903", 
-            appId: "1:41553157903:web:cc33d252cff023be97a87a", 
-            measurementId: "G-XV6RZDESSB"
-        };
+
         // --- Firebase Config ---
         let db;
         let auth;
         let adminUser = { name: "מנהל המערכת" }; // Placeholder
         let unreadMessages = new Set(); // To track unread message IDs
 
-        document.addEventListener('DOMContentLoaded', () => {
+        document.addEventListener('DOMContentLoaded', async () => {
             try {
                 const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
                 if (firebaseConfig.apiKey) {
-                    firebase.initializeApp(firebaseConfig);
-                    db = firebase.firestore();
-                    auth = firebase.auth();
                     
-                     if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                         auth.signInWithCustomToken(__initial_auth_token)
-                            .then(startApp)
-                            .catch(handleAuthError);
+                    // v9 Init
+                    let app;
+                    const apps = getApps();
+                    if (apps.length > 0) {
+                        app = getApp();
                     } else {
-                        auth.signInAnonymously()
-                            .then(startApp)
-                            .catch(handleAuthError);
+                        app = initializeApp(firebaseConfig);
                     }
+                    db = getFirestore(app);
+                    auth = getAuth(app);
+                    
+                    let userCredential;
+                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                        userCredential = await signInWithCustomToken(auth, __initial_auth_token);
+                    } else {
+                        userCredential = await signInAnonymously(auth);
+                    }
+                    startApp(userCredential);
+
                 } else {
                     console.error("Firebase config is missing.");
                 }
             } catch (e) {
                 console.error("Error initializing Firebase:", e);
+                handleAuthError(e);
             }
         });
         
@@ -215,8 +207,8 @@
             listenForNewCustomerMessages();
         }
         
-        // --- Tab Navigation ---
-        function showTab(tabName) {
+        // --- Tab Navigation (No changes needed) ---
+        window.showTab = function(tabName) {
             // Hide all content
             document.querySelectorAll('.tab-content').forEach(content => {
                 content.classList.add('hidden');
@@ -237,15 +229,14 @@
             }
         }
         
-        // --- Load Deliveries (Tab 1) ---
+        // --- Load Deliveries (Tab 1) - v9 Syntax ---
         function loadDeliveries() {
             const tableBody = document.getElementById('deliveries-table-body');
             
-            // ==========================================================
-            // === תיקון: שונה מ-'deliveries' ל-'orders' ===
-            // ==========================================================
-            db.collection('orders').limit(20) // Get top 20
-              .onSnapshot((querySnapshot) => {
+            // v9 query
+            const q = query(collection(db, 'orders'), limit(20));
+            
+            onSnapshot(q, (querySnapshot) => {
                   if (querySnapshot.empty) {
                       tableBody.innerHTML = '<tr><td colspan="6" class="text-center p-6 text-gray-500">לא נמצאו משלוחים.</td></tr>';
                       return;
@@ -296,16 +287,19 @@
             return row;
         }
 
-        // --- Listen for Messages (Tab 2 & Badge) ---
+        // --- Listen for Messages (Tab 2 & Badge) - v9 Syntax ---
         function listenForNewCustomerMessages() {
             const messagesList = document.getElementById('messages-list');
             
-            // This query searches ALL subcollections named 'messages'
-            db.collectionGroup('messages')
-              .where('type', '==', 'message_to_admin')
-              .orderBy('timestamp', 'desc')
-              .limit(20) // Get 20 most recent messages
-              .onSnapshot((querySnapshot) => {
+            // v9 query
+            const q = query(
+                collectionGroup(db, 'messages'),
+                where('type', '==', 'message_to_admin'),
+                orderBy('timestamp', 'desc'),
+                limit(20)
+            );
+              
+            onSnapshot(q, (querySnapshot) => {
                    document.getElementById('loading-messages').classList.add('hidden');
                    
                    if (querySnapshot.empty) {
@@ -368,7 +362,7 @@
             return card;
         }
 
-        function markMessageAsRead(msgId) {
+        window.markMessageAsRead = function(msgId) {
             // In a real app, you'd update this message in Firestore, e.g., set 'read: true'
             // For this demo, we just remove it from the UI.
             const card = document.getElementById(`msg-card-${msgId}`);
@@ -401,8 +395,8 @@
             }
         }
 
-        // --- Notification Modal Logic ---
-        function openNotificationModal(delivery) {
+        // --- Notification Modal Logic (No changes needed) ---
+        window.openNotificationModal = function(delivery) {
             const orderId = delivery.order_id || delivery.docId;
             
             document.getElementById('modal-notif-customer-name').innerText = delivery.customer_name || 'לקוח';
@@ -415,11 +409,12 @@
             document.getElementById('notification-modal').classList.remove('hidden');
         }
         
-        function closeNotificationModal() {
+        window.closeNotificationModal = function() {
              document.getElementById('notification-modal').classList.add('hidden');
         }
         
-        function sendNotificationToCustomer() {
+        // --- sendNotificationToCustomer - v9 Syntax ---
+        window.sendNotificationToCustomer = async function() {
             const orderId = document.getElementById('modal-notif-order-doc-id').value;
             const text = document.getElementById('notification-text').value;
             const statusEl = document.getElementById('notification-status');
@@ -434,23 +429,26 @@
                 text: text,
                 senderName: adminUser.name,
                 senderId: auth.currentUser ? auth.currentUser.uid : "admin_user",
-                timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                timestamp: serverTimestamp(), // v9 function
                 type: "notification_to_customer"
             };
 
-            db.collection('orders').doc(orderId).collection('messages').add(notificationDoc)
-                .then(() => {
-                    statusEl.innerText = 'ההתראה נשלחה ללקוח בהצלחה!';
-                    statusEl.className = 'text-green-600 text-center mt-2';
-                    setTimeout(() => {
-                        closeNotificationModal();
-                    }, 2000);
-                })
-                .catch((error) => {
-                    console.error("Error sending notification:", error);
-                    statusEl.innerText = 'שגיאה בשליחת ההתראה.';
-                    statusEl.className = 'text-red-600 text-center mt-2';
-                });
+            try {
+                // v9 syntax
+                const messagesColRef = collection(db, 'orders', orderId, 'messages');
+                await addDoc(messagesColRef, notificationDoc);
+                
+                statusEl.innerText = 'ההתראה נשלחה ללקוח בהצלחה!';
+                statusEl.className = 'text-green-600 text-center mt-2';
+                setTimeout(() => {
+                    closeNotificationModal();
+                }, 2000);
+
+            } catch (error) {
+                console.error("Error sending notification:", error);
+                statusEl.innerText = 'שגיאה בשליחת ההתראה.';
+                statusEl.className = 'text-red-600 text-center mt-2';
+            }
         }
         
     </script>
