@@ -1,0 +1,970 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DeliveryMaster v32.5 (Stable)</title>
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <script src="https://unpkg.com/feather-icons"></script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+
+    <!-- סגנונות CSS - ללא שינוי מהמקור -->
+    <style>
+        :root {
+            --primary-color: #3b82f6; /* blue-500 */
+            --primary-dark: #2563eb; /* blue-600 */
+            --bg-light: #f3f4f6; /* gray-100 */
+            --bg-white: #ffffff;
+            --border-color: #e5e7eb; /* gray-200 */
+        }
+
+        html, body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            direction: rtl;
+            background-color: var(--bg-light);
+            margin: 0;
+            padding: 0;
+            scroll-behavior: smooth;
+        }
+
+        * { box-sizing: border-box; }
+
+        .mock-header {
+            background: #2c3e50;
+            color: white;
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        .mock-header h1 { margin: 0; font-size: 1.5rem; }
+        .nav-button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 1rem;
+            font-weight: bold;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .nav-button:hover { background-color: #2980b9; }
+
+        /* סגנונות גנריים למודאל ו-Toast */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: none; /* נסתר כברירת מחדל */
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            padding: 1rem;
+        }
+
+        .modal-content {
+            background-color: white;
+            border-radius: 0.5rem;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+            max-width: 90%;
+            width: 500px;
+            overflow: hidden;
+        }
+
+        /* סגנונות מיוחדים ללוח המכולות */
+        .eco-card {
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .eco-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        .overdue-card {
+            border: 2px solid #e74c3c; /* Red border for overdue */
+            background-color: #fce7e7;
+        }
+        .overdue-text {
+            color: #e74c3c; /* Red text for overdue days */
+            font-weight: 600;
+        }
+        .normal-text {
+            color: #2ecc71; /* Green text for normal days */
+            font-weight: 600;
+        }
+
+        /* סגנון ל-Toast Notification */
+        #toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 2000;
+            display: flex;
+            flex-direction: column-reverse; /* כדי שהחדש יופיע למטה */
+            gap: 10px;
+        }
+        .toast {
+            padding: 1rem 1.5rem;
+            border-radius: 0.5rem;
+            color: white;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            opacity: 0;
+            transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
+            transform: translateX(100%);
+        }
+        .toast.show {
+            opacity: 1;
+            transform: translateX(0);
+        }
+        .toast.success { background-color: #2ecc71; }
+        .toast.error { background-color: #e74c3c; }
+        .toast.info { background-color: #3498db; }
+        
+        /* Map Styles */
+        #map {
+            height: 60vh;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .leaflet-popup-content-wrapper {
+            border-radius: 8px;
+        }
+        .leaflet-popup-content p {
+            margin: 0.25rem 0;
+        }
+        .leaflet-marker-icon {
+            filter: drop-shadow(0 1px 1px rgba(0,0,0,0.5));
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- טעינת Firebase -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where, serverTimestamp, runTransaction, getDocs, orderBy } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        
+        // הגדרות גלובליות
+        window.firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        window.appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        window.initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        window.db = null;
+        window.auth = null;
+        window.userId = null;
+
+        // הגדרת רמת לוגים ל-Firestore
+        setLogLevel('debug');
+
+        // פונקציית אתחול
+        async function initializeFirebase() {
+            if (Object.keys(window.firebaseConfig).length === 0) {
+                console.error("Firebase configuration is missing.");
+                return;
+            }
+
+            const app = initializeApp(window.firebaseConfig);
+            window.db = getFirestore(app);
+            window.auth = getAuth(app);
+            
+            // טעינת מידע על המשתמש
+            onAuthStateChanged(window.auth, async (user) => {
+                if (user) {
+                    window.userId = user.uid;
+                } else {
+                    // כניסה באמצעות Custom Token או אנונימית
+                    try {
+                        if (window.initialAuthToken) {
+                            await signInWithCustomToken(window.auth, window.initialAuthToken);
+                        } else {
+                            await signInAnonymously(window.auth);
+                        }
+                    } catch (error) {
+                        console.error("Firebase Sign In Failed:", error);
+                    }
+                }
+                // סיום תהליך האותנטיקציה, מוכן להתחיל את האפליקציה
+                if (window.auth.currentUser) {
+                    window.userId = window.auth.currentUser.uid;
+                    window.firebaseAuthReady = true;
+                    document.dispatchEvent(new CustomEvent('firebaseAuthReady'));
+                    console.log(`Firebase Ready. User ID: ${window.userId}`);
+                    // עדכון גלובלי של ה-userId לתצוגה
+                    const userIdElement = document.getElementById('current-user-id');
+                    if (userIdElement) {
+                        userIdElement.textContent = window.userId;
+                    }
+                }
+            });
+        }
+
+        initializeFirebase();
+
+        // חשיפת פונקציות גלובליות לשימוש בקוד ה-HTML והסקריפטים
+        window.getFirestore = getFirestore;
+        window.doc = doc;
+        window.getDoc = getDoc;
+        window.addDoc = addDoc;
+        window.setDoc = setDoc;
+        window.updateDoc = updateDoc;
+        window.deleteDoc = deleteDoc;
+        window.onSnapshot = onSnapshot;
+        window.collection = collection;
+        window.query = query;
+        window.where = where;
+        window.serverTimestamp = serverTimestamp;
+        window.runTransaction = runTransaction;
+        window.getDocs = getDocs;
+        window.orderBy = orderBy;
+        window.getAuth = getAuth;
+    </script>
+
+
+    <!-- רכיבי UI מרכזיים (כותרת וניווט) -->
+    <header class="mock-header">
+        <h1>DeliveryMaster - ניהול משולב</h1>
+        <div class="flex space-x-4 space-x-reverse">
+            <button id="show-map-button" class="nav-button">מפה</button>
+            <button id="show-containers-button" class="nav-button">מכולות (ECO)</button>
+            <button id="show-new-order-button" class="nav-button">הזמנה חדשה</button>
+        </div>
+    </header>
+
+    <div class="p-6 md:p-10">
+        <!-- הצגת ID משתמש לצורך שיתוף -->
+        <div class="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded relative mb-6 text-sm" role="alert">
+            <span class="block sm:inline">מזהה משתמש נוכחי (לשיתוף):</span>
+            <strong id="current-user-id" class="block sm:inline ltr:ml-2 rtl:mr-2 select-all">...טוען...</strong>
+        </div>
+
+        <!-- מיכל לתצוגות השונות -->
+        <div id="views-container">
+            <!-- כברירת מחדל נציג את לוח המכולות המשולב -->
+        </div>
+    </div>
+
+
+    <!-- ============================================== -->
+    <!-- 1. Modal לניהול אישורי משתמש (במקום alert/confirm) -->
+    <!-- ============================================== -->
+    <div id="confirmation-modal" class="modal-overlay">
+        <div class="modal-content bg-white p-6 md:p-8">
+            <h2 id="confirmation-modal-title" class="text-xl font-bold mb-4 text-gray-800">אישור פעולה</h2>
+            <p id="confirmation-modal-body" class="text-gray-600 mb-6 leading-relaxed">האם אתה בטוח שברצונך לבצע פעולה זו?</p>
+            <div class="flex justify-end space-x-4 space-x-reverse">
+                <button id="confirmation-modal-cancel" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition duration-150">ביטול</button>
+                <button id="confirmation-modal-confirm" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition duration-150 font-semibold">אישור</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================== -->
+    <!-- 2. Modal לעריכת מכולה (מופעל מלוגיקת המפה והכרטיס) -->
+    <!-- ============================================== -->
+    <div id="container-edit-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="bg-gray-50 border-b p-4 flex justify-between items-center">
+                <h3 class="text-xl font-semibold text-gray-800">עריכת הזמנת מכולה</h3>
+                <button onclick="closeContainerEditModal()" class="text-gray-500 hover:text-gray-700">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div class="p-6">
+                <!-- טופס עריכה -->
+                <form id="container-edit-form">
+                    <input type="hidden" id="container-edit-id">
+                    <div class="mb-4">
+                        <label for="container-edit-customer" class="block text-sm font-medium text-gray-700">לקוח</label>
+                        <p id="container-edit-customer" class="text-lg font-bold text-gray-900 mt-1"></p>
+                    </div>
+
+                    <div class="mb-4">
+                        <label for="container-edit-delivery-type" class="block text-sm font-medium text-gray-700">סוג משלוח</label>
+                        <select id="container-edit-delivery-type" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2">
+                            <option value="Delivery">משלוח</option>
+                            <option value="Pickup">איסוף</option>
+                            <option value="Replace">החלפה</option>
+                        </select>
+                    </div>
+
+                    <div class="flex space-x-4 space-x-reverse mb-4">
+                        <div class="flex-1">
+                            <label for="container-edit-order-date" class="block text-sm font-medium text-gray-700">תאריך אספקה/שירות</label>
+                            <input type="date" id="container-edit-order-date" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2">
+                        </div>
+                        <div class="flex-1">
+                            <label for="container-edit-order-time" class="block text-sm font-medium text-gray-700">שעת אספקה/שירות</label>
+                            <input type="time" id="container-edit-order-time" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2">
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label for="container-edit-rental-start-date" class="block text-sm font-medium text-gray-700">תחילת שכירות (תאריך המכולה באתר)</label>
+                        <input type="date" id="container-edit-rental-start-date" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2">
+                    </div>
+
+                    <div class="mb-6">
+                        <label for="container-edit-notes" class="block text-sm font-medium text-gray-700">הערות</label>
+                        <textarea id="container-edit-notes" rows="3" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2"></textarea>
+                    </div>
+
+                    <button type="submit" id="save-container-edit-btn" class="w-full py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">שמור שינויים</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- ============================================== -->
+    <!-- 3. Toast Container לניהול הודעות קצרות -->
+    <!-- ============================================== -->
+    <div id="toast-container"></div>
+
+
+    <!-- ============================================== -->
+    <!-- 4. הגדרות תצוגה: מפה, מכולות, הזמנה חדשה (בתוך views-container) -->
+    <!-- ============================================== -->
+    
+    <!-- A. תצוגת מפה (view-map) -->
+    <div id="view-map" class="hidden p-4 bg-white rounded-lg shadow-xl mb-8">
+        <h2 class="text-2xl font-bold mb-4">מפת מכולות פעילות</h2>
+        <div id="map"></div>
+    </div>
+
+    <!-- B. תצוגת מכולות (view-containers) - לוח ECO המשודרג -->
+    <div id="view-containers" class="hidden p-4 bg-white rounded-lg shadow-xl mb-8">
+        <h2 class="text-2xl font-bold mb-6">לוח ניהול מכולות פעילות (ECO)</h2>
+        <div class="mb-6">
+            <input type="text" id="container-search-input" placeholder="חיפוש לפי שם לקוח או כתובת..." class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+        </div>
+        
+        <div id="container-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <!-- כרטיסי המכולות ירונדרו כאן -->
+            <p id="no-containers-message" class="col-span-full text-center text-gray-500 hidden">אין מכולות פעילות.</p>
+        </div>
+        
+        <div id="container-list" class="mt-6">
+            <!-- אופציה לתצוגת טבלה תוסף כאן בעתיד -->
+        </div>
+    </div>
+
+    <!-- C. תצוגת הזמנה חדשה (view-new-order) -->
+    <div id="view-new-order" class="hidden p-4 bg-white rounded-lg shadow-xl mb-8">
+        <h2 class="text-2xl font-bold mb-6">יצירת הזמנה חדשה</h2>
+        <form id="new-order-form" class="space-y-4">
+            <!-- שדות הלקוח החכם -->
+            <div class="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                <h3 class="text-lg font-semibold mb-3 text-blue-700">פרטי לקוח</h3>
+                <input type="hidden" id="customer-id">
+                <div>
+                    <label for="customer-name" class="block text-sm font-medium text-gray-700">שם לקוח (*)</label>
+                    <input type="text" id="customer-name" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
+                    <div id="customer-suggestions" class="absolute z-10 bg-white border border-gray-300 rounded-md mt-1 w-full shadow-lg max-h-40 overflow-y-auto"></div>
+                </div>
+                <div>
+                    <label for="customer-phone" class="block text-sm font-medium text-gray-700 mt-3">טלפון (*)</label>
+                    <input type="tel" id="customer-phone" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
+                </div>
+            </div>
+
+            <!-- שדות ההזמנה -->
+            <h3 class="text-lg font-semibold pt-4 border-t">פרטי מכולה/שירות</h3>
+            <div>
+                <label for="address" class="block text-sm font-medium text-gray-700">כתובת השירות (*)</label>
+                <input type="text" id="address" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
+            </div>
+
+            <div class="flex space-x-4 space-x-reverse">
+                <div class="flex-1">
+                    <label for="order-date" class="block text-sm font-medium text-gray-700">תאריך אספקה (*)</label>
+                    <input type="date" id="order-date" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
+                </div>
+                <div class="flex-1">
+                    <label for="order-time" class="block text-sm font-medium text-gray-700">שעת אספקה</label>
+                    <input type="time" id="order-time" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
+                </div>
+            </div>
+            
+            <div>
+                <label for="rental-start-date" class="block text-sm font-medium text-gray-700">תחילת שכירות (אם נשארת אצל הלקוח)</label>
+                <input type="date" id="rental-start-date" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
+            </div>
+
+            <div>
+                <label for="notes" class="block text-sm font-medium text-gray-700">הערות</label>
+                <textarea id="notes" rows="3" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2"></textarea>
+            </div>
+            
+            <button type="submit" id="save-new-order-btn" class="w-full py-3 px-4 border border-transparent rounded-md shadow-sm text-lg font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">שמירת הזמנה</button>
+        </form>
+    </div>
+
+    
+    <!-- ============================================== -->
+    <!-- 5. סקריפטים גלובליים ועיקריים -->
+    <!-- ============================================== -->
+    <script>
+        // --- פונקציות גלובליות ---
+
+        // 1. ניהול Toast Notifications
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.textContent = message;
+
+            container.appendChild(toast);
+
+            // הפעלת אנימציה
+            setTimeout(() => {
+                toast.classList.add('show');
+            }, 10); // השהיה קלה לוודא שה-DOM הספיק לעדכן את המצב לפני הוספת מחלקת show
+
+            // הסרת ה-Toast לאחר 4 שניות
+            setTimeout(() => {
+                toast.classList.remove('show');
+                // הסרה פיזית מה-DOM לאחר סיום האנימציה
+                setTimeout(() => {
+                    container.removeChild(toast);
+                }, 300);
+            }, 4000);
+        }
+        window.showToast = showToast;
+
+
+        // 2. ניהול Modal אישור גנרי (היישום החדש)
+        let globalConfirmationCallback = null;
+
+        /**
+         * פתיחת מודאל אישור מותאם אישית (מחליף את alert/confirm).
+         * @param {string} title כותרת המודאל
+         * @param {string} body גוף ההודעה
+         * @param {function} callback הפונקציה שתופעל אם המשתמש יאשר
+         * @param {string} confirmText הטקסט על כפתור האישור (ברירת מחדל: "אישור")
+         * @param {string} confirmButtonClass מחלקות Tailwind לכפתור האישור (ברירת מחדל: 'bg-red-600 hover:bg-red-700')
+         */
+        function openConfirmationModal(title, body, callback, confirmText = "אישור", confirmButtonClass = 'bg-red-600 hover:bg-red-700') {
+            const modal = document.getElementById('confirmation-modal');
+            const confirmBtn = document.getElementById('confirmation-modal-confirm');
+
+            document.getElementById('confirmation-modal-title').textContent = title;
+            document.getElementById('confirmation-modal-body').innerHTML = body;
+            
+            confirmBtn.textContent = confirmText;
+            // ניקוי מחלקות קודמות והוספת החדשות
+            confirmBtn.className = confirmBtn.className.split(' ').filter(c => !c.startsWith('bg-') && !c.startsWith('hover:bg-')).join(' ') + ' ' + confirmButtonClass;
+
+            globalConfirmationCallback = callback;
+            modal.style.display = 'flex';
+        }
+
+        function closeConfirmationModal() {
+            document.getElementById('confirmation-modal').style.display = 'none';
+            globalConfirmationCallback = null; // מנקה את הקולבק
+        }
+        
+        // הוספת Listener לאישור/ביטול במודאל האישור
+        document.addEventListener('DOMContentLoaded', () => {
+            const modal = document.getElementById('confirmation-modal');
+            const confirmBtn = document.getElementById('confirmation-modal-confirm');
+            const cancelBtn = document.getElementById('confirmation-modal-cancel');
+            
+            confirmBtn.addEventListener('click', () => {
+                if (globalConfirmationCallback) {
+                    globalConfirmationCallback();
+                }
+                closeConfirmationModal();
+            });
+
+            cancelBtn.addEventListener('click', closeConfirmationModal);
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    closeConfirmationModal();
+                }
+            });
+        });
+        
+        window.openConfirmationModal = openConfirmationModal;
+        window.closeConfirmationModal = closeConfirmationModal;
+
+
+        // 3. ניהול Modal עריכת מכולה (Container Edit)
+        function closeContainerEditModal() {
+            document.getElementById('container-edit-modal').style.display = 'none';
+        }
+        window.closeContainerEditModal = closeContainerEditModal;
+
+        /** פותח את מודאל העריכה וטוען נתונים */
+        async function openContainerEditModal(orderId) {
+             const orderRef = doc(db, `artifacts/${appId}/public/data/orders`, orderId);
+             try {
+                const orderSnap = await getDoc(orderRef);
+                if (!orderSnap.exists()) {
+                    showToast('הזמנת מכולה לא נמצאה!', 'error');
+                    return;
+                }
+                const order = orderSnap.data();
+
+                // מילוי הנתונים בטופס
+                document.getElementById('container-edit-id').value = orderId;
+                document.getElementById('container-edit-customer').textContent = `${order.customerName} (${order.address})`;
+                document.getElementById('container-edit-delivery-type').value = order.deliveryType || 'Delivery';
+                document.getElementById('container-edit-notes').value = order.notes || '';
+                
+                // טיפול בתאריכים
+                const orderDate = order.orderDate ? order.orderDate.toDate().toISOString().substring(0, 10) : '';
+                const orderTime = order.orderTime || '';
+                const rentalStartDate = order.rentalStartDate ? order.rentalStartDate.toDate().toISOString().substring(0, 10) : '';
+
+                document.getElementById('container-edit-order-date').value = orderDate;
+                document.getElementById('container-edit-order-time').value = orderTime;
+                document.getElementById('container-edit-rental-start-date').value = rentalStartDate;
+
+                document.getElementById('container-edit-modal').style.display = 'flex';
+                
+             } catch (error) {
+                showToast(`שגיאה בטעינת נתוני מכולה: ${error.message}`, 'error');
+                console.error("Error loading container data:", error);
+             }
+        }
+        window.openContainerEditModal = openContainerEditModal;
+
+        // 4. ניהול תצוגות
+        function switchView(viewId) {
+            document.querySelectorAll('#views-container > div').forEach(view => {
+                view.classList.add('hidden');
+            });
+            const view = document.getElementById(viewId);
+            if (view) {
+                view.classList.remove('hidden');
+                // אם זו תצוגת המפה, ודא שהיא מרונדרת
+                if (viewId === 'view-map') {
+                     // כנראה שיש כאן קריאה ל-renderMap()
+                }
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('show-map-button').addEventListener('click', () => switchView('view-map'));
+            document.getElementById('show-containers-button').addEventListener('click', () => switchView('view-containers'));
+            document.getElementById('show-new-order-button').addEventListener('click', () => switchView('view-new-order'));
+            
+            // הצגת תצוגת ברירת מחדל (ECO Dashboard)
+            switchView('view-containers');
+        });
+
+        
+        // 5. פונקציית שמירת עריכת מכולה (קישור ל-container-edit-form)
+        document.addEventListener('DOMContentLoaded', () => {
+            const form = document.getElementById('container-edit-form');
+            if (form) {
+                form.addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    handleSaveContainerOrder(e.target);
+                });
+            }
+        });
+
+
+        // --- לוגיקת CRUD וטיפול בנתונים ---
+
+        // פונקציה לשמירת הזמנה חדשה (view-new-order)
+        async function handleSaveNewOrder(formData) {
+            // ... (לוגיקת שמירת הזמנה חדשה - לא שונתה)
+            const btn = document.getElementById('save-new-order-btn');
+            btn.disabled = true;
+            btn.innerText = 'שומר...';
+            
+            try {
+                // לוגיקת לקוחות חכמים: בדיקה האם הלקוח קיים או יצירת לקוח חדש
+                let customerId = formData.get('customer-id');
+                const customerName = formData.get('customer-name').trim();
+                const customerPhone = formData.get('customer-phone').trim();
+
+                if (!customerId) {
+                    // יצירת לקוח חדש
+                    const customerRef = collection(db, `artifacts/${appId}/public/data/customers`);
+                    const newCustomer = {
+                        name: customerName,
+                        phone: customerPhone,
+                        createdAt: serverTimestamp(),
+                        createdBy: userId
+                    };
+                    const docRef = await addDoc(customerRef, newCustomer);
+                    customerId = docRef.id;
+                    showToast('לקוח חדש נוצר בהצלחה!', 'success');
+                }
+
+                // טיפול בתאריכים
+                const orderDateString = formData.get('order-date');
+                const orderTimeString = formData.get('order-time');
+                const rentalStartDateString = formData.get('rental-start-date');
+
+                let orderDateTime = null;
+                try {
+                    orderDateTime = new Date(`${orderDateString}T${orderTimeString || '00:00:00'}`);
+                    if (isNaN(orderDateTime)) throw new Error("Invalid Date");
+                } catch(e) {
+                     console.error("שגיאה בהמרת תאריך/שעה:", e);
+                     throw new Error("יש לבחור תאריך אספקה/שירות חוקי.");
+                }
+                
+                let rentalStartDate = null;
+                if (rentalStartDateString) {
+                     try {
+                        rentalStartDate = new Date(`${rentalStartDateString}T00:00:00`);
+                        if (isNaN(rentalStartDate)) throw new Error("Invalid Date");
+                     } catch(e) {
+                         console.error("שגיאה בהמרת תאריך תחילת שכירות:", e);
+                     }
+                }
+
+
+                // יצירת הזמנה
+                const ordersRef = collection(db, `artifacts/${appId}/public/data/orders`);
+                await addDoc(ordersRef, {
+                    customerId: customerId,
+                    customerName: customerName,
+                    address: formData.get('address').trim(),
+                    orderDate: orderDateTime,
+                    orderTime: orderTimeString || '',
+                    rentalStartDate: rentalStartDate,
+                    notes: formData.get('notes').trim(),
+                    deliveryType: 'Delivery', // ברירת מחדל לאספקה
+                    status: 'Active', // סטטוס ברירת מחדל
+                    createdAt: serverTimestamp(),
+                    createdBy: userId,
+                    geo: null // קואורדינטות יתווספו ע"י שירות גיאוקוד עתידי
+                });
+
+                showToast('הזמנה חדשה נשמרה בהצלחה!', 'success');
+                document.getElementById('new-order-form').reset();
+                
+            } catch (error) {
+                showToast(`שגיאה בשמירת הזמנה: ${error.message}`, 'error');
+                console.error("Error saving new order:", error);
+            } finally {
+                btn.disabled = false;
+                btn.innerText = 'שמירת הזמנה';
+            }
+        }
+
+        // פונקציה לשמירת עריכת מכולה קיימת (Modal)
+         async function handleSaveContainerOrder(form) {
+             const btn = document.getElementById('save-container-edit-btn');
+             const orderId = document.getElementById('container-edit-id').value;
+             if (!orderId) return;
+
+             btn.disabled = true;
+             btn.innerText = 'שומר...';
+
+             try {
+                 const orderRef = doc(db, `artifacts/${appId}/public/data/orders`, orderId);
+                 
+                 const deliveryType = document.getElementById('container-edit-delivery-type').value;
+                 const orderDateStr = document.getElementById('container-edit-order-date').value;
+                 const orderTime = document.getElementById('container-edit-order-time').value;
+                 const rentalStartDateStr = document.getElementById('container-edit-rental-start-date').value;
+
+                 let orderDate = null;
+                 if (orderDateStr) {
+                    try { orderDate = new Date(`${orderDateStr}T${orderTime || '00:00:00'}`); }
+                    catch(e) { throw new Error("שגיאה בהמרת תאריך/שעה שירות."); }
+                 }
+
+                 let rentalStartDate = null;
+                 if (rentalStartDateStr) {
+                     try {
+                         rentalStartDate = new Date(`${rentalStartDateStr}T00:00:00`);
+                         // לוודא שהתאריך תקין
+                         if (isNaN(rentalStartDate.getTime())) { rentalStartDate = null; console.log("Rental start invalid start"); }
+                     } catch(e) {
+                         console.error(e, "CRUD.Container.Edit", { orderId, date: orderDateStr, time: orderTime });
+                         throw new Error("שגיאה בהמרת תאריך/שעה לתחילת שכירות.");
+                     }
+                 }
+
+
+                 const updatedData = {
+                    deliveryType: deliveryType,
+                    orderDate: orderDate,
+                    orderTime: orderTime,
+                    notes: document.getElementById('container-edit-notes').value.trim(),
+                    rentalStartDate: rentalStartDate, // Update or clear the field
+                    lastModified: serverTimestamp()
+                 };
+
+                 await updateDoc(orderRef, updatedData);
+                 console.log("Container order updated", "CRUD.Container.Edit", { orderId, changes: updatedData });
+                 showToast('הזמנת מכולה עודכנה', 'success');
+                 closeContainerEditModal();
+                 // Listener will automatically refresh the container view if it's active
+
+             } catch (error) {
+                 showToast(`שגיאה בעדכון הזמנת מכולה: ${error.message}`, 'error');
+                 console.error(error, "CRUD.Container.Edit", { orderId });
+             } finally {
+                 btn.disabled = false;
+                 btn.innerText = 'שמור שינויים';
+             }
+         }
+        window.handleSaveContainerOrder = handleSaveContainerOrder;
+
+
+        // --- לוגיקת ECO Dashboard (המכולות) ---
+        
+        // פונקציה לעיבוד נתונים (חישוב ימי שכירות)
+        function getRentalStatus(rentalStartDate) {
+            const OVERDUE_THRESHOLD_DAYS = 14; 
+            const now = new Date();
+            
+            // אם אין תאריך התחלה, אין סטטוס שכירות פעיל
+            if (!rentalStartDate || !rentalStartDate.toDate) {
+                return { daysRented: 0, isOverdue: false, display: 'אין שכירות פעילה' };
+            }
+
+            const start = rentalStartDate.toDate();
+            const diffTime = Math.abs(now - start);
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            
+            const isOverdue = diffDays > OVERDUE_THRESHOLD_DAYS;
+
+            return { 
+                daysRented: diffDays, 
+                isOverdue: isOverdue, 
+                display: `${diffDays} ימים` 
+            };
+        }
+
+        // 1. פונקציית רינדור כרטיס מכולה
+        function renderContainerCard(order) {
+            const containerId = order.id;
+            const status = getRentalStatus(order.rentalStartDate);
+            
+            const cardClass = status.isOverdue ? 'overdue-card' : 'bg-white border-gray-200';
+            const daysClass = status.isOverdue ? 'overdue-text' : 'normal-text';
+            const icon = status.isOverdue ? feather.icons['alert-triangle'].toSvg({ class: 'w-5 h-5 text-red-600' }) : feather.icons['truck'].toSvg({ class: 'w-5 h-5 text-blue-600' });
+
+            return `
+                <div class="eco-card p-4 border rounded-xl shadow-md flex flex-col space-y-3 ${cardClass}">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-2 space-x-reverse">
+                            ${icon}
+                            <h3 class="eco-customer-name font-bold text-lg text-gray-900">${order.customerName}</h3>
+                        </div>
+                        <span class="text-xs font-mono text-gray-500 select-all">#${containerId.substring(0, 8)}</span>
+                    </div>
+
+                    <p class="eco-address text-gray-600">${order.address}</p>
+                    
+                    <div class="flex items-center space-x-2 space-x-reverse text-sm">
+                        ${feather.icons['calendar'].toSvg({ class: 'w-4 h-4 text-gray-500' })}
+                        <span class="font-medium text-gray-700">שכירות:</span>
+                        <span class="${daysClass}">${status.display}</span>
+                    </div>
+
+                    <div class="flex space-x-3 space-x-reverse pt-2 border-t border-gray-100">
+                        <button onclick="handleContainerAction('replace', '${containerId}', '${order.customerName}')" class="flex-1 py-2 px-3 text-sm font-semibold rounded-lg bg-orange-500 text-white hover:bg-orange-600 transition duration-150">
+                            החלפה
+                        </button>
+                        <button onclick="handleContainerAction('remove', '${containerId}', '${order.customerName}')" class="flex-1 py-2 px-3 text-sm font-semibold rounded-lg bg-red-500 text-white hover:bg-red-600 transition duration-150">
+                            הוצאה
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        // 2. פונקציות הטיפול בפעולות החלפה/הוצאה (משתמשות כעת במודאל האישור)
+
+        // פונקציה המאחדת את הטיפול בפעולות (נקרעת מהכרטיס)
+        function handleContainerAction(actionType, containerId, customerName) {
+            let title, body, confirmText, confirmClass, callback;
+
+            if (actionType === 'replace') {
+                title = 'אישור החלפת מכולה';
+                body = `האם אתה בטוח שברצונך לבצע **פעולת החלפה** עבור המכולה של <strong class="font-semibold text-orange-600">${customerName}</strong>? פעולה זו תפתח את מסך העריכה.`;
+                confirmText = 'בצע החלפה';
+                confirmClass = 'bg-orange-500 hover:bg-orange-600';
+                callback = () => {
+                    // הלוגיקה האמיתית: פתיחת מודאל העריכה
+                    openContainerEditModal(containerId); 
+                    showToast(`מכין את טופס ההחלפה עבור ${customerName}...`, 'info');
+                };
+            } else if (actionType === 'remove') {
+                title = 'אישור הוצאת מכולה';
+                body = `האם אתה בטוח שברצונך לבצע **פעולת הוצאה (איסוף)** עבור המכולה של <strong class="font-semibold text-red-600">${customerName}</strong>? פעולה זו תשנה את סטטוס ההזמנה.`;
+                confirmText = 'בצע הוצאה';
+                confirmClass = 'bg-red-600 hover:bg-red-700';
+                callback = () => {
+                    // לוגיקת ה-TODO (שינוי סטטוס, יצירת אירוע איסוף וכו')
+                    showToast(`TODO: בוטלה הוצאה. יש לממש את לוגיקת הוצאה עבור ID: ${containerId}`, 'info');
+                    // דוגמה למה שהיה מחליף את זה:
+                    // updateDoc(doc(db, ...), { status: 'PickupScheduled', pickupDate: serverTimestamp() });
+                };
+            } else {
+                return; // פעולה לא מוכרת
+            }
+            
+            openConfirmationModal(title, body, callback, confirmText, confirmClass);
+        }
+        window.handleContainerAction = handleContainerAction; // חשיפה גלובלית לשימוש ב-onclick
+
+
+        // 3. פונקציית אתחול ה-ECO Dashboard
+        function initializeEcoApp() {
+            const grid = document.getElementById('container-grid');
+            const noContainersMessage = document.getElementById('no-containers-message');
+            const searchInput = document.getElementById('container-search-input');
+            
+            // --- האזנה לשינויים ב-Firestore ---
+            const ordersCollection = collection(db, `artifacts/${appId}/public/data/orders`);
+            const q = query(ordersCollection); // ניתן להוסיף כאן where לסטטוס 'Active' בלבד
+
+            onSnapshot(q, (snapshot) => {
+                const containersHtml = [];
+                let hasActiveContainers = false;
+
+                snapshot.forEach(doc => {
+                    const order = { id: doc.id, ...doc.data() };
+                    // נניח שרק הזמנות עם rentalStartDate רלוונטיות ללוח זה
+                    if (order.rentalStartDate) { 
+                        containersHtml.push(renderContainerCard(order));
+                        hasActiveContainers = true;
+                    }
+                });
+
+                grid.innerHTML = containersHtml.join('');
+                noContainersMessage.classList.toggle('hidden', hasActiveContainers);
+
+                // הפעלת אייקוני Feather
+                feather.replace();
+            }, (error) => {
+                showToast('שגיאה בטעינת נתונים מ-Firestore: ' + error.message, 'error');
+                console.error("Firestore snapshot error:", error);
+            });
+
+
+            // --- לוגיקת סינון ---
+            searchInput.addEventListener('input', (e) => {
+                const searchTerm = e.target.value.toLowerCase().trim();
+                const cards = grid.querySelectorAll('.eco-card');
+                cards.forEach(card => {
+                    const customerName = card.querySelector('.eco-customer-name').textContent.toLowerCase();
+                    const address = card.querySelector('.eco-address').textContent.toLowerCase();
+                    const isVisible = customerName.includes(searchTerm) || address.includes(searchTerm);
+                    card.style.display = isVisible ? 'flex' : 'none';
+                });
+            });
+            
+        }
+
+        // --- לוגיקת המפה (view-map) ---
+        let map = null;
+        let markersLayer = null;
+
+        const containerActiveIcon = L.divIcon({
+            html: '<svg class="w-6 h-6 text-orange-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zM12 12c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3z"/></svg>',
+            className: 'custom-div-icon',
+            iconSize: [24, 24],
+            iconAnchor: [12, 24],
+            popupAnchor: [0, -20]
+        });
+
+        const containerOverdueIcon = L.divIcon({
+            html: '<svg class="w-6 h-6 text-purple-600" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zM12 12c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3z"/></svg>',
+            className: 'custom-div-icon',
+            iconSize: [24, 24],
+            iconAnchor: [12, 24],
+            popupAnchor: [0, -20]
+        });
+
+
+        function renderMapMarkers(orders) {
+            if (!map) return;
+
+            // ניקוי סמנים קודמים
+            if (markersLayer) {
+                map.removeLayer(markersLayer);
+            }
+            markersLayer = L.layerGroup().addTo(map);
+
+            orders.forEach(order => {
+                // נניח שיש לנו שדה 'geo' עם lat ו-lng
+                if (order.geo && order.geo.lat && order.geo.lng) {
+                    const status = getRentalStatus(order.rentalStartDate);
+                    
+                    const icon = status.isOverdue ? containerOverdueIcon : containerActiveIcon;
+                    const daysClass = status.isOverdue ? 'font-bold text-red-600' : 'font-semibold text-green-600';
+                    
+                    // בניית הפופאפ
+                    const popupContent = `
+                        <div class="text-right">
+                            <p class="font-bold text-lg mb-1">${order.customerName}</p>
+                            <p class="text-sm text-gray-700 mb-2">${order.address}</p>
+                            <p class="text-sm">ימי שכירות: <span class="${daysClass}">${status.display}</span></p>
+                            <button onclick="openContainerEditModal('${order.id}')" 
+                                    class="mt-3 w-full py-1 px-3 text-sm font-semibold rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition duration-150">
+                                החלפה/עריכה
+                            </button>
+                        </div>
+                    `;
+
+                    L.marker([order.geo.lat, order.geo.lng], { icon: icon })
+                        .bindPopup(popupContent)
+                        .addTo(markersLayer);
+                }
+            });
+        }
+
+
+        function initializeMap() {
+            if (map) return;
+
+            map = L.map('map').setView([32.0853, 34.7818], 10); // מרכז תל אביב
+
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            }).addTo(map);
+
+            // האזנה לנתונים והצגתם במפה
+            const ordersCollection = collection(db, `artifacts/${appId}/public/data/orders`);
+            onSnapshot(ordersCollection, (snapshot) => {
+                const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                renderMapMarkers(orders);
+            }, (error) => {
+                console.error("Map data snapshot error:", error);
+            });
+        }
+        
+        // --- התחלת האפליקציה ---
+        document.addEventListener('DOMContentLoaded', () => {
+            if (window.firebaseAuthReady) {
+                initializeEcoApp();
+                initializeMap(); // אתחול המפה
+            } else {
+                document.addEventListener('firebaseAuthReady', () => {
+                    initializeEcoApp();
+                    initializeMap(); // אתחול המפה
+                });
+            }
+        });
+
+
+    </script>
+</body>
+</html>
