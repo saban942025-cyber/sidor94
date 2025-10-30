@@ -692,17 +692,22 @@
             messageUnsubscribeListeners = {};
 
             // v9 Query:
-            // !!! אינדקס נדרש: orders (status ASC, delivery_date DESC)
+            // !!! אינדקס נדרש: orders (status ASC, delivery_date DESC) - *** התיקון למטה ***
+            // תיקון: אי אפשר לסנן ב-IN/NOT-IN ולמיין לפי שדה אחר.
+            // לכן נסנן לפי סטטוס ונמיין לפי סטטוס, ואת המיון לפי תאריך נעשה ב-JS.
             const q = query(
                 collection(db, 'orders'),
-                where('status', 'not-in', ['סופק', 'מבוטל']),
-                orderBy('status'), // ממיין לפי סטטוס
-                orderBy('delivery_date', 'desc'), // ממיין לפי תאריך (דורש אינדקס)
-                limit(50)
+                where('status', 'in', ['חדש', 'בטיפול', 'בדרך']), // שינוי מ-not-in ל-in
+                orderBy('status') // הסרנו את המיון הנוסף לפי תאריך
+                // orderBy('delivery_date', 'desc'), // <-- זו הייתה הבעיה
             );
 
             unsubscribeActiveOrders = onSnapshot(q, (querySnapshot) => {
-                document.getElementById('loading-orders').style.display = 'none';
+                // תיקון קריסה: בדוק אם אלמנט הטעינה עדיין קיים
+                const loadingEl = document.getElementById('loading-orders');
+                if (loadingEl) {
+                    loadingEl.style.display = 'none';
+                }
                 
                 if (querySnapshot.empty) {
                     ordersListDiv.innerHTML = '<p class="text-center text-gray-500">לא נמצאו הזמנות פעילות.</p>';
@@ -712,6 +717,24 @@
                 
                 allOrders = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 
+                // --- הוספת מיון ידני ב-JS ---
+                // ממיין קודם לפי סטטוס (כמו ב-FS), ואז לפי תאריך יורד
+                allOrders.sort((a, b) => {
+                    const statusOrder = { 'חדש': 1, 'בטיפול': 2, 'בדרך': 3 };
+                    const statusA = statusOrder[a.status] || 99;
+                    const statusB = statusOrder[b.status] || 99;
+                    
+                    if (statusA !== statusB) {
+                        return statusA - statusB;
+                    }
+                    
+                    // מיון משני: תאריך יורד (החדש ביותר למעלה)
+                    const dateA = a.delivery_date || '';
+                    const dateB = b.delivery_date || '';
+                    return dateB.localeCompare(dateA); // B מול A
+                });
+                // --- סוף מיון ---
+
                 // עדכון ספירות (לוגיקה לדוגמה)
                 document.getElementById('count-active').innerText = allOrders.length;
                 // כאן תצטרך שאילתות נפרדות עבור "סופקו היום" ו"עתידי"
@@ -721,9 +744,13 @@
 
             }, (error) => {
                 console.error("Error fetching orders: ", error);
-                document.getElementById('loading-orders').innerHTML = `
-                    <p class="text-red-500">שגיאה בטעינת הזמנות.</p>
-                    <p class="text-sm text-gray-600 mt-2">ייתכן שנדרש אינדקס ב-Firestore. בדוק ב-Console (F12) אם יש קישור ליצירת אינדקס.</p>`;
+                // תיקון קריסה: בדוק אם האלמנט קיים לפני שדורסים
+                const loadingEl = document.getElementById('loading-orders');
+                if (loadingEl) {
+                    loadingEl.innerHTML = `
+                        <p class="text-red-500">שגיאה בטעינת הזמנות.</p>
+                        <p class="text-sm text-gray-600 mt-2">ייתכן שנדרש אינדקס ב-Firestore. בדוק ב-Console (F12) אם יש קישור ליצירת אינדקס.</p>`;
+                }
                 showToast("שגיאה בטעינת הזמנות", "error");
             });
         }
@@ -1258,4 +1285,5 @@
     </script>
 </body>
 </html>
+
 
