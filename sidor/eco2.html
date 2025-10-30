@@ -140,7 +140,7 @@
             font-size: 1rem;
             font-family: inherit;
         }
-        /* [חדש] סגנון לשדה לקריאה בלבד */
+        /* [תיקון] סגנון לשדה לקריאה בלבד (יופעל דינמית) */
         .eco-form-group input[readonly] {
             background-color: #e9ecef;
             color: #6c757d;
@@ -392,8 +392,8 @@
                 </div>
                 <div class="eco-form-group">
                     <label for="ecoFormAddress">כתובת</label>
-                    <!-- [חדש] הפכנו את השדה ל-readonly, הוא יתמלא אוטומטית -->
-                    <input type="text" id="ecoFormAddress" required readonly>
+                    <!-- [תיקון] הסרנו readonly; הוא יתווסף ויוסר ע"י JS -->
+                    <input type="text" id="ecoFormAddress" required>
                 </div>
                 <div class="eco-form-group">
                     <label for="ecoFormWarehouse">מחסן</label>
@@ -553,10 +553,8 @@
              */
             const listenToCustomers = () => {
                 try {
-                    // הנחת נתיב: /artifacts/{appId}/public/data/customers
-                    // אם הלקוחות פרטיים, הנתיב צריך להיות /artifacts/{appId}/users/{userId}/customers
-                    // נשתמש בנתיב ציבורי כברירת מחדל
-                    const customersColPath = `/artifacts/${appId}/public/data/customers`;
+                    // [תיקון] החזרנו את הנתיב המלא והמאובטח
+                    const customersColPath = `/artifacts/${appId}/public/data/customers`; 
                     console.log(`EcoModal: Listening to customers at: ${customersColPath}`);
                     
                     const q = query(collection(db, customersColPath), orderBy("name")); // מיון לפי שם
@@ -615,15 +613,17 @@
                         const selectedOption = options[i];
                         customerAddressInput.value = selectedOption.dataset.address || '';
                         customerIdInput.value = selectedOption.dataset.id || '';
+                        customerAddressInput.readOnly = true; // [חדש] נועל את הכתובת כי הלקוח קיים
                         found = true;
                         break;
                     }
                 }
 
                 if (!found) {
-                    // אם המשתמש מקליד משהו שלא ברשימה, נקה את השדות
-                    customerAddressInput.value = '';
-                    customerIdInput.value = '';
+                    // [תיקון] אם המשתמש מקליד שם חדש
+                    customerIdInput.value = ''; // מנקה ID (כי זה לקוח חדש)
+                    customerAddressInput.readOnly = false; // [חדש] מאפשר עריכה ידנית של הכתובת
+                    // אנחנו *לא* מנקים את customerAddressInput כדי לאפשר לו להקליד כתובת חדשה
                 }
             };
 
@@ -651,7 +651,9 @@
                                 customerName: data.customer?.name || data.customerName || 'N/A',
                                 address: data.address || 'N/A',
                                 warehouse: data.warehouse || 'N/A',
-                                startDate: jsDate 
+                                startDate: jsDate,
+                                // [חדש] שומרים גם את מזהה הלקוח אם קיים, לטובת פעולות עתידיות
+                                customerId: data.customer?.id || null 
                             };
                         }).filter(c => c !== null); 
                         allContainersData = containers; 
@@ -751,20 +753,16 @@
                 event.preventDefault();
                 
                 // [משודרג] קבלת הערכים מהטופס
-                const customerId = customerIdInput.value;
+                let customerId = customerIdInput.value; // עשוי להיות ריק
                 const customerName = customerSearchInput.value.trim();
                 const address = customerAddressInput.value.trim();
                 const warehouse = document.getElementById('ecoFormWarehouse').value;
                 const startDateValue = document.getElementById('ecoFormStartDate').value;
                 const deliveryNote = document.getElementById('ecoFormDeliveryNote').value.trim();
 
-                // [משודרג] ולידציה: מוודא שלקוח *נבחר*
-                if (!customerId || !customerName) {
-                    alert("יש לבחור לקוח קיים מהרשימה.");
-                    return;
-                }
-                if (!address || !warehouse || !startDateValue) {
-                    alert("אנא מלא את כל השדות.");
+                // [משודרג] ולידציה
+                if (!customerName || !address || !warehouse || !startDateValue) {
+                    alert("אנא מלא את כל שדות החובה (לקוח, כתובת, מחסן, תאריך).");
                     return;
                 }
                 
@@ -772,13 +770,38 @@
                 saveButton.textContent = 'שומר...';
 
                 try {
-                    // [משודרג] שמירת הנתונים במבנה אובייקט
+                    // [תיקון] לוגיקה ליצירת לקוח חדש אם צריך
+                    if (!customerId) {
+                        // אם אין ID, זה לקוח חדש. ניצור אותו
+                        console.log("EcoModal: Creating new customer...");
+                        saveButton.textContent = 'יוצר לקוח חדש...';
+                        
+                        const newCustomerData = {
+                            name: customerName,
+                            defaultAddress: address,
+                            address: address, // שדות נפוצים
+                            createdAt: Timestamp.now(),
+                            // נוסיף שדות בסיסיים, המשתמש יוכל לערוך אותם מאוחר יותר במערכת המלאה
+                            phone: '',
+                            customerNumber: '' 
+                        };
+                        
+                        // [תיקון] יוצר את הלקוח בנתיב המאובטח הנכון
+                        const customersColPath = `/artifacts/${appId}/public/data/customers`;
+                        const customerDocRef = await addDoc(collection(db, customersColPath), newCustomerData);
+                        customerId = customerDocRef.id; // שומרים את ה-ID החדש
+                        console.log(`EcoModal: New customer created with ID: ${customerId} at ${customersColPath}`);
+                    }
+
+                    // --- יצירת המכולה ---
+                    saveButton.textContent = 'שומר מכולה...';
+                    
                     const newContainerData = {
                         customer: {
                             id: customerId,
                             name: customerName
                         },
-                        address: address, // הכתובת שנשלפה אוטומטית
+                        address: address, 
                         warehouse: warehouse,
                         deliveryNote: deliveryNote || null,
                         startDate: Timestamp.fromDate(new Date(startDateValue)),
@@ -838,4 +861,6 @@
 
 </body>
 </html>
+
+
 
