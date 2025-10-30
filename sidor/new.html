@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DeliveryMaster v32.5 (Stable)</title>
+    <title>DeliveryMaster v32.6 (דיוק מפה)</title>
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
     <script src="https://cdn.tailwindcss.com"></script>
 
@@ -384,15 +384,28 @@
                             <option value="ECO-24">ECO-24 (עד 14 ימים)</option>
                         </select>
                     </div>
-                    <!-- כתובת ומיקום -->
+                    <!-- כתובת -->
                     <div>
-                        <label for="address" class="block text-sm font-medium text-gray-700">כתובת למשלוח (חיפוש מפה)</label>
+                        <label for="address" class="block text-sm font-medium text-gray-700">כתובת למשלוח</label>
                         <input type="text" id="address" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
-                        <div id="address-coordinates" class="mt-1 text-xs text-gray-500">מיקום: ללא</div>
-                        <input type="hidden" id="latitude">
-                        <input type="hidden" id="longitude">
-                        <button type="button" id="geocode-button" class="mt-2 bg-purple-500 hover:bg-purple-600 text-white text-sm py-1 px-3 rounded-md transition duration-150">אתר מיקום</button>
                     </div>
+
+                    <!-- קואורדינטות (חדש) -->
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label for="latitude" class="block text-sm font-medium text-gray-700">Latitude (קו רוחב)</label>
+                            <input type="number" step="any" id="latitude" placeholder="32.1867..." required class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 ltr text-right">
+                        </div>
+                        <div>
+                            <label for="longitude" class="block text-sm font-medium text-gray-700">Longitude (קו אורך)</label>
+                            <input type="number" step="any" id="longitude" placeholder="34.9526..." required class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 ltr text-right">
+                        </div>
+                    </div>
+                    
+                    <!-- כפתור Geocode (משתמש בשדות הקואורדינטות) -->
+                    <button type="button" id="geocode-button" class="w-full bg-purple-500 hover:bg-purple-600 text-white text-sm py-2 px-3 rounded-md transition duration-150">
+                        אתר/אמת מיקום מכתובת (או השתמש בנתונים שהוזנו)
+                    </button>
                     <!-- סוג פעולה -->
                     <div>
                         <label for="delivery-type" class="block text-sm font-medium text-gray-700">סוג פעולה</label>
@@ -456,6 +469,18 @@
                         <div>
                             <label class="block text-sm font-medium text-gray-700">כתובת</label>
                             <p id="container-edit-address" class="mt-1 block w-full p-2 bg-gray-100 border border-gray-300 rounded-md"></p>
+                        </div>
+                    </div>
+                    
+                    <!-- קואורדינטות (קריאה בלבד בעריכה, המיקום נשמר מהיצירה) -->
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Latitude (קו רוחב)</label>
+                            <p id="container-edit-latitude" class="mt-1 block w-full p-2 bg-gray-100 border border-gray-300 rounded-md ltr text-right"></p>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Longitude (קו אורך)</label>
+                            <p id="container-edit-longitude" class="mt-1 block w-full p-2 bg-gray-100 border border-gray-300 rounded-md ltr text-right"></p>
                         </div>
                     </div>
 
@@ -596,11 +621,19 @@
             return `artifacts/${window.appId}/users/${window.userId}/${collectionName}`;
         }
 
-        // --- Geocoding (Placeholder - always returns a fake Israeli location) ---
-        async function geocodeAddress(address) {
-             SmartLog.info(`Searching for coordinates for: ${address}`, "Geocoding.Mock");
+        /**
+         * Geocoding (Mock) - Now prioritizes manually entered coordinates.
+         * If the address matches a mock city, it returns that city's coordinates.
+         * Otherwise, it uses the coordinates already in the Lat/Lng inputs as the source of truth (if valid).
+         */
+        async function geocodeAddress(address, currentLat, currentLng) {
+             SmartLog.info(`Searching/Verifying coordinates for: ${address}`, "Geocoding.Mock");
              
-             // Mock Geocoding for Israeli cities (Central/North)
+             // קואורדינטות ברירת מחדל לא נמצאו (כפר סבא - לפי בקשת המשתמש)
+             const FALLBACK_LAT = 32.186705; 
+             const FALLBACK_LNG = 34.952626;
+
+             // Mock Geocoding for Israeli cities 
              const mockLocations = {
                 "תל אביב": { lat: 32.0853, lng: 34.7818 },
                 "ירושלים": { lat: 31.7683, lng: 35.2137 },
@@ -609,20 +642,36 @@
                 "רמת גן": { lat: 32.0833, lng: 34.8000 },
                 "אשדוד": { lat: 31.7900, lng: 34.6530 },
                 "נתניה": { lat: 32.3228, lng: 34.8530 },
+                "כפר סבא": { lat: FALLBACK_LAT, lng: FALLBACK_LNG }, // הוספת כפר סבא לדיוק
              };
              
              const city = Object.keys(mockLocations).find(c => address.includes(c));
-             const defaultLocation = mockLocations["תל אביב"];
 
              return new Promise(resolve => {
                  setTimeout(() => {
+                     let lat = currentLat;
+                     let lng = currentLng;
+                     let source = 'User Input';
+
                      if (city) {
-                         showToast(`מיקום נמצא: ${city}`, 'success', 1500);
-                         resolve({ success: true, lat: mockLocations[city].lat, lng: mockLocations[city].lng });
+                         // נמצאה עיר בנתוני המוק - שימוש בקואורדינטות המדויקות יותר
+                         lat = mockLocations[city].lat;
+                         lng = mockLocations[city].lng;
+                         source = `Mock: ${city}`;
+                         showToast(`מיקום נמצא (Mock): ${city}`, 'success', 1500);
+                     } else if (isNaN(currentLat) || isNaN(currentLng)) {
+                         // אם הכתובת לא נמצאה ואין קואורדינטות שהוזנו - שימוש בפולבק
+                         lat = FALLBACK_LAT;
+                         lng = FALLBACK_LNG;
+                         source = 'Default Fallback (Kfar Saba)';
+                         showToast('הכתובת לא נמצאה, נעשה שימוש במיקום ברירת מחדל (כפר סבא)', 'info', 3000);
                      } else {
-                         showToast('שימוש במיקום ברירת מחדל (תל אביב)', 'info', 1500);
-                         resolve({ success: true, lat: defaultLocation.lat, lng: defaultLocation.lng });
+                         // שימוש בקואורדינטות שהוזנו ידנית ע"י המשתמש (אם קיימות ותקינות)
+                         showToast(`השתמש במיקום שהוזן: Lat ${lat.toFixed(4)}, Lng ${lng.toFixed(4)}`, 'success', 1500);
                      }
+
+                     resolve({ success: true, lat: parseFloat(lat), lng: parseFloat(lng) });
+
                  }, 500);
              });
         }
@@ -649,15 +698,18 @@
                  const customerName = document.getElementById('customer-name').value.trim();
                  const containerSize = document.getElementById('container-size').value;
                  const address = document.getElementById('address').value.trim();
-                 const lat = parseFloat(document.getElementById('latitude').value);
-                 const lng = parseFloat(document.getElementById('longitude').value);
+                 const latInput = document.getElementById('latitude').value;
+                 const lngInput = document.getElementById('longitude').value;
                  const deliveryType = document.getElementById('delivery-type').value;
                  const orderDate = document.getElementById('order-date').value;
                  const orderTime = document.getElementById('order-time').value;
                  const notes = document.getElementById('notes').value.trim();
                  
+                 const lat = parseFloat(latInput);
+                 const lng = parseFloat(lngInput);
+                 
                  if (isNaN(lat) || isNaN(lng)) {
-                    throw new Error("אנא אתר את המיקום על המפה לפני שמירה.");
+                    throw new Error("אנא ודא שהוזנו קואורדינטות Lat/Lng תקינות לפני שמירה.");
                  }
                  
                  // Combine date and time to a Date object, then to Timestamp
@@ -668,7 +720,7 @@
                      customerName,
                      containerSize,
                      address,
-                     location: { lat, lng },
+                     location: { lat, lng }, // שמירת הקואורדינטות המדויקות
                      deliveryType,
                      scheduledAt: scheduledTimestamp,
                      orderDate,
@@ -686,9 +738,6 @@
 
                  // Reset form and close modal
                  document.getElementById('container-create-form').reset();
-                 document.getElementById('address-coordinates').textContent = 'מיקום: ללא';
-                 document.getElementById('latitude').value = '';
-                 document.getElementById('longitude').value = '';
                  closeContainerCreateModal();
 
              } catch (error) {
@@ -943,6 +992,10 @@
              document.getElementById('container-edit-customer-name').textContent = container.customerName;
              document.getElementById('container-edit-container-size').textContent = container.containerSize;
              document.getElementById('container-edit-address').textContent = container.address;
+             // קואורדינטות (קריאה בלבד)
+             document.getElementById('container-edit-latitude').textContent = container.location?.lat?.toFixed(6) || 'N/A';
+             document.getElementById('container-edit-longitude').textContent = container.location?.lng?.toFixed(6) || 'N/A';
+
 
              // השדות לעריכה
              document.getElementById('container-edit-delivery-type').value = container.deliveryType;
@@ -994,6 +1047,7 @@
             const collectionPath = getPrivateCollectionPath('container-orders');
             if (!collectionPath) return;
 
+            // Query: מביא רק הזמנות שיש להן קואורדינטות תקינות
             const q = query(collection(db, collectionPath), where('location.lat', '!=', null));
 
             onSnapshot(q, (snapshot) => {
@@ -1063,6 +1117,7 @@
                     <div class="text-right">
                         <h4 class="text-lg font-bold text-gray-800">${container.customerName}</h4>
                         <p class="text-sm text-gray-600">${container.address}</p>
+                        <p class="text-xs text-gray-400 ltr">Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)}</p>
                         <hr class="my-2"/>
                         <p class="text-sm"><strong>מכולה:</strong> ${container.containerSize}</p>
                         <p class="text-sm"><strong>פעולה:</strong> ${container.deliveryType}</p>
@@ -1135,26 +1190,24 @@
             // --- Geocoding Listener ---
             document.getElementById('geocode-button').addEventListener('click', async () => {
                 const addressInput = document.getElementById('address');
-                const addressDisplay = document.getElementById('address-coordinates');
                 const latInput = document.getElementById('latitude');
                 const lngInput = document.getElementById('longitude');
 
                 const address = addressInput.value.trim();
-                if (!address) {
-                    showToast('אנא הזן כתובת.', 'error');
+                const currentLat = parseFloat(latInput.value);
+                const currentLng = parseFloat(lngInput.value);
+                
+                if (!address && (isNaN(currentLat) || isNaN(currentLng))) {
+                    showToast('אנא הזן כתובת או קואורדינטות.', 'error');
                     return;
                 }
 
-                const result = await geocodeAddress(address);
+                const result = await geocodeAddress(address, currentLat, currentLng);
                 if (result.success) {
                     latInput.value = result.lat;
                     lngInput.value = result.lng;
-                    addressDisplay.textContent = `מיקום: Lat ${result.lat.toFixed(4)}, Lng ${result.lng.toFixed(4)}`;
-                } else {
-                     addressDisplay.textContent = 'מיקום: לא נמצא';
-                     latInput.value = '';
-                     lngInput.value = '';
-                }
+                } 
+                // אין צורך ב-else כי פונקציית ה-geocode תמיד מחזירה הצלחה עם מיקום כלשהו
             });
             
             // --- Navigation Logic ---
@@ -1174,6 +1227,9 @@
                     // אתחול המפה רק כשעוברים אליה
                     if (!map) {
                         initializeMap();
+                    } else {
+                        // אם המפה כבר קיימת, יש לוודא שהיא מעדכנת את התצוגה שלה
+                         map.invalidateSize(); 
                     }
                 }
             }
