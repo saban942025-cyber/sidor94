@@ -1,24 +1,28 @@
-viewer-app<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="he" dir="rtl">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>DeliveryMaster Viewer v50.6 (Mobile UI Fix)</title>
+    <title>DeliveryMaster Viewer v50.10 (UI/Logic Refine)</title>
     <!-- 
-      DeliveryMaster Live Viewer App v50.6 (Mobile UI Fix)
+      DeliveryMaster Live Viewer App v50.10 (UI/Logic Refine)
       
       Changelog:
-      - v50.6 (FIX):
-        - Fixed "Blank Page" error by completely refactoring the layout.
-        - Removed separate mobile/desktop maps. Now uses ONE map container (`#viewer-map`).
-        - Implemented a mobile-first "app-like" layout using CSS Grid.
-        - On mobile: Map top, Tabbed content bottom.
-        - On desktop: Map left, Sidebar right.
-        - Simplified and corrected map initialization logic (`initViewerMap`).
-      - v50.5: (Faulty implementation of mobile UI)
-      - v50.4: Added listener for `globalPings` collection to receive admin alerts.
-      - v50.3 (FIX): Fixed "ISRAEL_CENTER is not defined" error.
-      - v50.2: Added Header Counters, Future Orders Tab, and Order Type Styling.
+      - v50.10 (NEW):
+        - Refined container logic: "Containers" page now shows ALL orders *except* 'מחסן החרש' and 'מחסן התלמיד'.
+        - Redesigned main list order card (`createViewerOrderCard`) to be cleaner and highlight delivery date/time.
+        - Updated container page title.
+      - v50.9 (NEW):
+        - Added fixed bottom navigation bar (like an app) with 3 buttons.
+        - Increased mobile list ratio to 65% (Map is 35%).
+        - Header counters are now clickable.
+        - Redesigned main order card.
+        - Search now includes 'warehouse'.
+        - Added new Reports Page with Chart.js.
+      - v50.8 (NEW):
+        - Main screen simplified.
+        - Added "שער חומרי בנין" & password-protected "שער מכולות".
+        - Implemented 10-day rental progress bar.
     -->
     
     <!-- PWA Manifest & Theme -->
@@ -36,6 +40,9 @@ viewer-app<!DOCTYPE html>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     
+    <!-- Chart.js (NEW for Reports) -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
     <!-- Icons (Feather) -->
     <script src="https://unpkg.com/feather-icons"></script>
 
@@ -61,6 +68,9 @@ viewer-app<!DOCTYPE html>
              --color-masait-bg: #dcfce7; /* green-100 */
              --color-isuf-bg: #f3f4f6;   /* gray-100 */
              --color-future-bg: #f9fafb; /* gray-50 */
+             
+             /* v50.9: Bottom nav height */
+             --bottom-nav-height: 65px;
         }
         html, body {
             height: 100vh;
@@ -71,6 +81,8 @@ viewer-app<!DOCTYPE html>
             font-family: 'Inter', 'Arial', sans-serif;
             background-color: var(--bg-light);
             color: var(--text-dark);
+             /* v50.9: Add padding for fixed bottom nav */
+             padding-bottom: var(--bottom-nav-height);
         }
         
         /* Main Layout */
@@ -105,6 +117,12 @@ viewer-app<!DOCTYPE html>
              padding: 0.25rem 0.75rem;
              border-radius: 99px; /* Pill shape */
              font-size: 0.8rem; /* Smaller font */
+             /* v50.9: Make counters clickable */
+             cursor: pointer;
+             transition: background-color 0.2s;
+        }
+        .counter-item:hover {
+            background-color: #e5e7eb; /* gray-200 */
         }
          .counter-item .count {
              font-weight: 700;
@@ -121,6 +139,8 @@ viewer-app<!DOCTYPE html>
             grid-template-rows: 1fr; /* Single row */
             flex-grow: 1; /* Take remaining space */
             overflow: hidden;
+            /* v50.9: Account for bottom nav */
+            height: calc(100% - var(--bottom-nav-height));
         }
         
         #viewer-map-container {
@@ -150,7 +170,8 @@ viewer-app<!DOCTYPE html>
             #viewer-main-content {
                 display: grid;
                 grid-template-columns: 1fr; /* Single column */
-                grid-template-rows: 45% 1fr; /* Map (45%) | Sidebar (remaining) */
+                /* v50.9: Increased list size. Map 35%, List 65% */
+                grid-template-rows: 35% 1fr; 
             }
             #viewer-map-container {
                 grid-row: 1;
@@ -165,33 +186,6 @@ viewer-app<!DOCTYPE html>
         }
         
         /* Side Panel / Mobile Content Area */
-        #viewer-side-panel .tabs-container {
-            display: flex;
-            border-bottom: 1px solid var(--border-color);
-            flex-shrink: 0;
-        }
-        #viewer-side-panel .tab-button {
-             flex: 1; 
-             padding: 0.75rem 0.5rem; 
-             font-weight: 500; 
-             text-align: center; 
-             border-bottom: 3px solid transparent; 
-             color: var(--text-light);
-             font-size: 0.9rem; 
-             cursor: pointer;
-             white-space: nowrap; 
-        }
-        @media (max-width: 768px) {
-             #viewer-side-panel .tab-button {
-                 font-size: 0.8rem;
-                 padding: 0.75rem 0.25rem;
-             }
-        }
-         #viewer-side-panel .tab-button.active {
-             border-bottom-color: var(--primary-color);
-             color: var(--primary-color);
-         }
-        
         #viewer-side-panel .search-container {
             padding: 0.75rem;
             border-bottom: 1px solid var(--border-color);
@@ -204,12 +198,8 @@ viewer-app<!DOCTYPE html>
             position: relative; /* For loader and for lists */
         }
         .panel-list {
-            /* Full height/width of parent, only visible one shown */
             position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
+            top: 0; left: 0; width: 100%; height: 100%;
             overflow-y: auto;
             display: none; /* Hidden by default */
         }
@@ -217,31 +207,53 @@ viewer-app<!DOCTYPE html>
             display: block; /* Shown by JS */
         }
         
-        .order-card, .driver-card {
-            padding: 0.75rem 1rem; /* Slightly smaller padding */
+        /* v50.9: Redesigned Order Card */
+        .order-card {
+            padding: 1rem;
             border-bottom: 1px solid var(--border-color);
             transition: background-color 0.2s;
             cursor: pointer;
         }
-        .order-card:hover, .driver-card:hover {
-            background-color: #fafafa;
-        }
-         .order-card.active, .driver-card.active {
+        .order-card:hover { background-color: #fafafa; }
+         .order-card.active {
              background-color: #eff6ff; /* blue-50 */
              border-right: 3px solid var(--primary-color);
          }
-        .order-card .font-bold {
-            color: var(--primary-dark);
+        .order-card-header-center {
+            text-align: center;
+            margin-bottom: 0.5rem;
         }
-        /* Styling for different order types */
-        .order-card.type-manof { background-color: var(--color-manof-bg); }
-        .order-card.type-masait { background-color: var(--color-masait-bg); }
-        .order-card.type-isuf { background-color: var(--color-isuf-bg); }
-         .order-card.future-order { 
-             background-color: var(--color-future-bg); 
-         }
-        .order-card.future-order .font-semibold { color: var(--text-light); } /* Dim text */
-        .order-type-icon { margin-left: 0.5rem; font-size: 1.1em; } /* Emoji styling */
+        .order-card-header-center .order-id {
+            font-weight: 700;
+            font-size: 1.1rem;
+            color: var(--primary-dark);
+            display: block;
+        }
+        .order-card-header-center .customer-name {
+            font-weight: 600;
+            font-size: 1rem;
+            color: var(--text-dark);
+            display: block;
+        }
+        .order-card-details {
+            font-size: 0.875rem;
+            color: var(--text-light);
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+            margin-top: 0.75rem;
+        }
+        .order-card-details div {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        /* v50.10: Icon size now set by Tailwind in the card */
+        /* .order-card-details i {
+            width: 16px;
+            height: 16px;
+        } */
+
 
         /* Status Colors */
         .status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
@@ -315,6 +327,299 @@ viewer-app<!DOCTYPE html>
         .toast.error { background-color: #ef4444; }
         .toast.ping { background-color: var(--primary-color); } /* Style for pings */
 
+        /* Full Page Views for Orders */
+        .full-page-view {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: white;
+            z-index: 1000;
+            overflow-y: auto;
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+             /* v50.9: Account for bottom nav */
+            padding-bottom: var(--bottom-nav-height);
+        }
+
+        .full-page-view.active {
+            transform: translateX(0);
+        }
+
+        .full-page-header {
+            position: sticky;
+            top: 0;
+            background: white;
+            border-bottom: 1px solid var(--border-color);
+            padding: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            z-index: 10;
+        }
+
+        .full-page-content {
+            padding: 1rem;
+        }
+
+        .order-category-section {
+            margin-bottom: 2rem;
+        }
+
+        .category-header {
+            background: var(--primary-color);
+            color: white;
+            padding: 0.75rem 1rem;
+            border-radius: 8px 8px 0 0;
+            font-weight: 700;
+            margin-bottom: 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .category-orders {
+            border: 1px solid var(--border-color);
+            border-top: none;
+            border-radius: 0 0 8px 8px;
+            overflow: hidden;
+        }
+
+        /* Enhanced Order Cards for Full Page */
+        .enhanced-order-card {
+            padding: 1rem;
+            border-bottom: 1px solid var(--border-color);
+            background: white;
+            transition: all 0.2s ease;
+        }
+
+        .enhanced-order-card:last-child {
+            border-bottom: none;
+        }
+
+        .enhanced-order-card:hover {
+            background: #f8fafc;
+        }
+
+        .order-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 0.5rem;
+        }
+
+        .order-main-info {
+            flex: 1;
+        }
+
+        .order-meta {
+            display: flex;
+            gap: 1rem;
+            font-size: 0.875rem;
+            color: var(--text-light);
+            margin-top: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .order-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 99px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            background: var(--bg-light);
+        }
+
+        .badge-status-new { background: #dbeafe; color: #1e40af; }
+        .badge-status-assigned { background: #fef3c7; color: #92400e; }
+        .badge-status-onway { background: #dcfce7; color: #166534; }
+        .badge-status-completed { background: #f3f4f6; color: #374151; }
+
+        .tomorrow-orders-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .delivery-type-section {
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .delivery-type-header {
+            padding: 1rem;
+            font-weight: 700;
+            color: white;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .delivery-type-manof { background: linear-gradient(135deg, #0ea5e9, #0369a1); }
+        .delivery-type-masait { background: linear-gradient(135deg, #10b981, #047857); }
+        .delivery-type-isuf { background: linear-gradient(135deg, #6b7280, #374151); }
+
+        /* Navigation Buttons */
+        .nav-button {
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            font-size: 0.875rem;
+        }
+
+        .nav-button:hover {
+            background: var(--primary-dark);
+        }
+
+        .nav-button.secondary {
+            background: var(--bg-light);
+            color: var(--text-dark);
+        }
+
+        .nav-button.secondary:hover {
+            background: #e5e7eb;
+        }
+        
+        /* v50.8: Container Rental Progress */
+        .rental-progress-bar {
+            background-color: var(--border-color);
+            border-radius: 99px;
+            height: 10px;
+            overflow: hidden;
+            margin-top: 0.75rem;
+        }
+        .rental-progress-bar .progress {
+            background-color: var(--primary-color);
+            height: 100%;
+            transition: width 0.3s ease;
+        }
+        .rental-days {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--text-light);
+            text-align: center;
+            margin-top: 0.25rem;
+        }
+        .overtime-flash {
+            color: #ef4444; /* red-500 */
+            animation: gentle-flash 1.5s infinite;
+        }
+        @keyframes gentle-flash {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+        
+        /* v50.9: Fixed Bottom Nav */
+        #bottom-nav-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: var(--bottom-nav-height);
+            background-color: var(--bg-white);
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-around;
+            z-index: 100;
+            padding: 0 0.5rem;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
+        }
+        .bottom-nav-button {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-light);
+            font-weight: 500;
+            font-size: 0.75rem;
+            border: none;
+            background: none;
+            cursor: pointer;
+            padding: 0.5rem 0;
+            border-radius: 8px;
+            transition: all 0.2s ease;
+            height: 100%;
+        }
+        .bottom-nav-button i {
+            width: 24px;
+            height: 24px;
+            margin-bottom: 2px;
+        }
+        .bottom-nav-button:hover {
+            background-color: var(--bg-light);
+            color: var(--primary-color);
+        }
+
+        /* v50.9: Reports Page Styling */
+        .report-filter-bar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            padding: 1rem;
+            background: var(--bg-light);
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+            align-items: center;
+        }
+        .report-filter-bar label {
+            font-weight: 500;
+        }
+        .report-filter-bar input {
+            padding: 0.5rem;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+        }
+        .report-section {
+            background: var(--bg-white);
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        .report-section h3 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 0.5rem;
+            margin-bottom: 1rem;
+        }
+        .customer-list-item {
+            padding: 0.5rem 0;
+            border-bottom: 1px solid var(--border-color);
+            font-weight: 500;
+        }
+        .customer-list-item:last-child {
+            border-bottom: none;
+        }
+
+
+        @media (max-width: 768px) {
+            .order-card-details {
+                font-size: 0.8rem;
+            }
+            .report-filter-bar {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .report-filter-bar .nav-button {
+                width: 100%;
+            }
+        }
+
     </style>
 </head>
 <body class="antialiased">
@@ -331,19 +636,19 @@ viewer-app<!DOCTYPE html>
              </div>
         </header>
         
-        <!-- Counters -->
+        <!-- v50.9: Counters are now clickable -->
         <div id="viewer-counters">
-             <div class="counter-item">
+             <div class="counter-item" onclick="showActiveListPage()">
                  🔄
                  <span>בסידור:</span>
                  <span id="count-active" class="count">-</span>
              </div>
-             <div class="counter-item">
+             <div class="counter-item" onclick="showCompletedTodayListPage()">
                  ✅
                  <span>סופקו היום:</span>
                  <span id="count-completed-today" class="count">-</span>
              </div>
-             <div class="counter-item">
+             <div class="counter-item" onclick="showFutureListPage()">
                  📅
                  <span>צפי עתידי:</span>
                  <span id="count-future" class="count">-</span>
@@ -363,47 +668,162 @@ viewer-app<!DOCTYPE html>
 
             <!-- Side Panel (Lists) / Mobile Content Panel -->
             <aside id="viewer-side-panel">
-                <!-- Tabs -->
-                <div class="tabs-container">
-                    <button id="tab-orders-active" class="tab-button active" onclick="showViewerPanelTab('orders-active')">
-                        הזמנות פעילות
-                    </button>
-                    <button id="tab-orders-future" class="tab-button" onclick="showViewerPanelTab('orders-future')">
-                        הזמנות עתידיות
-                    </button>
-                    <button id="tab-drivers" class="tab-button" onclick="showViewerPanelTab('drivers')">
-                        נהגים
-                    </button>
-                </div>
-                
                 <!-- Search -->
                 <div class="search-container">
-                    <input type="text" id="viewer-search-input" placeholder="חפש הזמנה או נהג..." class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300" onkeyup="filterViewerLists()">
+                    <input type="text" id="viewer-search-input" placeholder="חפש הזמנה, לקוח, כתובת או מחסן..." class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300" onkeyup="filterViewerLists()">
                 </div>
                 
                 <!-- Lists Container -->
                 <div class="panel-list-container">
-                    <!-- Active Orders List -->
-                    <div id="viewer-orders-active-list" class="panel-list active">
-                        <div class="loader-container"><div class="loader"></div></div>
-                    </div>
-                    
-                     <!-- Future Orders List -->
-                    <div id="viewer-orders-future-list" class="panel-list">
-                        <div class="loader-container"><div class="loader"></div></div>
-                    </div>
-                    
-                    <!-- Drivers List -->
-                    <div id="viewer-drivers-list" class="panel-list">
+                    <!-- Active Orders List (Now the only list shown) -->
+                    <div id="viewer-orders-active-list" class="panel-list active" style="display:block;">
                         <div class="loader-container"><div class="loader"></div></div>
                     </div>
                 </div>
+
+                <!-- v50.9: Nav buttons moved to fixed bottom bar -->
             </aside>
         </main>
+
+        <!-- v50.9: Fixed Bottom Nav Bar -->
+        <nav id="bottom-nav-bar">
+            <button class="bottom-nav-button" onclick="showMaterialsPage()">
+                <i data-feather="package"></i>
+                <span>חומרי בנין</span>
+            </button>
+            <button class="bottom-nav-button" onclick="showContainersPage()">
+                <i data-feather="archive"></i>
+                <span>מכולות</span>
+            </button>
+            <button class="bottom-nav-button" onclick="showReportsPage()">
+                <i data-feather="bar-chart-2"></i>
+                <span>דוחות</span>
+            </button>
+        </nav>
     </div>
 
      <!-- Toast Container -->
     <div id="toast-container"></div>
+
+    <!-- Full Page Views (v50.9: ALL Pages) -->
+
+    <!-- Full Page View: חומרי בנין -->
+    <div id="fullpage-materials" class="full-page-view">
+        <div class="full-page-header">
+            <button class="nav-button secondary" onclick="hideFullPageView('materials')">
+                <i data-feather="arrow-right"></i> חזרה
+            </button>
+            <h2 class="text-xl font-bold">חומרי בנין (החרש, התלמיד)</h2>
+        </div>
+        <div class="full-page-content">
+            <div id="materials-orders-container">
+                <!-- Populated by JS -->
+                <div class="loader-container"><div class="loader"></div></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Full Page View: מכולות -->
+    <div id="fullpage-containers" class="full-page-view">
+        <div class="full-page-header">
+            <button class="nav-button secondary" onclick="hideFullPageView('containers')">
+                <i data-feather="arrow-right"></i> חזרה
+            </button>
+            <!-- v50.10: Updated Title -->
+            <h2 class="text-xl font-bold">מכולות</h2>
+        </div>
+        <div class="full-page-content">
+            <!-- Using tomorrow-orders-grid for layout -->
+            <div id="containers-orders-container" class="tomorrow-orders-grid">
+                <!-- Populated by JS -->
+                <div class="loader-container"><div class="loader"></div></div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- v50.9: Full Page View: דוחות -->
+    <div id="fullpage-reports" class="full-page-view">
+        <div class="full-page-header">
+            <button class="nav-button secondary" onclick="hideFullPageView('reports')">
+                <i data-feather="arrow-right"></i> חזרה
+            </button>
+            <h2 class="text-xl font-bold">דוחות וניתוחים</h2>
+        </div>
+        <div class="full-page-content">
+            <!-- Filter Bar -->
+            <div class="report-filter-bar">
+                <label for="report-date-start">מתאריך:</label>
+                <input type="date" id="report-date-start">
+                <label for="report-date-end">עד תאריך:</label>
+                <input type="date" id="report-date-end">
+                <button class="nav-button" onclick="renderReports()">
+                    <i data-feather="filter"></i> סנן
+                </button>
+            </div>
+            
+            <!-- Charts & Lists -->
+            <div id="reports-content-container">
+                <!-- Section 1: Warehouse Chart -->
+                <div class="report-section">
+                    <h3>הזמנות לפי מחסן</h3>
+                    <canvas id="report-chart-warehouse" height="250"></canvas>
+                </div>
+                
+                <!-- Section 2: Orders Over Time Chart -->
+                <div class="report-section">
+                    <h3>הזמנות לאורך זמן</h3>
+                    <canvas id="report-chart-time" height="250"></canvas>
+                </div>
+
+                <!-- Section 3: Completed Customers -->
+                <div class="report-section">
+                    <h3>לקוחות שקיבלו אספקה</h3>
+                    <div id="report-list-customers">
+                        <div class="text-center p-4 text-gray-500">טוען נתונים...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- v50.9: Full Page View: Active List (From Counter) -->
+    <div id="fullpage-list-active" class="full-page-view">
+        <div class="full-page-header">
+            <button class="nav-button secondary" onclick="hideFullPageView('list-active')">
+                <i data-feather="arrow-right"></i> חזרה
+            </button>
+            <h2 class="text-xl font-bold">הזמנות בסידור</h2>
+        </div>
+        <div class="full-page-content" id="list-active-container">
+            <!-- Populated by JS -->
+        </div>
+    </div>
+    
+    <!-- v50.9: Full Page View: Completed Today List (From Counter) -->
+    <div id="fullpage-list-completed-today" class="full-page-view">
+        <div class="full-page-header">
+            <button class="nav-button secondary" onclick="hideFullPageView('list-completed-today')">
+                <i data-feather="arrow-right"></i> חזרה
+            </button>
+            <h2 class="text-xl font-bold">הזמנות שסופקו היום</h2>
+        </div>
+        <div class="full-page-content" id="list-completed-today-container">
+            <!-- Populated by JS -->
+        </div>
+    </div>
+    
+    <!-- v50.9: Full Page View: Future List (From Counter) -->
+    <div id="fullpage-list-future" class="full-page-view">
+        <div class="full-page-header">
+            <button class="nav-button secondary" onclick="hideFullPageView('list-future')">
+                <i data-feather="arrow-right"></i> חזרה
+            </button>
+            <h2 class="text-xl font-bold">צפי הזמנות עתידי</h2>
+        </div>
+        <div class="full-page-content" id="list-future-container">
+            <!-- Populated by JS -->
+        </div>
+    </div>
 
 
     <script type="module">
@@ -483,11 +903,16 @@ viewer-app<!DOCTYPE html>
         // --- CONFIG & STATE ---
         const ISRAEL_CENTER = [32.0853, 34.7818];
         const ACTIVE_ORDER_STATUSES = ["חדש", "שויך", "בדרך"]; // Statuses for active count & list
+        
+        // v50.9: Chart instances
+        let reportChartWarehouse = null;
+        let reportChartTime = null;
 
         let viewerState = {
             allOrders: [], // Holds ALL orders for counting/future list
             activeOrders: [], // Filtered active orders for main list/map
             futureOrders: [], // Filtered future orders
+            completedTodayOrders: [], // v50.9: New state for completed today
             drivers: [],
             liveLocations: {},
         };
@@ -520,13 +945,11 @@ viewer-app<!DOCTYPE html>
         });
         
         async function initializeViewerApplication() {
-            SmartLog.info("v50.6 Viewer: Initializing...", "Init"); // Version bump
+            SmartLog.info("v50.10 Viewer: Initializing...", "Init"); // Version bump
             try {
                 updateConnectionStatus('connecting', 'מפעיל מפה...');
                 initViewerMap(); // This will now work
                 showLoader('viewer-orders-active-list', true);
-                 showLoader('viewer-orders-future-list', true);
-                showLoader('viewer-drivers-list', true);
                 
                 await authReadyPromise; // Waits for ensureAuth to complete
                 SmartLog.info(`Firebase Auth successful for viewer.`, "Init.Auth");
@@ -555,13 +978,12 @@ viewer-app<!DOCTYPE html>
                 const mapContainer = document.getElementById('viewer-map');
                 if (!mapContainer) throw new Error("Map container #viewer-map not found");
                  
-                // If map instance exists, remove it first
                  if (viewerMap) {
                      viewerMap.remove();
                      viewerMap = null;
                  }
 
-                viewerMap = L.map('viewer-map').setView(ISRAEL_CENTER, 9); // *** USES ISRAEL_CENTER ***
+                viewerMap = L.map('viewer-map').setView(ISRAEL_CENTER, 9);
                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                     maxZoom: 19,
                     attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
@@ -591,9 +1013,7 @@ viewer-app<!DOCTYPE html>
             onSnapshot(q, (snapshot) => {
                 SmartLog.info(`Drivers: ${snapshot.docs.length} docs.`, "Firestore.Snapshot");
                 viewerState.drivers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                renderViewerDriversList();
                 renderViewerMapMarkers(); // Update map markers which depend on driver data
-                showLoader('viewer-drivers-list', false);
             }, e => { 
                 SmartLog.error(e, "Firestore.Drivers.Listener"); 
                 updateConnectionStatus("error", "שגיאת נהגים"); 
@@ -603,7 +1023,6 @@ viewer-app<!DOCTYPE html>
         // Listener for ALL orders - used for counts and future orders list
         function listenToAllOrdersViewer() {
             SmartLog.info("Listening to ALL Orders (for counts & future)...", "Firestore.Listen");
-            // Listen without status filter, but keep the ordering
             const q = query(collection(db, "orders"), orderBy("createdAt", "desc")); 
             onSnapshot(q, (snapshot) => {
                 SmartLog.info(`All Orders: ${snapshot.docs.length} docs.`, "Firestore.Snapshot");
@@ -614,30 +1033,34 @@ viewer-app<!DOCTYPE html>
                 const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
                 const todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999);
                 
+                // Active Orders
                 viewerState.activeOrders = viewerState.allOrders.filter(o => ACTIVE_ORDER_STATUSES.includes(o.status || ''));
+                
+                // Future Orders
                 viewerState.futureOrders = viewerState.allOrders.filter(o => {
-                    // Check if orderDate exists and is after today's end
                     if (!o.orderDate) return false;
                     try {
-                        // Ensure orderDate is parsed correctly (assuming YYYY-MM-DD or similar JS parsable format)
                         const orderDateObj = new Date(o.orderDate);
-                        // Set time to start of day for comparison to avoid time zone issues
                         orderDateObj.setHours(0, 0, 0, 0); 
                         return orderDateObj > todayEnd;
                     } catch (e) {
-                         console.warn("Error parsing orderDate:", o.orderDate, e);
                          return false;
                     }
                 });
                 
+                // v50.9: Completed Today Orders
+                viewerState.completedTodayOrders = viewerState.allOrders.filter(o => {
+                     if (o.status !== 'הושלם') return false;
+                     const modifiedTime = o.lastModified?.toDate ? o.lastModified.toDate().getTime() : 0;
+                     return modifiedTime >= todayStart.getTime() && modifiedTime <= todayEnd.getTime();
+                });
+                
                 // --- Update UI ---
-                renderViewerOrdersList(); // Renders active orders
-                renderViewerFutureOrdersList(); // Renders future orders
+                renderViewerOrdersList(); // Renders active orders (main list)
                 renderViewerMapMarkers(); // Updates map markers based on activeOrders
                 updateCounters(); // Update header counters
                 
                 showLoader('viewer-orders-active-list', false);
-                showLoader('viewer-orders-future-list', false);
 
             }, e => { 
                 console.error("Firestore ALL Orders Listener Error:", e); 
@@ -657,8 +1080,6 @@ viewer-app<!DOCTYPE html>
                     newLocations[doc.id] = { id: doc.id, ...doc.data() };
                 });
                 viewerState.liveLocations = newLocations;
-                // These changes affect driver list (status) and map
-                renderViewerDriversList();
                 renderViewerMapMarkers();
              }, e => { 
                 SmartLog.error(e, "Firestore.Locations.Listener"); 
@@ -666,10 +1087,8 @@ viewer-app<!DOCTYPE html>
             });
         }
         
-        // --- New Listener for Global Pings ---
         function listenToGlobalPings() {
              SmartLog.info("Listening for Global Pings...", "Firestore.Listen");
-             // Listen for pings created in the last 60 seconds
              const since = new Date(Date.now() - 60000); 
              const q = query(
                  collection(db, "globalPings"), 
@@ -689,7 +1108,6 @@ viewer-app<!DOCTYPE html>
                      if (change.type === "added") {
                          const ping = change.doc.data();
                          SmartLog.info("Global Ping Received!", "Pings", ping);
-                         // Play sound and show toast
                          playNotificationSound('A5', '4n'); // Louder, longer note
                          showToast(`התראה מהמנהל: ${ping.message}`, 'ping');
                      }
@@ -704,17 +1122,7 @@ viewer-app<!DOCTYPE html>
         
          function updateCounters() {
              const activeCount = viewerState.activeOrders.length;
-             
-             const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
-             const todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999);
-             
-             const completedTodayCount = viewerState.allOrders.filter(o => {
-                 // Check status and if lastModified is valid and within today
-                  if (o.status !== 'הושלם') return false;
-                  const modifiedTime = o.lastModified?.toDate ? o.lastModified.toDate().getTime() : 0;
-                  return modifiedTime >= todayStart.getTime() && modifiedTime <= todayEnd.getTime();
-             }).length;
-             
+             const completedTodayCount = viewerState.completedTodayOrders.length;
              const futureCount = viewerState.futureOrders.length;
              
              const countActiveEl = document.getElementById('count-active');
@@ -725,58 +1133,8 @@ viewer-app<!DOCTYPE html>
              if(countCompletedEl) countCompletedEl.innerText = completedTodayCount;
              if(countFutureEl) countFutureEl.innerText = futureCount;
          }
-
-        function renderViewerDriversList() {
-            const list = document.getElementById('viewer-drivers-list');
-             if (!list) return; // Guard clause
-            list.innerHTML = ''; // Clear
-            
-            // Sort drivers alphabetically before rendering
-            const sortedDrivers = [...viewerState.drivers].sort((a, b) => a.name?.localeCompare(b.name || '') || 0);
-
-            if (sortedDrivers.length === 0) {
-                list.innerHTML = `<div class="p-4 text-center text-gray-500">לא נמצאו נהגים.</div>`;
-                return;
-            }
-            
-            sortedDrivers.forEach(driver => {
-                const location = viewerState.liveLocations[driver.id]; 
-                list.appendChild(createViewerDriverCard(driver, location));
-            });
-            filterViewerLists(); // Apply filter after rendering
-        }
         
-        function createViewerDriverCard(driver, location) {
-            const el = document.createElement('div');
-            el.className = 'driver-card p-4 cursor-pointer';
-            el.id = `viewer-driver-card-${driver.id}`; 
-            el.setAttribute('data-search', driver.name.toLowerCase());
-            el.onclick = () => focusViewerMapItem(driver.id, 'driver'); 
-            
-            let statusClass = 'status-inactive';
-            let statusText = 'לא מחובר';
-            
-            if (location) {
-                statusClass = location.isStuck ? 'status-stuck' : 'status-active';
-                statusText = location.isStuck ? `תקוע (${location.minutesAgo || '?'})` : 'פעיל';
-            }
-            
-            el.innerHTML = `
-                <div class="flex justify-between items-center">
-                    <span class="font-semibold">${driver.name}</span>
-                    <div class="flex items-center space-x-2 space-x-reverse">
-                        <span class="text-sm font-medium">${statusText}</span>
-                        <span class="status-dot ${statusClass}"></span>
-                    </div>
-                </div>
-                <div class="text-sm text-gray-500 mt-1">
-                    <span>${driver.vehicleType || 'משאית'} | ${driver.phone}</span>
-                </div>
-            `;
-            return el;
-        }
-        
-        // Renders ONLY Active Orders
+        // Renders ONLY Active Orders (to main list)
         function renderViewerOrdersList() {
             const list = document.getElementById('viewer-orders-active-list');
              if (!list) return; // Guard clause
@@ -791,78 +1149,59 @@ viewer-app<!DOCTYPE html>
              const sortedActiveOrders = [...viewerState.activeOrders].sort((a,b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
 
             sortedActiveOrders.forEach(order => {
-                list.appendChild(createViewerOrderCard(order, false)); // false indicates not future
+                list.appendChild(createViewerOrderCard(order));
             });
              filterViewerLists(); // Apply filter after rendering
-        }
-
-        // Renders ONLY Future Orders
-        function renderViewerFutureOrdersList() {
-            const list = document.getElementById('viewer-orders-future-list');
-             if (!list) return; // Guard clause
-            list.innerHTML = ''; // Clear
-            
-            if (viewerState.futureOrders.length === 0) {
-                list.innerHTML = `<div class="p-4 text-center text-gray-500">אין הזמנות עתידיות.</div>`;
-                return;
-            }
-            
-             // Sort future orders by their orderDate (earliest first)
-            const sortedFutureOrders = [...viewerState.futureOrders].sort((a,b) => {
-                 const dateA = a.orderDate ? new Date(a.orderDate).getTime() : 0;
-                 const dateB = b.orderDate ? new Date(b.orderDate).getTime() : 0;
-                 return dateA - dateB;
-             });
-
-            sortedFutureOrders.forEach(order => {
-                list.appendChild(createViewerOrderCard(order, true)); // true indicates future
-            });
-             filterViewerLists(); // Apply filter after rendering
+             feather.replace(); // v50.9: Update icons in new cards
         }
 
         
-        function createViewerOrderCard(order, isFuture = false) {
+        // v50.10: Redesigned main order card
+        function createViewerOrderCard(order) {
             const el = document.createElement('div');
-            const typeInfo = orderTypeDetails[order.deliveryType] || orderTypeDetails['default'];
-            el.className = `order-card p-3 cursor-pointer ${typeInfo.className} ${isFuture ? 'future-order' : ''}`; // Reduced padding
+            el.className = `order-card`;
             el.id = `viewer-order-card-${order.id}`; 
-            el.setAttribute('data-search', `${order.orderNumber || order.id} ${order.customer?.name?.toLowerCase()} ${order.address?.toLowerCase()}`);
-            
-            // Only make active orders clickable to focus map
-            if (!isFuture) {
-                 el.onclick = () => focusViewerMapItem(order.id, 'order'); 
-            } else {
-                 el.style.cursor = 'default'; // Not clickable
-            }
-            
+            // v50.9: Added warehouse to search
+            el.setAttribute('data-search', `${order.orderNumber || order.id} ${order.customer?.name?.toLowerCase()} ${order.address?.toLowerCase()} ${order.warehouse?.toLowerCase()}`);
+            el.onclick = () => focusViewerMapItem(order.id, 'order'); 
+
             const customerName = order.customer?.name || 'לקוח לא ידוע';
             const address = order.address || 'כתובת לא צוינה';
             const displayId = order.orderNumber || `#${order.id.slice(-6)}`;
-            const status = order.status || '?';
-            const driverName = order.driver?.name ? `(${order.driver.name})` : '';
-            // Format createdAt timestamp
-             const createdDateTime = order.createdAt?.toDate 
-                 ? order.createdAt.toDate().toLocaleString('he-IL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) 
-                 : 'N/A';
-             const orderDateForDisplay = order.orderDate 
+            
+            // v50.9: Get delivery date and time
+            const orderDateForDisplay = order.orderDate 
                  ? new Date(order.orderDate).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' })
-                 : 'N/A';
+                 : 'לא צוין תאריך';
+            
+            const orderTimeForDisplay = order.deliverySlot || 'לא צוינה שעה'; // Assuming field 'deliverySlot'
 
             el.innerHTML = `
-                <div class="flex justify-between items-center mb-1">
-                    <span class="font-bold text-blue-600 flex items-center">
-                         ${displayId} <span class="order-type-icon">${typeInfo.icon}</span>
-                     </span>
-                     ${isFuture 
-                         ? `<span class="text-sm font-semibold text-gray-600">לתאריך: ${orderDateForDisplay}</span>`
-                         : `<span class="text-sm font-semibold">${status} ${driverName}</span>`
-                     }
+                <div class="order-card-header-center">
+                    <span class="order-id">${displayId}</span>
+                    <span class="customer-name">${customerName}</span>
                 </div>
-                <div class="font-semibold text-gray-800 text-sm">${customerName}</div>
-                <div class="text-xs text-gray-600 truncate">${address}</div>
-                <div class="text-xs text-gray-500 mt-1 flex justify-between">
-                    <span>${order.warehouse || ''}</span>
-                    <span>נוצר: ${createdDateTime}</span>
+                <div class="order-card-details mt-4">
+                    <div class="flex items-center gap-2 text-gray-700">
+                        <i data-feather="map-pin" class="w-4 h-4"></i>
+                        <span class="font-medium truncate">${address}</span>
+                    </div>
+                    <div class="flex items-center gap-2 text-gray-700">
+                        <i data-feather="home" class="w-4 h-4"></i>
+                        <span class="font-medium">מחסן: ${order.warehouse || '?'}</span>
+                    </div>
+                </div>
+                <!-- Highlighted Date/Time Section -->
+                <div class="mt-3 bg-gray-100 p-3 rounded-lg flex items-center justify-center gap-4 text-gray-800">
+                    <div class="flex items-center gap-2">
+                        <i data-feather="calendar" class="w-4 h-4 text-primary-dark"></i>
+                        <span class="font-semibold">${orderDateForDisplay}</span>
+                    </div>
+                    <div class="border-l border-gray-300 h-5"></div>
+                    <div class="flex items-center gap-2">
+                        <i data-feather="clock" class="w-4 h-4 text-primary-dark"></i>
+                        <span class="font-semibold">${orderTimeForDisplay}</span>
+                    </div>
                 </div>
             `;
             return el;
@@ -908,7 +1247,6 @@ viewer-app<!DOCTYPE html>
             // --- Render Active Orders Only ---
             const activeMapOrders = viewerState.activeOrders.filter(o => o.latitude && o.longitude);
             
-            // Clear markers for orders that are no longer active or don't exist in the active list
             Object.keys(viewerOrderMarkers).forEach(orderId => {
                 if (!activeMapOrders.some(o => o.id == orderId)) {
                     if (viewerMap.hasLayer(viewerOrderMarkers[orderId])) {
@@ -923,17 +1261,20 @@ viewer-app<!DOCTYPE html>
                 const customerName = order.customer?.name || 'לקוח לא ידוע';
                 const displayId = order.orderNumber || `#${order.id.slice(-6)}`;
                  const typeInfo = orderTypeDetails[order.deliveryType] || orderTypeDetails['default'];
+                 
                 const popupContent = `
                      <h4>${typeInfo.icon} הזמנה ${displayId}</h4>
                      <p>${customerName}</p>
                      <p>${order.address || '...'}</p>
                      <p>סטטוס: ${order.status}</p>
-                     ${order.driver?.name ? `<p>נהג: ${order.driver.name}</p>` : ''}`;
+                     ${order.driver?.name ? `<p>נהג: ${order.driver.name}</p>` : ''}
+                     <p id="popup-dist-${order.id}" class="font-semibold text-blue-600"></p> 
+                `;
                 
                 if (viewerOrderMarkers[order.id]) {
                     viewerOrderMarkers[order.id].setLatLng(latLng).setPopupContent(popupContent);
                 } else {
-                    viewerOrderMarkers[order.id] = L.marker(latLng, { icon: orderIconActive }) // Use active icon
+                    viewerOrderMarkers[order.id] = L.marker(latLng, { icon: orderIconActive })
                         .addTo(viewerMap)
                         .bindPopup(popupContent)
                         .on('click', () => focusViewerMapItem(order.id, 'order'));
@@ -941,80 +1282,462 @@ viewer-app<!DOCTYPE html>
                 bounds.extend(latLng);
             });
 
-            // Adjust map view only if there are markers to show
              if (bounds.isValid() && (activeMapOrders.length > 0 || Object.keys(viewerDriverMarkers).some(id => !viewerState.liveLocations[id]?.isStuck))) {
                  try { viewerMap.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 }); } catch (e) { console.warn("FitBounds error:", e); }
              } else if (!bounds.isValid()) {
-                // If no valid bounds (no active markers), reset view
                 viewerMap.setView(ISRAEL_CENTER, 9); 
              }
         }
         
+        // --- FULL PAGE VIEWS FUNCTIONS (v50.9) ---
+        
+        function showFullPageView(viewId) {
+            const el = document.getElementById(`fullpage-${viewId}`);
+            if (el) {
+                el.classList.add('active');
+                // document.body.style.overflow = 'hidden'; // Already hidden on body
+                feather.replace();
+            }
+        }
+
+        function hideFullPageView(viewId) {
+            const el = document.getElementById(`fullpage-${viewId}`);
+             if (el) {
+                el.classList.remove('active');
+                // document.body.style.overflow = 'auto'; // Re-enable body scroll
+                feather.replace();
+             }
+        }
+
+        // 1. Materials Page
+        function showMaterialsPage() {
+            SmartLog.info("Showing Materials Page", "UI.FullPage");
+            showLoader('materials-orders-container', true);
+            renderMaterialsPage();
+            showFullPageView('materials');
+        }
+        
+        function renderMaterialsPage() {
+            const container = document.getElementById('materials-orders-container');
+            if (!container) return;
+
+            const materialWarehouses = ['מחסן החרש', 'מחסן התלמיד'];
+            const materialsOrders = viewerState.allOrders
+                .filter(o => materialWarehouses.includes(o.warehouse))
+                .sort((a,b) => (a.orderDate ? new Date(a.orderDate) : 0) - (b.orderDate ? new Date(b.orderDate) : 0)); // Sort by date
+
+            if (materialsOrders.length === 0) {
+                 container.innerHTML = '<div class="text-center p-8 text-gray-500">לא נמצאו הזמנות לחומרי בנין.</div>';
+                 return;
+            }
+
+            container.innerHTML = materialsOrders.map(order => createEnhancedOrderCard(order, true)).join('');
+            showLoader('materials-orders-container', false);
+            feather.replace();
+        }
+
+        // 2. Containers Page
+        function showContainersPage() {
+            SmartLog.info("Attempting to show Containers Page", "UI.FullPage");
+            const pass = prompt("נדרשת סיסמה:", "");
+            if (pass === "1125") {
+                SmartLog.info("Password correct", "UI.FullPage");
+                showLoader('containers-orders-container', true);
+                renderContainersPage();
+                showFullPageView('containers');
+            } else if (pass !== null) { 
+                SmartLog.warn("Password incorrect", "UI.FullPage");
+                alert("סיסמה שגויה.");
+            }
+        }
+
+        function renderContainersPage() {
+            const container = document.getElementById('containers-orders-container');
+            if (!container) return;
+
+            // v50.10: New logic: Containers are all orders NOT from material warehouses
+            const materialWarehouses = ['מחסן החרש', 'מחסן התלמיד'];
+            const containerOrders = viewerState.allOrders
+                .filter(o => !materialWarehouses.includes(o.warehouse)) // Filter *out* materials
+                .sort((a,b) => (a.createdAt?.toMillis() || 0) - (b.createdAt?.toMillis() || 0)); // Sort by creation date
+
+            if (containerOrders.length === 0) {
+                 container.innerHTML = '<div class="text-center p-8 text-gray-500">לא נמצאו הזמנות מכולה.</div>';
+                 return;
+            }
+             
+            container.innerHTML = containerOrders.map(order => createContainerOrderCard(order)).join('');
+            showLoader('containers-orders-container', false);
+            feather.replace();
+        }
+
+        // 3. New Card Renderer for Containers
+        function createContainerOrderCard(order) {
+            const typeInfo = orderTypeDetails[order.deliveryType] || orderTypeDetails['default'];
+            const customerName = order.customer?.name || 'לקוח לא ידוע';
+            const address = order.address || 'כתובת לא צוינה';
+            const displayId = order.orderNumber || `#${order.id.slice(-6)}`;
+            
+            // --- Rental Logic ---
+            const RENTAL_PERIOD_DAYS = 10;
+            let daysPassed = 0;
+            let progressPercent = 0;
+            let isOvertime = false;
+            let createdDateStr = '...';
+
+            if (order.createdAt && order.createdAt.toDate) {
+                const createdMillis = order.createdAt.toDate().getTime();
+                createdDateStr = new Date(createdMillis).toLocaleDateString('he-IL');
+                daysPassed = (Date.now() - createdMillis) / (1000 * 60 * 60 * 24);
+                progressPercent = Math.min(100, (daysPassed / RENTAL_PERIOD_DAYS) * 100);
+                isOvertime = daysPassed > RENTAL_PERIOD_DAYS;
+            }
+            
+            const daysDisplay = `${Math.floor(daysPassed)} / ${RENTAL_PERIOD_DAYS} ימים`;
+
+            return `
+                <div class="delivery-type-section">
+                    <div class="delivery-type-header delivery-type-isuf">
+                         <span>${typeInfo.icon}</span>
+                         <span class="font-bold">${displayId}</span>
+                         <span>${customerName}</span>
+                    </div>
+                    <div class="p-4">
+                        <div class="font-semibold text-gray-800">${address}</div>
+                        <div class="text-sm text-gray-500 mb-3">
+                            <span>התחלה: ${createdDateStr}</span>
+                            ${order.driver?.name ? ` | <span>נהג: ${order.driver.name}</span>` : ''}
+                        </div>
+                        
+                        <!-- Progress Bar -->
+                        <div class="rental-progress-bar">
+                            <div class="progress" style="width: ${progressPercent}%; background-color: ${isOvertime ? '#ef4444' : 'var(--primary-color)'};"></div>
+                        </div>
+                        <div class="rental-days ${isOvertime ? 'overtime-flash' : ''}">
+                            ${daysDisplay}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // 4. v50.9: New Reports Page
+        function showReportsPage() {
+            SmartLog.info("Showing Reports Page", "UI.FullPage");
+            showFullPageView('reports');
+            
+            // Set default dates (e.g., last 7 days)
+            const endDate = new Date();
+            const startDate = new Date();
+            startDate.setDate(endDate.getDate() - 7);
+            
+            const startEl = document.getElementById('report-date-start');
+            const endEl = document.getElementById('report-date-end');
+            
+            if (startEl && endEl) {
+                startEl.value = startDate.toISOString().split('T')[0];
+                endEl.value = endDate.toISOString().split('T')[0];
+            }
+            
+            // Render reports with default dates
+            renderReports();
+        }
+        
+        function renderReports() {
+            SmartLog.info("Rendering Reports", "Reports");
+            const startDateEl = document.getElementById('report-date-start');
+            const endDateEl = document.getElementById('report-date-end');
+            
+            if (!startDateEl || !endDateEl || !startDateEl.value || !endDateEl.value) {
+                showToast("נא לבחור תאריכי התחלה וסיום", "error");
+                return;
+            }
+
+            try {
+                const startDate = new Date(startDateEl.value);
+                startDate.setHours(0, 0, 0, 0);
+                const endDate = new Date(endDateEl.value);
+                endDate.setHours(23, 59, 59, 999);
+                
+                // Filter all orders by date range (using createdAt)
+                const filteredOrders = viewerState.allOrders.filter(o => {
+                    const orderTime = o.createdAt?.toDate ? o.createdAt.toDate().getTime() : 0;
+                    return orderTime >= startDate.getTime() && orderTime <= endDate.getTime();
+                });
+                
+                SmartLog.info(`Found ${filteredOrders.length} orders in range`, "Reports", {startDate, endDate});
+                
+                // Render Charts
+                renderWarehouseChart(filteredOrders);
+                renderOrdersOverTimeChart(filteredOrders, startDate, endDate);
+                
+                // Render List
+                renderCompletedCustomersList(filteredOrders);
+                
+            } catch (e) {
+                SmartLog.error(e, "Reports.Render");
+                showToast(`שגיאה בהכנת הדוח: ${e.message}`, "error");
+            }
+        }
+        
+        function renderWarehouseChart(orders) {
+            const ctx = document.getElementById('report-chart-warehouse').getContext('2d');
+            if (!ctx) return;
+            
+            // Group by warehouse
+            const warehouseCounts = orders.reduce((acc, order) => {
+                const warehouse = order.warehouse || 'לא ידוע';
+                acc[warehouse] = (acc[warehouse] || 0) + 1;
+                return acc;
+            }, {});
+            
+            const labels = Object.keys(warehouseCounts);
+            const data = Object.values(warehouseCounts);
+            
+            if (reportChartWarehouse) {
+                reportChartWarehouse.destroy(); // Destroy old chart
+            }
+            
+            reportChartWarehouse = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'כמות הזמנות',
+                        data: data,
+                        backgroundColor: 'rgba(59, 130, 246, 0.7)',
+                        borderColor: 'rgba(59, 130, 246, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: { stepSize: 1 }
+                        }
+                    }
+                }
+            });
+        }
+        
+        function renderOrdersOverTimeChart(orders, startDate, endDate) {
+            const ctx = document.getElementById('report-chart-time').getContext('2d');
+            if (!ctx) return;
+            
+            // Group by day
+            const ordersByDay = {};
+            // Initialize all days in the range to 0
+            let currentDate = new Date(startDate);
+            while (currentDate <= endDate) {
+                const dayString = currentDate.toLocaleDateString('he-IL', {day: '2-digit', month: '2-digit'});
+                ordersByDay[dayString] = 0;
+                currentDate.setDate(currentDate.getDate() + 1);
+            }
+            
+            // Populate counts
+            orders.forEach(order => {
+                const orderDate = order.createdAt.toDate();
+                const dayString = orderDate.toLocaleDateString('he-IL', {day: '2-digit', month: '2-digit'});
+                if (ordersByDay.hasOwnProperty(dayString)) {
+                    ordersByDay[dayString]++;
+                }
+            });
+            
+            const labels = Object.keys(ordersByDay);
+            const data = Object.values(ordersByDay);
+
+            if (reportChartTime) {
+                reportChartTime.destroy();
+            }
+            
+            reportChartTime = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'הזמנות ליום',
+                        data: data,
+                        fill: false,
+                        borderColor: 'rgb(75, 192, 192)',
+                        tension: 0.1
+                    }]
+                },
+                options: { responsive: true }
+            });
+        }
+        
+        function renderCompletedCustomersList(orders) {
+            const container = document.getElementById('report-list-customers');
+            if (!container) return;
+            
+            const completedOrders = orders.filter(o => o.status === 'הושלם');
+            const customerNames = new Set(completedOrders.map(o => o.customer?.name || 'לקוח לא ידוע'));
+            
+            const uniqueCustomers = Array.from(customerNames).sort();
+            
+            if (uniqueCustomers.length === 0) {
+                 container.innerHTML = '<div class="text-center p-4 text-gray-500">לא סופקו הזמנות בטווח זה.</div>';
+                 return;
+            }
+            
+            container.innerHTML = uniqueCustomers.map(name => `
+                <div class="customer-list-item">${name}</div>
+            `).join('');
+        }
+        
+        // 5. v50.9: New list pages from counters
+        function showActiveListPage() {
+            SmartLog.info("Showing Active List Page", "UI.FullPage");
+            const container = document.getElementById('list-active-container');
+            container.innerHTML = ''; // Clear
+            if (viewerState.activeOrders.length === 0) {
+                container.innerHTML = '<div class="text-center p-8 text-gray-500">אין הזמנות בסידור.</div>';
+            } else {
+                 viewerState.activeOrders
+                    .sort((a,b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0))
+                    .forEach(order => container.appendChild(createEnhancedOrderCard(order, true)));
+            }
+            showFullPageView('list-active');
+        }
+        
+        function showCompletedTodayListPage() {
+             SmartLog.info("Showing Completed Today List Page", "UI.FullPage");
+            const container = document.getElementById('list-completed-today-container');
+            container.innerHTML = ''; // Clear
+            if (viewerState.completedTodayOrders.length === 0) {
+                container.innerHTML = '<div class="text-center p-8 text-gray-500">אין הזמנות שסופקו היום.</div>';
+            } else {
+                 viewerState.completedTodayOrders
+                    .sort((a,b) => (b.lastModified?.toMillis() || 0) - (a.lastModified?.toMillis() || 0)) // Sort by completion time
+                    .forEach(order => container.appendChild(createEnhancedOrderCard(order, true)));
+            }
+            showFullPageView('list-completed-today');
+        }
+        
+        function showFutureListPage() {
+             SmartLog.info("Showing Future List Page", "UI.FullPage");
+            const container = document.getElementById('list-future-container');
+            container.innerHTML = ''; // Clear
+            if (viewerState.futureOrders.length === 0) {
+                container.innerHTML = '<div class="text-center p-8 text-gray-500">אין הזמנות עתידיות.</div>';
+            } else {
+                 viewerState.futureOrders
+                    .sort((a,b) => (a.orderDate ? new Date(a.orderDate) : 0) - (b.orderDate ? new Date(b.orderDate) : 0)) // Sort by order date
+                    .forEach(order => container.appendChild(createEnhancedOrderCard(order, true)));
+            }
+            showFullPageView('list-future');
+        }
+
+
+        // Enhanced Order Card for Full Page Views (Used by Materials & Counter Lists)
+        function createEnhancedOrderCard(order, showTime = false) {
+            const typeInfo = orderTypeDetails[order.deliveryType] || orderTypeDetails['default'];
+            const customerName = order.customer?.name || 'לקוח לא ידוע';
+            const address = order.address || 'כתובת לא צוינה';
+            const displayId = order.orderNumber || `#${order.id.slice(-6)}`;
+            
+            const createdTime = order.createdAt?.toDate 
+                ? order.createdAt.toDate().toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })
+                : '';
+            
+            const orderDate = order.orderDate 
+                ? new Date(order.orderDate).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit' })
+                : '';
+
+            return `
+                <div class="enhanced-order-card ${typeInfo.className}">
+                    <div class="order-card-header">
+                        <div class="order-main-info">
+                            <div class="flex items-center gap-2 mb-1">
+                                <span class="font-bold text-lg">${displayId}</span>
+                                <span class="order-type-icon text-xl">${typeInfo.icon}</span>
+                                <span class="order-badge badge-status-${getStatusClass(order.status)}">${order.status}</span>
+                            </div>
+                            <div class="font-semibold text-gray-800">${customerName}</div>
+                            <div class="text-gray-600 text-sm">${address}</div>
+                        </div>
+                    </div>
+                    <div class="order-meta">
+                        <span>${order.warehouse || ''}</span>
+                        ${showTime && orderDate ? `<span>📅 ${orderDate}</span>` : ''}
+                        ${showTime && order.deliverySlot ? `<span>🕒 ${order.deliverySlot}</span>` : ''}
+                        ${order.driver?.name ? `<span>👤 ${order.driver.name}</span>` : ''}
+                    </div>
+                </div>
+            `;
+        }
+
+        // Helper function for status badge classes
+        function getStatusClass(status) {
+            const statusMap = {
+                'חדש': 'new',
+                'שויך': 'assigned', 
+                'בדרך': 'onway',
+                'הושלם': 'completed'
+            };
+            return statusMap[status] || '';
+        }
+
         
         // --- UI INTERACTIONS for Viewer ---
         
-        function showViewerPanelTab(tabName) {
-             // Hide all list containers first
-             document.getElementById('viewer-orders-active-list').style.display = 'none';
-             document.getElementById('viewer-orders-future-list').style.display = 'none';
-             document.getElementById('viewer-drivers-list').style.display = 'none';
-             
-             // Remove 'active' from all lists
-             document.querySelectorAll('.panel-list').forEach(list => list.classList.remove('active'));
-             
-             // Show the selected list container
-             const listToShow = document.getElementById(`viewer-${tabName}-list`);
-             if (listToShow) {
-                 listToShow.style.display = 'block';
-                 listToShow.classList.add('active'); // Add active class for filtering
-             }
-
-             // Update active tab style
-             document.querySelectorAll('#viewer-side-panel .tab-button').forEach(button => {
-                 button.classList.remove('active', 'border-blue-500', 'text-blue-500');
-                 button.classList.add('border-transparent', 'text-gray-500');
-             });
-             // Note: The button IDs were changed to match the tabName logic
-             const activeButton = document.getElementById(`tab-${tabName}`); 
-             if (activeButton) {
-                 activeButton.classList.add('active', 'border-blue-500', 'text-blue-500');
-                 activeButton.classList.remove('border-transparent', 'text-gray-500');
-             }
-             
-             // Re-apply filter for the newly visible list
-             filterViewerLists();
-         }
-
-        window.showViewerPanelTab = showViewerPanelTab; // Make global
+        window.filterViewerLists = filterViewerLists; // Make global
         
         function filterViewerLists() {
             const query = document.getElementById('viewer-search-input').value.toLowerCase();
-            // Find the *currently active* list to filter
             const activeList = document.querySelector('.panel-list.active');
             
             if (activeList) {
-                const itemsToFilter = activeList.querySelectorAll('.order-card, .driver-card');
+                const itemsToFilter = activeList.querySelectorAll('.order-card');
                 itemsToFilter.forEach(card => {
                     const search = card.getAttribute('data-search') || '';
                     card.style.display = search.includes(query) ? 'block' : 'none';
                 });
             }
         }
-        window.filterViewerLists = filterViewerLists; // Make global
         
         function focusViewerMapItem(id, type) {
             let marker, card, listId;
-             // Deselect all cards first
              document.querySelectorAll('.driver-card, .order-card').forEach(c => c.classList.remove('active'));
 
             if (type === 'driver') {
                 marker = viewerDriverMarkers[id];
                  card = document.getElementById(`viewer-driver-card-${id}`);
                  listId = 'viewer-drivers-list';
-            } else { // order (must be active order to be clickable)
+            } else { 
                 marker = viewerOrderMarkers[id];
                  card = document.getElementById(`viewer-order-card-${id}`);
-                 listId = 'viewer-orders-active-list';
+                 listId = 'viewer-orders-active-list'; 
+
+                const order = viewerState.activeOrders.find(o => o.id === id);
+                
+                const updatePopupDistance = (message) => {
+                     if (marker && marker.getPopup()) {
+                        const content = marker.getPopup().getContent();
+                        // Use regex to replace the content of the distance p tag
+                        const newContent = content.replace(
+                            /<p id="popup-dist-.*?".*?<\/p>/,
+                            `<p id="popup-dist-${id}" class="font-semibold text-blue-600">${message}</p>`
+                        );
+                        marker.getPopup().setContent(newContent);
+                     }
+                };
+                
+                updatePopupDistance('...מחפש נהג');
+
+                if (order && order.driver && order.driver.id) {
+                    const driverLoc = viewerState.liveLocations[order.driver.id];
+                    if (driverLoc && driverLoc.latitude && driverLoc.longitude) {
+                        const dist = calculateDistance(driverLoc.latitude, driverLoc.longitude, order.latitude, order.longitude);
+                        updatePopupDistance(dist ? `מרחק מהנהג: ${dist} ק"מ` : 'שגיאה בחישוב מרחק');
+                    } else {
+                         updatePopupDistance('מיקום נהג לא זמין');
+                    }
+                } else {
+                    updatePopupDistance('אין נהג משויך');
+                }
             }
             
             if (marker) {
@@ -1023,21 +1746,31 @@ viewer-app<!DOCTYPE html>
             }
              if (card) {
                  card.classList.add('active');
-                 // Scroll into view if needed
                   const listElement = document.getElementById(listId);
                   if (listElement) {
-                     // Calculate offset relative to the scrollable container
                       const containerRect = listElement.getBoundingClientRect();
                       const cardRect = card.getBoundingClientRect();
-                      listElement.scrollTop += (cardRect.top - containerRect.top) - 10; // Adjust scroll, -10 for padding
+                      listElement.scrollTop += (cardRect.top - containerRect.top) - 10;
                   }
              }
-             // On mobile, maybe switch to map view? (Future enhancement)
         }
         window.focusViewerMapItem = focusViewerMapItem; // Make global
 
         
         // --- HELPERS ---
+
+        function calculateDistance(lat1, lon1, lat2, lon2) {
+            if (!lat1 || !lon1 || !lat2 || !lon2) return null;
+            const R = 6371; // Radius of the earth in km
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = 
+                Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            const d = R * c; // Distance in km
+            return d.toFixed(1); // 1 decimal place
+        }
         
         async function playNotificationSound(note = "C5", duration = "8n") {
             try {
@@ -1048,7 +1781,7 @@ viewer-app<!DOCTYPE html>
                 await Tone.start();
                 const synth = new Tone.Synth().toDestination();
                 synth.triggerAttackRelease(note, duration, Tone.now());
-                 if (note !== "C5") { // Add a second tone for variety
+                 if (note !== "C5") { 
                      synth.triggerAttackRelease(note, duration, Tone.now() + 0.2);
                  }
                 SmartLog.info("Notification sound played.", 'Notifications');
@@ -1068,18 +1801,17 @@ viewer-app<!DOCTYPE html>
                     loader.className = 'loader-container';
                     loader.innerHTML = `<div class="loader"></div>`;
                     if (elementId !== 'viewer-map-loader') {
-                         container.prepend(loader); // Prepend for lists
+                         container.prepend(loader);
                     } else {
-                         container.style.display = 'flex'; // Show for map
+                         container.style.display = 'flex';
                     }
                 } else if (loader) {
-                     loader.style.display = 'flex'; // Ensure visible if hidden
+                     loader.style.display = 'flex';
                 }
             } else {
                 if (loader) {
-                     loader.style.display = 'none'; // Hide instead of removing
+                     loader.style.display = 'none';
                 }
-                // Handle map loader separately
                  if (elementId === 'viewer-map-loader') {
                      container.style.display = 'none';
                  }
@@ -1087,7 +1819,6 @@ viewer-app<!DOCTYPE html>
         }
         
         function showToast(message, type = 'info') {
-             // Simple console log for viewer, or implement toast if needed
              console.log(`[Toast-${type.toUpperCase()}]: ${message}`);
             
             const container = document.getElementById('toast-container'); 
@@ -1096,15 +1827,25 @@ viewer-app<!DOCTYPE html>
                  return;
             }
             const toast = document.createElement('div');
-            toast.className = `toast ${type}`; // type can be 'success', 'error', 'ping', or default
+            toast.className = `toast ${type}`; 
             toast.innerText = message;
             container.appendChild(toast);
             setTimeout(() => toast.classList.add('show'), 10);
             setTimeout(() => {
                 toast.classList.remove('show');
                 setTimeout(() => { if (container.contains(toast)) container.removeChild(toast); }, 300);
-            }, 5000); // Show for 5 seconds
+            }, 5000); 
         }
+
+        // Make functions globally available
+        window.showMaterialsPage = showMaterialsPage;
+        window.showContainersPage = showContainersPage;
+        window.showReportsPage = showReportsPage;
+        window.renderReports = renderReports; // For filter button
+        window.hideFullPageView = hideFullPageView;
+        window.showActiveListPage = showActiveListPage;
+        window.showCompletedTodayListPage = showCompletedTodayListPage;
+        window.showFutureListPage = showFutureListPage;
 
     </script>
 </body>
