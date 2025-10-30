@@ -1,0 +1,1477 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>DeliveryMaster Viewer v50.8 (Gates)</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#ffffff">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <link rel="apple-touch-icon" href="https://i.postimg.cc/ryPT3r29/image.png">
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <script src="https://unpkg.com/feather-icons"></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --primary-color: #3b82f6; /* blue-500 */
+            --primary-dark: #2563eb; /* blue-600 */
+            --bg-light: #f3f4f6; /* gray-100 */
+            --bg-white: #ffffff;
+            --border-color: #e5e7eb; /* gray-200 */
+            --text-dark: #1f2937; /* gray-800 */
+            --text-light: #6b7280; /* gray-500 */
+             /* Order Type Colors */
+             --color-manof-bg: #e0f2fe; /* sky-100 */
+             --color-masait-bg: #dcfce7; /* green-100 */
+             --color-isuf-bg: #f3f4f6;   /* gray-100 */
+             --color-future-bg: #f9fafb; /* gray-50 */
+        }
+        html, body {
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden; /* Prevent body scroll */
+        }
+        body {
+            font-family: 'Inter', 'Arial', sans-serif;
+            background-color: var(--bg-light);
+            color: var(--text-dark);
+        }
+        
+        /* Main Layout */
+        .viewer-layout {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            width: 100%;
+        }
+        
+        header {
+            flex-shrink: 0; /* Don't shrink header */
+        }
+
+        #viewer-counters {
+            flex-shrink: 0; /* Don't shrink counters */
+            background-color: #e5e7eb; /* gray-200 */
+            padding: 0.5rem 1rem;
+            display: flex;
+            flex-wrap: wrap; /* Allow wrapping on small screens */
+            justify-content: space-around;
+            gap: 0.5rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .counter-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-weight: 500;
+             color: var(--text-dark);
+             background-color: var(--bg-white);
+             padding: 0.25rem 0.75rem;
+             border-radius: 99px; /* Pill shape */
+             font-size: 0.8rem; /* Smaller font */
+        }
+         .counter-item .count {
+             font-weight: 700;
+             color: var(--primary-dark);
+             min-width: 1.25rem; /* Ensure space for number */
+             text-align: center;
+         }
+
+        /* --- Main Content Layout --- */
+        /* Desktop: Map left, Sidebar right */
+        #viewer-main-content {
+            display: grid;
+            grid-template-columns: 1fr 350px; /* Map | Sidebar */
+            grid-template-rows: 1fr; /* Single row */
+            flex-grow: 1; /* Take remaining space */
+            overflow: hidden;
+        }
+        
+        #viewer-map-container {
+            position: relative;
+            background-color: #e0e0e0;
+            grid-row: 1;
+            grid-column: 1;
+        }
+        #viewer-map {
+            height: 100%;
+            width: 100%;
+        }
+        
+        #viewer-side-panel {
+            grid-row: 1;
+            grid-column: 2;
+            background-color: var(--bg-white);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            overflow: hidden;
+        }
+        
+        /* Mobile: Map top, Tabs+Lists bottom */
+        @media (max-width: 768px) {
+            #viewer-main-content {
+                display: grid;
+                grid-template-columns: 1fr; /* Single column */
+                grid-template-rows: 45% 1fr; /* Map (45%) | Sidebar (remaining) */
+            }
+            #viewer-map-container {
+                grid-row: 1;
+                grid-column: 1;
+            }
+            #viewer-side-panel {
+                grid-row: 2;
+                grid-column: 1;
+                border-right: none;
+                border-top: 1px solid var(--border-color);
+            }
+        }
+        
+        /* Side Panel / Mobile Content Area */
+        #viewer-side-panel .tabs-container {
+            /* display: flex; */
+            display: none; /* v50.8: Tabs removed from main screen */
+            border-bottom: 1px solid var(--border-color);
+            flex-shrink: 0;
+        }
+        #viewer-side-panel .tab-button {
+             flex: 1; 
+             padding: 0.75rem 0.5rem; 
+             font-weight: 500; 
+             text-align: center; 
+             border-bottom: 3px solid transparent; 
+             color: var(--text-light);
+             font-size: 0.9rem; 
+             cursor: pointer;
+             white-space: nowrap; 
+        }
+        @media (max-width: 768px) {
+             #viewer-side-panel .tab-button {
+                 font-size: 0.8rem;
+                 padding: 0.75rem 0.25rem;
+             }
+        }
+         #viewer-side-panel .tab-button.active {
+             border-bottom-color: var(--primary-color);
+             color: var(--primary-color);
+         }
+        
+        #viewer-side-panel .search-container {
+            padding: 0.75rem;
+            border-bottom: 1px solid var(--border-color);
+            flex-shrink: 0;
+        }
+        
+        .panel-list-container {
+            flex: 1;
+            overflow-y: auto;
+            position: relative; /* For loader and for lists */
+        }
+        .panel-list {
+            /* Full height/width of parent, only visible one shown */
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            overflow-y: auto;
+            display: none; /* Hidden by default */
+        }
+        .panel-list.active {
+            display: block; /* Shown by JS */
+        }
+        
+        .order-card, .driver-card {
+            padding: 0.75rem 1rem; /* Slightly smaller padding */
+            border-bottom: 1px solid var(--border-color);
+            transition: background-color 0.2s;
+            cursor: pointer;
+        }
+        .order-card:hover, .driver-card:hover {
+            background-color: #fafafa;
+        }
+         .order-card.active, .driver-card.active {
+             background-color: #eff6ff; /* blue-50 */
+             border-right: 3px solid var(--primary-color);
+         }
+        .order-card .font-bold {
+            color: var(--primary-dark);
+        }
+        /* Styling for different order types */
+        .order-card.type-manof { background-color: var(--color-manof-bg); }
+        .order-card.type-masait { background-color: var(--color-masait-bg); }
+        .order-card.type-isuf { background-color: var(--color-isuf-bg); }
+         .order-card.future-order { 
+             background-color: var(--color-future-bg); 
+         }
+        .order-card.future-order .font-semibold { color: var(--text-light); } /* Dim text */
+        .order-type-icon { margin-left: 0.5rem; font-size: 1.1em; } /* Emoji styling */
+
+        /* Status Colors */
+        .status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+        .status-active { background-color: #22c55e; } /* green-500 */
+        .status-stuck { background-color: #ef4444; } /* red-500 */
+        .status-inactive { background-color: #9ca3af; } /* gray-400 */
+        
+        /* Leaflet Customizations */
+        .leaflet-popup-content-wrapper { border-radius: 8px; }
+        .leaflet-popup-content { margin: 13px 20px; font-family: 'Inter', sans-serif; }
+        .leaflet-popup-content h4 { font-weight: 700; margin-bottom: 8px; display: flex; align-items: center; }
+        .leaflet-popup-content p { margin: 4px 0; color: var(--text-light); }
+        
+        /* Loader */
+        .loader-container {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(255,255,255,0.7); display: flex;
+            align-items: center; justify-content: center; z-index: 10;
+        }
+        .loader {
+            border: 4px solid #f3f3f3; border-top: 4px solid var(--primary-color);
+            border-radius: 50%; width: 40px; height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* Connection Status */
+         #connection-status {
+             font-size: 0.8rem;
+             font-weight: 500;
+             padding: 4px 8px;
+             border-radius: 99px;
+             display: inline-flex;
+             align-items: center;
+             gap: 4px;
+         }
+         #connection-status.connected { background-color: #dcfce7; color: #166534; } /* green */
+         #connection-status.connecting { background-color: #fef9c3; color: #854d0e; } /* yellow */
+         #connection-status.error { background-color: #fee2e2; color: #991b1b; } /* red */
+         #connection-status .dot { width: 6px; height: 6px; border-radius: 50%; }
+         #connection-status.connected .dot { background-color: #22c55e; }
+         #connection-status.connecting .dot { background-color: #facc15; }
+         #connection-status.error .dot { background-color: #ef4444; }
+         
+        /* Toast Notification */
+        #toast-container {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 5000;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .toast {
+            padding: 12px 20px;
+            background-color: var(--text-dark);
+            color: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.3s ease;
+        }
+        .toast.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .toast.success { background-color: #22c55e; }
+        .toast.error { background-color: #ef4444; }
+        .toast.ping { background-color: var(--primary-color); } /* Style for pings */
+
+        /* Full Page Views for Orders */
+        .full-page-view {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: white;
+            z-index: 1000;
+            overflow-y: auto;
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+        }
+
+        .full-page-view.active {
+            transform: translateX(0);
+        }
+
+        .full-page-header {
+            position: sticky;
+            top: 0;
+            background: white;
+            border-bottom: 1px solid var(--border-color);
+            padding: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            z-index: 10;
+        }
+
+        .full-page-content {
+            padding: 1rem;
+        }
+
+        .order-category-section {
+            margin-bottom: 2rem;
+        }
+
+        .category-header {
+            background: var(--primary-color);
+            color: white;
+            padding: 0.75rem 1rem;
+            border-radius: 8px 8px 0 0;
+            font-weight: 700;
+            margin-bottom: 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .category-orders {
+            border: 1px solid var(--border-color);
+            border-top: none;
+            border-radius: 0 0 8px 8px;
+            overflow: hidden;
+        }
+
+        /* Enhanced Order Cards for Full Page */
+        .enhanced-order-card {
+            padding: 1rem;
+            border-bottom: 1px solid var(--border-color);
+            background: white;
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+
+        .enhanced-order-card:last-child {
+            border-bottom: none;
+        }
+
+        .enhanced-order-card:hover {
+            background: #f8fafc;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .order-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 0.5rem;
+        }
+
+        .order-main-info {
+            flex: 1;
+        }
+
+        .order-meta {
+            display: flex;
+            gap: 1rem;
+            font-size: 0.875rem;
+            color: var(--text-light);
+            margin-top: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .order-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 99px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            background: var(--bg-light);
+        }
+
+        .badge-status-new { background: #dbeafe; color: #1e40af; }
+        .badge-status-assigned { background: #fef3c7; color: #92400e; }
+        .badge-status-onway { background: #dcfce7; color: #166534; }
+        .badge-status-completed { background: #f3f4f6; color: #374151; }
+
+        /* Tomorrow's Orders Specific Styling */
+        .tomorrow-orders-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .delivery-type-section {
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .delivery-type-header {
+            padding: 1rem;
+            font-weight: 700;
+            color: white;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .delivery-type-manof { background: linear-gradient(135deg, #0ea5e9, #0369a1); }
+        .delivery-type-masait { background: linear-gradient(135deg, #10b981, #047857); }
+        .delivery-type-isuf { background: linear-gradient(135deg, #6b7280, #374151); }
+
+        /* Navigation Buttons */
+        .nav-button {
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 0.75rem 1rem; /* Adjusted padding */
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center; /* Center content */
+            gap: 0.5rem;
+            font-size: 0.875rem; /* Smaller font for grid */
+        }
+
+        .nav-button:hover {
+            background: var(--primary-dark);
+        }
+
+        .nav-button.secondary {
+            background: var(--bg-light);
+            color: var(--text-dark);
+        }
+
+        .nav-button.secondary:hover {
+            background: #e5e7eb;
+        }
+        
+        /* v50.8: Container Rental Progress */
+        .rental-progress-bar {
+            background-color: var(--border-color);
+            border-radius: 99px;
+            height: 10px;
+            overflow: hidden;
+            margin-top: 0.75rem;
+        }
+        .rental-progress-bar .progress {
+            background-color: var(--primary-color);
+            height: 100%;
+            transition: width 0.3s ease;
+        }
+        .rental-days {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--text-light);
+            text-align: center;
+            margin-top: 0.25rem;
+        }
+        .overtime-flash {
+            color: #ef4444; /* red-500 */
+            animation: gentle-flash 1.5s infinite;
+        }
+        @keyframes gentle-flash {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+        
+        /* v50.8: Tweaks for main list to remove tabs */
+        #viewer-orders-active-list.panel-list.active {
+            display: block; /* Ensure active list is shown */
+        }
+        #viewer-orders-active-list {
+             /* Make it take full height of its container */
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            overflow-y: auto;
+        }
+
+
+        @media (max-width: 768px) {
+            .tomorrow-orders-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .order-meta {
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+            
+            .nav-button {
+                padding: 1rem 1rem;
+                font-size: 0.9rem;
+            }
+        }
+
+    </style>
+</head>
+<body class="antialiased">
+
+    <div class="viewer-layout">
+        <header class="bg-white shadow-sm p-4 flex justify-between items-center">
+             <div class="flex items-center space-x-2 space-x-reverse">
+                 <i data-feather="truck" class="w-7 h-7 text-blue-500"></i>
+                 <h1 class="text-xl font-bold">DeliveryMaster Viewer</h1>
+             </div>
+             <div id="connection-status" class="connecting">
+                 <span class="dot"></span>
+                 <span>מתחבר...</span>
+             </div>
+        </header>
+        
+        <div id="viewer-counters">
+             <div class="counter-item">
+                 🔄
+                 <span>בסידור:</span>
+                 <span id="count-active" class="count">-</span>
+             </div>
+             <div class="counter-item">
+                 ✅
+                 <span>סופקו היום:</span>
+                 <span id="count-completed-today" class="count">-</span>
+             </div>
+             <div class="counter-item">
+                 📅
+                 <span>צפי עתידי:</span>
+                 <span id="count-future" class="count">-</span>
+             </div>
+        </div>
+
+        <main id="viewer-main-content">
+            <div id="viewer-map-container">
+                <div id="viewer-map"></div>
+                <div id="viewer-map-loader" class="loader-container">
+                    <div class="loader"></div>
+                    <span class="ml-4 font-semibold">טוען מפה ונתונים...</span>
+                </div>
+            </div>
+
+            <aside id="viewer-side-panel">
+                <div class="search-container">
+                    <input type="text" id="viewer-search-input" placeholder="חפש הזמנה פעילה..." class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300" onkeyup="filterViewerLists()">
+                </div>
+                
+                <div class="panel-list-container">
+                    <div id="viewer-orders-active-list" class="panel-list active" style="display:block;">
+                        <div class="loader-container"><div class="loader"></div></div>
+                    </div>
+                    
+                     </div>
+
+                <div id="full-page-nav-buttons" class="p-4 border-t border-gray-200 bg-gray-50 grid grid-cols-2 gap-3">
+                    <button class="nav-button" onclick="showMaterialsPage()">
+                        <i data-feather="package"></i>
+                        שער חומרי בנין
+                    </button>
+                    <button class="nav-button secondary" onclick="showContainersPage()">
+                        <i data-feather="archive"></i>
+                        שער מכולות
+                    </button>
+                </div>
+            </aside>
+        </main>
+    </div>
+
+     <div id="toast-container"></div>
+
+    <div id="fullpage-materials" class="full-page-view">
+        <div class="full-page-header">
+            <button class="nav-button secondary" onclick="hideFullPageView('materials')">
+                <i data-feather="arrow-right"></i> חזרה
+            </button>
+            <h2 class="text-xl font-bold">שער חומרי בנין (החרש, התלמיד)</h2>
+        </div>
+        <div class="full-page-content">
+            <div id="materials-orders-container">
+                <div class="loader-container"><div class="loader"></div></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="fullpage-containers" class="full-page-view">
+        <div class="full-page-header">
+            <button class="nav-button secondary" onclick="hideFullPageView('containers')">
+                <i data-feather="arrow-right"></i> חזרה
+            </button>
+            <h2 class="text-xl font-bold">שער מכולות (30, 32, 40)</h2>
+        </div>
+        <div class="full-page-content">
+            <div id="containers-orders-container" class="tomorrow-orders-grid">
+                <div class="loader-container"><div class="loader"></div></div>
+            </div>
+        </div>
+    </div>
+
+
+    <script type="module">
+        // --- Inlined Firebase SDK Imports ---
+        import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+        import { getFirestore, collection, doc, onSnapshot, query, orderBy, addDoc, where, limit } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js"; 
+        import { serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js"; 
+
+        // --- Inlined Config Logic ---
+        const firebaseConfig = {
+          apiKey: "AIzaSyDq0oVwS6zbEfsgrYBRkeBq80dDUKMedzo", authDomain: "saban94-78949.firebaseapp.com", projectId: "saban94-78949",
+          storageBucket: "saban94-78949.firebasestorage.app", messagingSenderId: "41553157903", appId: "1:41553157903:web:cc33d252cff023be97a87a", measurementId: "G-XV6RZDESSB"
+        };
+        let app, auth, db;
+        let initializationError = null;
+        try {
+            app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+            auth = getAuth(app); db = getFirestore(app);
+            console.log("Firebase initialized for Viewer");
+        } catch (error) { console.error("CRITICAL: Firebase init failed!", error); initializationError = error; }
+
+        const MAX_AUTH_RETRIES = 3; const RETRY_DELAY_MS = 3000;
+        async function ensureAuth() {
+            console.log("ensureAuth: Starting..."); let tries = 0;
+            updateConnectionStatus('connecting', 'מאמת...');
+            while (tries < MAX_AUTH_RETRIES) {
+                tries++;
+                try {
+                    if (initializationError) throw new Error(`Init failed: ${initializationError.message}`);
+                    if (!auth) throw new Error("Auth object missing");
+                    console.log(`ensureAuth: Attempt ${tries}/${MAX_AUTH_RETRIES}...`);
+                    const userCredential = await signInAnonymously(auth);
+                    console.log("ensureAuth: Success.", userCredential.user.uid);
+                    updateConnectionStatus('connecting', 'מאזין...'); // Stage after auth
+                    return userCredential.user;
+                } catch (e) {
+                    console.warn(`[FirebaseAuth] Attempt ${tries} failed:`, e.code, e.message);
+                    if (tries >= MAX_AUTH_RETRIES) { console.error("ensureAuth: All attempts failed."); throw e; }
+                    console.log(`ensureAuth: Retrying in ${RETRY_DELAY_MS / 1000}s...`); await new Promise(r => setTimeout(r, RETRY_DELAY_MS));
+                }
+            } throw new Error("ensureAuth: Max retries reached.");
+        }
+        const authReadyPromise = ensureAuth();
+
+        // --- Inlined SmartLog Logic ---
+        const LOG_COLLECTION = 'system_logs_v3_viewer'; // Separate collection?
+        const sessionId = (Date.now() + Math.random()).toString(36);
+        let isDbAvailable = !!db; let authChecked = false;
+        const writeLog = async (level, message, origin, context = {}, category = null, solution = null) => {
+            const consoleArgs = [`[${origin}] ${level}:`, message]; if (Object.keys(context).length > 0) consoleArgs.push(context); if (category) consoleArgs.push(`[Cat: ${category}]`); if (solution) consoleArgs.push(`[Sol: ${solution}]`);
+            switch (level) { case 'INFO': console.log(...consoleArgs); break; case 'WARN': console.warn(...consoleArgs); break; case 'ERROR': console.error(...consoleArgs); break; default: console.log(...consoleArgs); }
+            if (!isDbAvailable) { return; }
+            try {
+                if (!authChecked || !auth?.currentUser) {
+                    await authReadyPromise; authChecked = true;
+                }
+                const user = auth?.currentUser; if (!user) { console.warn("Viewer SmartLog: User missing after authReady."); return; }
+                const userContext = { uid: user.uid, isAnonymous: user.isAnonymous };
+                const logEntry = {
+                    timestamp: serverTimestamp(), level, message: String(message), origin: `Viewer-${origin}`, // Add prefix
+                    context: { ...JSON.parse(JSON.stringify(context || {})), sessionId, userAgent: navigator.userAgent || 'N/A', page: 'ViewerApp' },
+                    user: userContext, category: category || null, solution: solution || null
+                };
+                 addDoc(collection(db, LOG_COLLECTION), logEntry).catch(e => console.error("Viewer SmartLog write error:", e));
+            } catch (error) {
+                console.error("Viewer SmartLog FATAL ERROR.", error, { originalMessage: message });
+                if (error.code === 'permission-denied' || error.message.includes('permissions')) { console.warn("Viewer SmartLog: Disabling Firestore logging."); isDbAvailable = false; }
+            }
+        };
+        const SmartLog = {
+            info: (msg, origin, ctx = {}) => { writeLog('INFO', msg, origin, ctx); },
+            warn: (msg, origin, ctx = {}, cat = null, sol = null) => { writeLog('WARN', msg, origin, ctx, cat, sol); },
+            error: (err, origin, ctx = {}, cat = null, sol = null) => { const msg = err instanceof Error ? err.message : String(err); const stack = err instanceof Error ? err.stack : 'N/A'; writeLog('ERROR', msg, origin, { ...ctx, stack }, cat, sol); }
+        };
+
+        // --- CONFIG & STATE ---
+        const ISRAEL_CENTER = [32.0853, 34.7818];
+        const ACTIVE_ORDER_STATUSES = ["חדש", "שויך", "בדרך"]; // Statuses for active count & list
+
+        let viewerState = {
+            allOrders: [], // Holds ALL orders for counting/future list
+            activeOrders: [], // Filtered active orders for main list/map
+            futureOrders: [], // Filtered future orders
+            drivers: [],
+            liveLocations: {},
+        };
+        
+        let viewerMap; // The one and only map instance
+        let viewerDriverMarkers = {};
+        let viewerOrderMarkers = {}; // Will only hold markers for ACTIVE orders
+        
+        // --- ICONS & STYLING ---
+        const driverIconActive = L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png', shadowSize: [41, 41] });
+        const driverIconStuck = L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png', shadowSize: [41, 41] });
+        const orderIconActive = L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-blue.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png', shadowSize: [41, 41] });
+
+        const orderTypeDetails = {
+            'הובלת מנוף': { icon: '🏗️', className: 'type-manof' },
+            'הובלת משאית': { icon: '🚚', className: 'type-masait' },
+            'איסוף עצמי': { icon: '👤', className: 'type-isuf' },
+            'default': { icon: '📦', className: '' } // Fallback
+        };
+
+        
+        // --- INITIALIZATION ---
+        document.addEventListener('DOMContentLoaded', () => {
+            try {
+                feather.replace();
+            } catch (e) {
+                SmartLog.error(e, "Init.Feather");
+            }
+            initializeViewerApplication();
+        });
+        
+        async function initializeViewerApplication() {
+            SmartLog.info("v50.8 Viewer: Initializing...", "Init"); // Version bump
+            try {
+                updateConnectionStatus('connecting', 'מפעיל מפה...');
+                initViewerMap(); // This will now work
+                showLoader('viewer-orders-active-list', true);
+                
+                await authReadyPromise; // Waits for ensureAuth to complete
+                SmartLog.info(`Firebase Auth successful for viewer.`, "Init.Auth");
+                
+                // Auth is ready, now attach listeners
+                listenToDriversViewer();
+                listenToAllOrdersViewer(); 
+                listenToLocationsViewer();
+                listenToGlobalPings(); // Add listener for admin pings
+                
+                showLoader('viewer-map-loader', false);
+                updateConnectionStatus('connected', 'מחובר'); // Final connected status
+                
+                // Initialize full page views after data is loaded
+                // setTimeout(initializeFullPageViews, 1000); // No longer needed
+                
+            } catch (error) {
+                SmartLog.error(error, "Init.Critical", { message: "Viewer initialization failed." });
+                updateConnectionStatus('error', `שגיאת אתחול: ${error.message}`);
+                 const mapLoader = document.getElementById('viewer-map-loader');
+                 if(mapLoader) mapLoader.innerHTML = `<span class="text-red-600">שגיאת אתחול קריטית.</span>`;
+                showToast(`שגיאת אתחול: ${error.message}`, 'error');
+            }
+        }
+
+        function initViewerMap() {
+            try {
+                // Ensure map container exists
+                const mapContainer = document.getElementById('viewer-map');
+                if (!mapContainer) throw new Error("Map container #viewer-map not found");
+                 
+                // If map instance exists, remove it first
+                 if (viewerMap) {
+                     viewerMap.remove();
+                     viewerMap = null;
+                 }
+
+                viewerMap = L.map('viewer-map').setView(ISRAEL_CENTER, 9); // *** USES ISRAEL_CENTER ***
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    maxZoom: 19,
+                    attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                }).addTo(viewerMap);
+                SmartLog.info("Viewer Map initialized", "Init.Map");
+            } catch (error) {
+                SmartLog.error(error, "Init.Map");
+                 const mapContainer = document.getElementById('viewer-map');
+                 if(mapContainer) mapContainer.innerHTML = `<div class="p-8 text-center text-red-600">שגיאה בטעינת המפה.</div>`;
+            }
+        }
+        
+        function updateConnectionStatus(statusClass, message) {
+             const el = document.getElementById('connection-status');
+             if (el) {
+                 el.className = statusClass; // 'connecting', 'connected', 'error'
+                 const span = el.querySelector('span:last-child');
+                 if (span) span.innerText = message;
+             }
+         }
+
+        // --- FIRESTORE LISTENERS (REAL-TIME for Viewer) ---
+        
+        function listenToDriversViewer() {
+            SmartLog.info("Listening to Drivers...", "Firestore.Listen");
+            const q = query(collection(db, "drivers"), orderBy("name"));
+            onSnapshot(q, (snapshot) => {
+                SmartLog.info(`Drivers: ${snapshot.docs.length} docs.`, "Firestore.Snapshot");
+                viewerState.drivers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                renderViewerDriversList(); // Still need to render this, even if hidden, for search logic
+                renderViewerMapMarkers(); // Update map markers which depend on driver data
+                // showLoader('viewer-drivers-list', false); // No longer visible
+            }, e => { 
+                SmartLog.error(e, "Firestore.Drivers.Listener"); 
+                updateConnectionStatus("error", "שגיאת נהגים"); 
+            });
+        }
+        
+        // Listener for ALL orders - used for counts and future orders list
+        function listenToAllOrdersViewer() {
+            SmartLog.info("Listening to ALL Orders (for counts & future)...", "Firestore.Listen");
+            // Listen without status filter, but keep the ordering
+            const q = query(collection(db, "orders"), orderBy("createdAt", "desc")); 
+            onSnapshot(q, (snapshot) => {
+                SmartLog.info(`All Orders: ${snapshot.docs.length} docs.`, "Firestore.Snapshot");
+                
+                viewerState.allOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                
+                // --- Process and Update State ---
+                const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+                const todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999);
+                
+                viewerState.activeOrders = viewerState.allOrders.filter(o => ACTIVE_ORDER_STATUSES.includes(o.status || ''));
+                viewerState.futureOrders = viewerState.allOrders.filter(o => {
+                    // Check if orderDate exists and is after today's end
+                    if (!o.orderDate) return false;
+                    try {
+                        // Ensure orderDate is parsed correctly (assuming YYYY-MM-DD or similar JS parsable format)
+                        const orderDateObj = new Date(o.orderDate);
+                        // Set time to start of day for comparison to avoid time zone issues
+                        orderDateObj.setHours(0, 0, 0, 0); 
+                        return orderDateObj > todayEnd;
+                    } catch (e) {
+                         console.warn("Error parsing orderDate:", o.orderDate, e);
+                         return false;
+                    }
+                });
+                
+                // --- Update UI ---
+                renderViewerOrdersList(); // Renders active orders (main list)
+                // renderViewerFutureOrdersList(); // v50.8: Removed from main UI
+                renderViewerMapMarkers(); // Updates map markers based on activeOrders
+                updateCounters(); // Update header counters
+                
+                showLoader('viewer-orders-active-list', false);
+                // showLoader('viewer-orders-future-list', false); // v50.8: Removed
+
+            }, e => { 
+                console.error("Firestore ALL Orders Listener Error:", e); 
+                SmartLog.error(e, "Firestore.AllOrders.Listener"); 
+                updateConnectionStatus("error", "שגיאת הזמנות כללי"); 
+            });
+        }
+
+
+        function listenToLocationsViewer() {
+             SmartLog.info("Listening to Locations...", "Firestore.Listen");
+             const q = query(collection(db, "driverLocations"));
+             onSnapshot(q, (snapshot) => {
+                SmartLog.info(`Locations: ${snapshot.docs.length} changes.`, "Firestore.Snapshot");
+                const newLocations = {};
+                snapshot.forEach(doc => {
+                    newLocations[doc.id] = { id: doc.id, ...doc.data() };
+                });
+                viewerState.liveLocations = newLocations;
+                // These changes affect driver list (status) and map
+                renderViewerDriversList(); // Still need this for data
+                renderViewerMapMarkers();
+             }, e => { 
+                SmartLog.error(e, "Firestore.Locations.Listener"); 
+                updateConnectionStatus("error", "שגיאת מיקומים"); 
+            });
+        }
+        
+        // --- New Listener for Global Pings ---
+        function listenToGlobalPings() {
+             SmartLog.info("Listening for Global Pings...", "Firestore.Listen");
+             // Listen for pings created in the last 60 seconds
+             const since = new Date(Date.now() - 60000); 
+             const q = query(
+                 collection(db, "globalPings"), 
+                 where("createdAt", ">", since),
+                 orderBy("createdAt", "desc"),
+                 limit(1) // We only care about the latest one
+             );
+             
+             let initialLoad = true;
+             onSnapshot(q, (snapshot) => {
+                 if (initialLoad) {
+                     initialLoad = false; // Don't beep on first load
+                     return; 
+                 }
+                 
+                 snapshot.docChanges().forEach(change => {
+                     if (change.type === "added") {
+                         const ping = change.doc.data();
+                         SmartLog.info("Global Ping Received!", "Pings", ping);
+                         // Play sound and show toast
+                         playNotificationSound('A5', '4n'); // Louder, longer note
+                         showToast(`התראה מהמנהל: ${ping.message}`, 'ping');
+                     }
+                 });
+             }, e => { 
+                SmartLog.error(e, "Firestore.Pings.Listener"); 
+                updateConnectionStatus("error", "שגיאת התראות"); 
+            });
+        }
+
+        // --- RENDER FUNCTIONS for Viewer ---
+        
+         function updateCounters() {
+             const activeCount = viewerState.activeOrders.length;
+             
+             const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+             const todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999);
+             
+             const completedTodayCount = viewerState.allOrders.filter(o => {
+                 // Check status and if lastModified is valid and within today
+                  if (o.status !== 'הושלם') return false;
+                  const modifiedTime = o.lastModified?.toDate ? o.lastModified.toDate().getTime() : 0;
+                  return modifiedTime >= todayStart.getTime() && modifiedTime <= todayEnd.getTime();
+             }).length;
+             
+             const futureCount = viewerState.futureOrders.length;
+             
+             const countActiveEl = document.getElementById('count-active');
+             const countCompletedEl = document.getElementById('count-completed-today');
+             const countFutureEl = document.getElementById('count-future');
+             
+             if(countActiveEl) countActiveEl.innerText = activeCount;
+             if(countCompletedEl) countCompletedEl.innerText = completedTodayCount;
+             if(countFutureEl) countFutureEl.innerText = futureCount;
+         }
+
+        function renderViewerDriversList() {
+            // v50.8: This function no longer renders to a visible list,
+            // but we keep the logic in case search needs to be expanded.
+            // For now, it just ensures driver data is processed.
+            // We'll create dummy elements for the search filter.
+            const list = document.getElementById('viewer-drivers-list');
+            if (!list) { // If list element was removed, create a dummy one
+                 let dummyList = document.createElement('div');
+                 dummyList.id = 'viewer-drivers-list';
+                 dummyList.className = 'panel-list';
+                 dummyList.style.display = 'none';
+                 document.querySelector('.panel-list-container').appendChild(dummyList);
+                 list = dummyList;
+            }
+            list.innerHTML = ''; // Clear
+            
+            viewerState.drivers.forEach(driver => {
+                 const el = document.createElement('div');
+                 el.className = 'driver-card';
+                 el.style.display = 'none'; // Not visible
+                 el.setAttribute('data-search', driver.name.toLowerCase());
+                 list.appendChild(el);
+            });
+        }
+        
+        // Renders ONLY Active Orders (to main list)
+        function renderViewerOrdersList() {
+            const list = document.getElementById('viewer-orders-active-list');
+             if (!list) return; // Guard clause
+            list.innerHTML = ''; // Clear
+            
+            if (viewerState.activeOrders.length === 0) {
+                list.innerHTML = `<div class="p-4 text-center text-gray-500">אין הזמנות פעילות כרגע.</div>`;
+                return;
+            }
+            
+            // Sort active orders by creation date (newest first)
+             const sortedActiveOrders = [...viewerState.activeOrders].sort((a,b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
+
+            sortedActiveOrders.forEach(order => {
+                list.appendChild(createViewerOrderCard(order, false)); // false indicates not future
+            });
+             filterViewerLists(); // Apply filter after rendering
+        }
+
+        // Renders ONLY Future Orders (v50.8: Removed)
+        // function renderViewerFutureOrdersList() { ... }
+        
+        function createViewerOrderCard(order, isFuture = false) {
+            const el = document.createElement('div');
+            const typeInfo = orderTypeDetails[order.deliveryType] || orderTypeDetails['default'];
+            el.className = `order-card p-3 cursor-pointer ${typeInfo.className} ${isFuture ? 'future-order' : ''}`; // Reduced padding
+            el.id = `viewer-order-card-${order.id}`; 
+            el.setAttribute('data-search', `${order.orderNumber || order.id} ${order.customer?.name?.toLowerCase()} ${order.address?.toLowerCase()}`);
+            
+            // Only make active orders clickable to focus map
+            if (!isFuture) {
+                 el.onclick = () => focusViewerMapItem(order.id, 'order'); 
+            } else {
+                 el.style.cursor = 'default'; // Not clickable
+            }
+            
+            const customerName = order.customer?.name || 'לקוח לא ידוע';
+            const address = order.address || 'כתובת לא צוינה';
+            const displayId = order.orderNumber || `#${order.id.slice(-6)}`;
+            const status = order.status || '?';
+            const driverName = order.driver?.name ? `(${order.driver.name})` : '';
+            // Format createdAt timestamp
+             const createdDateTime = order.createdAt?.toDate 
+                 ? order.createdAt.toDate().toLocaleString('he-IL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) 
+                 : 'N/A';
+             const orderDateForDisplay = order.orderDate 
+                 ? new Date(order.orderDate).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' })
+                 : 'N/A';
+
+            el.innerHTML = `
+                <div class="flex justify-between items-center mb-1">
+                    <span class="font-bold text-blue-600 flex items-center">
+                         ${displayId} <span class="order-type-icon">${typeInfo.icon}</span>
+                     </span>
+                     ${isFuture 
+                         ? `<span class="text-sm font-semibold text-gray-600">לתאריך: ${orderDateForDisplay}</span>`
+                         : `<span class="text-sm font-semibold">${status} ${driverName}</span>`
+                     }
+                </div>
+                <div class="font-semibold text-gray-800 text-sm">${customerName}</div>
+                <div class="text-xs text-gray-600 truncate">${address}</div>
+                <div class="text-xs text-gray-500 mt-1 flex justify-between">
+                    <span>${order.warehouse || ''}</span>
+                    <span>נוצר: ${createdDateTime}</span>
+                </div>
+            `;
+            return el;
+        }
+        
+        function renderViewerMapMarkers() {
+            if (!viewerMap) return;
+
+            const bounds = L.latLngBounds();
+
+            // --- Render Drivers ---
+            Object.values(viewerState.liveLocations).forEach(driverLoc => {
+                if (!driverLoc.latitude || !driverLoc.longitude) return;
+                
+                const driverData = viewerState.drivers.find(d => d.id === driverLoc.id);
+                const name = driverData?.name || 'נהג לא ידוע';
+                
+                const latLng = [driverLoc.latitude, driverLoc.longitude];
+                const icon = driverLoc.isStuck ? driverIconStuck : driverIconActive;
+                const popupContent = `<h4>${name}</h4><p>${driverLoc.isStuck ? 'תקוע' : 'פעיל'}</p>`;
+                
+                if (viewerDriverMarkers[driverLoc.id]) {
+                    viewerDriverMarkers[driverLoc.id].setLatLng(latLng).setIcon(icon).setPopupContent(popupContent);
+                } else {
+                    viewerDriverMarkers[driverLoc.id] = L.marker(latLng, { icon: icon })
+                        .addTo(viewerMap)
+                        .bindPopup(popupContent)
+                        .on('click', () => focusViewerMapItem(driverLoc.id, 'driver'));
+                }
+                 if (!driverLoc.isStuck) bounds.extend(latLng);
+            });
+             // Remove markers for drivers no longer in liveLocations
+             Object.keys(viewerDriverMarkers).forEach(driverId => {
+                 if (!viewerState.liveLocations[driverId]) {
+                     if (viewerMap.hasLayer(viewerDriverMarkers[driverId])) {
+                         viewerMap.removeLayer(viewerDriverMarkers[driverId]);
+                     }
+                     delete viewerDriverMarkers[driverId];
+                 }
+             });
+
+            
+            // --- Render Active Orders Only ---
+            const activeMapOrders = viewerState.activeOrders.filter(o => o.latitude && o.longitude);
+            
+            // Clear markers for orders that are no longer active or don't exist in the active list
+            Object.keys(viewerOrderMarkers).forEach(orderId => {
+                if (!activeMapOrders.some(o => o.id == orderId)) {
+                    if (viewerMap.hasLayer(viewerOrderMarkers[orderId])) {
+                        viewerMap.removeLayer(viewerOrderMarkers[orderId]);
+                    }
+                    delete viewerOrderMarkers[orderId];
+                }
+            });
+
+            activeMapOrders.forEach(order => {
+                const latLng = [order.latitude, order.longitude];
+                const customerName = order.customer?.name || 'לקוח לא ידוע';
+                const displayId = order.orderNumber || `#${order.id.slice(-6)}`;
+                 const typeInfo = orderTypeDetails[order.deliveryType] || orderTypeDetails['default'];
+                 
+                 // v50.8: Added distance placeholder
+                const popupContent = `
+                     <h4>${typeInfo.icon} הזמנה ${displayId}</h4>
+                     <p>${customerName}</p>
+                     <p>${order.address || '...'}</p>
+                     <p>סטטוס: ${order.status}</p>
+                     ${order.driver?.name ? `<p>נהג: ${order.driver.name}</p>` : ''}
+                     <p id="popup-dist-${order.id}" class="font-semibold text-blue-600"></p> 
+                `;
+                
+                if (viewerOrderMarkers[order.id]) {
+                    viewerOrderMarkers[order.id].setLatLng(latLng).setPopupContent(popupContent);
+                } else {
+                    viewerOrderMarkers[order.id] = L.marker(latLng, { icon: orderIconActive }) // Use active icon
+                        .addTo(viewerMap)
+                        .bindPopup(popupContent)
+                        .on('click', () => focusViewerMapItem(order.id, 'order'));
+                }
+                bounds.extend(latLng);
+            });
+
+            // Adjust map view only if there are markers to show
+             if (bounds.isValid() && (activeMapOrders.length > 0 || Object.keys(viewerDriverMarkers).some(id => !viewerState.liveLocations[id]?.isStuck))) {
+                 try { viewerMap.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 }); } catch (e) { console.warn("FitBounds error:", e); }
+             } else if (!bounds.isValid()) {
+                // If no valid bounds (no active markers), reset view
+                viewerMap.setView(ISRAEL_CENTER, 9); 
+             }
+        }
+        
+        // --- FULL PAGE VIEWS FUNCTIONS (v50.8) ---
+        
+        function showFullPageView(viewId) {
+            const el = document.getElementById(`fullpage-${viewId}`);
+            if (el) {
+                el.classList.add('active');
+                document.body.style.overflow = 'hidden';
+                feather.replace();
+            }
+        }
+
+        function hideFullPageView(viewId) {
+            const el = document.getElementById(`fullpage-${viewId}`);
+             if (el) {
+                el.classList.remove('active');
+                document.body.style.overflow = 'auto'; // Re-enable body scroll
+                feather.replace();
+             }
+        }
+
+        // 1. Materials Page
+        function showMaterialsPage() {
+            SmartLog.info("Showing Materials Page", "UI.FullPage");
+            showLoader('materials-orders-container', true);
+            renderMaterialsPage();
+            showFullPageView('materials');
+        }
+        
+        function renderMaterialsPage() {
+            const container = document.getElementById('materials-orders-container');
+            if (!container) return;
+
+            const materialWarehouses = ['מחסן החרש', 'מחסן התלמיד'];
+            // Filter ALL orders (active and future)
+            const materialsOrders = viewerState.allOrders
+                .filter(o => materialWarehouses.includes(o.warehouse))
+                .sort((a,b) => (a.orderDate ? new Date(a.orderDate) : 0) - (b.orderDate ? new Date(b.orderDate) : 0)); // Sort by date
+
+            if (materialsOrders.length === 0) {
+                 container.innerHTML = '<div class="text-center p-8 text-gray-500">לא נמצאו הזמנות לחומרי בנין.</div>';
+                 return;
+            }
+
+            // Use the existing enhanced card renderer
+            container.innerHTML = materialsOrders.map(order => createEnhancedOrderCard(order, true)).join('');
+            showLoader('materials-orders-container', false);
+            feather.replace();
+        }
+
+        // 2. Containers Page
+        function showContainersPage() {
+            SmartLog.info("Attempting to show Containers Page", "UI.FullPage");
+            const pass = prompt("נדרשת סיסמה:", "");
+            if (pass === "1125") {
+                SmartLog.info("Password correct", "UI.FullPage");
+                showLoader('containers-orders-container', true);
+                renderContainersPage();
+                showFullPageView('containers');
+            } else if (pass !== null) { // Only alert if they entered something wrong (not 'cancel')
+                SmartLog.warn("Password incorrect", "UI.FullPage");
+                alert("סיסמה שגויה.");
+            }
+        }
+
+        function renderContainersPage() {
+            const container = document.getElementById('containers-orders-container');
+            if (!container) return;
+
+            const containerWarehouses = ['30', '32', '40'];
+            const containerOrders = viewerState.allOrders
+                .filter(o => containerWarehouses.includes(String(o.warehouse))) // Ensure string comparison
+                .sort((a,b) => (a.createdAt?.toMillis() || 0) - (b.createdAt?.toMillis() || 0)); // Sort by creation date
+
+            if (containerOrders.length === 0) {
+                 container.innerHTML = '<div class="text-center p-8 text-gray-500">לא נמצאו הזמנות מכולה.</div>';
+                 return;
+            }
+             
+            // Use a grid layout (class already in HTML)
+            container.innerHTML = containerOrders.map(order => createContainerOrderCard(order)).join('');
+            showLoader('containers-orders-container', false);
+            feather.replace();
+        }
+
+        // 3. New Card Renderer for Containers
+        function createContainerOrderCard(order) {
+            const typeInfo = orderTypeDetails[order.deliveryType] || orderTypeDetails['default'];
+            const customerName = order.customer?.name || 'לקוח לא ידוע';
+            const address = order.address || 'כתובת לא צוינה';
+            const displayId = order.orderNumber || `#${order.id.slice(-6)}`;
+            
+            // --- Rental Logic ---
+            const RENTAL_PERIOD_DAYS = 10;
+            let daysPassed = 0;
+            let progressPercent = 0;
+            let isOvertime = false;
+            let createdDateStr = '...';
+
+            if (order.createdAt && order.createdAt.toDate) {
+                const createdMillis = order.createdAt.toDate().getTime();
+                createdDateStr = new Date(createdMillis).toLocaleDateString('he-IL');
+                daysPassed = (Date.now() - createdMillis) / (1000 * 60 * 60 * 24);
+                progressPercent = Math.min(100, (daysPassed / RENTAL_PERIOD_DAYS) * 100);
+                isOvertime = daysPassed > RENTAL_PERIOD_DAYS;
+            }
+            
+            const daysDisplay = `${Math.floor(daysPassed)} / ${RENTAL_PERIOD_DAYS} ימים`;
+
+            // Use a different card structure (from tomorrow-orders)
+            return `
+                <div class="delivery-type-section">
+                    <div class="delivery-type-header delivery-type-isuf">
+                         <span>${typeInfo.icon}</span>
+                         <span class="font-bold">${displayId}</span>
+                         <span>${customerName}</span>
+                    </div>
+                    <div class="p-4">
+                        <div class="font-semibold text-gray-800">${address}</div>
+                        <div class="text-sm text-gray-500 mb-3">
+                            <span>התחלה: ${createdDateStr}</span>
+                            ${order.driver?.name ? ` | <span>נהג: ${order.driver.name}</span>` : ''}
+                        </div>
+                        
+                        <div class="rental-progress-bar">
+                            <div class="progress" style="width: ${progressPercent}%;"></div>
+                        </div>
+                        <div class="rental-days ${isOvertime ? 'overtime-flash' : ''}">
+                            ${daysDisplay}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Create Enhanced Order Card for Full Page Views (Used by Materials)
+        function createEnhancedOrderCard(order, showTime = false) {
+            const typeInfo = orderTypeDetails[order.deliveryType] || orderTypeDetails['default'];
+            const customerName = order.customer?.name || 'לקוח לא ידוע';
+            const address = order.address || 'כתובת לא צוינה';
+            const displayId = order.orderNumber || `#${order.id.slice(-6)}`;
+            
+            const createdTime = order.createdAt?.toDate 
+                ? order.createdAt.toDate().toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })
+                : '';
+            
+            const orderDate = order.orderDate 
+                ? new Date(order.orderDate).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit' })
+                : '';
+
+            return `
+                <div class="enhanced-order-card ${typeInfo.className}">
+                    <div class="order-card-header">
+                        <div class="order-main-info">
+                            <div class="flex items-center gap-2 mb-1">
+                                <span class="font-bold text-lg">${displayId}</span>
+                                <span class="order-type-icon text-xl">${typeInfo.icon}</span>
+                                <span class="order-badge badge-status-${getStatusClass(order.status)}">${order.status}</span>
+                            </div>
+                            <div class="font-semibold text-gray-800">${customerName}</div>
+                            <div class="text-gray-600 text-sm">${address}</div>
+                        </div>
+                    </div>
+                    <div class="order-meta">
+                        <span>${order.warehouse || ''}</span>
+                        ${showTime && orderDate ? `<span>📅 ${orderDate}</span>` : ''}
+                        ${createdTime ? `<span>🕒 ${createdTime}</span>` : ''}
+                        ${order.driver?.name ? `<span>👤 ${order.driver.name}</span>` : ''}
+                    </div>
+                </div>
+            `;
+        }
+
+        // Helper function for status badge classes
+        function getStatusClass(status) {
+            const statusMap = {
+                'חדש': 'new',
+                'שויך': 'assigned', 
+                'בדרך': 'onway',
+                'הושלם': 'completed'
+            };
+            return statusMap[status] || '';
+        }
+
+        
+        // --- UI INTERACTIONS for Viewer ---
+        
+        // v50.8: showViewerPanelTab removed as tabs are gone from main screen
+
+        window.filterViewerLists = filterViewerLists; // Make global
+        
+        function filterViewerLists() {
+            const query = document.getElementById('viewer-search-input').value.toLowerCase();
+            // Find the *currently active* list to filter
+            // v50.8: This is now only the active orders list
+            const activeList = document.querySelector('.panel-list.active');
+            
+            if (activeList) {
+                const itemsToFilter = activeList.querySelectorAll('.order-card, .driver-card');
+                itemsToFilter.forEach(card => {
+                    const search = card.getAttribute('data-search') || '';
+                    card.style.display = search.includes(query) ? 'block' : 'none';
+                });
+            }
+        }
+        
+        function focusViewerMapItem(id, type) {
+            let marker, card, listId;
+             // Deselect all cards first
+             document.querySelectorAll('.driver-card, .order-card').forEach(c => c.classList.remove('active'));
+
+            if (type === 'driver') {
+                marker = viewerDriverMarkers[id];
+                 card = document.getElementById(`viewer-driver-card-${id}`);
+                 listId = 'viewer-drivers-list'; // This list is hidden but may exist
+            } else { // order (must be active order to be clickable)
+                marker = viewerOrderMarkers[id];
+                 card = document.getElementById(`viewer-order-card-${id}`);
+                 listId = 'viewer-orders-active-list'; // This is now the only list
+
+                 // --- v50.8: Calculate and update distance on click ---
+                const order = viewerState.activeOrders.find(o => o.id === id);
+                // Clear old distance first
+                const popupDistEl = document.getElementById(`popup-dist-${id}`);
+                if (popupDistEl) popupDistEl.innerText = '...מחפש נהג';
+
+                if (order && order.driver && order.driver.id) {
+                    const driverLoc = viewerState.liveLocations[order.driver.id];
+                    if (driverLoc && driverLoc.latitude && driverLoc.longitude) {
+                        const dist = calculateDistance(driverLoc.latitude, driverLoc.longitude, order.latitude, order.longitude);
+                        if (dist) {
+                            // Update popup content
+                            if (popupDistEl) {
+                                popupDistEl.innerText = `מרחק מהנהג: ${dist} ק"מ`;
+                            }
+                        } else {
+                             if (popupDistEl) popupDistEl.innerText = 'שגיאה בחישוב מרחק';
+                        }
+                    } else {
+                         if (popupDistEl) popupDistEl.innerText = 'מיקום נהג לא זמין';
+                    }
+                } else {
+                    if (popupDistEl) popupDistEl.innerText = 'אין נהג משויך';
+                }
+                // --- END NEW ---
+            }
+            
+            if (marker) {
+                viewerMap.setView(marker.getLatLng(), 15);
+                marker.openPopup();
+            }
+             if (card) {
+                 card.classList.add('active');
+                 // Scroll into view if needed
+                  const listElement = document.getElementById(listId);
+                  if (listElement) {
+                     // Calculate offset relative to the scrollable container
+                      const containerRect = listElement.getBoundingClientRect();
+                      const cardRect = card.getBoundingClientRect();
+                      listElement.scrollTop += (cardRect.top - containerRect.top) - 10; // Adjust scroll, -10 for padding
+                  }
+             }
+        }
+        window.focusViewerMapItem = focusViewerMapItem; // Make global
+
+        
+        // --- HELPERS ---
+
+        // v50.8: New distance calculator
+        function calculateDistance(lat1, lon1, lat2, lon2) {
+            if (!lat1 || !lon1 || !lat2 || !lon2) return null;
+            const R = 6371; // Radius of the earth in km
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = 
+                Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            const d = R * c; // Distance in km
+            return d.toFixed(1); // 1 decimal place
+        }
+        
+        async function playNotificationSound(note = "C5", duration = "8n") {
+            try {
+                if (!window.Tone) {
+                    SmartLog.warn("Tone.js not loaded, cannot play sound.", "Notifications");
+                    return;
+                }
+                await Tone.start();
+                const synth = new Tone.Synth().toDestination();
+                synth.triggerAttackRelease(note, duration, Tone.now());
+                 if (note !== "C5") { // Add a second tone for variety
+                     synth.triggerAttackRelease(note, duration, Tone.now() + 0.2);
+                 }
+                SmartLog.info("Notification sound played.", 'Notifications');
+            } catch (e) {
+                SmartLog.error(e, "Notifications.Sound");
+            }
+        }
+
+        function showLoader(elementId, show) {
+            const container = document.getElementById(elementId);
+            if (!container) return;
+            
+            let loader = container.querySelector('.loader-container');
+            if (show) {
+                if (!loader && !container.querySelector('.loader')) { 
+                    loader = document.createElement('div');
+                    loader.className = 'loader-container';
+                    loader.innerHTML = `<div class="loader"></div>`;
+                    if (elementId !== 'viewer-map-loader') {
+                         container.prepend(loader); // Prepend for lists
+                    } else {
+                         container.style.display = 'flex'; // Show for map
+                    }
+                } else if (loader) {
+                     loader.style.display = 'flex'; // Ensure visible if hidden
+                }
+            } else {
+                if (loader) {
+                     loader.style.display = 'none'; // Hide instead of removing
+                }
+                // Handle map loader separately
+                 if (elementId === 'viewer-map-loader') {
+                     container.style.display = 'none';
+                 }
+            }
+        }
+        
+        function showToast(message, type = 'info') {
+             // Simple console log for viewer, or implement toast if needed
+             console.log(`[Toast-${type.toUpperCase()}]: ${message}`);
+            
+            const container = document.getElementById('toast-container'); 
+            if (!container) { 
+                 console.error("Toast container not found!");
+                 return;
+            }
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`; // type can be 'success', 'error', 'ping', or default
+            toast.innerText = message;
+            container.appendChild(toast);
+            setTimeout(() => toast.classList.add('show'), 10);
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => { if (container.contains(toast)) container.removeChild(toast); }, 300);
+            }, 5000); // Show for 5 seconds
+        }
+
+        // Make full page functions globally available
+        window.showMaterialsPage = showMaterialsPage;
+        window.showContainersPage = showContainersPage;
+        window.hideFullPageView = hideFullPageView;
+
+    </script>
+</body>
+</html>
