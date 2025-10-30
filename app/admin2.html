@@ -3,167 +3,165 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Panel - ניהול משלוחים</title>
+    <title>מנהל - DeliveryMaster v9</title>
+    
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Font Awesome for Icons -->
+    
+    <!-- Font Awesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-
+    
     <style>
-        body { font-family: 'Inter', sans-serif; }
-        .tab-button {
-            transition: all 0.3s ease;
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f1f5f9; /* slate-100 */
         }
-        .tab-button.active {
-            border-color: #3b82f6; /* blue-500 */
-            background-color: #eff6ff; /* blue-50 */
-            color: #2563eb; /* blue-600 */
+        
+        /* אנימציית הבהוב לפעמון */
+        @keyframes ring {
+            0% { transform: rotate(0); }
+            10% { transform: rotate(15deg); }
+            20% { transform: rotate(-15deg); }
+            30% { transform: rotate(10deg); }
+            40% { transform: rotate(-10deg); }
+            50% { transform: rotate(0); }
+            100% { transform: rotate(0); }
         }
-        /* Notification bell */
-        #notification-bell {
-            position: relative;
-            cursor: pointer;
+        .ring-animation {
+            animation: ring 1.5s ease-in-out;
         }
-        #notification-badge {
-            position: absolute;
-            top: -5px;
-            right: -10px;
-            width: 20px;
-            height: 20px;
-            background-color: #ef4444; /* red-500 */
-            color: white;
-            border-radius: 50%;
-            display: none; /* Hidden by default */
-            font-size: 0.75rem;
-            font-weight: bold;
-            line-height: 20px; /* Center text */
-            text-align: center;
-            animation: pulse 1.5s infinite;
+        
+        /* סגנון לכרטיס הודעה חדשה */
+        .new-message-card {
+            background-color: #fefce8; /* yellow-50 */
+            border-color: #facc15; /* yellow-400 */
         }
-        @keyframes pulse {
-            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
-            70% { transform: scale(1.1); box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
-            100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+
+        /* סגנון לכרטיס התראה שנשלחה */
+        .sent-alert-card {
+            background-color: #f0f9ff; /* sky-50 */
+            border-color: #7dd3fc; /* sky-300 */
         }
     </style>
 </head>
-<body class="bg-gray-100">
+<body class="min-h-screen">
 
-    <header class="bg-white shadow-md">
-        <nav class="container mx-auto px-4 py-4 flex justify-between items-center">
-            <h1 class="text-3xl font-bold text-blue-600">מערכת ניהול (Admin)</h1>
-            <div class="flex items-center space-x-6">
-                <div id="notification-bell" onclick="showTab('messages')">
-                    <i class="fas fa-bell fa-2x text-gray-600 hover:text-blue-500"></i>
-                    <span id="notification-badge">0</span>
-                </div>
-                <span id="user-display" class="text-gray-700">טוען משתמש...</span>
-            </div>
-        </nav>
-        <!-- Tabs -->
-        <div class="container mx-auto px-4 border-b-2 border-gray-200">
-            <div class="flex space-x-4 space-x-reverse -mb-0.5">
-                <button id="tab-deliveries" class="tab-button active py-3 px-6 font-semibold text-gray-600 border-b-4 border-transparent" onclick="showTab('deliveries')">
-                    <i class="fas fa-truck ml-2"></i> ניהול משלוחים
-                </button>
-                <button id="tab-messages" class="tab-button py-3 px-6 font-semibold text-gray-600 border-b-4 border-transparent" onclick="showTab('messages')">
-                    <i class="fas fa-comments ml-2"></i> הודעות מלקוחות
-                </button>
+    <!-- כותרת עליונה -->
+    <header class="bg-white shadow-md sticky top-0 z-50">
+        <div class="container mx-auto max-w-5xl p-4 flex justify-between items-center">
+            <h1 class="text-3xl font-bold text-gray-800">דשבורד מנהל</h1>
+            
+            <div class="relative">
+                <i class="fas fa-bell fa-2x text-gray-600"></i>
+                <span id="notification-badge" class="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center hidden">
+                    0
+                </span>
             </div>
         </div>
     </header>
 
-    <main class="container mx-auto p-4">
+    <!-- תוכן ראשי -->
+    <main class="container mx-auto max-w-5xl p-4 mt-6">
 
-        <!-- Tab 1: Deliveries -->
-        <div id="tab-content-deliveries" class="tab-content">
-            <h2 class="text-2xl font-semibold text-gray-800 mb-4">משלוחים פעילים</h2>
-            <div class="bg-white p-6 rounded-lg shadow">
-                <table class="w-full text-right">
-                    <thead class="border-b-2 border-gray-200">
-                        <tr>
-                            <th class="p-3">מס' הזמנה</th>
-                            <th class="p-3">לקוח</th>
-                            <th class="p-3">כתובת</th>
-                            <th class="p-3">נהג</th>
-                            <th class="p-3">סטטוס</th>
-                            <th class="p-3">פעולות</th>
-                        </tr>
-                    </thead>
-                    <tbody id="deliveries-table-body">
-                        <tr>
-                            <td colspan="6" class="text-center p-6 text-gray-500">
-                                <i class="fas fa-spinner fa-spin ml-2"></i> טוען משלוחים...
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
+        <!-- בורר לשוניות -->
+        <div class="mb-6">
+            <div class="border-b border-gray-300">
+                <nav class="flex -mb-px space-x-reverse space-x-6">
+                    <button id="tab-messages" onclick="showTab('messages')" class="py-4 px-1 border-b-2 border-blue-500 font-medium text-blue-600">
+                        <i class="fas fa-inbox mr-2"></i> הודעות מלקוחות
+                    </button>
+                    <button id="tab-alerts" onclick="showTab('alerts')" class="py-4 px-1 border-b-2 border-transparent font-medium text-gray-500 hover:text-gray-700 hover:border-gray-300">
+                        <i class="fas fa-paper-plane mr-2"></i> התראות שנשלחו
+                    </button>
+                </nav>
             </div>
         </div>
-        
-        <!-- Tab 2: Customer Messages -->
-        <div id="tab-content-messages" class="tab-content hidden">
-            <h2 class="text-2xl font-semibold text-gray-800 mb-4">הודעות נכנסות מלקוחות</h2>
-            <div id="messages-list" class="bg-white p-6 rounded-lg shadow space-y-4">
-                <p id="loading-messages" class="text-center p-6 text-gray-500">
-                    <i class="fas fa-spinner fa-spin ml-2"></i> טוען הודעות...
-                </p>
-                <!-- Messages will be injected here -->
-            </div>
+
+        <!-- לשונית 1: הודעות מלקוחות -->
+        <div id="tab-content-messages" class="space-y-4">
+            <p id="loading-messages" class="text-center text-gray-600 p-10">
+                <i class="fas fa-spinner fa-spin fa-2x"></i>
+                <span class="block mt-2">טוען הודעות חדשות...</span>
+            </p>
+            <!-- כרטיסי הודעות יוכנסו כאן -->
+        </div>
+
+        <!-- לשונית 2: התראות שנשלחו -->
+        <div id="tab-content-alerts" class="space-y-4 hidden">
+             <p id="loading-alerts" class="text-center text-gray-600 p-10">
+                <i class="fas fa-spinner fa-spin fa-2x"></i>
+                <span class="block mt-2">טוען התראות שנשלחו...</span>
+            </p>
+            <!-- כרטיסי התראות יוכנסו כאן -->
         </div>
 
     </main>
     
-    <!-- Send Notification Modal (Example) -->
-    <div id="notification-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 hidden z-50">
-        <div class="bg-white rounded-lg shadow-2xl w-full max-w-lg" onclick.stop>
-            <div class="flex justify-between items-center p-5 border-b border-gray-200">
+    <!-- מודל שליחת התראה -->
+    <div id="alert-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-[100] hidden">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-lg mx-4">
+            <div class="flex justify-between items-center mb-4">
                 <h3 class="text-xl font-semibold">שלח התראה ללקוח</h3>
-                <button onclick="closeNotificationModal()" class="text-gray-400 hover:text-gray-600">
+                <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600">
                     <i class="fas fa-times fa-lg"></i>
                 </button>
             </div>
-            <div class="p-6">
-                <p class="mb-4">ההתראה תישלח ללקוח <strong id="modal-notif-customer-name"></strong>
-                   <br> בנוגע להזמנה <strong id="modal-notif-order-id"></strong>
-                </p>
-                <input type="hidden" id="modal-notif-order-doc-id">
-                
-                <textarea id="notification-text" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" rows="4" placeholder="תוכן ההתראה (לדוגמה: הזמנה אושרה ותועבר לאריזה)"></textarea>
-                
-                <button onclick="sendNotificationToCustomer()" class="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg">
-                    <i class="fas fa-paper-plane ml-2"></i> שלח התראה
+            <p class="mb-2"><strong>הזמנה:</strong> <span id="modal-order-id-display"></span></p>
+            <p class="mb-4"><strong>לקוח:</strong> <span id="modal-customer-name"></span></p>
+            
+            <input type="hidden" id="modal-order-id">
+            
+            <textarea id="modal-alert-text" class="w-full p-3 border border-gray-300 rounded-lg" rows="4" placeholder="כתוב את ההתראה ללקוח..."></textarea>
+            
+            <button onclick="sendNotification()" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-4 rounded-lg mt-4">
+                שלח התראה
+            </button>
+        </div>
+    </div>
+    
+    <!-- מודל אישור סימון כנקרא -->
+    <div id="confirm-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-[100] hidden">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-sm mx-4">
+            <h3 class="text-xl font-semibold mb-4">אישור</h3>
+            <p class="mb-6">האם אתה בטוח שברצונך לסמן הודעה זו כ"נקראה"? היא תיעלם מרשימה זו.</p>
+            <input type="hidden" id="confirm-message-id">
+            <input type="hidden" id="confirm-order-id">
+            <div class="flex justify-end gap-3">
+                <button onclick="closeConfirmModal()" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg">
+                    ביטול
                 </button>
-                <p id="notification-status" class="text-green-600 text-center mt-2"></p>
+                 <button onclick="markAsRead()" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg">
+                    סמן כנקראה
+                </button>
             </div>
         </div>
     </div>
-
-
-    <!-- ========================================================== -->
-    <!-- ===               שדרוג ל-Firebase v9 (Modular)           === -->
-    <!-- ========================================================== -->
     
-    <!-- Firebase SDKs v9 (Modular) -->
+    <!-- 
+      ==========================================================
+      ===        שדרוג ל-Firebase v9 (Modular SDK)            ===
+      ==========================================================
+    -->
     <script type="module">
+        // ייבוא פונקציות Firebase v9
         import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
         import { 
             getFirestore, onSnapshot, collection, query, where, 
-            orderBy, serverTimestamp, collectionGroup, addDoc, limit
+            orderBy, serverTimestamp, addDoc, limit, doc, 
+            collectionGroup, updateDoc
         } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-
-        // --- Firebase Config ---
+        
+        // --- Globals ---
         let db;
         let auth;
-        let adminUser = { name: "מנהל המערכת" }; // Placeholder
-        let unreadMessages = new Set(); // To track unread message IDs
-
+        let unsubscribeMessages = null;
+        let unsubscribeAlerts = null;
+        
+        // --- אתחול האפליקציה ---
         document.addEventListener('DOMContentLoaded', async () => {
+            // 1. אתחול Firebase v9
             try {
-                // ==========================================================
-                // === תיקון: הוספת תצורת גיבוי (fallback) ===
-                // ==========================================================
                 const fallbackConfig = {
                     apiKey: "AIzaSyDq0oVwS6zbEfsgrYBRkeBq80dDUKMedzo", 
                     authDomain: "saban94-76543.firebaseapp.com", 
@@ -178,300 +176,279 @@
                 if (typeof __firebase_config !== 'undefined' && __firebase_config !== '{}') {
                     firebaseConfig = JSON.parse(__firebase_config);
                 } else {
-                    console.warn("Using fallback Firebase config. This is normal for local testing.");
+                    console.warn("Using fallback Firebase config.");
                     firebaseConfig = fallbackConfig;
                 }
-                // ==========================================================
 
-                if (firebaseConfig.apiKey) {
-                    
-                    // v9 Init
-                    let app;
-                    const apps = getApps();
-                    if (apps.length > 0) {
-                        app = getApp();
-                    } else {
-                        app = initializeApp(firebaseConfig);
-                    }
-                    db = getFirestore(app);
-                    auth = getAuth(app);
-                    
-                    let userCredential;
-                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                        userCredential = await signInWithCustomToken(auth, __initial_auth_token);
-                    } else {
-                        userCredential = await signInAnonymously(auth);
-                    }
-                    startApp(userCredential);
-
-                } else {
-                    console.error("Firebase config is missing.");
+                if (!firebaseConfig.apiKey) {
+                    throw new Error("Firebase config is missing.");
                 }
-            } catch (e) {
-                console.error("Error initializing Firebase:", e);
-                handleAuthError(e);
+
+                let app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+
+                // 2. אימות
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+                console.log("Firebase Initialized & Admin Signed In:", auth.currentUser.uid);
+
+                // 3. התחל להאזין
+                listenForNewMessages();
+                listenForSentAlerts();
+
+            } catch (error) {
+                console.error('Error initializing Firebase:', error);
+                document.getElementById('loading-messages').innerText = "שגיאה קריטית בהתחברות ל-Firebase.";
+                document.getElementById('loading-alerts').innerText = "שגיאה קריטית בהתחברות ל-Firebase.";
             }
         });
         
-        function handleAuthError(error) {
-            console.error("Firebase auth error:", error);
-            document.getElementById('user-display').innerText = "שגיאת אימות";
-        }
-        
-        function startApp(userCredential) {
-            const user = userCredential.user;
-            document.getElementById('user-display').innerText = `מחובר: ${user.isAnonymous ? 'אנונימי' : user.uid}`;
-            // In a real app, you'd fetch adminUser's name from a 'users' collection
+        // --- האזנה להודעות חדשות מלקוחות (v9) ---
+        // תואם לאינדקס: messages (type ASC, readByViewer ASC)
+        function listenForNewMessages() {
+            if (unsubscribeMessages) unsubscribeMessages();
             
-            showTab('deliveries'); // Show default tab
-            loadDeliveries();
-            listenForNewCustomerMessages();
-        }
-        
-        // --- Tab Navigation (No changes needed) ---
-        window.showTab = function(tabName) {
-            // Hide all content
-            document.querySelectorAll('.tab-content').forEach(content => {
-                content.classList.add('hidden');
-            });
-            // Deactivate all buttons
-            document.querySelectorAll('.tab-button').forEach(button => {
-                button.classList.remove('active');
-            });
-            // Show selected content
-            document.getElementById(`tab-content-${tabName}`).classList.remove('hidden');
-            // Activate selected button
-            document.getElementById(`tab-${tabName}`).classList.add('active');
-            
-            if (tabName === 'messages') {
-                // When messages tab is viewed, clear the badge (basic logic)
-                unreadMessages.clear();
-                updateNotificationBadge();
-            }
-        }
-        
-        // --- Load Deliveries (Tab 1) - v9 Syntax ---
-        function loadDeliveries() {
-            const tableBody = document.getElementById('deliveries-table-body');
-            
-            // v9 query
-            const q = query(collection(db, 'orders'), limit(20));
-            
-            onSnapshot(q, (querySnapshot) => {
-                  if (querySnapshot.empty) {
-                      tableBody.innerHTML = '<tr><td colspan="6" class="text-center p-6 text-gray-500">לא נמצאו משלוחים.</td></tr>';
-                      return;
-                  }
-                  
-                  tableBody.innerHTML = ''; // Clear
-                  querySnapshot.forEach(doc => {
-                      const delivery = doc.data();
-                      delivery.docId = doc.id; // Store the Firestore document ID
-                      tableBody.appendChild(createDeliveryRow(delivery));
-                  });
-                  
-              }, (error) => {
-                  console.error("Error loading deliveries: ", error);
-                  tableBody.innerHTML = '<tr><td colspan="6" class="text-center p-6 text-red-500">שגיאה בטעינת משלוחים.</td></tr>';
-              });
-        }
-        
-        function createDeliveryRow(delivery) {
-            const row = document.createElement('tr');
-            row.className = 'border-b border-gray-100 hover:bg-gray-50';
-            
-            const orderId = delivery.order_id || delivery.docId;
-            
-            row.innerHTML = `
-                <td class="p-3 font-medium text-blue-600">${orderId.substring(0, 10)}...</td>
-                <td class="p-3">${delivery.customer_name || '...'}</td>
-                <td class="p-3">${delivery.customer_address || '...'}</td>
-                <td class="p-3">${delivery.driver_name || 'טרם שויך'}</td>
-                <td class="p-3">
-                    <span class="font-medium bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full text-sm">
-                        ${delivery.status || 'לא ידוע'}
-                    </span>
-                </td>
-                <td class="p-3">
-                    <button class="text-blue-500 hover:text-blue-700" title="שלח התראה ללקוח">
-                        <i class="fas fa-comment-dots"></i>
-                    </button>
-                    <!-- Add more actions here, e.g., edit -->
-                </td>
-            `;
-            
-            // Add click listener for sending notification
-            row.querySelector('button').onclick = () => {
-                openNotificationModal(delivery);
-            };
-            
-            return row;
-        }
+            const messagesContainer = document.getElementById('tab-content-messages');
+            const loadingEl = document.getElementById('loading-messages');
 
-        // --- Listen for Messages (Tab 2 & Badge) - v9 Syntax ---
-        function listenForNewCustomerMessages() {
-            const messagesList = document.getElementById('messages-list');
-            
-            // v9 query
             const q = query(
                 collectionGroup(db, 'messages'),
                 where('type', '==', 'message_to_admin'),
-                orderBy('timestamp', 'desc'),
-                limit(20)
+                where('readByViewer', '==', false),
+                limit(30) // ללא מיון, כי אין אינדקס על זמן
             );
-              
-            onSnapshot(q, (querySnapshot) => {
-                   document.getElementById('loading-messages').classList.add('hidden');
-                   
-                   if (querySnapshot.empty) {
-                       messagesList.innerHTML = '<p class="text-center p-6 text-gray-500">אין הודעות חדשות מלקוחות.</p>';
-                       return;
-                   }
-                   
-                   // Don't clear list, just check for changes
-                   querySnapshot.docChanges().forEach((change) => {
-                       if (change.type === 'added') {
-                           const msg = change.doc.data();
-                           msg.id = change.doc.id;
-                           const orderId = change.doc.ref.parent.parent.id; // Get parent 'orders' doc ID
-                           
-                           // Add to unread list
-                           unreadMessages.add(msg.id);
-                           
-                           // Prepend to list
-                           messagesList.prepend(createMessageCard(msg, orderId));
-                       }
-                   });
-                   
-                   updateNotificationBadge();
-                   
-              }, (error) => {
-                  console.error("Error listening for messages: ", error);
-                  document.getElementById('loading-messages').innerText = 'שגיאה בטעינת הודעות. ייתכן שנדרש אינדקס ב-Firestore.';
-              });
+            
+            unsubscribeMessages = onSnapshot(q, (snapshot) => {
+                loadingEl.style.display = 'none';
+                messagesContainer.innerHTML = ''; // נקה רשימה ישנה
+                
+                const newMessagesCount = snapshot.size;
+                updateNotificationBadge(newMessagesCount);
+                
+                if (snapshot.empty) {
+                    messagesContainer.innerHTML = '<p class="text-center text-gray-500 p-10">אין הודעות חדשות מלקוחות.</p>';
+                    return;
+                }
+                
+                snapshot.forEach(doc => {
+                    const message = doc.data();
+                    // ההודעה נמצאת ב- /orders/{orderId}/messages/{messageId}
+                    const orderId = doc.ref.parent.parent.id;
+                    const messageId = doc.id;
+                    messagesContainer.appendChild(createMessageCard(message, orderId, messageId));
+                });
+                
+            }, (error) => {
+                console.error("Error listening for messages:", error);
+                loadingEl.innerHTML = `
+                    <p class="text-red-500">שגיאה בטעינת הודעות.</p>
+                    <p class="text-sm text-gray-600 mt-2">ייתכן שנדרש אינדקס ב-Firestore. בדוק ב-Console (F12).</p>`;
+            });
         }
         
-        function createMessageCard(msg, orderId) {
-            const card = document.createElement('div');
-            card.id = `msg-card-${msg.id}`;
-            card.className = 'border border-gray-200 p-4 rounded-lg shadow-sm bg-yellow-50';
+        // --- האזנה להתראות שנשלחו (v9) ---
+        function listenForSentAlerts() {
+            if (unsubscribeAlerts) unsubscribeAlerts();
             
-            const time = msg.timestamp ? msg.timestamp.toDate().toLocaleString('he-IL') : 'לא זמין';
+            const alertsContainer = document.getElementById('tab-content-alerts');
+            const loadingEl = document.getElementById('loading-alerts');
+            
+            const q = query(
+                collectionGroup(db, 'messages'),
+                where('type', '==', 'notification_to_customer'),
+                orderBy('timestamp', 'desc'), // דורש אינדקס: messages (type ASC, timestamp DESC)
+                limit(30)
+            );
+            
+            unsubscribeAlerts = onSnapshot(q, (snapshot) => {
+                loadingEl.style.display = 'none';
+                alertsContainer.innerHTML = ''; // נקה רשימה
+                
+                if (snapshot.empty) {
+                    alertsContainer.innerHTML = '<p class="text-center text-gray-500 p-10">טרם נשלחו התראות.</p>';
+                    return;
+                }
+                
+                snapshot.forEach(doc => {
+                    const alertMsg = doc.data();
+                    const orderId = doc.ref.parent.parent.id;
+                    alertsContainer.appendChild(createAlertCard(alertMsg, orderId));
+                });
+                
+            }, (error) => {
+                console.error("Error listening for alerts:", error);
+                 loadingEl.innerHTML = `
+                    <p class="text-red-500">שגיאה בטעינת התראות.</p>
+                    <p class="text-sm text-gray-600 mt-2">ייתכן שנדרש אינדקס (messages: type ASC, timestamp DESC).</p>`;
+            });
+        }
+        
+        // --- יצירת כרטיסים ---
+        function createMessageCard(message, orderId, messageId) {
+            const card = document.createElement('div');
+            card.className = 'bg-white border border-gray-200 rounded-lg shadow-sm p-4 new-message-card';
+            
+            const time = message.timestamp ? message.timestamp.toDate().toLocaleString('he-IL') : 'לא ידוע';
             
             card.innerHTML = `
-                <div class="flex justify-between items-center mb-2">
-                    <h4 class="font-semibold text-lg text-gray-800">
-                        פנייה מ: <span class="text-blue-600">${msg.senderName || 'לקוח'}</span>
-                    </h4>
-                    <span class="text-sm text-gray-500">${time}</span>
+                <div class="flex justify-between items-start mb-2">
+                    <div>
+                        <span class="font-bold text-lg text-gray-800">${message.senderName || 'לקוח'}</span>
+                        <span class="text-sm text-gray-600">(הזמנה: ${orderId.substring(0, 6)})</span>
+                    </div>
+                    <span class="text-xs text-gray-500">${time}</span>
                 </div>
-                <p class="text-gray-700 mb-3">
-                    <strong>הזמנה:</strong> ${orderId}
-                </p>
-                <p class="bg-white p-3 rounded-md border border-gray-200">${msg.text}</p>
-                <div class="mt-4 flex gap-4">
-                    <button class="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-lg"
-                            onclick="openNotificationModal({ order_id: '${orderId}', customer_name: '${msg.senderName}', docId: '${orderId}' })">
-                        <i class="fas fa-reply ml-2"></i> שלח תשובה / התראה
+                <p class="text-gray-700 mb-4">${message.text}</p>
+                <div class="flex gap-2">
+                    <button onclick="openModal('${orderId}', '${message.senderName || 'לקוח'}')" class="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-3 rounded-lg">
+                        <i class="fas fa-reply mr-2"></i>שלח תשובה / התראה
                     </button>
-                    <button class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 py-2 px-4 rounded-lg"
-                            onclick="markMessageAsRead('${msg.id}')">
-                        <i class="fas fa-check ml-2"></i> סמן כטופל
+                    <button onclick="openConfirmModal('${orderId}', '${messageId}')" class="flex-1 bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-3 rounded-lg">
+                        <i class="fas fa-check mr-2"></i>סמן כנקרא
                     </button>
                 </div>
             `;
             return card;
         }
 
-        window.markMessageAsRead = function(msgId) {
-            // In a real app, you'd update this message in Firestore, e.g., set 'read: true'
-            // For this demo, we just remove it from the UI.
-            const card = document.getElementById(`msg-card-${msgId}`);
-            if (card) {
-                card.style.opacity = 0;
-                setTimeout(() => card.remove(), 500);
-            }
-            unreadMessages.delete(msgId);
-            updateNotificationBadge();
+        function createAlertCard(alertMsg, orderId) {
+            const card = document.createElement('div');
+            card.className = 'bg-white border border-gray-200 rounded-lg shadow-sm p-4 sent-alert-card';
+            
+            const time = alertMsg.timestamp ? alertMsg.timestamp.toDate().toLocaleString('he-IL') : 'לא ידוע';
+
+            card.innerHTML = `
+                <div class="flex justify-between items-start mb-2">
+                    <div>
+                        <span class="font-bold text-lg text-gray-800">התראה נשלחה ללקוח</span>
+                        <span class="text-sm text-gray-600">(הזמנה: ${orderId.substring(0, 6)})</span>
+                    </div>
+                    <span class="text-xs text-gray-500">${time}</span>
+                </div>
+                <p class="text-gray-700 italic">"${alertMsg.text}"</p>
+                <p class="text-sm text-gray-500 mt-2">נשלח על ידי: ${alertMsg.senderName || 'מנהל'}</p>
+            `;
+            return card;
         }
         
-        function updateNotificationBadge() {
-            const badge = document.getElementById('notification-badge');
-            const count = unreadMessages.size;
-            
-            if (count > 0 && document.getElementById('tab-messages').classList.contains('active')) {
-                // If user is on the messages tab, auto-clear
-                unreadMessages.clear();
-                updateNotificationBadge();
-                return;
-            }
-            
-            if (count > 0) {
-                badge.innerText = count > 9 ? '9+' : count;
-                badge.style.display = 'flex';
-                badge.style.alignItems = 'center';
-                badge.style.justifyContent = 'center';
-            } else {
-                badge.style.display = 'none';
-            }
+        // --- ניהול מודלים (v9) ---
+        
+        window.openModal = function(orderId, customerName) {
+            document.getElementById('modal-order-id').value = orderId;
+            document.getElementById('modal-order-id-display').innerText = orderId.substring(0, 6);
+            document.getElementById('modal-customer-name').innerText = customerName;
+            document.getElementById('alert-modal').classList.remove('hidden');
+        }
+        
+        window.closeModal = function() {
+            document.getElementById('alert-modal').classList.add('hidden');
+            document.getElementById('modal-alert-text').value = '';
+        }
+        
+        window.openConfirmModal = function(orderId, messageId) {
+            document.getElementById('confirm-order-id').value = orderId;
+            document.getElementById('confirm-message-id').value = messageId;
+            document.getElementById('confirm-modal').classList.remove('hidden');
         }
 
-        // --- Notification Modal Logic (No changes needed) ---
-        window.openNotificationModal = function(delivery) {
-            const orderId = delivery.order_id || delivery.docId;
-            
-            document.getElementById('modal-notif-customer-name').innerText = delivery.customer_name || 'לקוח';
-            document.getElementById('modal-notif-order-id').innerText = orderId;
-            document.getElementById('modal-notif-order-doc-id').value = orderId; // Use the actual doc ID
-            
-            document.getElementById('notification-text').value = ''; // Clear old text
-            document.getElementById('notification-status').innerText = ''; // Clear status
-            
-            document.getElementById('notification-modal').classList.remove('hidden');
+        window.closeConfirmModal = function() {
+            document.getElementById('confirm-modal').classList.add('hidden');
         }
-        
-        window.closeNotificationModal = function() {
-             document.getElementById('notification-modal').classList.add('hidden');
-        }
-        
-        // --- sendNotificationToCustomer - v9 Syntax ---
-        window.sendNotificationToCustomer = async function() {
-            const orderId = document.getElementById('modal-notif-order-doc-id').value;
-            const text = document.getElementById('notification-text').value;
-            const statusEl = document.getElementById('notification-status');
+
+        /**
+         * שולח התראה ללקוח (v9)
+         */
+        window.sendNotification = async function() {
+            const orderId = document.getElementById('modal-order-id').value;
+            const text = document.getElementById('modal-alert-text').value.trim();
             
-            if (text.trim() === '') {
-                statusEl.innerText = 'נא למלא תוכן התראה.';
-                statusEl.className = 'text-red-600 text-center mt-2';
+            if (!orderId || !text) {
+                alert("נא למלא תוכן התראה.");
                 return;
             }
             
-            const notificationDoc = {
+            const alertData = {
                 text: text,
-                senderName: adminUser.name,
-                senderId: auth.currentUser ? auth.currentUser.uid : "admin_user",
-                timestamp: serverTimestamp(), // v9 function
-                type: "notification_to_customer"
+                senderName: "שירות לקוחות", // או שם מנהל
+                senderId: auth.currentUser.uid,
+                timestamp: serverTimestamp(),
+                type: 'notification_to_customer'
             };
-
+            
             try {
-                // v9 syntax
                 const messagesColRef = collection(db, 'orders', orderId, 'messages');
-                await addDoc(messagesColRef, notificationDoc);
+                await addDoc(messagesColRef, alertData);
                 
-                statusEl.innerText = 'ההתראה נשלחה ללקוח בהצלחה!';
-                statusEl.className = 'text-green-600 text-center mt-2';
-                setTimeout(() => {
-                    closeNotificationModal();
-                }, 2000);
-
+                alert("ההתראה נשלחה בהצלחה!");
+                closeModal();
+                
             } catch (error) {
                 console.error("Error sending notification:", error);
-                statusEl.innerText = 'שגיאה בשליחת ההתראה.';
-                statusEl.className = 'text-red-600 text-center mt-2';
+                alert("שגיאה בשליחת ההתראה.");
             }
         }
         
+        /**
+         * מסמן הודעה כנקראה (v9)
+         */
+        window.markAsRead = async function() {
+            const orderId = document.getElementById('confirm-order-id').value;
+            const messageId = document.getElementById('confirm-message-id').value;
+            
+            if (!orderId || !messageId) return;
+
+            const messageRef = doc(db, 'orders', orderId, 'messages', messageId);
+            
+            try {
+                await updateDoc(messageRef, {
+                    readByViewer: true
+                });
+                console.log(`Message ${messageId} marked as read.`);
+                closeConfirmModal();
+            } catch (error) {
+                console.error("Error marking as read:", error);
+                alert("שגיאה בסימון ההודעה.");
+            }
+        }
+
+        // --- פונקציות עזר ---
+        function updateNotificationBadge(count) {
+            const badge = document.getElementById('notification-badge');
+            if (count > 0) {
+                badge.innerText = count;
+                badge.classList.remove('hidden');
+                badge.parentElement.classList.add('ring-animation');
+                // הסר אנימציה אחרי זמן מה
+                setTimeout(() => {
+                    badge.parentElement.classList.remove('ring-animation');
+                }, 1500);
+            } else {
+                badge.classList.add('hidden');
+            }
+        }
+        
+        window.showTab = function(tabName) {
+            // הסתר את כל הלשוניות
+            document.getElementById('tab-content-messages').classList.add('hidden');
+            document.getElementById('tab-content-alerts').classList.add('hidden');
+            // הסר אקטיבציה מכל הכפתורים
+            document.getElementById('tab-messages').classList.remove('border-blue-500', 'text-blue-600');
+            document.getElementById('tab-messages').classList.add('border-transparent', 'text-gray-500', 'hover:text-gray-700', 'hover:border-gray-300');
+            document.getElementById('tab-alerts').classList.remove('border-blue-500', 'text-blue-600');
+            document.getElementById('tab-alerts').classList.add('border-transparent', 'text-gray-500', 'hover:text-gray-700', 'hover:border-gray-300');
+            
+            // הצג את הלשונית הרצויה
+            document.getElementById(`tab-content-${tabName}`).classList.remove('hidden');
+            // סמן את הכפתור הרצוי
+            const tabButton = document.getElementById(`tab-${tabName}`);
+            tabButton.classList.add('border-blue-500', 'text-blue-600');
+            tabButton.classList.remove('border-transparent', 'text-gray-500', 'hover:text-gray-700', 'hover:border-gray-300');
+        }
+
     </script>
 </body>
 </html>
