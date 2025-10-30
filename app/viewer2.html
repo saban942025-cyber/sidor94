@@ -692,14 +692,14 @@
             messageUnsubscribeListeners = {};
 
             // v9 Query:
-            // !!! אינדקס נדרש: orders (status ASC, delivery_date DESC) - *** התיקון למטה ***
-            // תיקון: אי אפשר לסנן ב-IN/NOT-IN ולמיין לפי שדה אחר.
-            // לכן נסנן לפי סטטוס, ואת המיון לפי תאריך נעשה ב-JS.
+            // !!! תיקון: הסרנו את פקודות ה-orderBy
+            // Firestore לא מאפשר לסנן עם 'not-in' וגם למיין
             const q = query(
                 collection(db, 'orders'),
-                where('status', 'in', ['חדש', 'בטיפול', 'בדרך']), // שינוי מ-not-in ל-in
-                // orderBy('status') // <-- זו הייתה הבעיה! הסרנו את השורה הזו.
-                // orderBy('delivery_date', 'desc'), // <-- זו הייתה הבעיה
+                where('status', 'not-in', ['סופק', 'מבוטל']),
+                // orderBy('status'), // <-- גורם לשגיאה 400
+                // orderBy('delivery_date', 'desc'), // <-- גורם לשגיאה 400
+                limit(50)
             );
 
             unsubscribeActiveOrders = onSnapshot(q, (querySnapshot) => {
@@ -718,7 +718,7 @@
                 allOrders = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 
                 // --- הוספת מיון ידני ב-JS ---
-                // ממיין קודם לפי סטטוס (כמו ב-FS), ואז לפי תאריך יורד
+                // ממיין קודם לפי סטטוס, ואז לפי תאריך יורד
                 allOrders.sort((a, b) => {
                     const statusOrder = { 'חדש': 1, 'בטיפול': 2, 'בדרך': 3 };
                     const statusA = statusOrder[a.status] || 99;
@@ -744,12 +744,12 @@
 
             }, (error) => {
                 console.error("Error fetching orders: ", error);
-                // תיקון קריסה: בדוק אם האלמנט קיים לפני שדורסים
+                 // תיקון קריסה: בדוק אם האלמנט קיים לפני שדורסים
                 const loadingEl = document.getElementById('loading-orders');
                 if (loadingEl) {
                     loadingEl.innerHTML = `
                         <p class="text-red-500">שגיאה בטעינת הזמנות.</p>
-                        <p class="text-sm text-gray-600 mt-2">ייתכן שנדרש אינדקס ב-Firestore. בדוק ב-Console (F12) אם יש קישור ליצירת אינדקס.</p>`;
+                        <p class="text-sm text-gray-600 mt-2">ייתכן שהשאילתה לא חוקית או שנדרש אינדקס ב-Firestore. בדוק ב-Console (F12).</p>`;
                 }
                 showToast("שגיאה בטעינת הזמנות", "error");
             });
@@ -1285,6 +1285,4 @@
     </script>
 </body>
 </html>
-
-
 
