@@ -161,7 +161,28 @@
 
         document.addEventListener('DOMContentLoaded', async () => {
             try {
-                const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+                // ==========================================================
+                // === תיקון: הוספת תצורת גיבוי (fallback) ===
+                // ==========================================================
+                const fallbackConfig = {
+                    apiKey: "AIzaSyDq0oVwS6zbEfsgrYBRkeBq80dDUKMedzo", 
+                    authDomain: "saban94-76543.firebaseapp.com", 
+                    projectId: "saban94-76543",
+                    storageBucket: "saban94-76543.appspot.com", 
+                    messagingSenderId: "41553157903", 
+                    appId: "1:41553157903:web:cc33d252cff023be97a87a", 
+                    measurementId: "G-XV6RZDESSB"
+                };
+
+                let firebaseConfig;
+                if (typeof __firebase_config !== 'undefined' && __firebase_config !== '{}') {
+                    firebaseConfig = JSON.parse(__firebase_config);
+                } else {
+                    console.warn("Using fallback Firebase config. This is normal for local testing.");
+                    firebaseConfig = fallbackConfig;
+                }
+                // ==========================================================
+
                 if (firebaseConfig.apiKey) {
                     
                     // v9 Init
