@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>דוח מחסנים | DeliveryMaster</title>
+    
+    <!-- ייבוא Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/feather-icons">
+    <style>
+        html, body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            direction: rtl;
+            background-color: #f0f2f5;
+            margin: 0;
+            padding: 0;
+        }
+        .mock-header {
+            background: #2c3e50;
+            color: white;
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        .chart-bar {
+            height: 25px;
+            transition: width 0.5s ease-in-out;
+            border-radius: 4px;
+            margin-bottom: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding: 0 10px;
+            color: white;
+            font-weight: bold;
+            font-size: 0.8rem;
+        }
+    </style>
+    <!-- ייבוא Firebase -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, query, onSnapshot, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        
+        setLogLevel('Debug');
+        
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? initialAuthToken : null;
+        
+        if (!firebaseConfig) {
+            console.error("Firebase config is missing.");
+            throw new Error("Firebase config is missing.");
+        }
+
+        const app = initializeApp(firebaseConfig);
+        window.db = getFirestore(app);
+        window.auth = getAuth(app);
+
+        onAuthStateChanged(window.auth, async (user) => {
+            if (!user) {
+                try {
+                    if (initialAuthToken) {
+                        await signInWithCustomToken(window.auth, initialAuthToken);
+                    } else {
+                        await signInAnonymously(window.auth);
+                    }
+                } catch (error) {
+                    console.error("Firebase Sign-In Failed:", error);
+                }
+            }
+            
+            window.firebaseAuthReady = true;
+            document.dispatchEvent(new Event('firebaseAuthReady'));
+        });
+    </script>
+</head>
+
+<body>
+    <!-- כותרת מדומה -->
+    <div class="mock-header">
+        <h1>דוח מחסנים</h1>
+        <button id="openDashboardButton" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold transition-colors">חזור ללוח הבקרה</button>
+    </div>
+
+    <div class="p-6">
+        <div class="bg-white p-6 rounded-xl shadow-md mb-6 flex flex-wrap items-center gap-4">
+            <label for="warehouse-filter" class="text-lg font-semibold text-gray-700">בחר מחסן:</label>
+            <select id="warehouse-filter" class="p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-right w-full sm:w-64">
+                <option value="ALL">כל המחסנים</option>
+                <!-- אפשרויות יטענו על ידי JS -->
+            </select>
+        </div>
+
+        <!-- לוח דוחות וגרפים (משמאל) -->
+        <div id="report-dashboard" class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            <!-- דוחות וגרפים (עמודה 1) -->
+            <div id="charts-section" class="lg:col-span-1 bg-white p-6 rounded-xl shadow-md h-min sticky top-4">
+                <h3 class="text-xl font-bold mb-4 text-gray-800 border-b pb-2">סיכום סטטוס הזמנות</h3>
+                <div id="status-summary">
+                    <p class="text-gray-500">בחר מחסן כדי לראות את הסיכום...</p>
+                </div>
+                <!-- תרשים סרגל (CSS/Tailwind) -->
+                <div class="mt-6 border-t pt-4">
+                    <h4 class="text-lg font-semibold mb-3 text-gray-700">פילוח הזמנות (תרשים)</h4>
+                    <div id="chart-area">
+                        <!-- תרשים יוטמע כאן -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- טבלת הזמנות (עמודות 2-3) -->
+            <div class="lg:col-span-2 bg-white p-6 rounded-xl shadow-md">
+                <h3 class="text-xl font-bold mb-4 text-gray-800 border-b pb-2">טבלת הזמנות מסוננת</h3>
+                <input type="text" id="table-search-input" placeholder="חפש בטבלה (שם לקוח, מספר הזמנה...)" class="p-2 border border-gray-300 rounded-lg w-full mb-4 text-right" />
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">סטטוס</th>
+                                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">לקוח/מס' לקוח</th>
+                                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">מס' הזמנה/תעודה</th>
+                                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">סוג פעולה</th>
+                                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">תאריך הזמנה</th>
+                            </tr>
+                        </thead>
+                        <tbody id="orders-table-body" class="bg-white divide-y divide-gray-200">
+                            <tr><td colspan="5" class="p-4 text-center text-gray-500">בחר מחסן או המתן לטעינת נתונים...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const warehouseFilter = document.getElementById('warehouse-filter');
+            const ordersTableBody = document.getElementById('orders-table-body');
+            const statusSummary = document.getElementById('status-summary');
+            const chartArea = document.getElementById('chart-area');
+            const tableSearchInput = document.getElementById('table-search-input');
+            const openDashboardButton = document.getElementById('openDashboardButton');
+
+            // --- קבועים ---
+            const CONST_WAREHOUSES = [
+                { id: 'W30', name: 'מחסן 30 (שארק)' },
+                { id: 'W32', name: 'מחסן 32 (כראדי)' },
+                { id: 'W40', name: 'מחסן 40 (שי שרון)' }
+            ];
+            const getWarehouseName = (id) => CONST_WAREHOUSES.find(w => w.id === id)?.name || 'לא ידוע';
+            
+            let allOrders = [];
+
+            // --- אתחול והצגת אפשרויות סינון מחסנים ---
+            const populateWarehouseFilter = () => {
+                CONST_WAREHOUSES.forEach(w => {
+                    const option = document.createElement('option');
+                    option.value = w.id;
+                    option.textContent = w.name;
+                    warehouseFilter.appendChild(option);
+                });
+            };
+            populateWarehouseFilter();
+
+            // --- לוגיקת CRUD וטעינת נתונים ---
+            const initializeReportApp = () => {
+                if (!window.db || !window.auth.currentUser) return;
+                
+                const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+                const collectionPath = `/artifacts/${appId}/users/${window.auth.currentUser.uid}/container-orders`;
+                
+                const ordersRef = collection(window.db, collectionPath);
+                
+                // מאזינים לכל ההזמנות בקולקציה
+                onSnapshot(ordersRef, (snapshot) => {
+                    allOrders = [];
+                    snapshot.forEach((doc) => {
+                        const data = doc.data();
+                        allOrders.push({
+                            id: doc.id,
+                            ...data,
+                            orderDate: data.orderDate || '',
+                            // המרה של Timestamp לתאריך לצורך הצגה
+                            createdAt: data.createdAt?.toDate().toLocaleDateString('he-IL') || 'N/A'
+                        });
+                    });
+                    
+                    // מפעיל את הסינון בפעם הראשונה
+                    filterAndRenderOrders();
+                }, (error) => {
+                    console.error("Error loading orders for report:", error);
+                    ordersTableBody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-red-500">שגיאה בטעינת הנתונים: ${error.message}</td></tr>`;
+                });
+            };
+
+            // --- לוגיקת סינון ורינדור ---
+
+            const filterAndRenderOrders = () => {
+                const selectedWarehouseId = warehouseFilter.value;
+                let filteredOrders = allOrders;
+
+                if (selectedWarehouseId !== 'ALL') {
+                    filteredOrders = allOrders.filter(order => order.warehouseId === selectedWarehouseId);
+                }
+                
+                renderTable(filteredOrders);
+                renderSummaryAndChart(filteredOrders, selectedWarehouseId);
+            };
+
+            const renderTable = (orders) => {
+                const searchTerm = tableSearchInput.value.toLowerCase().trim();
+                
+                // סינון לפי חיפוש בטבלה
+                const finalOrders = orders.filter(order => {
+                    if (searchTerm === '') return true;
+                    return order.customerName.toLowerCase().includes(searchTerm) ||
+                           order.customerNumber.toLowerCase().includes(searchTerm) ||
+                           (order.orderNumber || '').toLowerCase().includes(searchTerm) ||
+                           (order.deliveryCertificateNumber || '').toLowerCase().includes(searchTerm);
+                });
+
+
+                if (finalOrders.length === 0) {
+                    ordersTableBody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-gray-500">לא נמצאו הזמנות תואמות במחסן זה.</td></tr>`;
+                    return;
+                }
+
+                ordersTableBody.innerHTML = finalOrders.map(order => {
+                    const statusColor = getStatusColor(order.status);
+                    return `
+                        <tr class="hover:bg-gray-50 transition-colors">
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${statusColor.bg} ${statusColor.text}">
+                                    ${order.status}
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${order.customerName} (ID: ${order.customerNumber})</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                הזמנה: ${order.orderNumber || 'N/A'} <br>
+                                תעודה: ${order.deliveryCertificateNumber || 'N/A'}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${order.actionType}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${order.orderDate}</td>
+                        </tr>
+                    `;
+                }).join('');
+            };
+
+            const getStatusColor = (status) => {
+                switch (status) {
+                    case 'פעיל': return { bg: 'bg-green-100', text: 'text-green-800', bar: '#10b981' };
+                    case 'ממתין לאישור': return { bg: 'bg-yellow-100', text: 'text-yellow-800', bar: '#f59e0b' };
+                    case 'הושלם': return { bg: 'bg-blue-100', text: 'text-blue-800', bar: '#6366f1' };
+                    default: return { bg: 'bg-gray-100', text: 'text-gray-800', bar: '#9ca3af' };
+                }
+            };
+
+            const renderSummaryAndChart = (orders, warehouseId) => {
+                const total = orders.length;
+                if (total === 0) {
+                    statusSummary.innerHTML = `<p class="text-gray-500">לא נמצאו הזמנות במחסן זה.</p>`;
+                    chartArea.innerHTML = '';
+                    return;
+                }
+
+                const statusCounts = orders.reduce((acc, order) => {
+                    acc[order.status] = (acc[order.status] || 0) + 1;
+                    return acc;
+                }, {});
+
+                // --- רינדור סיכום ---
+                const summaryHtml = `
+                    <div class="space-y-1">
+                        <p class="font-bold text-lg">סה"כ הזמנות: ${total}</p>
+                        ${Object.keys(statusCounts).map(status => {
+                            const count = statusCounts[status];
+                            const color = getStatusColor(status);
+                            return `<p class="text-sm ${color.text}">${status}: ${count}</p>`;
+                        }).join('')}
+                    </div>
+                `;
+                statusSummary.innerHTML = summaryHtml;
+
+                // --- רינדור תרשים סרגל ---
+                chartArea.innerHTML = Object.keys(statusCounts).map(status => {
+                    const count = statusCounts[status];
+                    const percentage = (count / total) * 100;
+                    const color = getStatusColor(status);
+                    return `
+                        <div class="mb-3">
+                            <div class="text-xs font-medium text-gray-600 mb-1 flex justify-between">
+                                <span>${status}</span>
+                                <span>${count} (${percentage.toFixed(0)}%)</span>
+                            </div>
+                            <div class="chart-bar" style="width: ${percentage}%; background-color: ${color.bar};">${count}</div>
+                        </div>
+                    `;
+                }).join('');
+            };
+
+            // --- Event Listeners ---
+            warehouseFilter.addEventListener('change', filterAndRenderOrders);
+            tableSearchInput.addEventListener('input', filterAndRenderOrders);
+            
+            openDashboardButton.addEventListener('click', () => {
+                window.location.href = 'index7.html'; 
+            });
+
+            // --- התחלת האפליקציה ---
+            if (window.firebaseAuthReady) {
+                initializeReportApp();
+            } else {
+                document.addEventListener('firebaseAuthReady', initializeReportApp);
+            }
+        });
+    </script>
+</body>
+</html>
