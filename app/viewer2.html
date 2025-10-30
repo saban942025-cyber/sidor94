@@ -3,11 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>DeliveryMaster Viewer v50.9 (Surgical Upgrade)</title>
+    <title>DeliveryMaster Viewer v50.9 (Final)</title>
     <!-- 
       DeliveryMaster Live Viewer App v50.9
-      הקובץ המקורי של המשתמש, עם השתלה כירורגית של Firebase v9 ומערכת תקשורת.
+      קובץ מקורי של המשתמש, עם השתלה כירורגית של Firebase v9 ומערכת תקשורת.
       כל המבנה והפונקציות המקוריות נשמרו.
+      מותאם לאינדקסים שהוגדרו.
     -->
     
     <!-- External Libraries (Unchanged) -->
@@ -520,7 +521,8 @@
         import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
         import { 
             getFirestore, onSnapshot, collection, query, where, 
-            orderBy, serverTimestamp, addDoc, limit, doc, getDocs
+            orderBy, serverTimestamp, addDoc, limit, doc, getDocs,
+            runTransaction, writeBatch
         } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         
         // --- Globals for Firebase ---
@@ -690,12 +692,12 @@
             messageUnsubscribeListeners = {};
 
             // v9 Query:
-            // !!! חשוב: שאילתה זו דורשת אינדקס ב-Firestore !!!
-            // (על 'status' ו-'delivery_date')
+            // !!! אינדקס נדרש: orders (status ASC, delivery_date DESC)
             const q = query(
                 collection(db, 'orders'),
                 where('status', 'not-in', ['סופק', 'מבוטל']),
-                orderBy('status'), // שנה ל-delivery_date אם תעדיף
+                orderBy('status'), // ממיין לפי סטטוס
+                orderBy('delivery_date', 'desc'), // ממיין לפי תאריך (דורש אינדקס)
                 limit(50)
             );
 
@@ -817,7 +819,7 @@
             return card;
         }
 
-        // --- Reports Page (Unchanged) ---
+        // --- Reports Page (MODIFIED to use new index) ---
         async function renderReports() {
             const startDate = document.getElementById('start-date').value;
             const endDate = document.getElementById('end-date').value;
@@ -835,11 +837,13 @@
             showToast("טוען נתוני דוח...", "info");
             
             // v9 Query:
+            // !!! אינדקס נדרש: orders (status ASC, delivery_date ASC)
             const q = query(
                 collection(db, 'orders'),
                 where('status', '==', 'סופק'),
                 where('delivery_date', '>=', startDate),
-                where('delivery_date', '<=', endDate)
+                where('delivery_date', '<=', endDate),
+                orderBy('delivery_date', 'asc') // הוספת מיון שתואם לאינדקס השני
             );
             
             try {
@@ -848,6 +852,10 @@
                 
                 if (completedOrders.length === 0) {
                      showToast("לא נמצאו הזמנות שסופקו בטווח התאריכים", "info");
+                     // נקה תרשימים קודמים
+                     if (warehouseChartInstance) warehouseChartInstance.destroy();
+                     if (timeChartInstance) timeChartInstance.destroy();
+                     document.getElementById('completed-customers-list').innerHTML = '<li class="p-3 text-center text-gray-500">לא נמצאו לקוחות.</li>';
                      return;
                 }
                 
@@ -998,6 +1006,7 @@
         /**
          * מאזין להודעות חדשות עבור כרטיס הזמנה ספציפי.
          * מדליק את המנורה אם יש הודעה חדשה שלא נקראה.
+         * תואם לאינדקס: messages (type ASC, readByViewer ASC)
          */
         function listenForNewMessages(orderId) {
             // נתק מאזין קודם אם קיים עבור ההזמנה הזו
@@ -1008,7 +1017,7 @@
             const q = query(
                 collection(db, 'orders', orderId, 'messages'),
                 where('type', '==', 'message_to_admin'),
-                where('readByViewer', '==', false), // חפש הודעות שלא נקראו
+                where('readByViewer', '==', false), // חפש הודעות שלא נקראו (תואם לאינדקס)
                 limit(1)
             );
             
@@ -1028,8 +1037,9 @@
         
         /**
          * פותח את המודל הקיים ומציג בו את היסטוריית הצ'אט.
+         * וגם מסמן את ההודעות כ"נקראו".
          */
-        window.showMessagesModal = function(orderId) {
+        window.showMessagesModal = async function(orderId) {
             if (!orderId) return;
 
             // 1. כבה את המנורה (מכיוון שהמשתמש נכנס לראות)
@@ -1038,8 +1048,8 @@
                 icon.classList.add('hidden');
             }
             
-            // 2. עדכן הודעות כ"נקראו" (לוגיקה עתידית - כרגע רק מכבה אייקון)
-            // updateMessagesAsRead(orderId);
+            // 2. עדכן הודעות כ"נקראו" (באצווה)
+            await updateMessagesAsRead(orderId);
             
             // 3. הצג את המודל הקיים
             document.getElementById('modal-title').innerText = `תקשורת (הזמנה ${orderId.substring(0,6)})`;
@@ -1054,6 +1064,41 @@
             
             // 4. טען את ההודעות
             loadOrderMessages(orderId);
+        }
+
+        /**
+         * פונקציה חדשה שמעדכנת את כל ההודעות ללקוח כנקראו
+         */
+        async function updateMessagesAsRead(orderId) {
+            console.log(`Marking messages as read for order ${orderId}...`);
+            // 1. מצא את כל ההודעות שטרם נקראו
+            const q = query(
+                collection(db, 'orders', orderId, 'messages'),
+                where('type', '==', 'message_to_admin'),
+                where('readByViewer', '==', false)
+            );
+            
+            try {
+                const snapshot = await getDocs(q);
+                if (snapshot.empty) {
+                    console.log("No new messages to mark as read.");
+                    return; // אין מה לעדכן
+                }
+                
+                // 2. צור אצווה (Batch) לעדכון כל ההודעות בבת אחת
+                const batch = writeBatch(db);
+                snapshot.docs.forEach(docRef => {
+                    batch.update(docRef.ref, { readByViewer: true });
+                });
+                
+                // 3. בצע את האצווה
+                await batch.commit();
+                console.log(`Marked ${snapshot.size} messages as read.`);
+
+            } catch (error) {
+                console.error("Error marking messages as read: ", error);
+                // אל תחסום את המשתמש, פשוט תרשום שגיאה
+            }
         }
 
         /**
@@ -1184,7 +1229,7 @@
                 senderName: author,
                 senderId: auth.currentUser ? auth.currentUser.uid : "viewer_user",
                 timestamp: serverTimestamp(),
-                type: "internal_note"
+                type: "internal_note" // סוג ההודעה
             };
             
             saveButton.disabled = true;
