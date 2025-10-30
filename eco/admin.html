@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DeliveryMaster v32.5 (Stable)</title>
+    <title>DeliveryMaster v32.6 (דיוק מפה)</title>
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
     <script src="https://cdn.tailwindcss.com"></script>
 
@@ -24,637 +24,1261 @@
             --bg-light: #f3f4f6; /* gray-100 */
             --bg-white: #ffffff;
             --border-color: #e5e7eb; /* gray-200 */
+            --text-dark: #1f2937; /* gray-800 */
+            --text-light: #6b7280; /* gray-500 */
+            --success-color: #10b981; /* emerald-500 */
+            --error-color: #ef4444; /* red-500 */
+            --warning-color: #f59e0b; /* amber-500 */
         }
+        
         html, body {
             font-family: 'Inter', sans-serif;
             direction: rtl;
             background-color: var(--bg-light);
-            min-height: 100vh;
             margin: 0;
             padding: 0;
+            height: 100%;
+            overflow-x: hidden;
         }
-        * { box-sizing: border-box; }
 
-        /* כרטיס הזמנה בסיסי */
-        .order-card {
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
-            transition: transform 0.2s, box-shadow 0.2s;
+        /* סגנונות כלליים */
+        .container-wrapper {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        /* כרטיס */
+        .card {
+            background-color: var(--bg-white);
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        /* כפתורים */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: 500;
+            transition: all 0.2s;
             cursor: pointer;
-            border-radius: 12px;
-            overflow: hidden;
+            user-select: none;
+            border: 1px solid transparent;
         }
-        .order-card:hover {
+        
+        .btn-primary {
+            background-color: var(--primary-color);
+            color: white;
+        }
+        .btn-primary:hover:not(:disabled) {
+            background-color: var(--primary-dark);
+            transform: translateY(-1px);
+            box-shadow: 0 2px 5px rgba(59, 130, 246, 0.4);
+        }
+        .btn-secondary {
+            background-color: var(--bg-light);
+            color: var(--text-dark);
+            border-color: var(--border-color);
+        }
+        .btn-secondary:hover:not(:disabled) {
+            background-color: var(--border-color);
+        }
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        /* טופס */
+        .form-label {
+            display: block;
+            font-weight: 500;
+            margin-bottom: 5px;
+            color: var(--text-dark);
+        }
+        .form-input, .form-select, .form-textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            margin-bottom: 15px;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .form-input:focus, .form-select:focus, .form-textarea:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+            outline: none;
+        }
+
+        /* מכולות בלוח המחוונים */
+        .container-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        .container-item {
+            display: flex;
+            flex-direction: column;
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            overflow: hidden;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .container-item:hover {
             transform: translateY(-2px);
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1);
+        }
+        .container-header {
+            padding: 15px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: var(--bg-light);
+        }
+        .container-body {
+            padding: 15px;
+            flex-grow: 1;
+        }
+        .container-footer {
+            padding: 10px 15px;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
         }
 
-        /* אייקוני נוצה */
-        .icon {
-            width: 20px;
-            height: 20px;
-            stroke-width: 2.5;
+        /* סטטוסים */
+        .status-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 9999px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            line-height: 1;
         }
-
-        /* מפת ליפלט */
-        #map-container {
-            height: 400px;
-            border-radius: 12px;
-            overflow: hidden;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-        }
-
+        .status-scheduled { background-color: #fcd34d; color: #92400e; } /* amber */
+        .status-delivered { background-color: #34d399; color: #065f46; } /* emerald */
+        .status-rental { background-color: #93c5fd; color: #1e40af; } /* blue */
+        .status-returned { background-color: #a7f3d0; color: #047857; } /* teal */
+        .status-error { background-color: #fca5a5; color: #991b1b; } /* red */
+        
         /* מודל */
         .modal-overlay {
+            position: fixed;
+            top: 0;
+            right: 0;
+            width: 100%;
+            height: 100%;
             background-color: rgba(0, 0, 0, 0.5);
-            z-index: 100;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .modal-overlay.active {
+            display: flex;
+            opacity: 1;
         }
         .modal-content {
-            max-width: 90%;
-            min-width: 320px;
-            max-height: 90vh;
-            overflow-y: auto;
-            transform: scale(0.95);
-            animation: modal-open 0.3s forwards;
-            z-index: 101;
+            background-color: white;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 600px;
+            transform: scale(0.9);
+            transition: transform 0.3s;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
         }
-        @keyframes modal-open {
-            to { transform: scale(1); }
+        .modal-overlay.active .modal-content {
+            transform: scale(1);
         }
-
-        /* טוסט הודעות */
+        .modal-header {
+            padding: 15px 20px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 1.25rem;
+            font-weight: 700;
+        }
+        .modal-body {
+            padding: 20px;
+        }
+        .modal-footer {
+            padding: 15px 20px;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            justify-content: flex-start;
+            gap: 10px;
+        }
+        
+        /* טוסט נוטיפיקציה */
         #toast-container {
             position: fixed;
             top: 20px;
-            right: 20px;
-            z-index: 1000;
+            left: 20px;
+            z-index: 2000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
         }
         .toast {
-            animation: slide-in 0.3s forwards, fade-out 0.5s 4s forwards;
+            background-color: white;
+            color: var(--text-dark);
+            padding: 15px 20px;
+            border-radius: 8px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            max-width: 300px;
             opacity: 0;
+            transition: opacity 0.3s, transform 0.3s;
+            transform: translateX(100%);
         }
-        @keyframes slide-in {
-            to { transform: translateX(0); opacity: 1; }
+        .toast.show {
+            opacity: 1;
+            transform: translateX(0);
         }
-        @keyframes fade-out {
-            from { opacity: 1; }
-            to { opacity: 0; }
-        }
+        .toast.success { border-right: 5px solid var(--success-color); }
+        .toast.error { border-right: 5px solid var(--error-color); }
+        .toast.warning { border-right: 5px solid var(--warning-color); }
 
-        /* סליידר למיון */
-        .sort-slider-track {
-            height: 8px;
-            background: var(--bg-light);
-            border-radius: 4px;
+        /* מפה */
+        #map-container {
+            height: 400px;
+            width: 100%;
+            border-radius: 8px;
+            overflow: hidden;
+            margin-top: 20px;
         }
-        .sort-slider-thumb {
-            width: 16px;
-            height: 16px;
-            background: var(--primary-color);
+        
+        .leaflet-container {
+            font-family: 'Inter', sans-serif;
+            direction: ltr; /* Leaflet צריך LTR */
+        }
+        
+        /* Loader */
+        .loader {
+            border: 4px solid var(--border-color);
+            border-top: 4px solid var(--primary-color);
             border-radius: 50%;
-            cursor: pointer;
-            border: 3px solid var(--bg-white);
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
-            position: relative;
-            z-index: 10;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+            margin-left: 10px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
 
-        /* כפתור */
-        .btn-primary {
-            transition: all 0.2s;
+        /* מוק-האדר */
+        .mock-header {
+            background: #2c3e50; /* כחול כהה */
+            color: white;
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            position: sticky;
+            top: 0;
+            z-index: 500;
         }
-        .btn-primary:hover {
-            background-color: var(--primary-dark);
+        .mock-header h1 { margin: 0; font-size: 1.5rem; }
+        .mock-header .user-info { font-size: 0.9rem; }
+
+        /* סלטים */
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-light);
+            border: 2px dashed var(--border-color);
+            border-radius: 12px;
+            margin-top: 20px;
         }
 
     </style>
 </head>
-<body class="p-4 sm:p-8">
+<body>
 
-    <div id="toast-container"></div>
-    <div class="max-w-7xl mx-auto">
-        <!-- כותרת ראשית -->
-        <header class="mb-8 flex justify-between items-center">
-            <h1 class="text-3xl font-bold text-gray-800 flex items-center">
-                <i data-feather="truck" class="icon ml-2 text-primary-color"></i>
-                ניהול הזמנות מכולות
-            </h1>
-            <div class="flex items-center space-x-4 space-x-reverse">
-                <button id="openNewOrderModalButton" class="bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded-lg font-semibold transition shadow-md flex items-center">
-                    <i data-feather="plus" class="icon ml-2"></i>
+    <header class="mock-header">
+        <h1>DeliveryMaster - מכולות</h1>
+        <div id="user-display" class="user-info">טוען משתמש...</div>
+    </header>
+
+    <div class="container-wrapper">
+
+        <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-6">
+            <div class="card p-4">
+                <p class="text-sm font-medium text-gray-500">סה"כ מכולות</p>
+                <p id="stat-total" class="text-2xl font-bold text-gray-900">0</p>
+            </div>
+            <div class="card p-4">
+                <p class="text-sm font-medium text-gray-500">בהספקה/בשטח</p>
+                <p id="stat-delivered" class="text-2xl font-bold text-emerald-600">0</p>
+            </div>
+            <div class="card p-4">
+                <p class="text-sm font-medium text-gray-500">שכירות פעילה</p>
+                <p id="stat-rental" class="text-2xl font-bold text-blue-600">0</p>
+            </div>
+            <div class="card p-4">
+                <p class="text-sm font-medium text-gray-500">מתוכננות</p>
+                <p id="stat-scheduled" class="text-2xl font-bold text-amber-600">0</p>
+            </div>
+        </div>
+
+        <div class="flex flex-col md:flex-row gap-4 mb-6">
+            <div class="flex-grow">
+                <input type="text" id="search-input" placeholder="חיפוש לפי לקוח, כתובת או ID..." class="form-input" />
+            </div>
+            <div class="flex gap-2">
+                <button id="openNewContainerModalButton" class="btn btn-primary whitespace-nowrap">
+                    <i data-feather="plus" class="w-5 h-5 ml-1"></i>
                     הזמנה חדשה
                 </button>
-                <div class="text-sm text-gray-500" id="user-info">טוען משתמש...</div>
+                <button id="toggleMapViewButton" class="btn btn-secondary whitespace-nowrap">
+                    <i data-feather="map" class="w-5 h-5 ml-1"></i>
+                    הצג מפה
+                </button>
             </div>
-        </header>
+        </div>
+        
+        <div id="map-container" style="display: none;">
+            <div id="map" style="height: 100%;"></div>
+        </div>
 
-        <!-- מסננים ומיון -->
-        <section class="mb-8 p-6 bg-white rounded-xl shadow-lg flex flex-wrap items-end gap-6">
-            <!-- סרגל חיפוש -->
-            <div class="flex-grow min-w-[200px]">
-                <label for="search-input" class="block text-sm font-medium text-gray-700 mb-1">חיפוש מהיר</label>
-                <div class="relative">
-                    <i data-feather="search" class="icon absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
-                    <input type="text" id="search-input" placeholder="חפש לקוח, כתובת או סטטוס..." class="w-full p-3 pr-10 border border-gray-300 rounded-lg focus:ring-primary-color focus:border-primary-color">
-                </div>
-            </div>
+        <div id="container-list-view" class="container-grid">
+            <!-- כרטיסי המכולות יטענו כאן -->
+        </div>
+        
+        <div id="empty-state" class="empty-state" style="display: none;">
+            <i data-feather="box" class="w-10 h-10 mx-auto mb-3"></i>
+            <p class="text-xl font-semibold">לא נמצאו הזמנות מכולות</p>
+            <p>התחל בלחיצה על "הזמנה חדשה" כדי להוסיף מכולה למערכת.</p>
+        </div>
 
-            <!-- סינון סטטוס -->
-            <div>
-                <label for="status-filter" class="block text-sm font-medium text-gray-700 mb-1">סינון לפי סטטוס</label>
-                <select id="status-filter" class="p-3 border border-gray-300 rounded-lg bg-white focus:ring-primary-color focus:border-primary-color min-w-[150px]">
-                    <option value="all">כל הסטטוסים</option>
-                    <option value="pending">ממתין</option>
-                    <option value="scheduled">מתוזמן</option>
-                    <option value="active">פעיל</option>
-                    <option value="returned">הוחזר</option>
-                    <option value="cancelled">בוטל</option>
-                </select>
-            </div>
-
-            <!-- מיון -->
-            <div>
-                <label for="sort-by" class="block text-sm font-medium text-gray-700 mb-1">מיון לפי</label>
-                <select id="sort-by" class="p-3 border border-gray-300 rounded-lg bg-white focus:ring-primary-color focus:border-primary-color min-w-[150px]">
-                    <option value="orderDate">תאריך הזמנה</option>
-                    <option value="deliveryType">סוג משלוח</option>
-                    <option value="status">סטטוס</option>
-                </select>
-            </div>
-        </section>
-
-        <!-- מפה (יוצג בלחיצה) -->
-        <section id="map-section" class="mb-8 hidden">
-            <h2 class="text-xl font-semibold text-gray-700 mb-4 flex items-center">
-                <i data-feather="map-pin" class="icon ml-2"></i>
-                מפת מיקומים
-            </h2>
-            <div id="map-container"></div>
-            <p id="map-status" class="text-center text-sm text-gray-500 mt-2"></p>
-        </section>
-
-        <!-- רשימת ההזמנות -->
-        <section>
-            <h2 class="text-xl font-semibold text-gray-700 mb-4 flex items-center">
-                <i data-feather="list" class="icon ml-2"></i>
-                רשימת ההזמנות הפעילות
-            </h2>
-            <div id="orders-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                <!-- כרטיסי הזמנה ייטענו כאן -->
-            </div>
-            <p id="loading-message" class="text-center text-lg text-gray-500 mt-10">טוען הזמנות, אנא המתן...</p>
-            <p id="no-orders-message" class="text-center text-lg text-gray-500 mt-10 hidden">לא נמצאו הזמנות תואמות.</p>
-        </section>
     </div>
 
-    <!-- מודל עריכת הזמנה - CONTAINER EDIT MODAL -->
-    <div id="container-edit-modal" class="modal-overlay hidden fixed inset-0 flex items-center justify-center p-4">
-        <div class="modal-content bg-white p-6 rounded-xl shadow-2xl w-full md:w-1/2 lg:w-1/3">
-            <h3 class="text-2xl font-bold mb-4 border-b pb-2 flex justify-between items-center">
-                עריכת הזמנת מכולה
-                <button onclick="closeContainerEditModal()" class="text-gray-400 hover:text-gray-600">
-                    <i data-feather="x" class="icon"></i>
-                </button>
-            </h3>
-            <form id="container-edit-form">
-                <input type="hidden" id="container-edit-id">
-                <p class="text-sm text-gray-600 mb-4">עדכון עבור הזמנה: <span id="container-edit-order-id" class="font-semibold text-gray-800"></span></p>
+    <!-- מודל הוספת מכולה חדשה -->
+    <div id="new-container-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>הזמנת מכולה חדשה</h2>
+                <button onclick="closeNewContainerModal()"><i data-feather="x" class="w-6 h-6"></i></button>
+            </div>
+            <div class="modal-body">
+                <form id="new-container-form">
+                    <label for="customer-name" class="form-label">שם לקוח</label>
+                    <input type="text" id="customer-name" class="form-input" required>
 
-                <div class="mb-4">
-                    <label for="container-edit-type" class="block text-sm font-medium text-gray-700">סוג משלוח</label>
-                    <select id="container-edit-type" class="w-full p-3 border border-gray-300 rounded-lg mt-1 focus:ring-primary-color focus:border-primary-color">
-                        <option value="drop_off">הורדה</option>
-                        <option value="pick_up">איסוף</option>
-                        <option value="replace">החלפה</option>
+                    <label for="customer-address" class="form-label">כתובת</label>
+                    <input type="text" id="customer-address" class="form-input" required>
+
+                    <label for="container-type" class="form-label">סוג מכולה</label>
+                    <select id="container-type" class="form-select" required>
+                        <option value="12m">12 מ"ק</option>
+                        <option value="9m">9 מ"ק</option>
+                        <option value="8m">8 מ"ק</option>
+                        <option value="other">אחר</option>
                     </select>
-                </div>
+                    
+                    <label for="delivery-type" class="form-label">סוג הזמנה</label>
+                    <select id="delivery-type" class="form-select" required>
+                        <option value="delivery">אספקה</option>
+                        <option value="exchange">החלפה</option>
+                        <option value="removal">הוצאה</option>
+                    </select>
 
-                <div class="grid grid-cols-2 gap-4 mb-4">
-                    <div>
-                        <label for="container-edit-date" class="block text-sm font-medium text-gray-700">תאריך מבוקש</label>
-                        <input type="date" id="container-edit-date" class="w-full p-3 border border-gray-300 rounded-lg mt-1 focus:ring-primary-color focus:border-primary-color" required>
+                    <label for="order-date" class="form-label">תאריך מתוכנן</label>
+                    <input type="date" id="order-date" class="form-input" required>
+                    
+                    <label for="order-time" class="form-label">שעה מתוכננת</label>
+                    <input type="time" id="order-time" class="form-input">
+
+                    <label for="new-notes" class="form-label">הערות</label>
+                    <textarea id="new-notes" class="form-textarea" rows="3"></textarea>
+                    
+                    <div id="new-map-preview" style="height: 250px; margin-top: 15px; border-radius: 6px; display: none;"></div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="submit" form="new-container-form" id="save-new-container-button" class="btn btn-primary">שמור הזמנה</button>
+                <button type="button" class="btn btn-secondary" onclick="closeNewContainerModal()">ביטול</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- מודל עריכת מכולה קיימת -->
+    <div id="edit-container-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>עריכת הזמנת מכולה</h2>
+                <button onclick="closeContainerEditModal()"><i data-feather="x" class="w-6 h-6"></i></button>
+            </div>
+            <div class="modal-body">
+                <form id="edit-container-form">
+                    <p class="text-sm font-medium text-gray-500 mb-3">לקוח: <span id="container-edit-customer-name" class="font-semibold text-gray-800"></span> (ID: <span id="container-edit-order-id"></span>)</p>
+
+                    <label for="container-edit-type" class="form-label">סוג מכולה</label>
+                    <select id="container-edit-type" class="form-select" disabled>
+                        <option value="12m">12 מ"ק</option>
+                        <option value="9m">9 מ"ק</option>
+                        <option value="8m">8 מ"ק</option>
+                        <option value="other">אחר</option>
+                    </select>
+                    
+                    <label for="container-edit-delivery-type" class="form-label">סוג הזמנה</label>
+                    <select id="container-edit-delivery-type" class="form-select" required>
+                        <option value="delivery">אספקה</option>
+                        <option value="exchange">החלפה</option>
+                        <option value="removal">הוצאה</option>
+                    </select>
+
+                    <label for="container-edit-date" class="form-label">תאריך מתוכנן</label>
+                    <input type="date" id="container-edit-date" class="form-input" required>
+                    
+                    <label for="container-edit-time" class="form-label">שעה מתוכננת</label>
+                    <input type="time" id="container-edit-time" class="form-input">
+
+                    <label for="container-edit-notes" class="form-label">הערות</label>
+                    <textarea id="container-edit-notes" class="form-textarea" rows="3"></textarea>
+                    
+                    <div id="rental-info-block" class="bg-blue-50 border border-blue-200 p-3 rounded-lg mt-4 hidden">
+                        <p class="font-medium text-blue-800 mb-2">מידע שכירות</p>
+                        <p class="text-sm mb-1">תאריך התחלת שכירות: <span id="rental-start-display">--</span></p>
+                        <p class="text-sm mb-1">ימים בשטח: <span id="rental-days-display">--</span></p>
+                        <button type="button" id="set-rental-return-button" class="btn btn-secondary btn-sm mt-2">הגדר כהוחזר היום</button>
                     </div>
-                    <div>
-                        <label for="container-edit-time" class="block text-sm font-medium text-gray-700">שעת הגעה</label>
-                        <input type="time" id="container-edit-time" class="w-full p-3 border border-gray-300 rounded-lg mt-1 focus:ring-primary-color focus:border-primary-color">
-                    </div>
-                </div>
-
-                <div class="mb-4">
-                    <label for="container-edit-notes" class="block text-sm font-medium text-gray-700">הערות להזמנה</label>
-                    <textarea id="container-edit-notes" rows="3" class="w-full p-3 border border-gray-300 rounded-lg mt-1 focus:ring-primary-color focus:border-primary-color"></textarea>
-                </div>
-
-                <div class="mb-6">
-                    <label for="container-edit-rental-start" class="block text-sm font-medium text-gray-700">תאריך התחלת שכירות (למכולות פעילות)</label>
-                    <input type="date" id="container-edit-rental-start" class="w-full p-3 border border-gray-300 rounded-lg mt-1 focus:ring-primary-color focus:border-primary-color">
-                    <p class="text-xs text-gray-500 mt-1">מלא רק אם המכולה כבר בשטח (סטטוס 'פעיל').</p>
-                </div>
-
-                <div class="flex justify-end space-x-3 space-x-reverse">
-                    <button type="button" onclick="closeContainerEditModal()" class="bg-gray-300 hover:bg-gray-400 text-gray-800 py-2 px-4 rounded-lg font-semibold transition">ביטול</button>
-                    <button type="submit" id="save-container-order-btn" class="btn-primary bg-primary-color text-white py-2 px-4 rounded-lg font-semibold shadow-md">שמור שינויים</button>
-                </div>
-            </form>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="submit" form="edit-container-form" id="save-edit-container-button" class="btn btn-primary">שמור שינויים</button>
+                <button type="button" class="btn btn-secondary" onclick="closeContainerEditModal()">ביטול</button>
+            </div>
         </div>
     </div>
 
 
-    <!-- סקריפטים -->
+    <!-- מודל אישור החזרה -->
+    <div id="confirm-return-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>אישור החזרת מכולה</h2>
+                <button onclick="closeConfirmReturnModal()"><i data-feather="x" class="w-6 h-6"></i></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-4">האם אתה בטוח שברצונך לסמן את המכולה של <strong id="return-customer-name-display"></strong> כ"הוחזרה"?</p>
+                <p class="mb-4">תאריך ההחזרה יוגדר ל- <strong id="return-date-display"></strong>.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="confirm-return-button" class="btn bg-green-500 hover:bg-green-600 text-white">אשר החזרה</button>
+                <button type="button" class="btn btn-secondary" onclick="closeConfirmReturnModal()">ביטול</button>
+            </div>
+        </div>
+    </div>
+
+
+    <div id="toast-container"></div>
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'primary': '#3b82f6',
+                        'primary-dark': '#2563eb',
+                    },
+                }
+            }
+        }
+    </script>
+
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, updateDoc, collection, query, where, onSnapshot, addDoc, serverTimestamp, deleteDoc, Timestamp, orderBy, arrayRemove, arrayUnion } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { 
+            getFirestore, collection, doc, query, where, onSnapshot, 
+            addDoc, updateDoc, deleteDoc, serverTimestamp, 
+            Timestamp, writeBatch, getDocs, orderBy
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // --- UI HELPERS ---
+        // --- הגדרות גלובליות ו-Firebase ---
+        // קריטי: הגדרת המשתנים הגלובליים המגיעים מהסביבה לפני השימוש
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null; 
+
+        // 1. אתחול Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+        let userId = null; 
+        let currentMap = null;
+        let mapMarkers = [];
+        let isDashboardInitialized = false; // דגל למניעת אתחול כפול
+
+        // 2. שמירת שירותי Firebase ב-window לשימוש בקוד רגיל
+        window.firebaseServices = {
+            db, auth, collection, doc, query, where, onSnapshot, 
+            addDoc, updateDoc, deleteDoc, serverTimestamp, 
+            Timestamp, writeBatch, getDocs, orderBy, initializeApp, getAuth
+        };
+        // דגל window.firebaseAuthReady הוסר - נסמוך על isDashboardInitialized
+
+        // 3. הגדרות נתיבים
+        function getPrivateCollectionPath(collectionName) {
+             if (!userId) {
+                console.error("User ID is not defined. Cannot construct private path. Waiting for auth...");
+                return null;
+             }
+             return `/artifacts/${appId}/users/${userId}/${collectionName}`;
+        }
+        
+        // --- מערכת לוגים משופרת ---
+        const SmartLog = {
+            info: (msg, component = "App", data = {}) => console.log(`[INFO] [${component}] ${msg}`, data),
+            error: (err, component = "App", data = {}) => console.error(`[ERROR] [${component}] ${err.message || err}`, data, err),
+            warn: (msg, component = "App", data = {}) => console.warn(`[WARN] [${component}] ${msg}`, data)
+        };
+        // setLogLevel('debug'); // אם נרצה לראות לוגים של Firebase
+        
+        // --- פונקציות עזר כלליות ---
 
         /**
          * מציג הודעת טוסט למשתמש
          * @param {string} message - ההודעה להצגה
-         * @param {'success'|'error'|'info'} type - סוג ההודעה
+         * @param {'success'|'error'|'warning'} type - סוג ההודעה
          */
-        function showToast(message, type) {
+        function showToast(message, type = 'info') {
             const container = document.getElementById('toast-container');
-            if (!container) return;
-
-            const colorMap = {
-                success: 'bg-green-500',
-                error: 'bg-red-500',
-                info: 'bg-blue-500'
-            };
-
             const toast = document.createElement('div');
-            toast.className = `toast p-4 mb-3 rounded-lg text-white shadow-xl ${colorMap[type] || colorMap.info} flex items-center transform translate-x-full`;
-            toast.textContent = message;
+            toast.className = `toast ${type}`;
+            toast.innerHTML = `<p class="font-semibold">${type === 'success' ? 'הצלחה' : type === 'error' ? 'שגיאה' : 'מידע'}</p><p class="text-sm">${message}</p>`;
+            container.appendChild(toast);
 
-            container.prepend(toast); // הוספה לראש הרשימה
-            setTimeout(() => toast.remove(), 5000); // הסרה לאחר 5 שניות
+            setTimeout(() => {
+                toast.classList.add('show');
+            }, 10);
+
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => {
+                    container.removeChild(toast);
+                }, 300);
+            }, 5000);
         }
-        window.showToast = showToast;
 
         /**
-         * פתיחת מודל עריכת מכולה
-         * @param {string} orderId - ID של ההזמנה
-         * @param {object} data - נתוני ההזמנה
+         * ממיר אובייקט Timestamp של Firebase לאובייקט Date
+         * @param {Timestamp|Date} timestamp - אובייקט Timestamp או Date
+         * @returns {Date | null}
          */
-        function openContainerEditModal(orderId, data) {
-            document.getElementById('container-edit-id').value = orderId;
-            document.getElementById('container-edit-order-id').textContent = orderId;
-            document.getElementById('container-edit-type').value = data.deliveryType || 'drop_off';
-            document.getElementById('container-edit-date').value = data.orderDate || '';
-            document.getElementById('container-edit-time').value = data.orderTime || '';
-            document.getElementById('container-edit-notes').value = data.notes || '';
+        function toDate(timestamp) {
+            if (timestamp && timestamp.toDate) {
+                return timestamp.toDate();
+            }
+            if (timestamp instanceof Date) {
+                return timestamp;
+            }
+            return null;
+        }
 
-            // המרת Timestamp לתאריך input מסוג date
-            if (data.rentalStartDate && data.rentalStartDate.toDate) {
-                document.getElementById('container-edit-rental-start').value = data.rentalStartDate.toDate().toISOString().substring(0, 10);
+        /**
+         * מעצב תאריך ושעה לפורמט קריא
+         * @param {Date | Timestamp} dateObj - תאריך או Timestamp
+         * @param {boolean} includeTime - האם לכלול שעה
+         * @returns {string}
+         */
+        function formatDateTime(dateObj, includeTime = false) {
+            const date = toDate(dateObj);
+            if (!date) return 'לא זמין';
+            
+            const options = { 
+                year: 'numeric', 
+                month: 'numeric', 
+                day: 'numeric' 
+            };
+            if (includeTime) {
+                options.hour = '2-digit';
+                options.minute = '2-digit';
+                options.hour12 = false;
+            }
+            return date.toLocaleString('he-IL', options);
+        }
+
+        /**
+         * מחשב את מספר הימים בין תאריך התחלה להיום
+         * @param {Date | Timestamp} startDateObj - תאריך התחלה
+         * @returns {number | string}
+         */
+        function calculateDaysInField(startDateObj) {
+            const startDate = toDate(startDateObj);
+            if (!startDate) return 'N/A';
+            const now = new Date();
+            // הגדרת שעה ל-00:00:00 כדי לחשב הפרש ימים מדויק
+            startDate.setHours(0, 0, 0, 0);
+            now.setHours(0, 0, 0, 0);
+            
+            const diffTime = Math.abs(now.getTime() - startDate.getTime());
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+            return diffDays;
+        }
+        
+        /**
+         * ממיר כתובת לקואורדינטות גיאוגרפיות (mock implementation)
+         * @param {string} address - הכתובת
+         * @returns {Promise<{lat: number, lng: number} | null>}
+         */
+        async function geocodeAddress(address) {
+            SmartLog.warn("Mock Geocoding: Using mocked coordinates for address.", "Map");
+            // שימוש בקואורדינטות מוקוות המייצגות מרכז תל אביב ומעט הזחה רנדומלית
+            const baseLat = 32.0853;
+            const baseLng = 34.7818;
+            const latOffset = (Math.random() - 0.5) * 0.05; // 0.05 זה בערך 5 ק"מ
+            const lngOffset = (Math.random() - 0.5) * 0.05;
+            
+            return {
+                lat: baseLat + latOffset,
+                lng: baseLng + lngOffset
+            };
+        }
+
+
+        // --- פונקציות מודל והצגה ---
+        
+        function openNewContainerModal() {
+            document.getElementById('new-container-modal').classList.add('active');
+            // איפוס טופס ופתיחת המפה אם צריך
+            document.getElementById('new-container-form').reset();
+            document.getElementById('new-map-preview').style.display = 'none';
+        }
+
+        function closeNewContainerModal() {
+            document.getElementById('new-container-modal').classList.remove('active');
+        }
+
+        function openContainerEditModal(orderData) {
+            const modal = document.getElementById('edit-container-modal');
+            
+            document.getElementById('container-edit-customer-name').textContent = orderData.customerName;
+            document.getElementById('container-edit-order-id').textContent = orderData.id;
+            
+            // עדכון שדות הטופס
+            document.getElementById('container-edit-type').value = orderData.containerType || '12m';
+            document.getElementById('container-edit-delivery-type').value = orderData.deliveryType || 'delivery';
+            document.getElementById('container-edit-notes').value = orderData.notes || '';
+            
+            const orderDate = toDate(orderData.orderDate);
+            if (orderDate) {
+                 document.getElementById('container-edit-date').value = orderDate.toISOString().split('T')[0];
+                 document.getElementById('container-edit-time').value = orderData.orderTime || '';
             } else {
-                document.getElementById('container-edit-rental-start').value = '';
+                 document.getElementById('container-edit-date').value = '';
+                 document.getElementById('container-edit-time').value = '';
+            }
+            
+            // עדכון כפתור השמירה עם ID
+            document.getElementById('save-edit-container-button').dataset.orderId = orderData.id;
+            
+            // עדכון פרטי שכירות
+            const rentalBlock = document.getElementById('rental-info-block');
+            const setReturnButton = document.getElementById('set-rental-return-button');
+            
+            if (orderData.status === 'delivered' || orderData.status === 'rental') {
+                rentalBlock.classList.remove('hidden');
+                setReturnButton.onclick = () => showConfirmReturnModal(orderData.id, orderData.customerName);
+                
+                const startDate = toDate(orderData.rentalStartDate);
+                document.getElementById('rental-start-display').textContent = startDate ? formatDateTime(startDate) : 'טרם החלה';
+                document.getElementById('rental-days-display').textContent = startDate ? `${calculateDaysInField(startDate)} ימים` : '0 ימים';
+                
+                if (orderData.status === 'rental') {
+                    setReturnButton.classList.remove('hidden');
+                } else {
+                    setReturnButton.classList.add('hidden');
+                }
+                
+            } else {
+                rentalBlock.classList.add('hidden');
             }
 
-            document.getElementById('container-edit-modal').classList.remove('hidden');
-            feather.replace();
+            modal.classList.add('active');
         }
-        window.openContainerEditModal = openContainerEditModal;
 
         function closeContainerEditModal() {
-            document.getElementById('container-edit-modal').classList.add('hidden');
+            document.getElementById('edit-container-modal').classList.remove('active');
         }
-        window.closeContainerEditModal = closeContainerEditModal;
+        
+        let currentReturnOrderId = null;
+        let currentReturnCustomerName = null;
 
+        function showConfirmReturnModal(orderId, customerName) {
+            closeContainerEditModal();
+            currentReturnOrderId = orderId;
+            currentReturnCustomerName = customerName;
+            const today = new Date();
+            
+            document.getElementById('return-customer-name-display').textContent = customerName;
+            document.getElementById('return-date-display').textContent = formatDateTime(today);
+            document.getElementById('confirm-return-modal').classList.add('active');
+        }
+        
+        function closeConfirmReturnModal() {
+            document.getElementById('confirm-return-modal').classList.remove('active');
+            currentReturnOrderId = null;
+            currentReturnCustomerName = null;
+        }
 
-        // --- FIREBASE AND DATA LOGIC ---
-
-        // Log utility
-        const SmartLog = {
-            info: (message, context, details) => console.log(`[INFO][${context}] ${message}`, details || ''),
-            error: (error, context, details) => console.error(`[ERROR][${context}] ${error.message || error}`, details || error),
-        };
-        window.SmartLog = SmartLog;
-
-        // Globals for Firebase services
-        let db, auth;
-        let userId = 'loading'; // Will be updated on auth state change
-        window.isAuthReady = false; // Flag to indicate if auth check is complete
-
+        // --- פונקציות CRUD ---
+        
         /**
-         * בונה נתיב קולקציה פרטי ספציפי למשתמש ולאפליקציה.
-         * @param {string} collectionName - שם הקולקציה
-         * @returns {string|null} הנתיב המלא או null אם חסר userId
+         * יצירת כרטיס מכולה מנתוני הזמנה
+         * @param {object} order - נתוני ההזמנה מ-Firestore
+         * @returns {string} - HTML של כרטיס המכולה
          */
-        function getPrivateCollectionPath(collectionName) {
-            if (!userId || userId === 'loading') {
-                SmartLog.error("Attempt to access private collection before userId is set.", "Auth.Path");
-                return null;
-            }
-            return `artifacts/${window.appId}/users/${userId}/${collectionName}`;
-        }
-        window.getPrivateCollectionPath = getPrivateCollectionPath;
-
-
-        document.addEventListener('DOMContentLoaded', () => {
-
-            feather.replace();
-
-            // --- FIREBASE INITIALIZATION ---
-            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-            const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-            window.appId = appId;
-
-            if (Object.keys(firebaseConfig).length === 0) {
-                console.error("FATAL ERROR: Firebase config is missing. Application cannot connect to the database.");
-                showToast('שגיאה חמורה: הגדרות Firebase חסרות.', 'error');
-            } else {
-                const app = initializeApp(firebaseConfig);
-                db = getFirestore(app);
-                auth = getAuth(app);
-                setLogLevel('debug'); // Added for debugging
-
-                // Store services globally for use in handlers
-                window.firebaseServices = { db, auth, doc, updateDoc, collection, query, where, onSnapshot, addDoc, serverTimestamp, deleteDoc, Timestamp, orderBy, arrayRemove, arrayUnion };
-
-                // 1. Initial Sign-in Attempt
-                const initialAuth = async () => {
-                    try {
-                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token.length > 0) {
-                            await signInWithCustomToken(auth, __initial_auth_token);
-                            SmartLog.info("Signed in with custom token.", "Auth.Init");
-                        } else {
-                            await signInAnonymously(auth);
-                            SmartLog.info("Signed in anonymously.", "Auth.Init");
-                        }
-                    } catch (error) {
-                        SmartLog.error(error, "Auth.Init", { message: "Failed initial sign-in" });
-                    }
-                };
-                initialAuth();
-
-
-                // 2. State Change Listener
-                onAuthStateChanged(auth, (user) => {
-                    if (user) {
-                        userId = user.uid;
-                        window.isAuthReady = true;
-                        window.firebaseAuthReady = true;
-                        document.getElementById('user-info').textContent = `מחובר | ID: ${user.uid}`;
-                        document.dispatchEvent(new Event('firebaseAuthReady'));
-                        SmartLog.info("Auth state ready", "Auth.State", { userId });
-                    } else {
-                        userId = crypto.randomUUID(); // Fallback ID for anonymous/unauthenticated state
-                        window.isAuthReady = false;
-                        window.firebaseAuthReady = false;
-                        document.getElementById('user-info').textContent = `אורח | ID: ${userId.substring(0, 8)}...`;
-                        SmartLog.info("Auth state unauthenticated, using fallback ID.", "Auth.State");
-                    }
-                });
-
-                // Set up the main application listener only when auth is ready
-                document.addEventListener('firebaseAuthReady', initializeOrderDashboard);
-            }
-
-
-            // --- CORE APP LOGIC ---
-
-            let ordersListener;
-            let currentOrders = [];
-
-            function initializeOrderDashboard() {
-                // Clear previous listener if exists
-                if (ordersListener) ordersListener();
-
-                const collectionPath = getPrivateCollectionPath('container-orders');
-                if (!collectionPath) return; // Should not happen if auth is ready
-
-                const ordersRef = collection(db, collectionPath);
-                // Listen to all changes, then filter/sort in JS
-                const q = query(ordersRef);
-
-                SmartLog.info("Setting up real-time listener for orders.", "Firestore.Listen", { path: collectionPath });
-                document.getElementById('loading-message').classList.remove('hidden');
-
-                ordersListener = onSnapshot(q, (snapshot) => {
-                    currentOrders = snapshot.docs.map(doc => ({
-                        id: doc.id,
-                        ...doc.data()
-                    }));
-                    SmartLog.info(`Received ${currentOrders.length} orders.`, "Firestore.Snapshot");
-                    applyFiltersAndSort();
-                    document.getElementById('loading-message').classList.add('hidden');
-                }, (error) => {
-                    SmartLog.error(error, "Firestore.Listener", { message: "Failed to fetch orders" });
-                    showToast('שגיאה בטעינת הזמנות בזמן אמת. אנא רענן.', 'error');
-                    document.getElementById('loading-message').classList.add('hidden');
-                });
-            }
-
-            function applyFiltersAndSort() {
-                let filteredOrders = [...currentOrders];
-                const searchTerm = document.getElementById('search-input').value.toLowerCase().trim();
-                const statusFilter = document.getElementById('status-filter').value;
-                const sortBy = document.getElementById('sort-by').value;
-
-                // 1. Filter
-                filteredOrders = filteredOrders.filter(order => {
-                    const statusMatch = statusFilter === 'all' || order.status === statusFilter;
-                    const searchMatch = !searchTerm ||
-                                        (order.customerName && order.customerName.toLowerCase().includes(searchTerm)) ||
-                                        (order.address && order.address.toLowerCase().includes(searchTerm)) ||
-                                        (order.status && order.status.toLowerCase().includes(searchTerm));
-                    return statusMatch && searchMatch;
-                });
-
-                // 2. Sort
-                filteredOrders.sort((a, b) => {
-                    if (sortBy === 'orderDate') {
-                        // Sort by date (convert string to comparable format or use Timestamp if available)
-                        const dateA = a.orderDate || '0';
-                        const dateB = b.orderDate || '0';
-                        return dateA.localeCompare(dateB);
-                    }
-                    if (sortBy === 'deliveryType') {
-                        return (a.deliveryType || '').localeCompare(b.deliveryType || '');
-                    }
-                    if (sortBy === 'status') {
-                        return (a.status || '').localeCompare(b.status || '');
-                    }
-                    return 0;
-                });
-
-                renderOrders(filteredOrders);
-            }
-
-            function renderOrders(orders) {
-                const grid = document.getElementById('orders-grid');
-                grid.innerHTML = ''; // Clear existing content
-
-                if (orders.length === 0) {
-                    document.getElementById('no-orders-message').classList.remove('hidden');
-                    return;
-                }
-                document.getElementById('no-orders-message').classList.add('hidden');
-
-                orders.forEach(order => {
-                    const card = createOrderCard(order);
-                    grid.appendChild(card);
-                });
-                feather.replace(); // Re-render icons after DOM update
-            }
-
-            // Map Status Colors and Icons
+        function createContainerCard(order) {
             const statusMap = {
-                pending: { color: 'text-yellow-600 bg-yellow-100', text: 'ממתין', icon: 'clock' },
-                scheduled: { color: 'text-blue-600 bg-blue-100', text: 'מתוזמן', icon: 'calendar' },
-                active: { color: 'text-red-600 bg-red-100', text: 'פעיל בשטח', icon: 'alert-triangle' },
-                returned: { color: 'text-green-600 bg-green-100', text: 'הוחזר', icon: 'check-circle' },
-                cancelled: { color: 'text-gray-600 bg-gray-200', text: 'בוטל', icon: 'x-circle' },
-                default: { color: 'text-gray-600 bg-gray-200', text: 'לא ידוע', icon: 'help-circle' }
+                'scheduled': { text: 'מתוכנן', class: 'status-scheduled' },
+                'delivered': { text: 'הספקה', class: 'status-delivered' },
+                'exchange': { text: 'החלפה', class: 'status-delivered' },
+                'removal': { text: 'הוצאה', class: 'status-delivered' },
+                'rental': { text: 'בשכירות', class: 'status-rental' },
+                'returned': { text: 'הוחזר', class: 'status-returned' },
+                'error': { text: 'שגיאה', class: 'status-error' },
             };
+            
+            const status = statusMap[order.status] || statusMap.scheduled;
+            const orderDateStr = formatDateTime(order.orderDate, true);
+            const rentalStartDateStr = toDate(order.rentalStartDate) ? formatDateTime(order.rentalStartDate) : 'טרם החלה';
+            const daysInField = order.rentalStartDate ? calculateDaysInField(order.rentalStartDate) : '0';
+            
+            let rentalInfoHtml = '';
+            let actionButtons = '';
 
-            function createOrderCard(order) {
-                const { color, text, icon } = statusMap[order.status] || statusMap.default;
-                const statusBadge = `<span class="px-3 py-1 text-xs font-semibold rounded-full ${color} flex items-center"><i data-feather="${icon}" class="icon w-4 h-4 ml-1"></i> ${text}</span>`;
-
-                const card = document.createElement('div');
-                card.className = 'order-card bg-white p-5 border border-gray-200 flex flex-col justify-between';
-                card.innerHTML = `
-                    <div>
-                        <div class="flex justify-between items-start mb-3">
-                            <h3 class="text-lg font-bold text-gray-900">${order.customerName || 'לקוח לא ידוע'}</h3>
-                            ${statusBadge}
-                        </div>
-                        <p class="text-sm text-gray-700 flex items-center mb-2"><i data-feather="map-pin" class="icon w-4 h-4 ml-2 text-primary-color"></i> ${order.address || 'כתובת לא צוינה'}</p>
-                        <p class="text-sm text-gray-700 flex items-center mb-2"><i data-feather="box" class="icon w-4 h-4 ml-2 text-primary-color"></i> סוג: ${order.containerType || 'לא צוין'}</p>
-                        <p class="text-sm text-gray-600 flex items-center mb-2"><i data-feather="calendar" class="icon w-4 h-4 ml-2 text-gray-500"></i> מועד: ${order.orderDate || 'לא צוין'} בשעה ${order.orderTime || ''}</p>
-                        <p class="text-xs text-gray-500 mt-3 border-t pt-2">מזהה הזמנה: ${order.id.substring(0, 8)}...</p>
-                    </div>
-                    <div class="mt-4 flex space-x-2 space-x-reverse justify-end">
-                        <button onclick="openContainerEditModal('${order.id}', ${JSON.stringify(order).replace(/"/g, '&quot;')})" class="text-primary-color hover:text-primary-dark p-2 rounded-full transition" title="ערוך">
-                            <i data-feather="edit" class="icon w-5 h-5"></i>
-                        </button>
-                        <button onclick="handleDeleteContainerOrder('${order.id}')" class="text-red-500 hover:text-red-600 p-2 rounded-full transition" title="מחק">
-                            <i data-feather="trash-2" class="icon w-5 h-5"></i>
-                        </button>
-                    </div>
+            if (order.status === 'delivered' || order.status === 'rental') {
+                rentalInfoHtml = `
+                    <p class="text-sm text-gray-700">תחילת שכירות: <span class="font-medium">${rentalStartDateStr}</span></p>
+                    <p class="text-sm text-gray-700">ימים בשטח: <span class="font-medium">${daysInField}</span></p>
                 `;
-                return card;
+                if (order.status === 'rental') {
+                    actionButtons += `<button onclick="handleSetRentalReturn('${order.id}', new Date())" class="btn btn-secondary btn-sm">החזרה מהירה</button>`;
+                }
+            } else if (order.status === 'scheduled') {
+                actionButtons += `<button onclick="handleSetDelivered('${order.id}')" class="btn bg-green-500 hover:bg-green-600 text-white btn-sm">סמן כהספקה</button>`;
             }
 
-            // Event Listeners for Filters/Sort
-            document.getElementById('search-input').addEventListener('input', applyFiltersAndSort);
-            document.getElementById('status-filter').addEventListener('change', applyFiltersAndSort);
-            document.getElementById('sort-by').addEventListener('change', applyFiltersAndSort);
-
-            // --- CRUD Functions ---
-
-            /**
-             * טיפול בשמירת עריכת הזמנת מכולה
-             */
-            async function handleSaveContainerOrder(event) {
-                event.preventDefault();
-                const btn = document.getElementById('save-container-order-btn');
-                btn.disabled = true;
-                btn.innerText = 'שומר...';
-
-                const orderId = document.getElementById('container-edit-id').value;
-                const deliveryType = document.getElementById('container-edit-type').value;
-                const orderDate = document.getElementById('container-edit-date').value.trim();
-                const orderTime = document.getElementById('container-edit-time').value.trim();
-                const rentalStartDateStr = document.getElementById('container-edit-rental-start').value.trim();
-                const { db, doc, updateDoc, serverTimestamp, Timestamp } = window.firebaseServices;
-
-                if (!db || !orderId) {
-                    showToast('שגיאה: שירותי בסיס נתונים או ID חסרים.', 'error');
-                    SmartLog.error("Missing DB services or Order ID", "CRUD.Container.Edit");
-                    btn.disabled = false;
-                    btn.innerText = 'שמור שינויים';
-                    return;
-                }
-
-                try {
-                    const collectionPath = getPrivateCollectionPath('container-orders');
-                    if (!collectionPath) throw new Error("נתיב קולקציה אינו זמין.");
-                    const orderRef = doc(db, collectionPath, orderId);
-
-                    let rentalStartDate = null;
-                    if (rentalStartDateStr) {
-                         try {
-                             // יוצר Timestamp מתאריך ה-HTML
-                             rentalStartDate = Timestamp.fromDate(new Date(rentalStartDateStr));
-                             SmartLog.info("Rental start date set.", "CRUD.Container.Edit");
-                         } catch(e) {
-                             SmartLog.error(e, "CRUD.Container.Edit", { date: rentalStartDateStr });
-                             throw new Error("שגיאה בהמרת תאריך התחלת שכירות.");
-                         }
-                    }
-
-                    const updatedData = {
-                       deliveryType: deliveryType,
-                       orderDate: orderDate,
-                       orderTime: orderTime,
-                       notes: document.getElementById('container-edit-notes').value.trim(),
-                       rentalStartDate: rentalStartDate, // Update or clear the field
-                       lastModified: serverTimestamp()
-                    };
-
-                    await updateDoc(orderRef, updatedData);
-                    SmartLog.info("Container order updated", "CRUD.Container.Edit", { orderId, changes: updatedData });
-                    showToast('הזמנת מכולה עודכנה', 'success');
-                    closeContainerEditModal();
-                    // Listener will automatically refresh the container view if it's active
-
-                } catch (error) {
-                    showToast(`שגיאה בעדכון הזמנת מכולה: ${error.message}`, 'error');
-                    SmartLog.error(error, "CRUD.Container.Edit", { orderId });
-                } finally {
-                    btn.disabled = false;
-                    btn.innerText = 'שמור שינויים';
-                }
-            }
-            document.getElementById('container-edit-form').addEventListener('submit', handleSaveContainerOrder);
-            window.handleSaveContainerOrder = handleSaveContainerOrder;
-
-            /**
-             * טיפול במחיקת הזמנת מכולה
-             */
-            async function handleDeleteContainerOrder(orderId) {
-                if (!window.confirm("האם אתה בטוח שברצונך למחוק הזמנה זו?")) return;
-
-                const { db, doc, deleteDoc } = window.firebaseServices;
-                if (!db || !orderId) {
-                    showToast('שגיאה: שירותי בסיס נתונים או ID חסרים.', 'error');
-                    return;
-                }
-
-                try {
-                    const collectionPath = getPrivateCollectionPath('container-orders');
-                    if (!collectionPath) throw new Error("נתיב קולקציה אינו זמין.");
-
-                    await deleteDoc(doc(db, collectionPath, orderId));
-                    SmartLog.info("Container order deleted", "CRUD.Container.Delete", { orderId });
-                    showToast('הזמנת מכולה נמחקה בהצלחה', 'success');
-                } catch (error) {
-                    showToast(`שגיאה במחיקת הזמנת מכולה: ${error.message}`, 'error');
-                    SmartLog.error(error, "CRUD.Container.Delete", { orderId });
-                }
-            }
-            window.handleDeleteContainerOrder = handleDeleteContainerOrder;
-
-            // --- Map Logic (Stub) ---
-            // Simplified placeholder for map logic as it's not the focus of the current request
-            function initializeMap() {
-                 console.log("Map initialization logic goes here (Leaflet setup).");
-                 const mapElement = document.getElementById('map-container');
-                 if (mapElement && !mapElement.classList.contains('leaflet-container')) {
-                     const map = L.map('map-container').setView([32.0853, 34.7818], 10); // Tel Aviv
-                     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                     }).addTo(map);
-                     document.getElementById('map-status').textContent = 'המפה נטענה. מרקרים יתווספו עם מיקומי הזמנות.';
+            if (order.deliveryType === 'exchange' || order.deliveryType === 'removal') {
+                 // במידה וזה החלפה או הוצאה, נציג מידע קצת שונה
+                 rentalInfoHtml = `<p class="text-sm text-gray-700">סוג פעולה: <span class="font-medium">${order.deliveryType === 'exchange' ? 'החלפה' : 'הוצאה'}</span></p>`;
+                 // כפתור השלמת הפעולה 
+                 if (order.status === 'scheduled') {
+                    actionButtons = `<button onclick="handleSetCompleted('${order.id}')" class="btn bg-green-500 hover:bg-green-600 text-white btn-sm">סמן כבוצע</button>`;
                  }
             }
-            // Bind map initialization to a button click (if one exists)
-            // For now, leaving it unattached until required.
+            
+            actionButtons += `
+                <button onclick="openContainerEditModal(${JSON.stringify(order).replace(/"/g, '&quot;')})" class="btn btn-secondary btn-sm">
+                    <i data-feather="edit-2" class="w-4 h-4"></i>
+                </button>
+            `;
 
+
+            return `
+                <div class="container-item bg-white" data-order-id="${order.id}" data-customer="${order.customerName.toLowerCase()}">
+                    <div class="container-header">
+                        <span class="text-lg font-bold text-primary">${order.customerName}</span>
+                        <span class="status-badge ${status.class}">${status.text}</span>
+                    </div>
+                    <div class="container-body flex-grow">
+                        <p class="text-sm text-gray-500 mb-2">ID: ${order.id}</p>
+                        <p class="font-semibold mb-1">${order.address}</p>
+                        <p class="text-sm text-gray-700">מכולה: ${order.containerType}</p>
+                        <p class="text-sm text-gray-700 mb-2">תאריך מתוכנן: ${orderDateStr}</p>
+                        ${rentalInfoHtml}
+                        <p class="text-sm text-gray-500 mt-2 italic">${order.notes ? 'הערות: ' + order.notes : ''}</p>
+                    </div>
+                    <div class="container-footer">
+                        ${actionButtons}
+                    </div>
+                </div>
+            `;
+        }
+
+        /**
+         * לכידת נתונים מטופס הוספה ושמירה ב-Firestore
+         * @param {Event} event - אירוע שליחת הטופס
+         */
+        async function handleSaveNewContainerOrder(event) {
+            event.preventDefault();
+            const btn = document.getElementById('save-new-container-button');
+            btn.disabled = true;
+            btn.innerText = 'שומר...';
+            
+            try {
+                const { db, addDoc, collection, serverTimestamp } = window.firebaseServices;
+                const collectionPath = getPrivateCollectionPath('container-orders');
+                if (!collectionPath) return;
+
+                const customerName = document.getElementById('customer-name').value.trim();
+                const address = document.getElementById('customer-address').value.trim();
+                const containerType = document.getElementById('container-type').value;
+                const deliveryType = document.getElementById('delivery-type').value;
+                const orderDateStr = document.getElementById('order-date').value;
+                const orderTime = document.getElementById('order-time').value.trim();
+                const notes = document.getElementById('new-notes').value.trim();
+
+                if (!customerName || !address || !orderDateStr) {
+                    throw new Error("נא למלא את כל השדות הנדרשים (שם, כתובת, תאריך).");
+                }
+                
+                const orderDate = new Date(`${orderDateStr}T00:00:00`); // שמירת תאריך ללא שעה מקומית
+                const now = new Date();
+
+                // Mock Geocoding
+                const coordinates = await geocodeAddress(address);
+                if (!coordinates) {
+                    throw new Error("לא ניתן למצוא קואורדינטות עבור הכתובת.");
+                }
+
+                // הגדרת סטטוס התחלתי
+                let status = 'scheduled';
+                if (deliveryType === 'exchange' || deliveryType === 'removal') {
+                    status = 'scheduled';
+                }
+
+                const newOrder = {
+                    customerName,
+                    address,
+                    containerType,
+                    deliveryType,
+                    orderDate: Timestamp.fromDate(orderDate),
+                    orderTime,
+                    notes,
+                    status,
+                    coords: coordinates,
+                    createdAt: serverTimestamp(),
+                    lastModified: serverTimestamp()
+                };
+
+                const docRef = await addDoc(collection(db, collectionPath), newOrder);
+                SmartLog.info("New container order added", "CRUD.Container.Add", { id: docRef.id });
+                showToast('הזמנת מכולה חדשה נוצרה', 'success');
+                closeNewContainerModal();
+
+            } catch (error) {
+                showToast(`שגיאה בהוספת הזמנת מכולה: ${error.message}`, 'error');
+                SmartLog.error(error, "CRUD.Container.Add");
+            } finally {
+                btn.disabled = false;
+                btn.innerText = 'שמור הזמנה';
+            }
+        }
+        document.getElementById('new-container-form').addEventListener('submit', handleSaveNewContainerOrder);
+        
+        
+        /**
+         * עדכון פרטי הזמנת מכולה קיימת
+         */
+         async function handleSaveContainerOrder(event) {
+             event.preventDefault();
+             const btn = document.getElementById('save-edit-container-button');
+             const orderId = btn.dataset.orderId;
+             if (!orderId) return;
+
+             btn.disabled = true;
+             btn.innerText = 'שומר...';
+
+             try {
+                 const { db, doc, updateDoc, serverTimestamp, Timestamp } = window.firebaseServices;
+                 const collectionPath = getPrivateCollectionPath('container-orders');
+                 if (!collectionPath) return;
+
+                 const orderRef = doc(db, collectionPath, orderId);
+                 
+                 const deliveryType = document.getElementById('container-edit-delivery-type').value;
+                 const orderDateStr = document.getElementById('container-edit-date').value;
+                 const orderTime = document.getElementById('container-edit-time').value.trim();
+
+                 if (!orderDateStr) {
+                      throw new Error("תאריך מתוכנן הוא שדה חובה.");
+                 }
+                 
+                 const orderDate = Timestamp.fromDate(new Date(`${orderDateStr}T00:00:00`));
+
+                 // אם סוג ההזמנה הוא אספקה, וודא ש-rentalStartDate לא מוגדר אם אין צורך
+                 let rentalStartDate = null;
+                 if (deliveryType !== 'delivery') {
+                     // אם זה החלפה/הוצאה, אין צורך ב-rentalStartDate, ננקה אותו
+                     rentalStartDate = null;
+                 }
+                 // הסטטוס יתעדכן אוטומטית ע"י המאזין אם הוא משתנה
+                 
+                 const updatedData = {
+                    deliveryType: deliveryType,
+                    orderDate: orderDate,
+                    orderTime: orderTime,
+                    notes: document.getElementById('container-edit-notes').value.trim(),
+                    rentalStartDate: rentalStartDate, // Update or clear the field if delivery type changed
+                    lastModified: serverTimestamp()
+                 };
+
+                 await updateDoc(orderRef, updatedData);
+                 SmartLog.info("Container order updated", "CRUD.Container.Edit", { orderId, changes: updatedData });
+                 showToast('הזמנת מכולה עודכנה', 'success');
+                 closeContainerEditModal();
+                 // Listener will automatically refresh the container view if it's active
+
+             } catch (error) {
+                 showToast(`שגיאה בעדכון הזמנת מכולה: ${error.message}`, 'error');
+                 SmartLog.error(error, "CRUD.Container.Edit", { orderId });
+             } finally {
+                 btn.disabled = false;
+                 btn.innerText = 'שמור שינויים';
+             }
+         }
+        document.getElementById('edit-container-form').addEventListener('submit', handleSaveContainerOrder);
+
+
+        /**
+         * סימון מכולה כ"סופקה" (Delivered)
+         * @param {string} orderId - ID של ההזמנה
+         */
+        async function handleSetDelivered(orderId) {
+            const { db, doc, updateDoc, serverTimestamp, Timestamp } = window.firebaseServices;
+            const collectionPath = getPrivateCollectionPath('container-orders');
+            if (!collectionPath) return;
+
+            try {
+                // הגדרת תאריך התחלת שכירות להיום
+                await updateDoc(doc(db, collectionPath, orderId), {
+                    status: 'rental',
+                    rentalStartDate: Timestamp.now(),
+                    lastModified: serverTimestamp()
+                });
+                showToast('סטטוס הוגדר כ"סופק/בשכירות"', 'success');
+            } catch (error) {
+                showToast(`שגיאה בהגדרת סטטוס: ${error.message}`, 'error');
+                SmartLog.error(error, "CRUD.Container.Delivered", { orderId });
+            }
+        }
+        window.handleSetDelivered = handleSetDelivered;
+        
+        /**
+         * סימון פעולת החלפה/הוצאה כ"בוצעה" (Completed)
+         * @param {string} orderId - ID של ההזמנה
+         */
+        async function handleSetCompleted(orderId) {
+            const { db, doc, updateDoc, serverTimestamp } = window.firebaseServices;
+            const collectionPath = getPrivateCollectionPath('container-orders');
+            if (!collectionPath) return;
+
+            try {
+                await updateDoc(doc(db, collectionPath, orderId), {
+                    status: 'returned', // סמן כהוחזר כדי לסיים את ה-lifecycle של ההזמנה
+                    lastModified: serverTimestamp()
+                });
+                showToast('הפעולה סומנה כ"בוצעה"', 'success');
+            } catch (error) {
+                showToast(`שגיאה בהגדרת סטטוס: ${error.message}`, 'error');
+                SmartLog.error(error, "CRUD.Container.Completed", { orderId });
+            }
+        }
+        window.handleSetCompleted = handleSetCompleted;
+
+        /**
+         * סימון מכולה כ"הוחזרה" (Returned)
+         * @param {string} orderId - ID של ההזמנה
+         * @param {Date} date - תאריך ההחזרה
+         */
+        async function handleSetRentalReturn(orderId, date) {
+             const { db, doc, updateDoc, serverTimestamp, Timestamp } = window.firebaseServices;
+             const collectionPath = getPrivateCollectionPath('container-orders');
+             if (!collectionPath) return;
+
+             try {
+                  // אם הגיע דרך כפתור האישור
+                  if (typeof date === 'undefined' || date === null) {
+                       date = new Date();
+                  }
+
+                  const returnDate = Timestamp.fromDate(date);
+                  await updateDoc(doc(db, collectionPath, orderId), {
+                      status: 'returned',
+                      returnDate: returnDate,
+                      // אם אין תאריך התחלה, נגדיר את תאריך ההחזרה גם כתאריך התחלה למניעת שגיאות חישוב
+                      // (אם כי המצב הזה לא אמור לקרות)
+                      rentalStartDate: Timestamp.now(), 
+                      lastModified: serverTimestamp()
+                  });
+                  closeConfirmReturnModal();
+                  showToast('סטטוס שכירות הוגדר כ"הוחזר"', 'success');
+             } catch (error) {
+                  showToast(`שגיאה בהגדרת סטטוס: ${error.message}`, 'error');
+                  SmartLog.error(error, "CRUD.Rental.Return", { orderId });
+             }
+        }
+        window.handleSetRentalReturn = handleSetRentalReturn;
+        
+        document.getElementById('confirm-return-button').addEventListener('click', () => {
+             if (currentReturnOrderId) {
+                 handleSetRentalReturn(currentReturnOrderId, new Date());
+             }
         });
+
+
+        // --- לוגיקת המפה (Leaflet) ---
+
+        function initializeMap(containers) {
+            const mapContainer = document.getElementById('map');
+            if (!mapContainer) return;
+            
+            // אתחול המפה רק אם היא לא אותחלה
+            if (!currentMap) {
+                 currentMap = L.map('map').setView([32.0853, 34.7818], 12); // מרכז תל אביב
+                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    maxZoom: 19,
+                    attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                 }).addTo(currentMap);
+            }
+            
+            // ניקוי מרקרים קיימים
+            mapMarkers.forEach(marker => currentMap.removeLayer(marker));
+            mapMarkers = [];
+            
+            // הוספת מרקרים חדשים
+            let bounds = [];
+            containers.forEach(order => {
+                if (order.coords && (order.status === 'delivered' || order.status === 'rental')) {
+                    const lat = order.coords.lat;
+                    const lng = order.coords.lng;
+                    
+                    const marker = L.marker([lat, lng]).addTo(currentMap)
+                        .bindPopup(`<b>${order.customerName}</b><br>${order.address}<br>ID: ${order.id}`);
+                    
+                    mapMarkers.push(marker);
+                    bounds.push([lat, lng]);
+                }
+            });
+
+            // התאמת המפה לגבולות המרקרים
+            if (bounds.length > 0) {
+                 const newBounds = L.latLngBounds(bounds);
+                 currentMap.fitBounds(newBounds, { padding: [50, 50] });
+            } else {
+                 currentMap.setView([32.0853, 34.7818], 12);
+            }
+        }
+        
+        function toggleMapView(containers = []) {
+             const mapContainer = document.getElementById('map-container');
+             const listContainer = document.getElementById('container-list-view');
+             const isMapVisible = mapContainer.style.display !== 'none';
+             const toggleButton = document.getElementById('toggleMapViewButton');
+             
+             if (isMapVisible) {
+                 // מעבר לתצוגת רשימה
+                 mapContainer.style.display = 'none';
+                 listContainer.style.display = 'grid';
+                 toggleButton.innerHTML = `<i data-feather="map" class="w-5 h-5 ml-1"></i> הצג מפה`;
+             } else {
+                 // מעבר לתצוגת מפה
+                 listContainer.style.display = 'none';
+                 mapContainer.style.display = 'block';
+                 toggleButton.innerHTML = `<i data-feather="list" class="w-5 h-5 ml-1"></i> הצג רשימה`;
+                 // אתחול המפה וריענון המרקרים
+                 setTimeout(() => { // נותן זמן ל-DOM להתעדכן לפני אתחול המפה
+                    initializeMap(containers);
+                    currentMap?.invalidateSize(); // חשוב לוודא שהמפה מוצגת נכון
+                 }, 100);
+             }
+        }
+        
+        // --- לוגיקה ראשית ו-Listeners ---
+
+        /**
+         * עדכון סטטיסטיקות הלוח המחוונים
+         * @param {Array<object>} containers - רשימת המכולות המלאה
+         */
+        function updateStats(containers) {
+             const total = containers.length;
+             const scheduled = containers.filter(c => c.status === 'scheduled').length;
+             // נכלול גם החלפה/הוצאה מתוכננים כ'מתוכננים'
+             const deliveryTypesScheduled = containers.filter(c => 
+                 (c.status === 'scheduled' && c.deliveryType === 'delivery') || 
+                 (c.status === 'scheduled' && (c.deliveryType === 'exchange' || c.deliveryType === 'removal'))
+             ).length;
+             
+             // נסנן: 'delivered' הוא עבור פעולה שבוצעה (למשל, החלפה/הוצאה שסומנה כבוצעה). 'rental' הוא שכירות פעילה.
+             const inField = containers.filter(c => c.status === 'delivered' || c.status === 'rental').length;
+             const rental = containers.filter(c => c.status === 'rental').length;
+
+
+             document.getElementById('stat-total').textContent = total;
+             document.getElementById('stat-scheduled').textContent = deliveryTypesScheduled;
+             document.getElementById('stat-delivered').textContent = inField; // סטטיסטיקה זו משקפת 'בשטח'
+             document.getElementById('stat-rental').textContent = rental;
+        }
+
+        /**
+         * מאזין בזמן אמת להזמנות המכולות
+         */
+        function setupContainerListener() {
+            const { db, collection, query, onSnapshot } = window.firebaseServices;
+            const collectionPath = getPrivateCollectionPath('container-orders');
+            
+            // בדיקה נוספת
+            if (!collectionPath) {
+                SmartLog.error("User ID is missing or not authorized. Cannot start listener.", "Firestore.Listener");
+                return;
+            }
+
+            // שאילתה: כל ההזמנות, ממוינות לפי תאריך מתוכנן
+            const q = query(collection(db, collectionPath));
+            
+            onSnapshot(q, (snapshot) => {
+                const containers = [];
+                snapshot.forEach((doc) => {
+                    const data = doc.data();
+                    containers.push({ id: doc.id, ...data });
+                });
+                
+                // מיון ב-JavaScript (במקום orderBy ב-Firestore כדי למנוע דרישת Index)
+                containers.sort((a, b) => {
+                    const dateA = toDate(a.orderDate);
+                    const dateB = toDate(b.orderDate);
+                    // נמיין מהקרוב ביותר לרחוק ביותר
+                    return (dateA?.getTime() || 0) - (dateB?.getTime() || 0);
+                });
+                
+                SmartLog.info(`Received ${containers.length} container updates.`, "Firestore.Listener");
+                
+                // עדכון ה-UI
+                renderContainerList(containers);
+                updateStats(containers);
+                
+                // שמירת הנתונים הגולמיים ב-window לשימוש ע"י פונקציות כמו toggleMapView
+                window.currentContainers = containers; 
+            }, (error) => {
+                SmartLog.error(error, "Firestore.Listener.Error");
+                showToast("שגיאה בטעינת נתוני מכולות. ייתכן שאין הרשאות.", "error");
+            });
+        }
+        
+        function renderContainerList(containers) {
+            const listDiv = document.getElementById('container-list-view');
+            const emptyState = document.getElementById('empty-state');
+            
+            // נציג רק מכולות פעילות או מתוכננות (לא 'returned')
+            const activeContainers = containers
+                .filter(c => c.status !== 'returned');
+            
+            if (activeContainers.length === 0) {
+                listDiv.innerHTML = '';
+                emptyState.style.display = 'block';
+                return;
+            }
+            
+            emptyState.style.display = 'none';
+            listDiv.innerHTML = activeContainers.map(createContainerCard).join('');
+                
+            // הפעלת אייקוני Feather
+            feather.replace();
+            
+            // הפעלת פונקציית החיפוש לאחר הרינדור
+            const searchTerm = document.getElementById('search-input').value.toLowerCase().trim();
+            if (searchTerm) {
+                 const cards = listDiv.querySelectorAll('.container-item');
+                 cards.forEach(card => {
+                     const customerData = card.dataset.customer;
+                     const isVisible = customerData.includes(searchTerm);
+                     card.style.display = isVisible ? 'flex' : 'none';
+                 });
+            }
+        }
+        
+        /**
+         * פונקציית אתחול ראשית של לוח המחוונים
+         */
+        function initializeContainerDashboard() {
+            if (isDashboardInitialized) {
+                SmartLog.info("Dashboard already initialized. Skipping.", "App");
+                return;
+            }
+            
+            // הצגת ה-UID של המשתמש
+            document.getElementById('user-display').textContent = `משתמש: ${userId}`;
+            
+            // הגדרת מאזין לנתונים
+            setupContainerListener();
+            
+            // הגדרת מאזיני UI
+            document.getElementById('openNewContainerModalButton').addEventListener('click', openNewContainerModal);
+            document.getElementById('toggleMapViewButton').addEventListener('click', () => {
+                // העברת הנתונים הגולמיים לפונקציה, אם קיימים
+                toggleMapView(window.currentContainers || []); 
+            });
+
+            // לוגיקת חיפוש
+            document.getElementById('search-input').addEventListener('input', (e) => {
+                 const searchTerm = e.target.value.toLowerCase().trim();
+                 const listDiv = document.getElementById('container-list-view');
+                 const cards = listDiv.querySelectorAll('.container-item');
+                 cards.forEach(card => {
+                     const customerData = card.dataset.customer;
+                     const orderId = card.dataset.orderId;
+                     // חיפוש לפי שם לקוח או ID
+                     const isVisible = customerData.includes(searchTerm) || orderId.includes(searchTerm);
+                     card.style.display = isVisible ? 'flex' : 'none';
+                 });
+            });
+            
+            isDashboardInitialized = true;
+            SmartLog.info("Dashboard initialized successfully.", "App");
+
+        }
+        
+        // 4. לוגיקת אימות (Authentication)
+        async function authenticateAndInitialize() {
+            try {
+                if (initialAuthToken) {
+                    await signInWithCustomToken(auth, initialAuthToken);
+                    SmartLog.info("Attempted sign in with custom token.", "Auth");
+                } else {
+                    await signInAnonymously(auth);
+                    SmartLog.info("Attempted sign in anonymously.", "Auth");
+                }
+            } catch (error) {
+                SmartLog.error(error, "Auth.SignIn", { tokenExists: !!initialAuthToken });
+                showToast("שגיאה בהתחברות למערכת. בדוק את הגדרות Firebase.", "error");
+            }
+        }
+
+        // 5. המאזין הקריטי - מפעיל את לוח המחוונים רק לאחר אימות מוצלח
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                // הגדרת userId רק כשהוא מאומת
+                userId = user.uid;
+                window.userId = userId; 
+                
+                SmartLog.info(`Auth state changed. User ID set: ${userId}`, "Auth");
+                
+                // הפעלת האפליקציה רק כאן, ורק פעם אחת
+                initializeContainerDashboard(); 
+            } else {
+                userId = null;
+                window.userId = null;
+                SmartLog.warn("Auth state changed. User signed out or failed to sign in.", "Auth");
+            }
+        });
+
+        // 6. התחל את תהליך האימות מיד
+        authenticateAndInitialize();
+
     </script>
 </body>
 </html>
