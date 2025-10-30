@@ -348,12 +348,32 @@
     <!-- Toast Container -->
     <div id="toast-container"></div>
     
-    <!-- סקריפטים של Firebase ו-App Logic -->
+ <!-- טעינת Firebase -->
     <script type="module">
-        // ------------------------------------
-        // --- 1. הגדרות וייבוא שירותי Firebase ---
-        // ------------------------------------
+        // עדכון: שינוי לגרסה 9.15.0 והוספת פונקציות Timestamp, getApps, getApp
+        import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+        import { 
+            getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot, 
+            collection, query, where, Timestamp, runTransaction, getDocs, orderBy, serverTimestamp 
+        } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { setLogLevel } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        
+        // --- Mandatory Firebase Config & Auth (using globals) ---
+        // עדכון: שימוש במפתחות שסופקו כברירת מחדל (Fallback)
+        const fallbackConfig = {
+            apiKey: "AIzaSyDq0oVwS6zbEfsgrYBRkeBq80dDUKMedzo", 
+            authDomain: "saban94-76543.firebaseapp.com", 
+            projectId: "saban94-76543",
+            storageBucket: "saban94-76543.appspot.com", 
+            messagingSenderId: "41553157903", 
+            appId: "1:41553157903:web:cc33d252cff023be97a87a", 
+            measurementId: "G-XV6RZDESSB"
+        };
 
+        const firebaseConfig = typeof __firebase_config !== 'undefined'
+            ? JSON.parse(__firebase_config)
+            : fallbackConfig;
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where, addDoc, getDocs, serverTimestamp, setLogLevel, Timestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
