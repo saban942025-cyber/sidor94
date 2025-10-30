@@ -2189,7 +2189,6 @@
                 }
             } catch (e) { SmartLog.error(e, "UI.ShowLoader", { elementId, show }); }
          }
-         
         function showToast(message, type = 'info') {
             try {
                 const container = document.getElementById('toast-container');
@@ -2203,4 +2202,169 @@
                 
                 setTimeout(() => toast.classList.add('show'), 10); // Fade in
                 setTimeout(() => {
-                    toast.classList
+                    toast.classList.remove('show');
+                    setTimeout(() => container.removeChild(toast), 300); // Remove after fade
+                }, 4000);
+            } catch (e) { SmartLog.error(e, "UI.ShowToast", { message, type }); }
+         }
+         
+        function copyToClipboard(text) {
+             try {
+                if (!navigator.clipboard) {
+                    // Fallback for insecure contexts
+                    const textArea = document.createElement("textarea");
+                    textArea.value = text;
+                    document.body.appendChild(textArea);
+                    textArea.focus();
+                    textArea.select();
+                    try {
+                        document.execCommand('copy');
+                        SmartLog.info("Copied to clipboard (fallback)", "UI.Clipboard", { text });
+                        showToast('הועתק ללוח');
+                    } catch (err) {
+                        SmartLog.error(err, "UI.Clipboard.Fallback");
+                        showToast('שגיאה בהעתקה', 'error');
+                    }
+                    document.body.removeChild(textArea);
+                    return;
+                }
+                navigator.clipboard.writeText(text).then(() => {
+                    SmartLog.info("Copied to clipboard", "UI.Clipboard", { text });
+                    showToast('הועתק ללוח');
+                }, (err) => {
+                    SmartLog.error(err, "UI.Clipboard.Navigator");
+                    showToast('שגיאה בהעתקה', 'error');
+                });
+             } catch (err) { SmartLog.error(err, "UI.Clipboard.Main"); }
+         }
+         
+        function copyCustomerLink(orderId) {
+            try {
+                const order = state.orders.find(o => o.id === orderId);
+                if (!order) return;
+                const link = `https://delivery-master.web.app/track.html?id=${order.id}`;
+                copyToClipboard(link);
+            } catch (e) { SmartLog.error(e, "UI.CopyCustomerLink", { orderId }); }
+         }
+        window.copyCustomerLink = copyCustomerLink;
+        
+        async function sendGlobalPing() {
+             const message = prompt("הקלד הודעה קצרה לשליחה לכל הנהגים הפעילים:");
+             if (!message || message.trim() === '') return;
+             
+             SmartLog.info("Sending global ping...", "CRUD.Ping", { message });
+             try {
+                 // Assuming 'globalPings' is the collection name
+                 await addDoc(collection(db, "globalPings"), {
+                     message: message.trim(),
+                     createdAt: serverTimestamp(),
+                     sentBy: 'admin'
+                 });
+                 SmartLog.info("Global ping sent successfully", "CRUD.Ping");
+                 showToast('התראה גלובלית נשלחה', 'success');
+             } catch (error) {
+                 SmartLog.error(error, "CRUD.Ping", { message });
+                 showToast('שגיאה בשליחת התראה', 'error');
+             }
+         }
+        window.sendGlobalPing = sendGlobalPing;
+
+        // --- NEW: CONTAINER EDIT MODAL FUNCTIONS (with Error Handling) ---
+        function openContainerEditModal(orderId) {
+            try {
+                const order = state.activeContainers.find(c => c.orderId === orderId);
+                let fallbackOrder = null;
+                
+                if (!order) {
+                    fallbackOrder = state.orders.find(o => o.id === orderId);
+                    if (!fallbackOrder || !VIRTUAL_WAREHOUSES.includes(fallbackOrder.warehouse)) {
+                        showToast('שגיאה: פרטי הזמנת מכולה לא נמצאו', 'error');
+                        return;
+                    }
+                    SmartLog.warn("Opening container edit for a non-active or fallback order", "UI.OpenContainerEdit", { orderId });
+                }
+                
+                const orderData = order || fallbackOrder;
+                
+                document.getElementById('container-edit-order-id').value = orderData.id || orderData.orderId;
+                document.getElementById('container-edit-title').innerText = `עריכת הזמנת מכולה #${orderData.orderNumber || (orderData.id || orderData.orderId).slice(-6)}`;
+                document.getElementById('container-edit-customer-name').innerText = orderData.customer?.name || orderData.customerName || '?';
+                document.getElementById('container-edit-address').innerText = orderData.address || '?';
+                document.getElementById('container-edit-warehouse').innerText = orderData.warehouse || '?';
+                
+                const originalOrder = state.orders.find(o => o.id === (orderData.id || orderData.orderId));
+                
+                document.getElementById('container-edit-delivery-type').value = originalOrder?.deliveryType || orderData.deliveryType || '';
+                document.getElementById('container-edit-date').value = originalOrder?.orderDate || (orderData.rentalStartDate ? orderData.rentalStartDate.toISOString().split('T')[0] : '');
+                document.getElementById('container-edit-time').value = originalOrder?.orderTime || '';
+                document.getElementById('container-edit-notes').value = originalOrder?.notes || '';
+
+                document.getElementById('container-edit-modal').showModal();
+                feather.replace();
+            } catch (e) { SmartLog.error(e, "UI.OpenContainerEdit", { orderId }); }
+        }
+        window.openContainerEditModal = openContainerEditModal;
+        
+        function closeContainerEditModal() {
+            try {
+                document.getElementById('container-edit-modal').close();
+            } catch (e) { SmartLog.error(e, "UI.CloseContainerEdit"); }
+         }
+        window.closeContainerEditModal = closeContainerEditModal;
+        
+        async function handleSaveContainerOrder(event) {
+             event.preventDefault();
+             const btn = document.getElementById('container-save-btn');
+             btn.disabled = true;
+             btn.innerText = 'שומר...';
+             
+             const orderId = document.getElementById('container-edit-order-id').value;
+             const orderRef = doc(db, "orders", orderId);
+
+             try {
+                 const deliveryType = document.getElementById('container-edit-delivery-type').value;
+                 const orderDate = document.getElementById('container-edit-date').value;
+                 const orderTime = document.getElementById('container-edit-time').value.trim() || null;
+                 let rentalStartDate = null;
+
+                 if (['הצבת מכולה', 'החלפת מכולה'].includes(deliveryType) && orderDate) {
+                     const dateTimeStr = `${orderDate}T${orderTime || '00:00'}`;
+                     try {
+                         const jsDate = new Date(dateTimeStr);
+                         if (!isNaN(jsDate)) {
+                             rentalStartDate = Timestamp.fromDate(jsDate);
+                         } else { throw new Error("Invalid date/time for rental start"); }
+                     } catch(e) {
+                         SmartLog.error(e, "CRUD.Container.Edit", { orderId, date: orderDate, time: orderTime });
+                         throw new Error("שגיאה בהמרת תאריך/שעה לתחילת שכירות.");
+                     }
+                 }
+
+                 const updatedData = {
+                    deliveryType: deliveryType,
+                    orderDate: orderDate,
+                    orderTime: orderTime,
+                    notes: document.getElementById('container-edit-notes').value.trim(),
+                    rentalStartDate: rentalStartDate, // Update or clear the field
+                    lastModified: serverTimestamp()
+                 };
+
+                 await updateDoc(orderRef, updatedData);
+                 SmartLog.info("Container order updated", "CRUD.Container.Edit", { orderId, changes: updatedData });
+                 showToast('הזמנת מכולה עודכנה', 'success');
+                 closeContainerEditModal();
+                 // Listener will automatically refresh the container view if it's active
+
+             } catch (error) {
+                 showToast(`שגיאה בעדכון הזמנת מכולה: ${error.message}`, 'error');
+                 SmartLog.error(error, "CRUD.Container.Edit", { orderId });
+             } finally {
+                 btn.disabled = false;
+                 btn.innerText = 'שמור שינויים';
+             }
+         }
+        window.handleSaveContainerOrder = handleSaveContainerOrder;
+
+    </script>
+</body>
+</html>
