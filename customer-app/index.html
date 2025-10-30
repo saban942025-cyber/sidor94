@@ -426,16 +426,16 @@
                 return;
             }
 
-            console.log("Attempting to find order with number:", idFromUrl);
+            console.log("Attempting to find order with ID:", idFromUrl);
 
             try {
-                // 3. Query for the order using the 'orderNumber' field
-                // *** זה התיקון הקריטי: מחפשים לפי orderNumber ***
-                const q = query(collection(db, "orders"), where("orderNumber", "==", idFromUrl), limit(1));
+                // 3. Query for the order using the 'order_id' field
+                // *** זה התיקון הקריטי: מחפשים לפי order_id ***
+                const q = query(collection(db, "orders"), where("order_id", "==", idFromUrl), limit(1));
                 const querySnapshot = await getDocs(q);
 
                 if (querySnapshot.empty) {
-                    console.error("No document found with orderNumber:", idFromUrl);
+                    console.error("No document found with order_id:", idFromUrl);
                     showAppStatus(`שגיאה: ההזמנה ${idFromUrl} לא נמצאה. אנא בדוק את הקישור.`, true);
                     return;
                 }
@@ -468,7 +468,7 @@
          * Populates the static order details
          */
         function populateOrderDetails(data) {
-            document.getElementById('order-number-header').innerText = `הזמנה מס' ${data.orderNumber || data.order_id || 'N/A'}`;
+            document.getElementById('order-number-header').innerText = `הזמנה מס' ${data.order_id || data.orderNumber || 'N/A'}`;
             document.getElementById('customer-name').innerText = data.customer_name || 'לא צוין';
             document.getElementById('customer-address').innerText = data.customer_address || 'לא צוין';
             document.getElementById('delivery-date').innerText = data.delivery_date ? `תאריך אספקה: ${data.delivery_date}` : 'לא צוין';
@@ -678,7 +678,7 @@
 *הודעה חדשה מלקוח (DeliveryMaster):*
 -----------------------------
 *שם לקוח:* ${orderData.customer_name || 'לא צוין'}
-*מספר הזמנה:* ${orderData.orderNumber || orderId}
+*מספר הזמנה:* ${orderData.order_id || orderData.orderNumber || orderId}
 *כתובת:* ${orderData.customer_address || 'לא צוין'}
 *תאריך אספקה:* ${orderData.delivery_date || 'לא צוין'}
 -----------------------------
