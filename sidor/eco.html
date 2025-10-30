@@ -382,6 +382,59 @@
             display: none;
         }
     </style>
+
+    <!-- [חדש] טעינת ספריות Firebase v9.15.0 כפי שביקשת -->
+    <script type="module">
+        // --- Inlined Firebase SDK Imports (v9.15.0) ---
+        import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+        import { getFirestore, collection, onSnapshot, query, where, orderBy } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+
+        // --- Mandatory Firebase Config & Auth (using globals) ---
+        
+        // שימוש בקונפיג שסופק על ידך כ-fallback
+        const fallbackConfig = {
+            apiKey: "AIzaSyDq0oVwS6zbEfsgrYBRkeBq80dDUKMedzo", authDomain: "saban94-78949.firebaseapp.com", projectId: "saban94-78949",
+            storageBucket: "saban94-78949.firebasestorage.app", messagingSenderId: "41553157903", appId: "1:41553157903:web:cc33d252cff023be97a87a", measurementId: "G-XV6RZDESSB"
+        };
+
+        // שימוש במשתנים הגלובליים של הסביבה אם קיימים
+        const firebaseConfig = typeof __firebase_config !== 'undefined'
+            ? JSON.parse(__firebase_config)
+            : fallbackConfig;
+            
+        const providedToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        
+        // אתחול Firebase
+        const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        
+        // חשיפת השירותים לסקריפט הראשי
+        window.firebaseServices = { db, auth, collection, onSnapshot, query, where, orderBy };
+
+        // --- אימות ---
+        try {
+            if (providedToken) {
+                console.log("EcoModal: Authenticating with provided token...");
+                await signInWithCustomToken(auth, providedToken);
+            } else {
+                console.warn("EcoModal: No provided token, signing in anonymously...");
+                await signInAnonymously(auth);
+            }
+            console.log("EcoModal: Auth successful.", auth.currentUser?.uid);
+            
+            // איתות שהאימות הושלם וניתן להתחיל לעבוד
+            window.firebaseAuthReady = true;
+            document.dispatchEvent(new Event('firebaseAuthReady'));
+
+        } catch (error) {
+            console.error("EcoModal: Critical auth failure.", error);
+            window.firebaseAuthReady = false;
+        }
+    </script>
+    <!-- סוף טעינת Firebase -->
+
 </head>
 <body>
 
@@ -411,12 +464,13 @@
                 <div class="eco-controls">
                     <input type="search" id="ecoSearchInput" class="eco-search-box" placeholder="חיפוש לפי לקוח, כתובת...">
                 </div>
-                <span class"eco-close-btn" id="ecoCloseModalButton">&times;</span>
+                <span class="eco-close-btn" id="ecoCloseModalButton">&times;</span>
             </header>
 
             <!-- רשת הכרטיסים -->
             <main id="ecoContainerGrid">
                 <!-- כרטיסי המכולות יטענו לכאן ע"י JavaScript -->
+                <p style="padding: 20px; text-align: center;">טוען נתונים מ-Firebase...</p>
             </main>
 
         </div>
@@ -468,20 +522,12 @@
             const cardTemplate = document.getElementById('ecoCardTemplate');
             const searchInput = document.getElementById('ecoSearchInput');
 
-            // משתנה גלובלי שיחזיק את כל המכולות לטובת סינון
+            // [משודרג] משתנה גלובלי שיחזיק את כל המכולות לטובת סינון
             let allContainersData = [];
             const MAX_RENTAL_DAYS_VIEW = 10; // מקסימום ימים לתצוגה בפס
 
-            // --- נתוני Mock (דמו) כ-Fallback ---
-            const mockContainerData = [
-                { id: "C1001", customerName: "א.א. שיפוצים בע\"מ", address: "הנגר 14, כפר סבא", warehouse: "מרכז", startDate: "2025-10-28" },
-                { id: "C1002", customerName: "גיא ורועי גינון", address: "הזית 5, רעננה", warehouse: "שרון", startDate: "2025-10-25" },
-                { id: "C1003", customerName: "קבלן בניין - יוסי", address: "רוטשילד 112, תל אביב", warehouse: "מרכז", startDate: "2025-10-22" },
-                { id: "C1004", customerName: "מפעל בטון הצפון", address: "אזור תעשיה, עכו", warehouse: "צפון", startDate: "2025-10-20" }, // 9 ימים (צהוב)
-                { id: "C1005", customerName: "פינוי פסולת הדרום", address: "העצמאות 1, באר שבע", warehouse: "דרום", startDate: "2025-10-18" }, // 11 ימים (אדום מהבהב)
-                { id: "C1006", customerName: "ורדינון שיפוצים", address: "הרקפת 9, חיפה", warehouse: "צפון", startDate: "2025-10-19" }, // 10 ימים (אדום מהבהב)
-                { id: "C1007", customerName: "בנייה קלה בע\"מ", address: "המכבים 44, ראשון לציון", warehouse: "מרכז", startDate: "2025-10-27" },
-            ];
+            // --- [הוסר] נתוני הדמה הוסרו ---
+            // const mockContainerData = [ ... ];
 
             // --- פתיחה וסגירה של המודאל ---
             
@@ -513,36 +559,78 @@
                 }
             });
 
-            // --- לוגיקת חיבור נתונים ---
+            // --- [משודרג] לוגיקת חיבור נתונים ---
 
             /**
-             * פונקציית אתחול ראשית
-             * מנסה להתחבר ל-Firestore, ואם נכשל, משתמשת בנתוני דמו.
+             * [משודרג] פונקציית אתחול ראשית
+             * מתחברת ל-Firestore ומאזינה לשינויים.
              */
-            const initializeApp = () => {
+            const initializeEcoApp = () => {
+                // קבלת שירותי Firebase שהוגדרו בסקריפט המודול
+                const { db, auth, collection, onSnapshot, query, where, orderBy } = window.firebaseServices;
+                
+                if (!db || !auth) {
+                    console.error("EcoModal: Firebase services not available.");
+                    grid.innerHTML = '<p style="padding: 20px; text-align: center; color: red;">שגיאה קריטית: אין חיבור לבסיס הנתונים.</p>';
+                    return;
+                }
+
+                // שימוש במשתנים הגלובליים כנדרש
+                const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+                const userId = auth.currentUser?.uid;
+
+                if (!userId) {
+                    console.error("EcoModal: Auth completed but user ID is not available.");
+                    return;
+                }
+                
+                // הגדרת נתיב לקולקשן המכולות (ניתן לשנות לפרטי אם צריך)
+                // שימוש בנתיב ציבורי כברירת מחדל עבור נתונים משותפים
+                const containersColPath = `/artifacts/${appId}/public/data/containers`;
+                console.log(`EcoModal: Listening to collection: ${containersColPath}`);
+
+                // הגדרת השאילתא
+                // ניתן להוסיף 'where' או 'orderBy' לפי צורך
+                // לדוגמה: query(collection(db, containersColPath), where("status", "==", "active"))
+                // הערה: שימוש ב-orderBy דורש אינדקס תואם ב-Firestore
+                const q = query(
+                    collection(db, containersColPath)
+                );
+
                 try {
-                    // --- הדמיית חיבור ל-FIRESTORE ---
-                    // במערכת אמיתית, כאן היה קוד ה-onSnapshot:
-                    /*
-                    const db = getFirestore();
-                    const containersCol = collection(db, 'containers'); // או הנתיב הנכון
-                    onSnapshot(query(containersCol, where('status', '==', 'active')), (snapshot) => {
-                        const containers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                        allContainersData = containers;
-                        renderData(allContainersData);
+                    // הפעלת המאזין (onSnapshot)
+                    onSnapshot(q, (snapshot) => {
+                        const containers = snapshot.docs.map(doc => {
+                            const data = doc.data();
+                            
+                            // המרת Firestore Timestamp לאובייקט Date של JavaScript
+                            const jsDate = data.startDate?.toDate ? data.startDate.toDate() : null;
+                            
+                            if (!jsDate) {
+                                console.warn(`Container ${doc.id} skipped, missing or invalid startDate.`);
+                                return null; // סנן פריטים ללא תאריך התחלה תקין
+                            }
+
+                            return {
+                                id: doc.id,
+                                customerName: data.customerName || 'N/A',
+                                address: data.address || 'N/A',
+                                warehouse: data.warehouse || 'N/A',
+                                startDate: jsDate // העברת אובייקט Date לפונקציות
+                            };
+                        }).filter(c => c !== null); // סינון סופי של פריטים לא תקינים
+
+                        allContainersData = containers; // שמירת הנתונים המעודכנים
+                        renderData(allContainersData); // רינדור מחדש של הממשק
+                        
+                    }, (error) => {
+                        console.error("EcoModal: Error listening to Firestore:", error);
+                        grid.innerHTML = '<p style="padding: 20px; text-align: center; color: red;">שגיאה בקבלת נתוני מכולות.</p>';
                     });
-                    */
-                    
-                    // --- שימוש ב-Fallback לנתוני דמו ---
-                    console.log("DeliveryMaster Eco: Using Mock Data (Fallback).");
-                    allContainersData = mockContainerData;
-                    renderData(allContainersData);
-                    
+
                 } catch (error) {
-                    console.error("DeliveryMaster Eco: Failed to initialize data connection. Using Mock Data.", error);
-                    // טיפול בשגיאה: אם הניסיון לחיבור נכשל, השתמש ב-Mock
-                    allContainersData = mockContainerData;
-                    renderData(allContainersData);
+                    console.error("EcoModal: Failed to set up onSnapshot listener.", error);
+                    grid.innerHTML = '<p style="padding: 20px; text-align: center; color: red;">שגיאה קריטית: לא ניתן להאזין לנתונים.</p>';
                 }
             };
 
@@ -553,7 +641,7 @@
             const renderData = (containers) => {
                 grid.innerHTML = ''; // נקה את הגריד לפני רינדור מחדש
                 if (containers.length === 0) {
-                    grid.innerHTML = '<p>לא נמצאו מכולות פעילות.</p>';
+                    grid.innerHTML = '<p style="padding: 20px; text-align: center;">לא נמצאו מכולות פעילות.</p>';
                     return;
                 }
                 
@@ -581,6 +669,7 @@
 
                 // --- חישוב ועדכון ויזואליזציה ---
                 try {
+                    // הפונקציה calculateRentalDays תקבל כעת אובייקט Date
                     const rentalDays = calculateRentalDays(container.startDate);
                     updateProgressBar(cardElement, rentalDays);
                 } catch (e) {
@@ -604,15 +693,16 @@
             // --- פונקציות ליבה (לוגיקה) ---
 
             /**
-             * מחשב את מספר ימי השכירות מתאריך התחלה
-             * @param {string} startDateString - תאריך בפורמט YYYY-MM-DD
+             * [משודרג] מחשב את מספר ימי השכירות מתאריך התחלה
+             * @param {Date | string} startDateInput - אובייקט Date (מ-Firestore) או string (מ-fallback)
              * @returns {number} - מספר ימי השכירות (מינימום 1)
              */
-            const calculateRentalDays = (startDateString) => {
-                if (!startDateString) {
-                    throw new Error("Invalid start date string");
+            const calculateRentalDays = (startDateInput) => {
+                if (!startDateInput) {
+                    throw new Error("Invalid start date input");
                 }
-                const startDate = new Date(startDateString);
+                // new Date() יטפל נכון גם ב-string וגם באובייקט Date
+                const startDate = new Date(startDateInput);
                 const today = new Date();
 
                 // אפס את השעות כדי להשוות רק תאריכים
@@ -716,11 +806,21 @@
                 });
             });
 
-            // --- התחלת האפליקציה ---
-            initializeApp();
+            // --- [משודרג] התחלת האפליקציה ---
+            
+            // המתן לאירוע שהאימות הושלם לפני הפעלת הלוגיקה
+            if (window.firebaseAuthReady) {
+                initializeEcoApp();
+            } else {
+                // אם הסקריפט רץ לפני שהאימות הסתיים, האזן לאירוע
+                document.addEventListener('firebaseAuthReady', () => {
+                    initializeEcoApp();
+                });
+            }
 
         });
     </script>
 
 </body>
 </html>
+
