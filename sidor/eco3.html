@@ -433,13 +433,8 @@
                     <div id="ecoCustomerDropdown" class="eco-custom-dropdown eco-hidden"></div>
                 </div>
                 
-                <div class="eco-form-group">
-                    <label for="ecoFormCustomerSearch">חפש לקוח (שם, מספר לקוח, טלפון)</label>
-                    <!-- [חדש] קשור ל-datalist -->
-                    <input type="text" id="ecoFormCustomerSearch" list="ecoCustomerList" required autocomplete="off">
-                    <!-- [חדש] רשימת הצעות אוטומטית שתתמלא מ-Firebase -->
-                    <datalist id="ecoCustomerList"></datalist>
-                </div>
+                <!-- [תיקון] הוסר בלוק HTML כפול -->
+                
                 <div class="eco-form-group">
                     <label for="ecoFormAddress">כתובת</label>
                     <!-- [תיקון] הסרנו readonly; הוא יתווסף ויוסר ע"י JS -->
@@ -519,8 +514,9 @@
             const saveButton = document.getElementById('ecoSaveButton');
             
             // --- [משודרג] אלמנטי טופס חיפוש ---
-            const customerSearchInput = document.getElementById('ecoFormCustomerSearch');
-            const customerDropdown = document.getElementById('ecoCustomerDropdown'); // [חדש]
+            // [תיקון] איתור האלמנטים הנכונים והבודדים
+            const customerSearchInput = document.querySelector('#ecoAddForm .search-group input[type="text"]');
+            const customerDropdown = document.getElementById('ecoCustomerDropdown'); 
             const customerAddressInput = document.getElementById('ecoFormAddress');
             const customerIdInput = document.getElementById('ecoFormCustomerID');
 
@@ -552,6 +548,7 @@
                 addButton.textContent = 'חזור לרשימה';
                 addButton.classList.add('back-btn');
                 addForm.reset();
+                customerAddressInput.readOnly = false; // [תיקון] ודא ששדה כתובת פתוח לעריכה
                 customerIdInput.value = ''; // [חדש] איפוס מזהה נסתר
                 document.getElementById('ecoFormStartDate').valueAsDate = new Date();
             };
@@ -636,6 +633,7 @@
              * [חדש] מרנדר את הרשימה הנפתחת החכמה
              */
             const renderCustomerDropdown = (filteredCustomers) => {
+                if (!customerDropdown) return; // הגנה
                 customerDropdown.innerHTML = ''; // נקה
                 customerDropdown.classList.remove('eco-hidden');
 
@@ -667,6 +665,7 @@
              * [חדש] פונקציה לבחירת לקוח מהרשימה
              */
             const selectCustomer = (customerData) => {
+                if (!customerSearchInput || !customerAddressInput || !customerIdInput) return; // הגנה
                 customerSearchInput.value = customerData.name;
                 customerAddressInput.value = customerData.address;
                 customerIdInput.value = customerData.id;
@@ -678,6 +677,7 @@
              * [חדש] מסתיר את הרשימה הנפתחת
              */
             const hideCustomerDropdown = () => {
+                if (!customerDropdown) return; // הגנה
                 customerDropdown.classList.add('eco-hidden');
                 customerDropdown.innerHTML = '';
             };
@@ -719,10 +719,14 @@
             };
 
             // [משודרג] חיבור האירוע לתיבת חיפוש הלקוחות
-            customerSearchInput.addEventListener('input', handleCustomerSearch);
+            if (customerSearchInput) {
+                customerSearchInput.addEventListener('input', handleCustomerSearch);
+            } else {
+                console.error("EcoModal: Critical error - customerSearchInput not found.");
+            }
             // [חדש] סגירת הדרופדאון בלחיצה בחוץ
             document.addEventListener('click', (e) => {
-                if (!customerSearchInput.contains(e.target) && !customerDropdown.contains(e.target)) {
+                if (customerSearchInput && !customerSearchInput.contains(e.target) && customerDropdown && !customerDropdown.contains(e.target)) {
                     hideCustomerDropdown();
                 }
             });
@@ -958,9 +962,4 @@
 
 </body>
 </html>
-
-
-
-
-
 
