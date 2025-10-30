@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ניהול מכולות | DeliveryMaster</title>
+    
+    <!-- 
+      קובץ זה (eco_fixed.html) נוצר כדף ניהול מכולות עצמאי.
+      הוא מכיל את כל ה-CSS וה-JavaScript הנדרשים לפעולתו.
+      האלמנטים #openEcoDashboardButton ו-#mockDashboardHeader הם רק לצורך הדגמה
+      של הפעלת המודאל. במערכת האמיתית, יש לקרוא לפונקציה openEcoModal()
+      מהכפתור "מכולות" הקיים במערכת DeliveryMaster.
+    -->
+
+    <style>
+        /* --- סגנון בסיס וגוף הדף (להדגמה) --- */
+        html, body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            direction: rtl;
+            background-color: #f0f2f5;
+            margin: 0;
+            padding: 0;
+            scroll-behavior: smooth;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        /* --- סגנון הדגמה (למחוק בשילוב סופי) --- */
+        .mock-header {
+            background: #2c3e50;
+            color: white;
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        .mock-header h1 {
+            margin: 0;
+            font-size: 1.5rem;
+        }
+        #openEcoDashboardButton {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 1rem;
+            font-weight: bold;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        #openEcoDashboardButton:hover {
+            background-color: #2980b9;
+        }
+        .mock-content {
+            padding: 30px;
+            text-align: center;
+            font-size: 1.2rem;
+            color: #555;
+        }
+
+        /* --- סגנון המודאל (חלון קופץ) --- */
+        #ecoModalOverlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(5px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+
+        #ecoModalOverlay.visible {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        #ecoDashboard {
+            width: 90%;
+            max-width: 1400px;
+            height: 90vh;
+            background: #f4f7f6;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transform: scale(0.95);
+            transition: transform 0.3s ease;
+        }
+
+        #ecoModalOverlay.visible #ecoDashboard {
+            transform: scale(1);
+        }
+
+        /* --- כותרת המודאל --- */
+        .eco-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 24px;
+            background: #ffffff;
+            border-bottom: 1px solid #dfe4e8;
+            flex-shrink: 0;
+        }
+
+        .eco-header h2 {
+            margin: 0;
+            color: #1a3b58;
+            font-size: 1.4rem;
+        }
+
+        .eco-controls {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+        .eco-search-box {
+            padding: 8px 12px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            width: 250px;
+            transition: box-shadow 0.2s;
+        }
+        .eco-search-box:focus {
+            outline: none;
+            box-shadow: 0 0 0 2px #3498db80;
+            border-color: #3498db;
+        }
+
+        .eco-close-btn {
+            font-size: 2.5rem;
+            color: #888;
+            cursor: pointer;
+            line-height: 1;
+            padding: 0 5px;
+            transition: color 0.2s;
+        }
+        .eco-close-btn:hover {
+            color: #333;
+        }
+
+        /* --- רשת המכולות --- */
+        #ecoContainerGrid {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 24px;
+            background: #f4f7f6;
+            
+            /* --- פריסה רספונסיבית --- */
+            display: grid;
+            /* Desktop: ינסה להכניס כמה שיותר עמודות ברוחב מינימלי של 340px.
+              במסך רחב זה ייצור 3-4 עמודות.
+            */
+            grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+            gap: 20px;
+        }
+
+        /* --- כרטיס מכולה --- */
+        .eco-card {
+            background: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.07);
+            display: flex;
+            flex-direction: column;
+            padding: 16px 20px;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            border: 1px solid transparent;
+        }
+        .eco-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
+        }
+
+        /* --- תוכן הכרטיס --- */
+        .eco-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 12px;
+            margin-bottom: 12px;
+        }
+        .eco-customer-name {
+            font-weight: 600;
+            font-size: 1.2rem;
+            color: #2c3e50;
+        }
+        .eco-warehouse {
+            font-size: 0.9rem;
+            color: #555;
+            background: #e9ecef;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-weight: 500;
+        }
+        .eco-address {
+            font-size: 0.95rem;
+            color: #777;
+            margin-bottom: 16px;
+        }
+
+        /* --- ויזואליזציה (משאית ופס התקדמות) --- */
+        .eco-progress-container {
+            position: relative;
+            width: 100%;
+            /* ריפוד עליון כדי לתת מקום ללייבל שמעל המשאית */
+            padding-top: 30px; 
+            margin-bottom: 10px;
+        }
+
+        .eco-progress-bar-container {
+            width: 100%;
+            height: 12px;
+            background: #e0e0e0;
+            border-radius: 6px;
+            overflow: hidden;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .eco-progress-bar {
+            height: 100%;
+            border-radius: 6px 0 0 6px;
+            transition: width 0.5s ease-out, background-color 0.5s;
+            background-color: #66bb6a; /* צבע התחלתי (ירוק) */
+        }
+
+        /* צבעים דינמיים לפס ההתקדמות */
+        .eco-progress-bar.green {
+            background: linear-gradient(90deg, #66bb6a, #43a047);
+        }
+        .eco-progress-bar.yellow {
+            background: linear-gradient(90deg, #ffee58, #fdd835);
+        }
+        .eco-progress-bar.red {
+            background: linear-gradient(90deg, #ef5350, #e53935);
+        }
+
+        .eco-truck-indicator {
+            position: absolute;
+            top: 0; /* יושב מעל הריפוד של הקונטיינר */
+            
+            /* מיקום מבוסס 'right' עבור RTL */
+            right: 0%; 
+            
+            transition: right 0.5s ease-out;
+            
+            /* ממירכוז האייקון בדיוק מעל הנקודה */
+            transform: translateX(50%); 
+            
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .eco-truck-label {
+            font-size: 0.8rem;
+            font-weight: bold;
+            color: #333;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 2px 5px;
+            border-radius: 4px;
+            margin-bottom: 2px;
+            white-space: nowrap;
+        }
+
+        .eco-truck-icon {
+            font-size: 1.5rem; /* גודל האייקון 🚚 */
+        }
+        
+        /* --- אפקט הבהוב לחריגה --- */
+        .eco-card.alert {
+            border-color: #e53935;
+            box-shadow: 0 0 15px rgba(229, 57, 53, 0.4);
+        }
+        
+        .eco-card.alert .eco-progress-bar.red {
+            /* הבהוב לפס האדום */
+            animation: pulse-red 1s infinite;
+        }
+
+        .eco-card.alert .eco-truck-label {
+            /* הבהוב לטקסט */
+            animation: pulse-text 1s infinite;
+            color: #d32f2f;
+            font-weight: 700;
+        }
+
+        @keyframes pulse-red {
+            0% { opacity: 1; }
+            50% { opacity: 0.4; }
+            100% { opacity: 1; }
+        }
+        
+        @keyframes pulse-text {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+
+        /* --- כפתורי פעולה בכרטיס --- */
+        .eco-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: auto; /* דוחף את הכפתורים לתחתית הכרטיס */
+            padding-top: 16px;
+        }
+
+        .eco-btn {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.9rem;
+            transition: background-color 0.2s, transform 0.1s;
+        }
+        .eco-btn:active {
+            transform: scale(0.98);
+        }
+
+        .eco-btn-primary {
+            background-color: #007bff;
+            color: white;
+        }
+        .eco-btn-primary:hover {
+            background-color: #0069d9;
+        }
+
+        .eco-btn-secondary {
+            background-color: #6c757d;
+            color: white;
+        }
+        .eco-btn-secondary:hover {
+            background-color: #5a6268;
+        }
+
+        /* --- רספונסיביות למובייל --- */
+        @media (max-width: 768px) {
+            #ecoDashboard {
+                width: 100%;
+                height: 100%;
+                border-radius: 0;
+            }
+
+            /* Mobile: עמודה אחת שתופסת את כל הרוחב
+            */
+            #ecoContainerGrid {
+                grid-template-columns: 1fr;
+                padding: 16px;
+            }
+
+            .eco-header {
+                flex-direction: column;
+                gap: 10px;
+                padding: 12px 16px;
+            }
+            .eco-controls {
+                width: 100%;
+            }
+            .eco-search-box {
+                width: 100%;
+            }
+        }
+        
+        /* --- תבנית HTML עבור כרטיס (לשכפול ע"י JS) --- */
+        .eco-card.hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- סביבת הדגמה (ניתן למחוק בסביבת פרודקשן) -->
+    <div class="mock-header" id="mockDashboardHeader">
+        <h1>DeliveryMaster</h1>
+        <button id="openEcoDashboardButton">פתח דשבורד מכולות (Eco)</button>
+    </div>
+    <div class="mock-content">
+        <p>זהו התוכן של הדף הראשי במערכת.</p>
+        <p>לחץ על הכפתור למעלה לפתיחת מודול המכולות.</p>
+    </div>
+    <!-- סוף סביבת הדגמה -->
+
+
+    <!-- =========== דשבורד ניהול מכולות (Eco System) =========== -->
+    
+    <!-- שכבת אוברליי שקופה -->
+    <div id="ecoModalOverlay">
+        
+        <!-- חלונית הדשבורד -->
+        <div id="ecoDashboard">
+            
+            <!-- כותרת ופקדים -->
+            <header class="eco-header">
+                <h2>ניהול מכולות (Eco System)</h2>
+                <div class="eco-controls">
+                    <input type="search" id="ecoSearchInput" class="eco-search-box" placeholder="חיפוש לפי לקוח, כתובת...">
+                </div>
+                <span class"eco-close-btn" id="ecoCloseModalButton">&times;</span>
+            </header>
+
+            <!-- רשת הכרטיסים -->
+            <main id="ecoContainerGrid">
+                <!-- כרטיסי המכולות יטענו לכאן ע"י JavaScript -->
+            </main>
+
+        </div>
+    </div>
+
+    <!-- 
+      תבנית HTML לשכפול כרטיס מכולה 
+      זה מאפשר יצירה יעילה של כרטיסים חדשים עם JavaScript
+    -->
+    <template id="ecoCardTemplate">
+        <div class="eco-card">
+            <div class="eco-card-header">
+                <span class="eco-customer-name">שם לקוח</span>
+                <span class="eco-warehouse">מחסן</span>
+            </div>
+            <p class="eco-address">כתובת הלקוח</p>
+            
+            <!-- אזור הוויזואליזציה -->
+            <div class="eco-progress-container">
+                <div class="eco-truck-indicator">
+                    <span class="eco-truck-label">0 ימים</span>
+                    <span class="eco-truck-icon">🚚</span>
+                </div>
+                <div class="eco-progress-bar-container">
+                    <div class="eco-progress-bar green" style="width: 0%;"></div>
+                </div>
+            </div>
+            
+            <!-- כפתורי פעולה -->
+            <div class="eco-actions">
+                <button class="eco-btn eco-btn-primary btn-replace">החלפה</button>
+                <button class="eco-btn eco-btn-secondary btn-remove">הוצאה</button>
+            </div>
+        </div>
+    </template>
+    
+    <!-- =========== סוף דשבורד ניהול מכולות =========== -->
+
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+
+            // --- איתור אלמנטים מרכזיים ---
+            const modalOverlay = document.getElementById('ecoModalOverlay');
+            const dashboardPanel = document.getElementById('ecoDashboard');
+            const openButton = document.getElementById('openEcoDashboardButton');
+            const closeButton = document.getElementById('ecoCloseModalButton');
+            const grid = document.getElementById('ecoContainerGrid');
+            const cardTemplate = document.getElementById('ecoCardTemplate');
+            const searchInput = document.getElementById('ecoSearchInput');
+
+            // משתנה גלובלי שיחזיק את כל המכולות לטובת סינון
+            let allContainersData = [];
+            const MAX_RENTAL_DAYS_VIEW = 10; // מקסימום ימים לתצוגה בפס
+
+            // --- נתוני Mock (דמו) כ-Fallback ---
+            const mockContainerData = [
+                { id: "C1001", customerName: "א.א. שיפוצים בע\"מ", address: "הנגר 14, כפר סבא", warehouse: "מרכז", startDate: "2025-10-28" },
+                { id: "C1002", customerName: "גיא ורועי גינון", address: "הזית 5, רעננה", warehouse: "שרון", startDate: "2025-10-25" },
+                { id: "C1003", customerName: "קבלן בניין - יוסי", address: "רוטשילד 112, תל אביב", warehouse: "מרכז", startDate: "2025-10-22" },
+                { id: "C1004", customerName: "מפעל בטון הצפון", address: "אזור תעשיה, עכו", warehouse: "צפון", startDate: "2025-10-20" }, // 9 ימים (צהוב)
+                { id: "C1005", customerName: "פינוי פסולת הדרום", address: "העצמאות 1, באר שבע", warehouse: "דרום", startDate: "2025-10-18" }, // 11 ימים (אדום מהבהב)
+                { id: "C1006", customerName: "ורדינון שיפוצים", address: "הרקפת 9, חיפה", warehouse: "צפון", startDate: "2025-10-19" }, // 10 ימים (אדום מהבהב)
+                { id: "C1007", customerName: "בנייה קלה בע\"מ", address: "המכבים 44, ראשון לציון", warehouse: "מרכז", startDate: "2025-10-27" },
+            ];
+
+            // --- פתיחה וסגירה של המודאל ---
+            
+            /**
+             * פותח את מודאל המכולות.
+             * זו הפונקציה שצריך לקרוא לה מכפתור "מכולות" במערכת הראשית.
+             */
+            window.openEcoModal = () => {
+                modalOverlay.classList.add('visible');
+            };
+
+            const closeEcoModal = () => {
+                modalOverlay.classList.remove('visible');
+            };
+
+            // חיבור כפתורי הדגמה
+            if (openButton) {
+                openButton.addEventListener('click', window.openEcoModal);
+            }
+            if (closeButton) {
+                closeButton.addEventListener('click', closeEcoModal);
+            }
+
+            // סגירה בלחיצה על הרקע השקוף
+            modalOverlay.addEventListener('click', (e) => {
+                // סגור רק אם לחצו ישירות על הרקע (ולא על החלון עצמו)
+                if (e.target === modalOverlay) {
+                    closeEcoModal();
+                }
+            });
+
+            // --- לוגיקת חיבור נתונים ---
+
+            /**
+             * פונקציית אתחול ראשית
+             * מנסה להתחבר ל-Firestore, ואם נכשל, משתמשת בנתוני דמו.
+             */
+            const initializeApp = () => {
+                try {
+                    // --- הדמיית חיבור ל-FIRESTORE ---
+                    // במערכת אמיתית, כאן היה קוד ה-onSnapshot:
+                    /*
+                    const db = getFirestore();
+                    const containersCol = collection(db, 'containers'); // או הנתיב הנכון
+                    onSnapshot(query(containersCol, where('status', '==', 'active')), (snapshot) => {
+                        const containers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        allContainersData = containers;
+                        renderData(allContainersData);
+                    });
+                    */
+                    
+                    // --- שימוש ב-Fallback לנתוני דמו ---
+                    console.log("DeliveryMaster Eco: Using Mock Data (Fallback).");
+                    allContainersData = mockContainerData;
+                    renderData(allContainersData);
+                    
+                } catch (error) {
+                    console.error("DeliveryMaster Eco: Failed to initialize data connection. Using Mock Data.", error);
+                    // טיפול בשגיאה: אם הניסיון לחיבור נכשל, השתמש ב-Mock
+                    allContainersData = mockContainerData;
+                    renderData(allContainersData);
+                }
+            };
+
+            /**
+             * מרנדר את כל כרטיסי המכולות לגריד
+             * @param {Array} containers - מערך אובייקטי המכולות
+             */
+            const renderData = (containers) => {
+                grid.innerHTML = ''; // נקה את הגריד לפני רינדור מחדש
+                if (containers.length === 0) {
+                    grid.innerHTML = '<p>לא נמצאו מכולות פעילות.</p>';
+                    return;
+                }
+                
+                containers.forEach(container => {
+                    const card = createContainerCard(container);
+                    grid.appendChild(card);
+                });
+            };
+
+            /**
+             * יוצר אלמנט HTML של כרטיס מכולה בודד
+             * @param {object} container - אובייקט נתוני מכולה
+             * @returns {HTMLElement} - אלמנט ה-DOM של הכרטיס
+             */
+            const createContainerCard = (container) => {
+                const cardFragment = cardTemplate.content.cloneNode(true);
+                const cardElement = cardFragment.querySelector('.eco-card');
+
+                cardElement.dataset.id = container.id;
+
+                // --- מילוי נתונים בסיסיים ---
+                cardElement.querySelector('.eco-customer-name').textContent = container.customerName;
+                cardElement.querySelector('.eco-warehouse').textContent = container.warehouse;
+                cardElement.querySelector('.eco-address').textContent = container.address;
+
+                // --- חישוב ועדכון ויזואליזציה ---
+                try {
+                    const rentalDays = calculateRentalDays(container.startDate);
+                    updateProgressBar(cardElement, rentalDays);
+                } catch (e) {
+                    console.error(`Error calculating days for container ${container.id}:`, e);
+                    // הסתר את הוויזואליזציה אם יש שגיאה בתאריך
+                    cardElement.querySelector('.eco-progress-container').style.display = 'none';
+                }
+
+                // --- חיבור כפתורי פעולה ---
+                cardElement.querySelector('.btn-replace').addEventListener('click', () => {
+                    handleReplace(container.id, container.customerName);
+                });
+                
+                cardElement.querySelector('.btn-remove').addEventListener('click', () => {
+                    handleRemove(container.id, container.customerName);
+                });
+
+                return cardElement;
+            };
+
+            // --- פונקציות ליבה (לוגיקה) ---
+
+            /**
+             * מחשב את מספר ימי השכירות מתאריך התחלה
+             * @param {string} startDateString - תאריך בפורמט YYYY-MM-DD
+             * @returns {number} - מספר ימי השכירות (מינימום 1)
+             */
+            const calculateRentalDays = (startDateString) => {
+                if (!startDateString) {
+                    throw new Error("Invalid start date string");
+                }
+                const startDate = new Date(startDateString);
+                const today = new Date();
+
+                // אפס את השעות כדי להשוות רק תאריכים
+                startDate.setHours(0, 0, 0, 0);
+                today.setHours(0, 0, 0, 0);
+
+                const diffTime = today.getTime() - startDate.getTime();
+                if (diffTime < 0) {
+                    return 0; // תאריך עתידי
+                }
+                
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                
+                // היום הראשון נספר כ-1
+                return diffDays + 1; 
+            };
+
+            /**
+             * מעדכן את פס ההתקדמות והמשאית בכרטיס ספציפי
+             * @param {HTMLElement} cardElement - אלמנט ה-DOM של הכרטיס
+             * @param {number} days - מספר ימי שכירות
+             */
+            const updateProgressBar = (cardElement, days) => {
+                const progressBar = cardElement.querySelector('.eco-progress-bar');
+                const truckIndicator = cardElement.querySelector('.eco-truck-indicator');
+                const truckLabel = cardElement.querySelector('.eco-truck-label');
+                
+                if (!progressBar || !truckIndicator || !truckLabel) return;
+
+                // חישוב אחוז התקדמות (עד המקסימום)
+                let percentage = (days / MAX_RENTAL_DAYS_VIEW) * 100;
+                if (percentage > 100) percentage = 100;
+                if (percentage < 0) percentage = 0;
+
+                // עדכון פס ההתקדמות
+                progressBar.style.width = percentage + '%';
+
+                // עדכון מיקום המשאית (מבוסס 'right' עבור RTL)
+                truckIndicator.style.right = percentage + '%';
+
+                // עדכון הטקסט
+                truckLabel.textContent = `${days} ימים`;
+
+                // עדכון צבעים והתראות
+                progressBar.classList.remove('green', 'yellow', 'red');
+                cardElement.classList.remove('alert');
+
+                if (days >= 10) {
+                    progressBar.classList.add('red');
+                    cardElement.classList.add('alert'); // הפעלת אנימציית הבהוב
+                } else if (days >= 8) {
+                    progressBar.classList.add('yellow');
+                } else {
+                    progressBar.classList.add('green');
+                }
+            };
+
+            // --- מטפלי אירועים (כפתורים וחיפוש) ---
+            
+            /**
+             * מטפל בלחיצה על "החלפה"
+             */
+            const handleReplace = (containerId, customerName) => {
+                // לוגיקה מותאמת אישית של המערכת
+                console.log(`בקשת החלפה עבור מכולה ${containerId} (${customerName})`);
+                // לדוגמה: פתיחת טופס חדש, שליחת בקשה ל-API
+                alert(`נשלחה בקשת החלפה עבור:\n${customerName} (ID: ${containerId})`);
+            };
+
+            /**
+             * מטפל בלחיצה על "הוצאה"
+             */
+            const handleRemove = (containerId, customerName) => {
+                // לוגיקה מותאמת אישית של המערכת
+                console.log(`בקשת הוצאה עבור מכולה ${containerId} (${customerName})`);
+                // לדוגמה: שינוי סטטוס ב-DB
+                alert(`נשלחה בקשת הוצאה עבור:\n${customerName} (ID: ${containerId})`);
+            };
+
+            /**
+             * מטפל בסינון וחיפוש
+             */
+            searchInput.addEventListener('input', (e) => {
+                const searchTerm = e.target.value.toLowerCase().trim();
+                
+                // בצע סינון יעיל בצד הלקוח על הנתונים שכבר נטענו
+                const cards = grid.querySelectorAll('.eco-card');
+                
+                cards.forEach(card => {
+                    const customerName = card.querySelector('.eco-customer-name').textContent.toLowerCase();
+                    const address = card.querySelector('.eco-address').textContent.toLowerCase();
+                    
+                    const isVisible = customerName.includes(searchTerm) || address.includes(searchTerm);
+                    
+                    // השתמש ב-class במקום style.display כדי לא לדרוס סגנונות אחרים
+                    if (isVisible) {
+                        card.classList.remove('hidden');
+                    } else {
+                        card.classList.add('hidden');
+                    }
+                });
+            });
+
+            // --- התחלת האפליקציה ---
+            initializeApp();
+
+        });
+    </script>
+
+</body>
+</html>
