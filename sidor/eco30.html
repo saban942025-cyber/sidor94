@@ -1,0 +1,1151 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DeliveryMaster v33.0 (ניהול מכולות)</title>
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <script src="https://unpkg.com/feather-icons"></script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    
+    <!-- Chart.js for reports/charts in Warehouses view -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+
+
+    <!-- סגנונות CSS -->
+    <style>
+        :root {
+            --primary-color: #3b82f6; /* blue-500 */
+            --primary-dark: #2563eb; /* blue-600 */
+            --bg-light: #f3f4f6; /* gray-100 */
+            --bg-white: #ffffff;
+            --border-color: #e5e7eb; /* gray-200 */
+        }
+        html, body {
+            font-family: 'Inter', sans-serif;
+            direction: rtl;
+            background-color: var(--bg-light);
+        }
+        * { box-sizing: border-box; }
+
+        .sidebar {
+            width: 250px;
+            background-color: #2c3e50; /* Dark Blue/Gray */
+            color: white;
+            transition: transform 0.3s ease-in-out;
+            position: fixed;
+            height: 100vh;
+            top: 0;
+            right: 0;
+            z-index: 50;
+        }
+        .main-content {
+            margin-right: 250px;
+            padding: 20px;
+            transition: margin-right 0.3s ease-in-out;
+            min-height: 100vh;
+        }
+        @media (max-width: 1024px) {
+            .sidebar { transform: translateX(100%); }
+            .sidebar-open { transform: translateX(0); }
+            .main-content { margin-right: 0; }
+        }
+
+        .menu-item {
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            border-radius: 8px;
+            margin: 4px 10px;
+        }
+        .menu-item:hover, .menu-item.active {
+            background-color: #34495e;
+        }
+
+        /* Toast notifications */
+        #toast-container {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .toast {
+            padding: 12px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            color: white;
+            font-weight: 500;
+            opacity: 0;
+            transition: opacity 0.5s ease-in-out, transform 0.5s ease-in-out;
+            transform: translateY(-20px);
+        }
+        .toast.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .toast.success { background-color: #10b981; /* emerald-500 */ }
+        .toast.error { background-color: #ef4444; /* red-500 */ }
+
+        /* Modal specific styling */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.6);
+            z-index: 1000;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            opacity: 0;
+            transition: opacity 0.3s ease-in-out;
+        }
+        .modal-overlay.show { opacity: 1; }
+        .modal-content {
+            background-color: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+            max-width: 95%;
+            width: 500px;
+            transform: translateY(-50px);
+            transition: transform 0.3s ease-in-out;
+        }
+        .modal-overlay.show .modal-content { transform: translateY(0); }
+
+        /* Custom scrollbar for better aesthetics */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: var(--bg-light); }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+</head>
+
+<body>
+    <!-- Global Toast Container -->
+    <div id="toast-container"></div>
+
+    <!-- Sidebar / Navigation -->
+    <aside id="sidebar" class="sidebar">
+        <div class="p-5 border-b border-gray-700">
+            <h1 class="text-2xl font-bold">DeliveryMaster</h1>
+            <p class="text-sm text-gray-400">ניהול מכולות</p>
+        </div>
+        <nav class="pt-4">
+            <div id="nav-container-board" class="menu-item active" data-view="container-board">
+                <i data-feather="list" class="w-5 h-5 ml-3"></i>
+                <span>לוח מכולות</span>
+            </div>
+            <div id="nav-new-order" class="menu-item" data-view="new-order">
+                <i data-feather="plus-square" class="w-5 h-5 ml-3"></i>
+                <span>יצירת הזמנה חדשה</span>
+            </div>
+            <!-- הוספת פריט ניווט חדש לדף המחסנים -->
+            <div id="nav-warehouses" class="menu-item" data-view="warehouses">
+                <i data-feather="trello" class="w-5 h-5 ml-3"></i>
+                <span>מחסנים ודוחות</span>
+            </div>
+        </nav>
+
+        <div class="absolute bottom-0 w-full p-4 border-t border-gray-700 text-sm text-gray-400">
+            <p>משתמש: <span id="user-id-display">טוען...</span></p>
+        </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main id="main-content" class="main-content">
+        <header class="flex justify-between items-center mb-6">
+            <h2 id="view-title" class="text-3xl font-bold text-gray-800">לוח מכולות</h2>
+            <button id="toggle-sidebar" class="lg:hidden p-2 rounded-full text-gray-600 hover:bg-gray-200">
+                <i data-feather="menu" class="w-6 h-6"></i>
+            </button>
+        </header>
+
+        <!-- View Container (Renders the current view) -->
+        <div id="view-container">
+            <!-- Container Board View (from eco3.html logic - simplified placeholder) -->
+            <section id="container-board-view" class="active-view">
+                <div class="mb-6 flex gap-4">
+                    <input type="text" id="search-input" placeholder="חפש לפי שם לקוח, כתובת או תעודת משלוח..."
+                           class="p-3 border border-gray-300 rounded-lg w-full focus:ring-primary-color focus:border-primary-color transition shadow-sm">
+                </div>
+                <div id="container-grid" class="space-y-8">
+                    <div class="text-center p-10 bg-white rounded-xl shadow-md" id="loading-message">
+                        <i data-feather="loader" class="w-8 h-8 mx-auto animate-spin text-primary-color mb-3"></i>
+                        <p class="text-gray-500">טוען נתוני מכולות פעילות...</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- New Order View -->
+            <section id="new-order-view" class="hidden-view">
+                <div class="max-w-3xl mx-auto bg-white p-6 md:p-10 rounded-xl shadow-lg">
+                    <h3 class="text-2xl font-bold mb-6 text-gray-800">יצירת הזמנת מכולה חדשה</h3>
+                    <form id="new-container-order-form" class="space-y-5">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                            <div>
+                                <label for="new-customer-name" class="block text-sm font-medium text-gray-700 mb-1">שם לקוח</label>
+                                <input type="text" id="new-customer-name" required
+                                       class="w-full p-3 border border-gray-300 rounded-lg focus:ring-primary-color focus:border-primary-color">
+                            </div>
+                            <!-- שדה חדש: מספר לקוח -->
+                            <div>
+                                <label for="new-customer-number" class="block text-sm font-medium text-gray-700 mb-1">מספר לקוח</label>
+                                <input type="text" id="new-customer-number" required
+                                       class="w-full p-3 border border-gray-300 rounded-lg focus:ring-primary-color focus:border-primary-color">
+                            </div>
+                        </div>
+
+                        <!-- שדה חדש: מספר הזמנה (אופציונלי) -->
+                        <div>
+                            <label for="new-order-number" class="block text-sm font-medium text-gray-700 mb-1">מספר הזמנה (אופציונלי)</label>
+                            <input type="text" id="new-order-number"
+                                   class="w-full p-3 border border-gray-300 rounded-lg focus:ring-primary-color focus:border-primary-color">
+                        </div>
+
+                        <div>
+                            <label for="new-address" class="block text-sm font-medium text-gray-700 mb-1">כתובת</label>
+                            <input type="text" id="new-address" required
+                                   class="w-full p-3 border border-gray-300 rounded-lg focus:ring-primary-color focus:border-primary-color">
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                            <div>
+                                <label for="new-container-type" class="block text-sm font-medium text-gray-700 mb-1">סוג מכולה</label>
+                                <select id="new-container-type" required
+                                        class="w-full p-3 border border-gray-300 rounded-lg focus:ring-primary-color focus:border-primary-color bg-white">
+                                    <option value="ECO-12">מכולה ECO-12</option>
+                                    <option value="ECO-24">מכולה ECO-24</option>
+                                </select>
+                            </div>
+                            <!-- שדה חדש: סוג פעולה -->
+                            <div>
+                                <label for="new-operation-type" class="block text-sm font-medium text-gray-700 mb-1">סוג פעולה</label>
+                                <select id="new-operation-type" required
+                                        class="w-full p-3 border border-gray-300 rounded-lg focus:ring-primary-color focus:border-primary-color bg-white">
+                                    <option value="הצבת מכולה">הצבת מכולה</option>
+                                    <option value="החלפת מכולה">החלפת מכולה</option>
+                                    <option value="הוצאת מכולה">הוצאת מכולה</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- שדה חדש: מחסן -->
+                        <div>
+                            <label for="new-warehouse" class="block text-sm font-medium text-gray-700 mb-1">מחסן</label>
+                            <select id="new-warehouse" required
+                                    class="w-full p-3 border border-gray-300 rounded-lg focus:ring-primary-color focus:border-primary-color bg-white">
+                                <option value="">בחר מחסן</option>
+                                <option value="מחסן 30 (שארק)">1 - מחסן 30 (שארק)</option>
+                                <option value="מחסן 32 (כראדי)">2 - מחסן 32 (כראדי)</option>
+                                <option value="מחסן 40 (שי שרון)">3 - מחסן 40 (שי שרון)</option>
+                            </select>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                            <div>
+                                <label for="new-delivery-date" class="block text-sm font-medium text-gray-700 mb-1">תאריך אספקה מתוכנן</label>
+                                <input type="date" id="new-delivery-date" required
+                                       class="w-full p-3 border border-gray-300 rounded-lg focus:ring-primary-color focus:border-primary-color">
+                            </div>
+                            <div>
+                                <label for="new-delivery-time" class="block text-sm font-medium text-gray-700 mb-1">שעת אספקה מתוכננת</label>
+                                <input type="time" id="new-delivery-time" required
+                                       class="w-full p-3 border border-gray-300 rounded-lg focus:ring-primary-color focus:border-primary-color">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label for="new-notes" class="block text-sm font-medium text-gray-700 mb-1">הערות (אופציונלי)</label>
+                            <textarea id="new-notes" rows="3"
+                                      class="w-full p-3 border border-gray-300 rounded-lg focus:ring-primary-color focus:border-primary-color"></textarea>
+                        </div>
+
+                        <button type="submit" id="save-new-order-btn"
+                                class="w-full bg-primary-color hover:bg-primary-dark text-white font-bold py-3 rounded-lg transition duration-200 shadow-md">
+                            צור הזמנה
+                        </button>
+                    </form>
+                    <p class="mt-4 text-sm text-gray-500 text-center">
+                        * ימי השכירות קבועים ל-10 ימים לכלל הלקוחות.
+                    </p>
+                </div>
+            </section>
+
+            <!-- Warehouses Dashboard View (הדף החדש) -->
+            <section id="warehouses-view" class="hidden-view">
+                <div class="space-y-8">
+                    <!-- Cards Summary -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div class="bg-white p-6 rounded-xl shadow-lg border-t-4 border-blue-500">
+                            <p class="text-sm font-medium text-gray-500">מחסן 30 (שארק)</p>
+                            <p class="text-3xl font-bold text-gray-900 mt-1" id="wh30-total">0 הזמנות</p>
+                            <p class="text-xs text-gray-400 mt-2">סה"כ הזמנות פעילות</p>
+                        </div>
+                        <div class="bg-white p-6 rounded-xl shadow-lg border-t-4 border-green-500">
+                            <p class="text-sm font-medium text-gray-500">מחסן 32 (כראדי)</p>
+                            <p class="text-3xl font-bold text-gray-900 mt-1" id="wh32-total">0 הזמנות</p>
+                            <p class="text-xs text-gray-400 mt-2">סה"כ הזמנות פעילות</p>
+                        </div>
+                        <div class="bg-white p-6 rounded-xl shadow-lg border-t-4 border-red-500">
+                            <p class="text-sm font-medium text-gray-500">מחסן 40 (שי שרון)</p>
+                            <p class="text-3xl font-bold text-gray-900 mt-1" id="wh40-total">0 הזמנות</p>
+                            <p class="text-xs text-gray-400 mt-2">סה"כ הזמנות פעילות</p>
+                        </div>
+                    </div>
+
+                    <!-- Charts and Reports -->
+                    <div class="bg-white p-6 rounded-xl shadow-lg">
+                        <h4 class="text-xl font-semibold mb-4 text-gray-800">דוח סוגי מכולות לפי מחסן</h4>
+                        <canvas id="warehouse-chart" height="150"></canvas>
+                    </div>
+
+                    <!-- Filterable Orders Table -->
+                    <div class="bg-white p-6 rounded-xl shadow-lg">
+                        <h4 class="text-xl font-semibold mb-4 text-gray-800">טבלת הזמנות מסוננת לפי מחסן</h4>
+                        <div class="mb-4 flex gap-4 items-center">
+                            <select id="warehouse-filter"
+                                    class="p-2 border border-gray-300 rounded-lg focus:ring-primary-color focus:border-primary-color bg-white">
+                                <option value="all">כל המחסנים</option>
+                                <option value="מחסן 30 (שארק)">מחסן 30 (שארק)</option>
+                                <option value="מחסן 32 (כראדי)">מחסן 32 (כראדי)</option>
+                                <option value="מחסן 40 (שי שרון)">מחסן 40 (שי שרון)</option>
+                            </select>
+                            <input type="text" id="warehouse-search" placeholder="חפש בטבלה..."
+                                   class="p-2 border border-gray-300 rounded-lg w-full max-w-sm focus:ring-primary-color focus:border-primary-color transition shadow-sm">
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-200">
+                                <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">מחסן</th>
+                                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">לקוח</th>
+                                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">סוג מכולה</th>
+                                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">סוג פעולה</th>
+                                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">תאריך אספקה</th>
+                                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">סטטוס</th>
+                                </tr>
+                                </thead>
+                                <tbody id="warehouse-orders-table-body" class="bg-white divide-y divide-gray-200">
+                                    <!-- Orders will be rendered here -->
+                                    <tr><td colspan="6" class="p-4 text-center text-gray-500">טוען נתונים...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <!-- Modal: Edit Container Order -->
+    <div id="container-edit-modal-overlay" class="modal-overlay">
+        <div class="modal-content">
+            <div class="p-6 md:p-8">
+                <h3 class="text-xl font-bold mb-4 text-gray-800">עריכת פרטי הזמנה</h3>
+                <form id="container-edit-form" class="space-y-4">
+                    <input type="hidden" id="container-edit-id">
+                    
+                    <!-- Customer Details (Read-only for Edit) -->
+                    <div class="bg-gray-50 p-3 rounded-lg border border-gray-200">
+                        <p class="text-sm font-semibold text-gray-700">פרטי לקוח:</p>
+                        <p class="text-sm text-gray-600"><span id="edit-customer-name-display"></span> (<span id="edit-customer-number-display"></span>)</p>
+                        <p class="text-xs text-gray-500">הזמנה: <span id="edit-order-number-display"></span></p>
+                        <p class="text-xs text-gray-500">מכולה: <span id="edit-container-type-display"></span> | מחסן: <span id="edit-warehouse-display"></span></p>
+                        <p class="text-xs text-gray-500">פעולה: <span id="edit-operation-type-display"></span></p>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label for="container-edit-delivery-type" class="block text-sm font-medium text-gray-700 mb-1">סוג אספקה</label>
+                            <select id="container-edit-delivery-type" required
+                                    class="w-full p-2 border border-gray-300 rounded-lg focus:ring-primary-color focus:border-primary-color bg-white">
+                                <option value="הובלה">הובלה</option>
+                                <option value="איסוף עצמי">איסוף עצמי</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="container-edit-rental-start-date" class="block text-sm font-medium text-gray-700 mb-1">תאריך תחילת שכירות</label>
+                            <input type="date" id="container-edit-rental-start-date"
+                                   class="w-full p-2 border border-gray-300 rounded-lg bg-gray-100 cursor-not-allowed" readonly disabled>
+                            <p class="text-xs text-gray-500 mt-1">ימי שכירות קבועים: 10 ימים</p>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label for="container-edit-order-date" class="block text-sm font-medium text-gray-700 mb-1">תאריך אספקה מתוכנן</label>
+                            <input type="date" id="container-edit-order-date" required
+                                   class="w-full p-2 border border-gray-300 rounded-lg focus:ring-primary-color focus:border-primary-color">
+                        </div>
+                        <div>
+                            <label for="container-edit-order-time" class="block text-sm font-medium text-gray-700 mb-1">שעת אספקה מתוכננת</label>
+                            <input type="time" id="container-edit-order-time" required
+                                   class="w-full p-2 border border-gray-300 rounded-lg focus:ring-primary-color focus:border-primary-color">
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label for="container-edit-status" class="block text-sm font-medium text-gray-700 mb-1">סטטוס הזמנה</label>
+                        <select id="container-edit-status" required
+                                class="w-full p-2 border border-gray-300 rounded-lg focus:ring-primary-color focus:border-primary-color bg-white">
+                            <option value="ממתין">ממתין</option>
+                            <option value="פעיל">פעיל (המכולה הוצבה/הוחלפה)</option>
+                            <option value="הושלם">הושלם (המכולה הוצאה)</option>
+                        </select>
+                        <p id="delivery-cert-info" class="text-xs text-red-500 mt-1 hidden">
+                            שים לב: בעת מעבר לסטטוס 'פעיל' תתבקש להזין מספר תעודת משלוח.
+                        </p>
+                    </div>
+
+                    <div>
+                        <label for="container-edit-notes" class="block text-sm font-medium text-gray-700 mb-1">הערות</label>
+                        <textarea id="container-edit-notes" rows="3"
+                                  class="w-full p-2 border border-gray-300 rounded-lg focus:ring-primary-color focus:border-primary-color"></textarea>
+                    </div>
+
+                    <div class="flex justify-end pt-4 gap-3">
+                        <button type="button" onclick="closeContainerEditModal()"
+                                class="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-100 transition">
+                            ביטול
+                        </button>
+                        <button type="submit" id="save-container-order-btn"
+                                class="px-4 py-2 bg-primary-color hover:bg-primary-dark text-white font-bold rounded-lg transition">
+                            שמור שינויים
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Delivery Certificate Prompt (New/Edit) -->
+    <div id="delivery-cert-modal-overlay" class="modal-overlay">
+        <div class="modal-content max-w-sm">
+            <div class="p-6 md:p-8 text-center">
+                <h3 class="text-xl font-bold mb-4 text-red-600">הזמנה עוברת למצב פעיל!</h3>
+                <p class="mb-4 text-gray-700">אנא הזן את מספר תעודת המשלוח להזמנה זו:</p>
+                <form id="delivery-cert-form" class="space-y-4">
+                    <input type="text" id="delivery-cert-number-input" required placeholder="לדוגמה: 6715496"
+                           class="w-full p-3 text-center text-lg border-2 border-red-400 rounded-lg focus:ring-red-500 focus:border-red-500">
+                    <button type="submit" id="save-cert-btn"
+                            class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-lg transition duration-200 shadow-md">
+                        אשר והפוך לפעיל
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript & Firebase Logic -->
+    <script type="module">
+        // Global variables for Firebase access
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, setPersistence, browserSessionPersistence } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where, serverTimestamp, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Firebase Initialization
+        let app, db, auth, userId = null;
+        let containerUnsubscribe = null; // Listener for container-board
+        let warehouseUnsubscribe = null; // Listener for warehouses-view
+
+        // Set Firebase Log Level to Debug
+        setLogLevel('Debug');
+
+        // Utility: Smart Logger
+        const SmartLog = {
+            info: (msg, component, data) => console.info(`[${component} INFO] ${msg}`, data || ''),
+            error: (err, component, data) => console.error(`[${component} ERROR] ${err.message || err}`, data || '', err),
+        };
+
+        // Utility: Toast Notifications
+        const showToast = (message, type = 'success', duration = 3000) => {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.textContent = message;
+
+            container.prepend(toast); // Add new toast to the top
+
+            // Show animation
+            setTimeout(() => {
+                toast.classList.add('show');
+            }, 10);
+
+            // Hide and remove after duration
+            setTimeout(() => {
+                toast.classList.remove('show');
+                // Wait for fade-out transition before removal
+                setTimeout(() => toast.remove(), 500);
+            }, duration);
+        };
+
+        // --- Core App & Auth Initialization ---
+
+        const initializeFirebase = async () => {
+            try {
+                if (Object.keys(firebaseConfig).length === 0) {
+                    throw new Error("Firebase configuration is missing.");
+                }
+                app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+                
+                await setPersistence(auth, browserSessionPersistence);
+
+                // Try to sign in with custom token or anonymously
+                if (initialAuthToken) {
+                    await signInWithCustomToken(auth, initialAuthToken);
+                    SmartLog.info("Signed in with custom token.", "Auth");
+                } else {
+                    await signInAnonymously(auth);
+                    SmartLog.info("Signed in anonymously.", "Auth");
+                }
+
+                onAuthStateChanged(auth, (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        document.getElementById('user-id-display').textContent = userId;
+                        SmartLog.info("Auth state changed. User ID set.", "Auth", { userId });
+                        // Start listeners after auth is ready
+                        setupContainerListeners();
+                        // Render initial view
+                        renderView(currentView);
+                    } else {
+                        // This case should be rare since we force anonymous sign-in
+                        userId = null;
+                        document.getElementById('user-id-display').textContent = 'מנותק';
+                        SmartLog.error("User logged out or failed to authenticate.", "Auth");
+                    }
+                });
+
+            } catch (error) {
+                showToast(`שגיאת אתחול: ${error.message}`, 'error');
+                SmartLog.error(error, "App Init");
+            }
+        };
+
+        // --- Navigation and View Management ---
+        let currentView = 'container-board';
+
+        const setupNavigation = () => {
+            const menuItems = document.querySelectorAll('.menu-item');
+            menuItems.forEach(item => {
+                item.addEventListener('click', () => {
+                    const view = item.getAttribute('data-view');
+                    renderView(view);
+
+                    // Close sidebar on mobile after selection
+                    if (window.innerWidth < 1024) {
+                        document.getElementById('sidebar').classList.remove('sidebar-open');
+                    }
+                });
+            });
+
+            document.getElementById('toggle-sidebar').addEventListener('click', () => {
+                document.getElementById('sidebar').classList.toggle('sidebar-open');
+            });
+        };
+
+        const renderView = (viewName) => {
+            currentView = viewName;
+            const views = document.querySelectorAll('#view-container > section');
+            const menuItems = document.querySelectorAll('.menu-item');
+
+            views.forEach(v => v.classList.add('hidden-view'));
+            menuItems.forEach(m => m.classList.remove('active'));
+
+            const activeView = document.getElementById(`${viewName}-view`);
+            const activeMenuItem = document.querySelector(`[data-view="${viewName}"]`);
+            const titleElement = document.getElementById('view-title');
+
+            if (activeView) activeView.classList.remove('hidden-view');
+            if (activeMenuItem) activeMenuItem.classList.add('active');
+
+            // Set Title
+            let titleText = '';
+            if (viewName === 'container-board') {
+                titleText = 'לוח מכולות פעילות';
+                setupContainerListeners();
+                warehouseUnsubscribe?.(); // Stop warehouse listener
+            } else if (viewName === 'new-order') {
+                titleText = 'יצירת הזמנת מכולה חדשה';
+                containerUnsubscribe?.(); // Stop board listener
+                warehouseUnsubscribe?.(); // Stop warehouse listener
+            } else if (viewName === 'warehouses') {
+                titleText = 'מחסנים ודוחות';
+                setupWarehouseListeners(); // Start warehouse listener
+                containerUnsubscribe?.(); // Stop board listener
+            }
+            titleElement.textContent = titleText;
+        };
+
+        // --- Firestore Utilities ---
+
+        // Helper to get collection path
+        const getContainersCollectionRef = () => {
+             // Collection path: /artifacts/{appId}/public/data/containers
+             return collection(db, 'artifacts', appId, 'public', 'data', 'containers');
+        };
+        
+        // Helper to get document ref
+        const getContainerDocRef = (docId) => {
+            return doc(getContainersCollectionRef(), docId);
+        };
+
+
+        // --- Container Board (Listener & Renderer) ---
+
+        let allContainers = []; // Global array to hold all fetched containers
+
+        const setupContainerListeners = () => {
+            if (!db || containerUnsubscribe) return;
+
+            // Query only for 'פעיל' (Active) and 'ממתין' (Pending) orders
+            const q = query(getContainersCollectionRef(), where('status', 'in', ['פעיל', 'ממתין']));
+
+            containerUnsubscribe = onSnapshot(q, (snapshot) => {
+                const containers = [];
+                snapshot.forEach(doc => {
+                    containers.push({ id: doc.id, ...doc.data() });
+                });
+                allContainers = containers;
+                SmartLog.info("Container data updated from Firestore", "ContainerBoard", { count: containers.length });
+                renderContainerGrid(containers);
+            }, (error) => {
+                SmartLog.error(error, "ContainerBoard Listener");
+                showToast("שגיאה בטעינת לוח המכולות.", "error");
+            });
+        };
+
+        // NOTE: This render function needs to be updated to group by warehouse
+        const renderContainerGrid = (containers) => {
+            const grid = document.getElementById('container-grid');
+            const loading = document.getElementById('loading-message');
+            grid.innerHTML = '';
+
+            if (containers.length === 0) {
+                loading.innerHTML = `<p class="text-gray-500">אין מכולות פעילות או ממתינות כרגע.</p>`;
+                grid.appendChild(loading);
+                return;
+            }
+
+            loading.style.display = 'none';
+
+            // Group containers by warehouse and then by container type
+            const groupedContainers = containers.reduce((acc, container) => {
+                const wh = container.warehouse || 'לא הוגדר';
+                const type = container.containerType || 'לא ידוע';
+
+                if (!acc[wh]) {
+                    acc[wh] = { 'ECO-12': [], 'ECO-24': [] };
+                }
+
+                if (acc[wh][type]) {
+                    acc[wh][type].push(container);
+                } else {
+                     acc[wh][type] = [container];
+                }
+
+                return acc;
+            }, {});
+
+            const warehouseOrder = ['מחסן 30 (שארק)', 'מחסן 32 (כראדי)', 'מחסן 40 (שי שרון)', 'לא הוגדר'];
+
+            warehouseOrder.forEach(warehouse => {
+                if (groupedContainers[warehouse]) {
+                    const warehouseSection = document.createElement('div');
+                    warehouseSection.className = 'eco-warehouse-section space-y-4 p-4 bg-white rounded-xl shadow-lg';
+                    warehouseSection.id = `wh-section-${warehouse.replace(/[^a-zA-Z0-9]/g, '-')}`;
+
+                    warehouseSection.innerHTML = `
+                        <h4 class="text-xl font-bold text-gray-800 border-b pb-2 mb-4">${warehouse}</h4>
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            ${renderContainerGroup(groupedContainers[warehouse]['ECO-12'], 'ECO-12')}
+                            ${renderContainerGroup(groupedContainers[warehouse]['ECO-24'], 'ECO-24')}
+                        </div>
+                    `;
+                    grid.appendChild(warehouseSection);
+                }
+            });
+
+            feather.replace(); // Re-render icons
+            setupSearchListener(containers); // Re-attach search listener
+        };
+        
+        const renderContainerGroup = (containers, type) => {
+            return `
+                <div class="space-y-3 p-3 border rounded-lg bg-gray-50">
+                    <h5 class="text-lg font-semibold text-gray-700">${type} (${containers.length})</h5>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3" id="group-${type}">
+                        ${containers.map(c => `
+                            <div id="card-${c.id}" class="eco-card flex flex-col p-4 bg-white rounded-lg shadow hover:shadow-lg transition cursor-pointer" onclick="showContainerEditModal('${c.id}', this)">
+                                <div class="flex justify-between items-start mb-2">
+                                    <span class="text-sm font-semibold eco-customer-name">${c.customerName}</span>
+                                    <span class="text-xs font-mono text-blue-500">${c.containerType}</span>
+                                </div>
+                                <p class="text-xs text-gray-500 mb-2 eco-address">${c.address}</p>
+                                <p class="text-xs text-gray-400">תעודת משלוח: ${c.deliveryCertificateNumber || '---'}</p>
+                                <p class="text-xs text-gray-600 mt-1">סטטוס: <span class="${c.status === 'פעיל' ? 'text-green-600 font-bold' : 'text-yellow-600'}">${c.status}</span></p>
+                            </div>
+                        `).join('')}
+                        ${containers.length === 0 ? `<p class="text-center text-gray-400 p-4">אין מכולות מסוג זה במלאי כרגע.</p>` : ''}
+                    </div>
+                </div>
+            `;
+        };
+
+        const setupSearchListener = (containers) => {
+            const searchInput = document.getElementById('search-input');
+            
+            // Remove previous listeners if any
+            // We use a clean approach by re-rendering the grid based on the global `allContainers` array
+            const searchHandler = (e) => {
+                const searchTerm = e.target.value.toLowerCase().trim();
+                
+                const filtered = allContainers.filter(c => {
+                    const customerName = (c.customerName || '').toLowerCase();
+                    const address = (c.address || '').toLowerCase();
+                    const deliveryCert = (c.deliveryCertificateNumber || '').toLowerCase();
+
+                    return customerName.includes(searchTerm) || 
+                           address.includes(searchTerm) ||
+                           deliveryCert.includes(searchTerm); // Search by Delivery Certificate Number
+                });
+                renderContainerGrid(filtered);
+            };
+
+            // Remove existing listener before adding a new one to prevent duplicates
+            searchInput.removeEventListener('input', searchInput._currentHandler);
+            searchInput.addEventListener('input', searchHandler);
+            searchInput._currentHandler = searchHandler; // Store reference to remove later
+        };
+
+        // --- New Container Order Handling ---
+
+        document.getElementById('new-container-order-form').addEventListener('submit', handleSaveNewContainerOrder);
+
+        async function handleSaveNewContainerOrder(event) {
+            event.preventDefault();
+            const btn = document.getElementById('save-new-order-btn');
+            btn.disabled = true;
+            btn.innerText = 'שומר...';
+
+            try {
+                const customerName = document.getElementById('new-customer-name').value.trim();
+                const customerNumber = document.getElementById('new-customer-number').value.trim();
+                const orderNumber = document.getElementById('new-order-number').value.trim() || null;
+                const address = document.getElementById('new-address').value.trim();
+                const containerType = document.getElementById('new-container-type').value;
+                const operationType = document.getElementById('new-operation-type').value; // New field
+                const warehouse = document.getElementById('new-warehouse').value; // New field
+                const deliveryDate = document.getElementById('new-delivery-date').value;
+                const deliveryTime = document.getElementById('new-delivery-time').value;
+                const notes = document.getElementById('new-notes').value.trim();
+                
+                if (!customerName || !customerNumber || !address || !containerType || !operationType || !warehouse || !deliveryDate || !deliveryTime) {
+                     throw new Error("אנא מלא את כל השדות החובה.");
+                }
+
+                // New orders start as 'ממתין' (Pending)
+                const newOrderData = {
+                    customerName,
+                    customerNumber, // New
+                    orderNumber, // New (optional)
+                    address,
+                    containerType,
+                    operationType, // New
+                    warehouse, // New
+                    rentalDays: 10, // Fixed requirement
+                    deliveryType: 'הובלה', // Default for new order, can be changed in edit
+                    orderDate: deliveryDate,
+                    orderTime: deliveryTime,
+                    notes,
+                    status: 'ממתין',
+                    createdAt: serverTimestamp(),
+                    lastModified: serverTimestamp(),
+                    userId: userId,
+                    // New: Delivery Certificate Number starts as null
+                    deliveryCertificateNumber: null, 
+                    rentalStartDate: null, // Set only when status becomes 'פעיל'
+                };
+
+                const docRef = await addDoc(getContainersCollectionRef(), newOrderData);
+                SmartLog.info("New container order created", "CRUD.Container.New", { docId: docRef.id, data: newOrderData });
+                
+                showToast(`הזמנה חדשה ל-${customerName} נוצרה בהצלחה.`, 'success');
+                document.getElementById('new-container-order-form').reset();
+                renderView('container-board'); // Move back to the board
+                
+            } catch (error) {
+                showToast(`שגיאה ביצירת הזמנה: ${error.message}`, 'error');
+                SmartLog.error(error, "CRUD.Container.New");
+            } finally {
+                btn.disabled = false;
+                btn.innerText = 'צור הזמנה';
+            }
+        }
+
+        // --- Edit Container Order Handling ---
+
+        let currentEditingOrderId = null; // Stores the ID of the order being edited
+        let previousStatus = null; // Stores the status before the user opened the modal
+
+        window.showContainerEditModal = async (orderId, cardElement) => {
+             if (!db) { showToast('המערכת עדיין מתאפסת.', 'error'); return; }
+             currentEditingOrderId = orderId;
+             const overlay = document.getElementById('container-edit-modal-overlay');
+             
+             try {
+                const docSnap = await getDoc(getContainerDocRef(orderId));
+
+                if (!docSnap.exists()) {
+                    showToast('הזמנה לא נמצאה.', 'error');
+                    return;
+                }
+                const data = docSnap.data();
+                previousStatus = data.status; // Save original status
+
+                // Read-only displays
+                document.getElementById('edit-customer-name-display').textContent = data.customerName || '---';
+                document.getElementById('edit-customer-number-display').textContent = data.customerNumber || '---';
+                document.getElementById('edit-order-number-display').textContent = data.orderNumber || '---';
+                document.getElementById('edit-container-type-display').textContent = data.containerType || '---';
+                document.getElementById('edit-warehouse-display').textContent = data.warehouse || '---';
+                document.getElementById('edit-operation-type-display').textContent = data.operationType || '---';
+
+                // Editable fields
+                document.getElementById('container-edit-id').value = orderId;
+                document.getElementById('container-edit-delivery-type').value = data.deliveryType || 'הובלה';
+                document.getElementById('container-edit-order-date').value = data.orderDate || '';
+                document.getElementById('container-edit-order-time').value = data.orderTime || '';
+                document.getElementById('container-edit-notes').value = data.notes || '';
+                document.getElementById('container-edit-status').value = data.status || 'ממתין';
+                document.getElementById('container-edit-rental-start-date').value = data.rentalStartDate || ''; // Read-only in form
+
+                // Status change warning visibility
+                document.getElementById('delivery-cert-info').classList.toggle('hidden', data.status === 'פעיל');
+                
+                overlay.style.display = 'flex';
+                setTimeout(() => overlay.classList.add('show'), 10);
+
+             } catch (error) {
+                 showToast(`שגיאה בטעינת נתוני הזמנה: ${error.message}`, 'error');
+                 SmartLog.error(error, "CRUD.Container.LoadEdit");
+             }
+        };
+
+        window.closeContainerEditModal = () => {
+             const overlay = document.getElementById('container-edit-modal-overlay');
+             overlay.classList.remove('show');
+             setTimeout(() => {
+                 overlay.style.display = 'none';
+                 currentEditingOrderId = null;
+                 previousStatus = null;
+                 document.getElementById('container-edit-form').reset();
+             }, 300);
+        };
+        
+        document.getElementById('container-edit-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            handleEditFormSubmission(currentEditingOrderId);
+        });
+
+        // Event listener for status change to manage the warning message
+        document.getElementById('container-edit-status').addEventListener('change', (e) => {
+            const newStatus = e.target.value;
+            const certInfo = document.getElementById('delivery-cert-info');
+            // Show warning if user selects 'פעיל' and it wasn't already 'פעיל'
+            if (newStatus === 'פעיל' && previousStatus !== 'פעיל') {
+                 certInfo.classList.remove('hidden');
+            } else {
+                 certInfo.classList.add('hidden');
+            }
+        });
+
+        // Handler to process the edit form submission
+        async function handleEditFormSubmission(orderId) {
+            const newStatus = document.getElementById('container-edit-status').value;
+            
+            // Case 1: Transitioning to 'פעיל' (Active) - must get cert number first
+            if (newStatus === 'פעיל' && previousStatus !== 'פעיל') {
+                closeContainerEditModal(); // Close main edit modal
+                showDeliveryCertModal(orderId); // Open the delivery cert prompt
+                return; // Stop submission of main form
+            }
+
+            // Case 2: Standard Update (status remains 'ממתין'/'הושלם' or already 'פעיל')
+            await finalizeContainerUpdate(orderId, newStatus);
+        }
+
+        // --- Delivery Certificate Modal Logic ---
+
+        let certOrderId = null;
+
+        const showDeliveryCertModal = (orderId) => {
+             certOrderId = orderId;
+             const overlay = document.getElementById('delivery-cert-modal-overlay');
+             overlay.style.display = 'flex';
+             document.getElementById('delivery-cert-number-input').value = '';
+             setTimeout(() => overlay.classList.add('show'), 10);
+        };
+
+        const closeDeliveryCertModal = () => {
+             const overlay = document.getElementById('delivery-cert-modal-overlay');
+             overlay.classList.remove('show');
+             setTimeout(() => overlay.style.display = 'none', 300);
+             certOrderId = null;
+        };
+
+        document.getElementById('delivery-cert-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const certNumber = document.getElementById('delivery-cert-number-input').value.trim();
+
+            if (!certNumber) {
+                showToast('מספר תעודת משלוח חובה להפעלת הזמנה.', 'error');
+                return;
+            }
+
+            // Save the update with the new status and certificate number
+            await finalizeContainerUpdate(certOrderId, 'פעיל', certNumber);
+            closeDeliveryCertModal();
+        });
+
+
+        // Core update function (called by both form submission and cert modal)
+        async function finalizeContainerUpdate(orderId, status, certNumber = null) {
+             const btn = document.getElementById('save-container-order-btn');
+             const orderRef = getContainerDocRef(orderId);
+
+             try {
+                 btn.disabled = true;
+                 btn.innerText = 'שומר שינויים...';
+
+                 const orderDate = document.getElementById('container-edit-order-date').value;
+                 const orderTime = document.getElementById('container-edit-order-time').value;
+                 const deliveryType = document.getElementById('container-edit-delivery-type').value;
+
+                 let rentalStartDate = null;
+                 if (status === 'פעיל') {
+                    // Check if a certNumber was provided, if not, try to fetch the existing one (for edits when status didn't change)
+                    if (!certNumber) {
+                         const docSnap = await getDoc(orderRef);
+                         if (docSnap.exists()) {
+                             certNumber = docSnap.data().deliveryCertificateNumber;
+                             rentalStartDate = docSnap.data().rentalStartDate; // Retain existing start date
+                         }
+                    } else {
+                         // New activation - set rental start date to current date/time
+                         rentalStartDate = new Date().toISOString().split('T')[0];
+                    }
+                    if (!certNumber) {
+                        throw new Error("מספר תעודת משלוח חסר להפעלת הזמנה.");
+                    }
+                 } else {
+                    // If moving back to Pending or to Completed, clear the active-only fields
+                    certNumber = null;
+                    rentalStartDate = null;
+                 }
+
+
+                 const updatedData = {
+                    deliveryType: deliveryType,
+                    orderDate: orderDate,
+                    orderTime: orderTime,
+                    notes: document.getElementById('container-edit-notes').value.trim(),
+                    status: status,
+                    // New/Updated fields
+                    deliveryCertificateNumber: certNumber,
+                    rentalStartDate: rentalStartDate,
+                    lastModified: serverTimestamp()
+                 };
+
+                 await updateDoc(orderRef, updatedData);
+                 SmartLog.info("Container order updated", "CRUD.Container.Edit", { orderId, changes: updatedData });
+                 showToast('הזמנת מכולה עודכנה', 'success');
+                 closeContainerEditModal();
+
+             } catch (error) {
+                 showToast(`שגיאה בעדכון הזמנת מכולה: ${error.message}`, 'error');
+                 SmartLog.error(error, "CRUD.Container.Edit", { orderId, status, certNumber });
+             } finally {
+                 btn.disabled = false;
+                 btn.innerText = 'שמור שינויים';
+             }
+        }
+
+        // --- Warehouses Dashboard Logic ---
+
+        let warehouseChartInstance = null;
+        let allWarehouseOrders = []; // To hold all orders for reports/table
+
+        const setupWarehouseListeners = () => {
+             if (!db || warehouseUnsubscribe) return;
+
+             // Query all orders for the report/table view
+             const q = query(getContainersCollectionRef());
+
+             warehouseUnsubscribe = onSnapshot(q, (snapshot) => {
+                 const orders = [];
+                 snapshot.forEach(doc => {
+                     orders.push({ id: doc.id, ...doc.data() });
+                 });
+                 allWarehouseOrders = orders;
+                 SmartLog.info("Warehouse orders data updated from Firestore", "WarehousesView", { count: orders.length });
+                 renderWarehouseDashboard(orders);
+                 renderWarehouseTable(orders);
+             }, (error) => {
+                 SmartLog.error(error, "WarehousesView Listener");
+                 showToast("שגיאה בטעינת נתוני המחסנים.", "error");
+             });
+        };
+
+        const renderWarehouseDashboard = (orders) => {
+             // 1. Update Cards
+             const whCounts = orders.reduce((acc, order) => {
+                 const wh = order.warehouse || 'לא הוגדר';
+                 if (order.status === 'פעיל') {
+                    acc[wh] = (acc[wh] || 0) + 1;
+                 }
+                 return acc;
+             }, {});
+
+             document.getElementById('wh30-total').textContent = `${whCounts['מחסן 30 (שארק)'] || 0} הזמנות`;
+             document.getElementById('wh32-total').textContent = `${whCounts['מחסן 32 (כראדי)'] || 0} הזמנות`;
+             document.getElementById('wh40-total').textContent = `${whCounts['מחסן 40 (שי שרון)'] || 0} הזמנות`;
+
+
+             // 2. Update Chart
+             const warehouseData = {
+                 'מחסן 30 (שארק)': { ECO12: 0, ECO24: 0 },
+                 'מחסן 32 (כראדי)': { ECO12: 0, ECO24: 0 },
+                 'מחסן 40 (שי שרון)': { ECO12: 0, ECO24: 0 },
+             };
+
+             orders.filter(o => o.status === 'פעיל' && warehouseData[o.warehouse]).forEach(order => {
+                 if (order.containerType === 'ECO-12') {
+                     warehouseData[order.warehouse].ECO12++;
+                 } else if (order.containerType === 'ECO-24') {
+                     warehouseData[order.warehouse].ECO24++;
+                 }
+             });
+
+             const labels = Object.keys(warehouseData);
+             const eco12Data = labels.map(wh => warehouseData[wh].ECO12);
+             const eco24Data = labels.map(wh => warehouseData[wh].ECO24);
+
+             if (warehouseChartInstance) {
+                 warehouseChartInstance.destroy();
+             }
+
+             const ctx = document.getElementById('warehouse-chart').getContext('2d');
+             warehouseChartInstance = new Chart(ctx, {
+                 type: 'bar',
+                 data: {
+                     labels: labels.map(l => l.replace(/ \(.+\)/, '')), // Display only number/name
+                     datasets: [
+                         {
+                             label: 'ECO-12 (פעיל)',
+                             data: eco12Data,
+                             backgroundColor: '#3b82f6', // Blue
+                             borderRadius: 4
+                         },
+                         {
+                             label: 'ECO-24 (פעיל)',
+                             data: eco24Data,
+                             backgroundColor: '#10b981', // Green
+                             borderRadius: 4
+                         }
+                     ]
+                 },
+                 options: {
+                     responsive: true,
+                     maintainAspectRatio: false,
+                     scales: {
+                         x: { stacked: true },
+                         y: { stacked: true, beginAtZero: true }
+                     },
+                     plugins: {
+                         legend: { position: 'top' },
+                         tooltip: { mode: 'index', intersect: false }
+                     }
+                 }
+             });
+        };
+        
+        const renderWarehouseTable = (orders) => {
+             const tableBody = document.getElementById('warehouse-orders-table-body');
+             const filterSelect = document.getElementById('warehouse-filter');
+             const searchInput = document.getElementById('warehouse-search');
+
+             // Get current filter and search term
+             const selectedWarehouse = filterSelect.value;
+             const searchTerm = searchInput.value.toLowerCase().trim();
+
+             const filteredOrders = orders.filter(order => {
+                 const whMatch = selectedWarehouse === 'all' || order.warehouse === selectedWarehouse;
+                 const searchMatch = !searchTerm ||
+                                     (order.customerName || '').toLowerCase().includes(searchTerm) ||
+                                     (order.deliveryCertificateNumber || '').toLowerCase().includes(searchTerm) ||
+                                     (order.status || '').toLowerCase().includes(searchTerm);
+                 return whMatch && searchMatch;
+             }).sort((a, b) => new Date(a.orderDate) - new Date(b.orderDate)); // Sort by delivery date
+
+             tableBody.innerHTML = filteredOrders.map(order => {
+                 const statusClass = order.status === 'פעיל' ? 'bg-green-100 text-green-800' :
+                                     order.status === 'ממתין' ? 'bg-yellow-100 text-yellow-800' :
+                                     'bg-gray-100 text-gray-800';
+                 return `
+                     <tr class="hover:bg-gray-50 cursor-pointer" onclick="showContainerEditModal('${order.id}')">
+                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${order.warehouse || '---'}</td>
+                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${order.customerName} (${order.customerNumber || '---'})</td>
+                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${order.containerType}</td>
+                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${order.operationType}</td>
+                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${order.orderDate}</td>
+                         <td class="px-6 py-4 whitespace-nowrap">
+                             <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${statusClass}">
+                                 ${order.status}
+                             </span>
+                         </td>
+                     </tr>
+                 `;
+             }).join('') || `<tr><td colspan="6" class="p-4 text-center text-gray-500">לא נמצאו הזמנות תואמות.</td></tr>`;
+        };
+
+        // Attach listeners for table filtering/searching
+        document.getElementById('warehouse-filter').addEventListener('change', () => renderWarehouseTable(allWarehouseOrders));
+        document.getElementById('warehouse-search').addEventListener('input', () => renderWarehouseTable(allWarehouseOrders));
+
+
+        // --- Initialization ---
+
+        window.onload = () => {
+             initializeFirebase();
+             setupNavigation();
+             feather.replace(); // Initial icon rendering
+
+             // Set default view on load
+             renderView('container-board');
+        };
+
+    </script>
+</body>
+</html>
