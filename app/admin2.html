@@ -218,7 +218,10 @@
         function loadDeliveries() {
             const tableBody = document.getElementById('deliveries-table-body');
             
-            db.collection('deliveries').limit(20) // Get top 20
+            // ==========================================================
+            // === תיקון: שונה מ-'deliveries' ל-'orders' ===
+            // ==========================================================
+            db.collection('orders').limit(20) // Get top 20
               .onSnapshot((querySnapshot) => {
                   if (querySnapshot.empty) {
                       tableBody.innerHTML = '<tr><td colspan="6" class="text-center p-6 text-gray-500">לא נמצאו משלוחים.</td></tr>';
@@ -274,12 +277,7 @@
         function listenForNewCustomerMessages() {
             const messagesList = document.getElementById('messages-list');
             
-            // This query is complex and requires a composite index in Firestore.
-            // For simplicity, we'll query all orders, then query messages for each.
-            // A better production approach: a dedicated 'admin_messages' collection
-            // where customer-app writes directly.
-            
-            // Simple (but less efficient) approach: query all 'messages' subcollections
+            // This query searches ALL subcollections named 'messages'
             db.collectionGroup('messages')
               .where('type', '==', 'message_to_admin')
               .orderBy('timestamp', 'desc')
@@ -435,3 +433,4 @@
     </script>
 </body>
 </html>
+
