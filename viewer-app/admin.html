@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DeliveryMaster v32.5 (Eco+)</title>
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <script src="https://unpkg.com/feather-icons"></script>
+
+    <script type="module">
+        // יש להחליף בפרטי ההגדרות של הפרויקט שלכם
+        const fallbackConfig = {
+            apiKey: "AIzaSyDq0oVwS6zbEfsgrYBRkeBq80dDUKMedzo", 
+            authDomain: "saban94-76543.firebaseapp.com", 
+            projectId: "saban94-76543",
+            storageBucket: "saban94-76543.appspot.com", 
+            messagingSenderId: "41553157903", 
+            appId: "1:41553157903:web:cc33d252cff023be97a87a", 
+            measurementId: "G-XV6RZDESSB"
+        };
+
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js";
+        import { 
+            getFirestore, 
+            collection, 
+            doc, 
+            query, 
+            where, 
+            onSnapshot, 
+            addDoc, 
+            updateDoc, 
+            serverTimestamp, 
+            arrayUnion,
+            getDocs // נדרש לעדכון הזמנות כשלקוח משתנה
+        } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js";
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        window.db = db;
+        window.serverTimestamp = serverTimestamp;
+        window.arrayUnion = arrayUnion;
+        window.addDoc = addDoc;
+        window.updateDoc = updateDoc;
+        window.collection = collection;
+        window.doc = doc;
+        window.query = query;
+        window.where = where;
+        window.onSnapshot = onSnapshot;
+        window.getDocs = getDocs;
+
+        // ... לוגיקת אימות ו-Listeners כפי שנראתה בלוג
+        signInAnonymously(auth).then(() => {
+            console.log("[Init.Auth] INFO: Auth successful. User: ...");
+            // כאן קוראים לפונקציות ה-Listen
+        }).catch(error => {
+            console.error("[Init.Auth] ERROR: Auth failed.", error);
+        });
+
+        // יצירת SmartLog ו-Toast פשוטים לדוגמה
+        window.SmartLog = {
+            info: (msg, source, data) => console.log(`[${source}] INFO: ${msg}`, data || ''),
+            error: (msg, source, data) => console.error(`[${source}] ERROR: ${msg}`, data || '')
+        };
+        window.showToast = (msg, type) => console.log(`[Toast ${type.toUpperCase()}]: ${msg}`);
+
+
+        // =======================================================
+        // 🚨 התיקון הנדרש נמצא כאן, בפונקציה ליצירת הזמנה
+        // =======================================================
+
+        /**
+         * CRUD.Order.Create: יוצר הזמנה חדשה ומעדכן את מסמך הלקוח.
+         * הפונקציה ששם נרשמה השגיאה המקורית.
+         * @param {string} customerId - מזהה הלקוח.
+         * @param {object} orderDetails - פרטי ההזמנה.
+         */
+        async function handleCreateNewOrder(customerId, orderDetails) {
+            const customerRef = doc(db, "customers", customerId);
+            const ordersCollection = collection(db, "orders");
+
+            SmartLog.info("Starting new order creation", "CRUD.Order.Create", { customerId });
+
+            try {
+                // 1. יצירת מסמך ההזמנה החדש
+                const newOrderData = {
+                    ...orderDetails,
+                    status: "חדש",
+                    createdAt: serverTimestamp(), // שימוש תקין: שדה ברמה העליונה
+                    lastModified: serverTimestamp() // שימוש תקין: שדה ברמה העליונה
+                };
+
+                const newOrderRef = await addDoc(ordersCollection, newOrderData);
+                const newOrderId = newOrderRef.id;
+
+                SmartLog.info(`Order document created: ${newOrderId}`, "CRUD.Order.Create");
+
+                // 2. עדכון מסמך הלקוח (החלק שגרם לשגיאה)
+                
+                // התיקון מתבצע בתוך האובייקט המועבר ל-arrayUnion
+                const orderRecordForCustomerHistory = {
+                    id: newOrderId,
+                    // ✅ התיקון: שימוש ב-new Date() במקום serverTimestamp() כדי להימנע מהשגיאה בתוך המערך
+                    addedAt: new Date(), 
+                    status: "חדש",
+                    amount: orderDetails.amount || 0 // דוגמה לשדות נוספים
+                };
+                
+                await updateDoc(customerRef, {
+                    lastOrderAdded: serverTimestamp(), // שדה ברמה העליונה (תקין)
+                    ordersHistory: arrayUnion(orderRecordForCustomerHistory) // שימוש בערך המתוקן
+                });
+
+                SmartLog.info(`Customer ${customerId} updated with new order ${newOrderId}`, "CRUD.Order.Create.CustomerUpdate");
+                showToast('הזמנה חדשה נוצרה בהצלחה', 'success');
+                
+                return newOrderId;
+
+            } catch (error) {
+                // [CRUD.Order.Create] ERROR: ... serverTimestamp() is not currently supported inside arrays ...
+                SmartLog.error(error, "CRUD.Order.Create", { customerId });
+                showToast(`שגיאה בהוספת הזמנה חדשה: ${error.message}`, 'error');
+                throw error;
+            }
+        }
+
+        window.handleCreateNewOrder = handleCreateNewOrder;
+
+        // =======================================================
+        // פונקציות נוספות מהקוד ששלחת (עדכון הזמנה קיימת)
+        // =======================================================
+
+        // ... פונקציית handleSaveContainerOrder מהסניפט הקודם (עדכון הזמנה)
+        async function handleSaveContainerOrder(orderId, orderData, customerRef, updatedData) {
+             // ... לוגיקת בדיקות תאריך וכו'...
+             
+             // updatedData כבר הוצג וכלל:
+             // lastModified: serverTimestamp()
+             
+             // הקוד שהצגת:
+             const updatedDataSave = {
+                // ... שדות הזמנה
+                lastModified: serverTimestamp() // תקין לחלוטין
+             };
+
+             // דוגמה לשימוש בקוד שהוצג:
+             // await updateDoc(doc(db, "orders", orderId), updatedDataSave);
+
+             // ... המשך הקוד...
+        }
+        window.handleSaveContainerOrder = handleSaveContainerOrder;
+
+
+        // ... פונקציית עדכון לקוח ועדכון הזמנות פעילות מהסניפט האחרון
+        // נניח שזו פונקציה הנקראת 'handleUpdateCustomerAndOrders'
+        async function handleUpdateCustomerAndOrders(customerId, changes, updatedData, addressChanged, originalAddress, newAddress, newCoords) {
+             const customerRef = doc(db, "customers", customerId);
+             
+             // 1. עדכון מסמך הלקוח
+             if (Object.keys(changes).length > 0) {
+                 await updateDoc(customerRef, updatedData);
+                 SmartLog.info("Customer updated with audit log", "CRUD.Customer", { id: customerId, changes: Object.keys(changes) });
+                 showToast('פרטי לקוח עודכנו', 'success');
+             } else {
+                 SmartLog.info("No changes detected for customer update", "CRUD.Customer", { id: customerId });
+                 showToast('לא זוהו שינויים לשמירה', 'info');
+             }
+             
+             // 2. עדכון הזמנות פעילות
+             if (addressChanged) {
+                 SmartLog.info(`Address changed for ${customerId}. Checking active orders...`, "CRUD.Order.UpdateOnCustChange");
+                 const q = query(collection(db, "orders"),
+                     where("customer.id", "==", customerId),
+                     where("status", "in", ["חדש", "שויך", "בדרך"]),
+                     where("address", "==", originalAddress) 
+                 );
+                 
+                 try {
+                     const querySnapshot = await getDocs(q);
+                     let updatedCount = 0;
+                     // במקום מערך של Promise-ים, נשתמש ב-Batch (מומלץ) או ב-Promise.all
+                     const updatePromises = []; // שימוש ב-Promise.all
+                     
+                     querySnapshot.forEach(orderDoc => {
+                         const orderUpdateData = {
+                             address: newAddress,
+                             "customer.name": updatedData.name, 
+                             "customer.phone": updatedData.phone
+                         };
+                         if (newCoords) { 
+                             orderUpdateData.latitude = newCoords[0];
+                             orderUpdateData.longitude = newCoords[1];
+                         }
+                         // דוחף את ה-Promise למערך
+                         updatePromises.push(updateDoc(doc(db, "orders", orderDoc.id), orderUpdateData));
+                         updatedCount++;
+                     });
+                     
+                     // מבצע את כל העדכונים במקביל
+                     await Promise.all(updatePromises); 
+                     SmartLog.info(`Updated ${updatedCount} active orders with new address.`, "CRUD.Order.UpdateOnCustChange");
+                     showToast(`עודכנו ${updatedCount} הזמנות פעילות בכתובת החדשה`, 'info');
+                     
+                 } catch (e) {
+                     SmartLog.error(e, "CRUD.Order.UpdateOnCustChange", { customerId });
+                     showToast('שגיאה בעדכון הזמנות פעילות', 'error');
+                 }
+             }
+        }
+        window.handleUpdateCustomerAndOrders = handleUpdateCustomerAndOrders;
+
+
+    </script>
+</head>
+<body>
+    <main>
+        <button onclick="window.handleCreateNewOrder('KCXmenIeABybNVatNUbN', { customer: { id: 'KCXmenIeABybNVatNUbN', name: 'לקוח בדיקה' }, amount: 100, deliveryType: 'רגיל' })">
+            צור הזמנה חדשה (בדיקה)
+        </button>
+    </main>
+    
+    <style>
+        /* ... סגנונות ה-CSS שלכם ... */
+    </style>
+    
+    <script>
+        // קוד JavaScript שאינו מודול (לדוגמה, קריאה ל-feather-icons)
+        feather.replace();
+    </script>
+</body>
+</html>
