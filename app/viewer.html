@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Viewer App - ניהול הזמנות</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f1f5f9;
+        }
+        /* Style for the modal */
+        #order-modal {
+            transition: opacity 0.3s ease;
+        }
+        /* Chat bubble styles */
+        .chat-bubble {
+            max-width: 80%;
+            padding: 0.75rem 1rem;
+            border-radius: 1rem;
+            margin-bottom: 0.5rem;
+            word-wrap: break-word;
+        }
+        .chat-bubble-admin {
+            background-color: #e2e8f0; /* gray-200 */
+            color: #1e293b; /* gray-800 */
+            border-bottom-left-radius: 0.25rem;
+            align-self: flex-start;
+        }
+        .chat-bubble-customer {
+            background-color: #2563eb; /* blue-600 */
+            color: white;
+            border-bottom-right-radius: 0.25rem;
+            align-self: flex-end;
+        }
+         .chat-bubble-note {
+            background-color: #fef9c3; /* yellow-100 */
+            color: #713f12; /* yellow-900 */
+            border: 1px solid #fde047; /* yellow-400 */
+            align-self: center;
+            width: 100%;
+            max-width: 100%;
+            text-align: center;
+            font-style: italic;
+        }
+        .chat-timestamp {
+            font-size: 0.75rem;
+            color: #64748b; /* gray-500 */
+            margin-top: 0.25rem;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+
+    <div class="container mx-auto p-4">
+        <header class="flex justify-between items-center bg-white p-4 rounded-lg shadow-md mb-6">
+            <h1 class="text-3xl font-bold text-gray-800">לוח בקרת הזמנות (Viewer)</h1>
+            <button onclick="location.reload()" class="text-blue-500 hover:text-blue-700">
+                <i class="fas fa-sync-alt fa-fw"></i> רענן
+            </button>
+        </header>
+
+        <!-- Orders Grid -->
+        <div id="orders-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            <!-- Loading indicator -->
+            <p id="loading-orders" class="text-center text-gray-700 col-span-full">טוען הזמנות...</p>
+            <!-- Order cards will be injected here by JS -->
+        </div>
+    </div>
+
+    <!-- Order Details Modal -->
+    <div id="order-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 hidden z-50" onclick="closeModal(event)">
+        <div class="bg-white rounded-lg shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col" onclick.stop>
+            <!-- Modal Header -->
+            <div class="flex justify-between items-center p-5 border-b border-gray-200">
+                <h2 class="text-2xl font-semibold text-gray-900">פרטי הזמנה: <span id="modal-order-id" class="text-blue-600"></span></h2>
+                <button onclick="closeModal(event)" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times fa-2x"></i>
+                </button>
+            </div>
+            
+            <!-- Modal Body -->
+            <div class="p-6 flex-grow overflow-y-auto" style="direction: rtl;">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- Left Column: Order Details -->
+                    <div class="border-l-0 md:border-l md:pl-6 border-gray-200">
+                        <h3 class="text-xl font-semibold mb-4 text-gray-800">סיכום הזמנה</h3>
+                        <div class="space-y-3">
+                            <div>
+                                <strong class="text-gray-600">שם לקוח:</strong>
+                                <p id="modal-customer-name" class="text-lg text-gray-900"></p>
+                            </div>
+                            <div>
+                                <strong class="text-gray-600">כתובת:</strong>
+                                <p id="modal-customer-address" class="text-lg text-gray-900"></p>
+                            </div>
+                            <div>
+                                <strong class="text-gray-600">טלפון:</strong>
+                                <p id="modal-customer-phone" class="text-lg text-gray-900"></p>
+                            </div>
+                             <div>
+                                <strong class="text-gray-600">סטטוס נוכחי:</strong>
+                                <p id="modal-status" class="text-lg font-bold text-blue-600"></p>
+                            </div>
+                            <div>
+                                <strong class="text-gray-600">נהג:</strong>
+                                <p id="modal-driver-name" class="text-lg text-gray-900"></p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Right Column: Messaging & Notes -->
+                    <div>
+                        <h3 class="text-xl font-semibold mb-4 text-gray-800">היסטוריית תקשורת והערות</h3>
+                        <!-- Chat History -->
+                        <div id="messages-container" class="h-64 bg-gray-100 rounded-lg p-4 overflow-y-auto flex flex-col space-y-4 mb-4">
+                            <!-- Messages will be injected here -->
+                            <p id="loading-messages" class="text-center text-gray-500">טוען הודעות...</p>
+                        </div>
+                        
+                        <!-- Add Note Form -->
+                        <h4 class="text-lg font-semibold mb-2 text-gray-800">הוסף הערה פנימית</h4>
+                        <div class="flex gap-2 mb-2">
+                             <input type="text" id="note-author" class="w-1/2 p-2 border border-gray-300 rounded-lg" placeholder="שם הכותב (לדוגמה: יוסי)">
+                             <input type="hidden" id="current-order-id-for-note">
+                        </div>
+                        <textarea id="note-text" class="w-full p-2 border border-gray-300 rounded-lg" rows="3" placeholder="כתוב הערה פנימית לתיעוד..."></textarea>
+                        <button onclick="addNoteToOrder()" class="mt-2 w-full bg-yellow-500 hover:bg-yellow-600 text-yellow-900 font-bold py-2 px-4 rounded-lg">
+                            <i class="fas fa-sticky-note ml-2"></i> שמור הערה
+                        </button>
+                        <p id="note-status" class="text-green-600 text-sm text-center mt-1"></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
+
+    <script>
+        // --- Firebase Config ---
+        let db;
+        let auth;
+        let unsubscribeOrders = null; // To stop listener on demand
+        let unsubscribeMessages = null; // To stop message listener on modal close
+
+        // --- Status Definitions ---
+        const statusMap = {
+            'pending': { text: 'ממתינה', icon: 'fa-hourglass-start', color: 'bg-gray-400', badge: 'bg-gray-100 text-gray-800' },
+            'confirmed': { text: 'אושרה', icon: 'fa-check', color: 'bg-blue-500', badge: 'bg-blue-100 text-blue-800' },
+            'packing': { text: 'נארזת', icon: 'fa-box', color: 'bg-yellow-500', badge: 'bg-yellow-100 text-yellow-800' },
+            'out_for_delivery': { text: 'במשלוח', icon: 'fa-truck', color: 'bg-orange-500', badge: 'bg-orange-100 text-orange-800' },
+            'near_you': { text: 'קרוב ליעד', icon: 'fa-map-marker-alt', color: 'bg-purple-500', badge: 'bg-purple-100 text-purple-800' },
+            'delivered': { text: 'נמסרה', icon: 'fa-check-double', color: 'bg-green-500', badge: 'bg-green-100 text-green-800' },
+            'pickup_ready': { text: 'מוכנה לאיסוף', icon: 'fa-store', color: 'bg-indigo-500', badge: 'bg-indigo-100 text-indigo-800' },
+            'default': { text: 'לא ידוע', icon: 'fa-question-circle', color: 'bg-gray-300', badge: 'bg-gray-100 text-gray-800' }
+        };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            try {
+                const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+                if (firebaseConfig.apiKey) {
+                    firebase.initializeApp(firebaseConfig);
+                    db = firebase.firestore();
+                    auth = firebase.auth();
+                    
+                     if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                         auth.signInWithCustomToken(__initial_auth_token)
+                            .then(() => startApp())
+                            .catch(handleAuthError);
+                    } else {
+                        auth.signInAnonymously()
+                            .then(() => startApp())
+                            .catch(handleAuthError);
+                    }
+                } else {
+                    console.error("Firebase config is missing.");
+                    document.getElementById('loading-orders').innerText = "שגיאת התחברות.";
+                }
+            } catch (e) {
+                console.error("Error initializing Firebase:", e);
+                document.getElementById('loading-orders').innerText = "שגיאה קריטית באתחול המערכת.";
+            }
+        });
+        
+        function handleAuthError(error) {
+            console.error("Firebase auth error:", error);
+            document.getElementById('loading-orders').innerText = "שגיאת אימות.";
+        }
+        
+        function startApp() {
+            getOrders();
+        }
+
+        // --- Fetch and Display Orders ---
+        function getOrders() {
+            if (unsubscribeOrders) unsubscribeOrders(); // Stop previous listener
+            
+            const ordersGrid = document.getElementById('orders-grid');
+            
+            unsubscribeOrders = db.collection('deliveries')
+                // .orderBy('timestamp', 'desc') // Add this if you have a timestamp field for sorting
+                .limit(20) // Limit to a reasonable number
+                .onSnapshot((querySnapshot) => {
+                    if (querySnapshot.empty) {
+                        document.getElementById('loading-orders').innerText = 'לא נמצאו הזמנות פעילות.';
+                        ordersGrid.innerHTML = ''; // Clear grid
+                        return;
+                    }
+                    
+                    document.getElementById('loading-orders').classList.add('hidden');
+                    ordersGrid.innerHTML = ''; // Clear grid for redraw
+                    
+                    querySnapshot.forEach((doc) => {
+                        const order = doc.data();
+                        order.id = doc.id; // Add doc ID to object
+                        ordersGrid.appendChild(createOrderCard(order));
+                    });
+
+                }, (error) => {
+                    console.error("Error getting orders: ", error);
+                    document.getElementById('loading-orders').innerText = 'שגיאה בטעינת הזמנות.';
+                });
+        }
+        
+        function createOrderCard(order) {
+            const statusInfo = statusMap[order.status] || statusMap['default'];
+            const orderIdForMessages = order.order_id || order.id;
+
+            const card = document.createElement('div');
+            card.className = `bg-white rounded-lg shadow-lg overflow-hidden transition-all hover:shadow-xl relative`;
+            
+            // New message icon indicator
+            const messageIcon = document.createElement('span');
+            messageIcon.id = `msg-icon-${orderIdForMessages}`; // Unique ID to target later
+            messageIcon.className = 'absolute top-3 left-3 text-yellow-500 text-xl hidden animate-pulse';
+            messageIcon.innerHTML = '<i class="fas fa-comment-dots"></i>';
+            card.appendChild(messageIcon);
+
+            card.innerHTML = `
+                <div class="p-5">
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="text-sm font-medium ${statusInfo.badge} px-2.5 py-0.5 rounded-full">${statusInfo.text}</span>
+                        <span class="text-sm text-gray-500">הזמנה #${order.order_id || order.id.substring(0, 6)}</span>
+                    </div>
+                    <h3 class="text-xl font-semibold text-gray-800 truncate" title="${order.customer_name}">${order.customer_name || 'ללא שם'}</h3>
+                    <p class="text-gray-600 truncate" title="${order.customer_address}">${order.customer_address || 'ללא כתובת'}</p>
+                    <div class="mt-4 pt-4 border-t border-gray-100">
+                        <p class="text-sm text-gray-600">
+                            <i class="fas fa-truck fa-fw ml-2 text-gray-500"></i>
+                            נהג: <span class="font-medium text-gray-800">${order.driver_name || 'טרם שויך'}</span>
+                        </p>
+                    </div>
+                    <button class="mt-4 w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg">
+                        <i class="fas fa-eye ml-2"></i> צפה בפרטים ובהודעות
+                    </button>
+                </div>
+            `;
+            
+            // Add click listener to the button
+            card.querySelector('button').onclick = () => showOrderDetails(order);
+            
+            // Start listening for new messages for this card
+            listenForNewMessages(orderIdForMessages);
+
+            return card;
+        }
+        
+        // --- Listen for new messages to show icon ---
+        function listenForNewMessages(orderId) {
+             db.collection('orders').doc(orderId).collection('messages')
+                .where('type', '==', 'message_to_admin')
+                // .where('read', '==', false) // Add this field later for better logic
+                .orderBy('timestamp', 'desc')
+                .limit(1)
+                .onSnapshot((snapshot) => {
+                    if (!snapshot.empty) {
+                        const msg = snapshot.docs[0].data();
+                        const now = new Date();
+                        const msgTime = msg.timestamp ? msg.timestamp.toDate() : now;
+                         // Show pulse if message is new (e.g., last 5 mins) or unread
+                         // Simple logic: just show if any message exists
+                         // A better logic would involve a 'read' flag
+                        if ((now - msgTime) < 300000) { // 5 minutes
+                            const icon = document.getElementById(`msg-icon-${orderId}`);
+                            if (icon) {
+                                icon.classList.remove('hidden');
+                            }
+                        }
+                    }
+                });
+        }
+
+        // --- Modal Logic ---
+        function showOrderDetails(order) {
+            const modal = document.getElementById('order-modal');
+            const statusInfo = statusMap[order.status] || statusMap['default'];
+            const orderIdForMessaging = order.order_id || order.id;
+
+            // Populate modal with data
+            document.getElementById('modal-order-id').innerText = orderIdForMessaging;
+            document.getElementById('modal-customer-name').innerText = order.customer_name || 'לא זמין';
+            document.getElementById('modal-customer-address').innerText = order.customer_address || 'לא זמין';
+            document.getElementById('modal-customer-phone').innerText = order.customer_phone || 'לא זמין';
+            document.getElementById('modal-status').innerText = statusInfo.text;
+            document.getElementById('modal-driver-name').innerText = order.driver_name || 'טרם שויך';
+            
+            // Set order ID for adding new notes
+            document.getElementById('current-order-id-for-note').value = orderIdForMessaging;
+
+            // Clear old messages and show loading
+            const messagesContainer = document.getElementById('messages-container');
+            messagesContainer.innerHTML = '<p id="loading-messages" class="text-center text-gray-500">טוען הודעות...</p>';
+            
+            // Clear note status
+            document.getElementById('note-author').value = '';
+            document.getElementById('note-text').value = '';
+            document.getElementById('note-status').innerText = '';
+            
+            // Load messages for this order
+            loadOrderMessages(orderIdForMessaging);
+            
+            // Show modal
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            
+            // Remove pulsing icon from card
+            const icon = document.getElementById(`msg-icon-${orderIdForMessaging}`);
+            if (icon) {
+                icon.classList.add('hidden');
+                // Here you would also mark messages as 'read' in Firestore
+            }
+        }
+
+        function closeModal(event) {
+            // Check if the click is on the background
+            if (event && event.target.id !== 'order-modal' && event.target.tagName !== 'BUTTON') {
+                return;
+            }
+            const modal = document.getElementById('order-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            
+            // Stop listening for messages for this order
+            if (unsubscribeMessages) {
+                unsubscribeMessages();
+                unsubscribeMessages = null;
+            }
+        }
+        
+        // --- Messaging Logic in Modal ---
+        function loadOrderMessages(orderId) {
+            if (unsubscribeMessages) unsubscribeMessages(); // Stop previous listener
+
+            const messagesContainer = document.getElementById('messages-container');
+            
+            unsubscribeMessages = db.collection('orders').doc(orderId).collection('messages')
+                .orderBy('timestamp', 'asc') // Show in chronological order
+                .onSnapshot((querySnapshot) => {
+                    document.getElementById('loading-messages')?.remove();
+                    
+                    if (querySnapshot.empty) {
+                        messagesContainer.innerHTML = '<p class="text-center text-gray-500">אין הודעות או הערות להזמנה זו.</p>';
+                        return;
+                    }
+                    
+                    messagesContainer.innerHTML = ''; // Clear for redraw
+                    
+                    querySnapshot.forEach((doc) => {
+                        const msg = doc.data();
+                        messagesContainer.appendChild(createMessageBubble(msg));
+                    });
+                    
+                    // Scroll to bottom
+                    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+                }, (error) => {
+                    console.error("Error loading messages: ", error);
+                    messagesContainer.innerHTML = '<p class="text-center text-red-500">שגיאה בטעינת הודעות.</p>';
+                });
+        }
+        
+        function createMessageBubble(msg) {
+            const bubble = document.createElement('div');
+            let bubbleClass = '';
+            let senderName = '';
+            
+            switch(msg.type) {
+                case 'message_to_admin':
+                    bubbleClass = 'chat-bubble chat-bubble-customer';
+                    senderName = msg.senderName || 'לקוח';
+                    break;
+                case 'notification_to_customer':
+                    bubbleClass = 'chat-bubble chat-bubble-admin';
+                    senderName = msg.senderName || 'מנהל';
+                    break;
+                case 'internal_note':
+                    bubbleClass = 'chat-bubble chat-bubble-note';
+                    senderName = `${msg.senderName || 'מנהל'} (הערה פנימית)`;
+                    break;
+                default:
+                    bubbleClass = 'chat-bubble chat-bubble-admin';
+                    senderName = msg.senderName || 'מערכת';
+            }
+            
+            bubble.className = bubbleClass;
+            
+            const time = msg.timestamp ? msg.timestamp.toDate().toLocaleString('he-IL') : 'שולח...';
+            
+            bubble.innerHTML = `
+                <strong class="font-semibold">${senderName}</strong>
+                <p>${msg.text}</p>
+                <div class="chat-timestamp text-right">${time}</div>
+            `;
+            return bubble;
+        }
+        
+        function addNoteToOrder() {
+            const orderId = document.getElementById('current-order-id-for-note').value;
+            const author = document.getElementById('note-author').value.trim();
+            const text = document.getElementById('note-text').value.trim();
+            const statusEl = document.getElementById('note-status');
+            
+            if (!orderId || !author || !text) {
+                statusEl.innerText = 'נא למלא שם כותב ותוכן הערה.';
+                statusEl.className = 'text-red-600 text-sm text-center mt-1';
+                return;
+            }
+            
+            const noteDoc = {
+                text: text,
+                senderName: author,
+                senderId: auth.currentUser ? auth.currentUser.uid : "viewer_user",
+                timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                type: "internal_note"
+            };
+            
+             db.collection('orders').doc(orderId).collection('messages').add(noteDoc)
+                .then(() => {
+                    statusEl.innerText = 'ההערה נשמרה בהצלחה!';
+                    statusEl.className = 'text-green-600 text-sm text-center mt-1';
+                    document.getElementById('note-text').value = ''; // Clear textarea
+                })
+                .catch((error) => {
+                    console.error("Error adding note:", error);
+                    statusEl.innerText = 'שגיאה בשמירת ההערה.';
+                    statusEl.className = 'text-red-600 text-sm text-center mt-1';
+                });
+            
+            setTimeout(() => { statusEl.innerText = ''; }, 3000);
+        }
+
+    </script>
+</body>
+</html>
