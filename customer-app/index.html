@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>מעקב הזמנה - שדרוג v33</title>
+    <title>מעקב הזמנה - v34.1 (File Upload)</title>
     <!-- 
-      DeliveryMaster Customer App v33 (Firebase + New Order)
-      - נוספה יכולת יצירת הזמנה חדשה (כפתור +, מודל, שליחה).
-      - נוספה פונקציית שיתוף אוטומטי ל-WhatsApp.
-      - נוספה מערכת תקשורת דו-כיוונית (צ'אט).
-      - נוספה יכולת שליחת מיקום.
-      - שימוש ב-Firebase v9 (Modular)
+      DeliveryMaster Customer App v34.1 (File Upload)
+      - [NEW] הוספת יכולת העלאת קבצים (תמונות, PDF וכו') באמצעות Firebase Storage.
+      - [NEW] הוספת כפתור "אטב" לצ'אט.
+      - [NEW] העלאת קובץ שולחת אוטומטית הודעה עם קישור להורדה.
+      - [NEW] בועות הצ'אט מזהות קישורים והופכות אותם ללחיצים.
+      - הוספת מודל "ברוכים הבאים" עם הדרכה למשתמש.
     -->
 
     <!-- PWA Manifest -->
@@ -99,6 +99,14 @@
              color: #dbeafe; /* blue-100 */
         }
         
+        /* [NEW] קישור בתוך בועת צ'אט */
+        .chat-bubble a {
+            font-weight: 600;
+            text-decoration: underline;
+        }
+        .chat-bubble-customer a { color: white; }
+        .chat-bubble-admin a { color: #1d4ed8; } /* blue-700 */
+
         /* סגנון למודל */
         dialog::backdrop {
             background: rgba(0, 0, 0, 0.5);
@@ -107,6 +115,51 @@
     </style>
 </head>
 <body class="bg-gray-100">
+
+    <!-- [NEW] מודל ברוכים הבאים -->
+    <dialog id="welcome-modal" class="p-0 rounded-lg shadow-xl w-11/12 max-w-lg">
+        <div class="sticky top-0 bg-white p-4 border-b flex justify-between items-center">
+            <h2 class="text-xl font-bold text-gray-800">ברוך הבא למערכת המעקב!</h2>
+            <button onclick="document.getElementById('welcome-modal').close()" class="text-gray-500 hover:text-gray-800">
+                <i data-feather="x"></i>
+            </button>
+        </div>
+        <div class="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+            <p class="text-lg text-gray-700">שלום <strong id="welcome-customer-name"></strong>, זהו מרכז הבקרה האישי שלך להזמנות.</p>
+            
+            <div class="space-y-3">
+                <div class="flex items-start gap-3">
+                    <i data-feather="eye" class="w-6 h-6 text-blue-500 flex-shrink-0 mt-1"></i>
+                    <div>
+                        <h4 class="font-semibold text-gray-800">צפייה בסטטוס חי</h4>
+                        <p class="text-gray-600 text-sm">תוכל לראות בכל רגע נתון את סטטוס ההזמנה שלך (התקבלה, בדרך, וכו') ואת מיקום הנהג על המפה בזמן אמת.</p>
+                    </div>
+                </div>
+                
+                <div class="flex items-start gap-3">
+                    <i data-feather="message-circle" class="w-6 h-6 text-blue-500 flex-shrink-0 mt-1"></i>
+                    <div>
+                        <h4 class="font-semibold text-gray-800">תקשורת ישירה</h4>
+                        <p class="text-gray-600 text-sm">בתחתית העמוד תמצא תיבת צ'אט. תוכל לשלוח הודעות, תמונות, או לשתף מיקום מדויק ישירות למנהל המשלוחים.</p>
+                    </div>
+                </div>
+
+                <div class="flex items-start gap-3">
+                    <i data-feather="plus-circle" class="w-6 h-6 text-blue-500 flex-shrink-0 mt-1"></i>
+                    <div>
+                        <h4 class="font-semibold text-gray-800">יצירת הזמנה חדשה</h4>
+                        <p class="text-gray-600 text-sm">צריך ציוד נוסף? לחץ על כפתור הפלוס (+) הכחול בפינה כדי לפתוח טופס מהיר וליצור הזמנה חדשה בקלות.</p>
+                    </div>
+                </div>
+            </div>
+            
+        </div>
+        <div class="p-4 bg-gray-50 border-t flex justify-end">
+            <button type="button" onclick="document.getElementById('welcome-modal').close()" class="py-2 px-6 bg-blue-600 border border-transparent rounded-md shadow-sm text-sm font-medium text-white hover:bg-blue-700">
+                הבנתי, תודה!
+            </button>
+        </div>
+    </dialog>
 
     <!-- מודל הזמנה חדשה -->
     <dialog id="new-order-modal" class="p-0 rounded-lg shadow-xl w-11/12 max-w-2xl">
@@ -145,7 +198,6 @@
                 </div>
             </div>
             
-            <!-- [NEW] שדה מיקום -->
             <div>
                 <label for="order-location" class="block text-sm font-medium text-gray-700">מיקום / כתובת</label>
                 <input type="text" id="order-location" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500" placeholder="הזן כתובת או השאר ריק לשימוש בכתובת הקיימת">
@@ -258,12 +310,28 @@
                         <!-- הודעות צ'אט יופיעו כאן -->
                         <p class="text-gray-500 text-sm text-center">טוען היסטוריית הודעות...</p>
                     </div>
+                    
+                    <!-- [NEW] כפתורי שליחה -->
                     <div class="mt-3 flex gap-2">
+                        <!-- [NEW] כפתור העלאת קובץ -->
+                        <input type="file" id="file-upload" accept="image/*,application/pdf" class="hidden">
+                        <button onclick="document.getElementById('file-upload').click()" class="bg-gray-300 text-gray-700 p-3 rounded-lg shadow hover:bg-gray-400">
+                            <i data-feather="paperclip"></i>
+                        </button>
+                        
                         <input type="text" id="chat-message" class="flex-grow p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="כתוב הודעה למנהל...">
+                        
                         <button onclick="sendCustomerMessage()" class="bg-blue-600 text-white p-3 rounded-lg shadow hover:bg-blue-700">
                             <i data-feather="send"></i>
                         </button>
                     </div>
+                    
+                    <!-- [NEW] סטטוס העלאה -->
+                    <div id="upload-status" class="text-sm text-gray-600 text-center mt-2 hidden">
+                        <div class="loader" style="width: 20px; height: 20px; border-width: 2px; display: inline-block; margin-left: 8px;"></div>
+                        מעלה קובץ...
+                    </div>
+                    
                     <button onclick="sendLocation()" class="mt-2 w-full text-sm bg-green-600 text-white p-2 rounded-lg shadow hover:bg-green-700 flex items-center justify-center gap-2">
                         <i data-feather="map-pin" class="w-4 h-4"></i>
                         שלח מיקום מדויק
@@ -279,23 +347,33 @@
         </footer>
 
     </div>
+    
+    <!-- [NEW] Toast Container -->
+    <div id="toast-container" class="fixed top-4 right-4 z-[5000]"></div>
+
 
     <!-- Firebase SDKs -->
     <script type="module">
         // --- [FIX v50.13] Using HTTPS URLs ---
         import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
-        import { getFirestore, collection, doc, onSnapshot, query, orderBy, addDoc, updateDoc, serverTimestamp, deleteDoc, arrayUnion, where, getDocs, getDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, doc, onSnapshot, query, orderBy, addDoc, updateDoc, serverTimestamp, deleteDoc, arrayUnion, where, getDocs, getDoc, limit } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        // [NEW] Import Firebase Storage
+        import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-storage.js";
 
         // --- Inlined Config Logic ---
         const firebaseConfig = {
           apiKey: "AIzaSyDq0oVwS6zbEfsgrYBRkeBq80dDUKMedzo", authDomain: "saban94-78949.firebaseapp.com", projectId: "saban94-78949",
-          storageBucket: "saban94-78949.firebasestorage.app", messagingSenderId: "41553157903", appId: "1:41553157903:web:cc33d252cff023be97a87a", measurementId: "G-XV6RZDESSB"
+          storageBucket: "saban94-78949.appspot.com", // [FIX] Make sure this is correct
+          messagingSenderId: "41553157903", appId: "1:41553157903:web:cc33d252cff023be97a87a", measurementId: "G-XV6RZDESSB"
         };
-        let app, auth, db; let initializationError = null;
+        let app, auth, db, storage; // [NEW] Added storage
+        let initializationError = null;
         try {
             app = getApps().length ? getApp() : initializeApp(firebaseConfig);
-            auth = getAuth(app); db = getFirestore(app);
+            auth = getAuth(app); 
+            db = getFirestore(app);
+            storage = getStorage(app); // [NEW] Initialize Storage
         } catch (error) { console.error("CRITICAL: Firebase init failed!", error); initializationError = error; }
 
         const MAX_AUTH_RETRIES = 3; const RETRY_DELAY_MS = 3000;
@@ -332,7 +410,8 @@
         let locationListenerUnsubscribe = null;
         let messagesListenerUnsubscribe = null;
         let currentOrderId = null;
-        let currentCustomerData = null; // לשמור את פרטי הלקוח
+        let currentCustomerData = null; 
+        let currentFirestoreDocId = null; // [NEW] Store the real doc ID
 
         // --- Icons ---
         const driverIcon = L.icon({
@@ -429,18 +508,16 @@
         }
         
         async function startTracking() {
-            currentOrderId = getOrderIdFromUrl();
+            currentOrderId = getOrderIdFromUrl(); // This is the order_id (e.g., 6209643)
             if (!currentOrderId) return;
             
             try {
                 await authReadyPromise; 
                 SmartLog.info("Auth ready, starting to track order.", { orderId: currentOrderId });
                 
-                // --- [FIX] Changed query to use 'order_id' field instead of document ID ---
                 const ordersRef = collection(db, "orders");
                 const q = query(ordersRef, where("order_id", "==", currentOrderId), limit(1));
                 
-                // Using getDocs once to find the document ID
                 const querySnapshot = await getDocs(q);
                 
                 if (querySnapshot.empty) {
@@ -450,11 +527,24 @@
                 }
                 
                 const orderDoc = querySnapshot.docs[0];
-                const firestoreDocId = orderDoc.id; // This is the real document ID
-                SmartLog.info(`Found document ID: ${firestoreDocId} for order_id: ${currentOrderId}`, {});
+                currentFirestoreDocId = orderDoc.id; // [NEW] Store the real document ID
+                SmartLog.info(`Found document ID: ${currentFirestoreDocId} for order_id: ${currentOrderId}`, {});
+
+                // --- [NEW] Welcome Modal Logic ---
+                const messagesColRef = collection(db, "orders", currentFirestoreDocId, "messages");
+                const messagesQuery = query(messagesColRef, limit(1));
+                const messagesSnapshot = await getDocs(messagesQuery);
+                
+                if (messagesSnapshot.empty) {
+                    const customerName = orderDoc.data().customer?.name || 'לקוח יקר';
+                    document.getElementById('welcome-customer-name').innerText = customerName;
+                    document.getElementById('welcome-modal').showModal();
+                    feather.replace(); 
+                }
+                // --- End Welcome Modal Logic ---
 
                 // Now listen to the specific document using its real ID
-                const orderRef = doc(db, "orders", firestoreDocId);
+                const orderRef = doc(db, "orders", currentFirestoreDocId);
                 orderListenerUnsubscribe = onSnapshot(orderRef, (docSnap) => {
                     if (!docSnap.exists()) {
                          showError("ההזמנה נמחקה או שאינה קיימת.");
@@ -462,7 +552,8 @@
                     }
                     
                     const orderData = docSnap.data();
-                    currentCustomerData = orderData.customer; // שמירת פרטי הלקוח
+                    orderListenerUnsubscribe.snapshot = docSnap; // [NEW] Attach snapshot for easy access
+                    currentCustomerData = orderData.customer; 
                     renderOrderData(orderData); 
                     
                     const driverId = orderData.driver?.id;
@@ -470,11 +561,12 @@
                         listenToDriverLocation(driverId, orderData);
                     } else {
                         if (locationListenerUnsubscribe) { locationListenerUnsubscribe(); locationListenerUnsubscribe = null; }
-                        updateMap([orderData.latitude, orderData.longitude], null);
+                        if (orderData.latitude && orderData.longitude) {
+                            updateMap([orderData.latitude, orderData.longitude], null);
+                        }
                     }
                     
-                    // הפעלת מאזין לצ'אט
-                    listenToMessages(firestoreDocId); // Use the real document ID
+                    listenToMessages(currentFirestoreDocId); // Use the real document ID
 
                 }, (error) => {
                     SmartLog.error(error, { context: "Error in order listener" });
@@ -487,13 +579,12 @@
             }
         }
         
-        // --- פונקציות מאזינים (עם שינויים) ---
         function listenToDriverLocation(driverId, orderData) {
             if (locationListenerUnsubscribe) { locationListenerUnsubscribe(); locationListenerUnsubscribe = null; }
             SmartLog.info("Listening to driver location...", { driverId });
             const locationRef = doc(db, "driverLocations", driverId);
             locationListenerUnsubscribe = onSnapshot(locationRef, (docSnap) => {
-                 const orderLatLng = [orderData.latitude, orderData.longitude];
+                 const orderLatLng = (orderData.latitude && orderData.longitude) ? [orderData.latitude, orderData.longitude] : null;
                  if (docSnap.exists() && orderData.status === 'בדרך') {
                      const locData = docSnap.data();
                      const driverLatLng = [locData.latitude, locData.longitude];
@@ -503,7 +594,8 @@
                  }
             }, (error) => {
                 SmartLog.error(error, { context: "Error in location listener", driverId });
-                updateMap([orderData.latitude, orderData.longitude], null);
+                const orderLatLng = (orderData.latitude && orderData.longitude) ? [orderData.latitude, orderData.longitude] : null;
+                updateMap(orderLatLng, null);
             });
         }
         
@@ -535,8 +627,8 @@
                 notesContainerEl.classList.add('hidden');
             }
             
-            const orderLatLng = [order.latitude, order.longitude];
-            if (!map && orderLatLng[0]) { 
+            const orderLatLng = (order.latitude && order.longitude) ? [order.latitude, order.longitude] : null;
+            if (!map && orderLatLng) { 
                  document.getElementById('map-container').classList.remove('hidden');
                  initializeMap(orderLatLng);
             }
@@ -570,15 +662,22 @@
                     const bubble = document.createElement('div');
                     const time = msg.timestamp ? new Date(msg.timestamp.seconds * 1000).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' }) : '';
                     
+                    // [NEW] Check for link
+                    let msgText = msg.text || '';
+                    const urlRegex = /(https?:\/\/[^\s]+)/g;
+                    if (urlRegex.test(msgText)) {
+                        msgText = msgText.replace(urlRegex, (url) => `<a href="${url}" target="_blank" rel="noopener noreferrer">${url.includes('firebasestorage') ? 'פתח קובץ מצורף' : 'פתח קישור'}</a>`);
+                    }
+
                     if (msg.type === 'notification_to_customer') {
                         bubble.className = 'chat-bubble chat-bubble-admin';
                         bubble.innerHTML = `<strong class="block">${msg.senderName || 'מנהל'}</strong>
-                                            <p>${msg.text}</p>
+                                            <p>${msgText}</p>
                                             <span class="chat-timestamp text-right">${time}</span>`;
                     } else if (msg.type === 'message_to_admin') {
                         bubble.className = 'chat-bubble chat-bubble-customer';
                         bubble.innerHTML = `<strong class="block">${msg.senderName || 'אני'}</strong>
-                                            <p>${msg.text}</p>
+                                            <p>${msgText}</p>
                                             <span class="chat-timestamp text-right">${time}</span>`;
                     }
                     chatHistoryEl.appendChild(bubble);
@@ -592,11 +691,9 @@
         
         async function sendCustomerMessage(messageText) {
             const text = messageText || document.getElementById('chat-message').value.trim();
-            // We must use the *real* document ID for writing
-            const firestoreDocId = orderListenerUnsubscribe ? orderListenerUnsubscribe.docId : null;
             
-            if (!text || !firestoreDocId || !currentCustomerData) {
-                 SmartLog.warn("Missing data for sending message", { text, firestoreDocId, currentCustomerData });
+            if (!text || !currentFirestoreDocId || !currentCustomerData) {
+                 SmartLog.warn("Missing data for sending message", { text, currentFirestoreDocId, currentCustomerData });
                  return;
             }
             
@@ -609,12 +706,12 @@
             };
             
             try {
-                const messagesColRef = collection(db, 'orders', firestoreDocId, 'messages');
+                const messagesColRef = collection(db, 'orders', currentFirestoreDocId, 'messages');
                 await addDoc(messagesColRef, messageData);
                 if (!messageText) {
                     document.getElementById('chat-message').value = '';
                 }
-                SmartLog.info("Customer message sent", { orderId: firestoreDocId, text });
+                SmartLog.info("Customer message sent", { orderId: currentFirestoreDocId, text });
             } catch (error) {
                 SmartLog.error(error, { context: "Failed to send customer message" });
                 alert("שגיאה בשליחת ההודעה.");
@@ -647,16 +744,16 @@
                 return;
             }
             document.getElementById('modal-customer-name').innerText = currentCustomerData.name || 'לא ידוע';
-            // [NEW] Pre-fill location field with existing order address
-            const existingOrder = orderListenerUnsubscribe ? orderListenerUnsubscribe.orderData : null;
-            if (existingOrder && existingOrder.customer_address) {
-                document.getElementById('order-location').value = existingOrder.customer_address;
+            
+            const orderData = orderListenerUnsubscribe.snapshot.data();
+            if (orderData && orderData.address) {
+                document.getElementById('order-location').value = orderData.address;
             } else if (currentCustomerData.defaultAddress) {
                 document.getElementById('order-location').value = currentCustomerData.defaultAddress;
             }
             
             document.getElementById('new-order-modal').showModal();
-            feather.replace(); // Ensure icons in modal are rendered
+            feather.replace(); 
         }
         window.openNewOrderModal = openNewOrderModal;
         
@@ -683,19 +780,23 @@
                 btn.innerText = "שלח הזמנה";
                 return;
             }
+            
+            const orderData = orderListenerUnsubscribe.snapshot.data();
 
             const newOrder = {
-                customer: currentCustomerData, // העתקת אובייקט הלקוח הקיים
-                address: location || currentCustomerData.defaultAddress || 'לא צוינה כתובת', // שימוש במיקום החדש או בברירת מחדל
+                customer: currentCustomerData, 
+                address: location || orderData.address || 'לא צוינה כתובת',
+                latitude: orderData.latitude, 
+                longitude: orderData.longitude,
                 notes: `--- הזמנה חדשה מלקוח ---\nפרויקט: ${project}\nתוכן: ${pasteContent}`,
                 deliveryType: transportType,
-                orderDate: new Date().toISOString().split('T')[0],
+                orderDate: new Date().toISOString().split('T')[0], 
                 orderTime: new Date().toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' }),
                 status: "חדש",
-                createdBy: "customer",
+                createdBy: "customer", 
                 createdAt: serverTimestamp(),
                 lastModified: serverTimestamp(),
-                order_id: `AUTO-${Date.now().toString().slice(-6)}` // יצירת מספר הזמנה ייחודי
+                order_id: `AUTO-${Date.now().toString().slice(-6)}`
             };
 
             try {
@@ -704,7 +805,8 @@
                 document.getElementById('new-order-modal').close();
                 alert("הזמנה חדשה נשלחה בהצלחה למנהל!");
                 
-                shareToWhatsApp(newOrder); // הפעלת שיתוף
+                shareToWhatsApp(newOrder); 
+
             } catch (error) {
                 SmartLog.error(error, { context: "Failed to create new order" });
                 alert("שגיאה ביצירת ההזמנה.");
@@ -718,14 +820,12 @@
         function shareToWhatsApp(orderData) {
             const phone = "972508860896";
             
-            // --- [FIX v33.5] Template ---
             const text = `
-*✅ הזמנה חדשה (לקוח)*
+*✅ הזמנה חדשה (אפליקציית לקוח)*
 =================
 *לקוח:* ${orderData.customer?.name || 'לא צוין'}
 *מס' לקוח:* ${orderData.customer?.customerNumber || orderData.customer?.customer_id || 'N/A'}
 *טלפון:* ${orderData.customer?.phone || 'N/A'}
-*איש קשר:* ${orderData.customer?.contact || 'N/A'}
 
 *פרויקט:* ${orderData.projectName || 'לא צוין'}
 =================
@@ -738,15 +838,87 @@
 *תוכן ההזמנה:*
 ${orderData.notes || "--- אין תוכן ---"}
             `;
-            // --- End Fix ---
             
             const url = `https://api.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(text)}`;
             window.open(url, '_blank');
         }
         
+        // [NEW] File Upload Logic
+        async function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            if (!currentFirestoreDocId) {
+                alert("שגיאה: לא זוהתה הזמנה.");
+                return;
+            }
+            
+            const uploadStatusEl = document.getElementById('upload-status');
+            uploadStatusEl.innerHTML = `<div class="loader" style="width: 20px; height: 20px; border-width: 2px; display: inline-block; margin-left: 8px;"></div> מעלה קובץ...`;
+            uploadStatusEl.classList.remove('hidden');
+
+            try {
+                // 1. Create a unique path
+                const storagePath = `orders/${currentFirestoreDocId}/attachments/${Date.now()}_${file.name}`;
+                const storageRef = ref(storage, storagePath);
+
+                // 2. Upload the file
+                const snapshot = await uploadBytes(storageRef, file);
+                
+                // 3. Get the download URL
+                const downloadURL = await getDownloadURL(snapshot.ref);
+
+                // 4. Send the URL as a chat message
+                await sendCustomerMessage(downloadURL);
+                
+                SmartLog.info("File uploaded and link sent", { url: downloadURL });
+                showToast("הקובץ נשלח בהצלחה!", "success");
+                uploadStatusEl.classList.add('hidden');
+
+            } catch (error) {
+                SmartLog.error(error, { context: "File Upload Failed" });
+                uploadStatusEl.innerText = "שגיאה בהעלאת הקובץ.";
+                // Hide error message after 3 seconds
+                setTimeout(() => uploadStatusEl.classList.add('hidden'), 3000);
+            } finally {
+                // Reset file input to allow uploading the same file again
+                event.target.value = null;
+            }
+        }
+        
+        // [NEW] Toast Notification
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            if (!container) return;
+            
+            const toast = document.createElement('div');
+            let bgColor = (type === 'success') ? 'bg-green-500' : (type === 'error') ? 'bg-red-500' : 'bg-blue-500';
+            
+            toast.className = `p-3 rounded-lg shadow-lg text-white ${bgColor} transform translate-x-full transition-transform duration-300 ease-out`;
+            toast.innerText = message;
+            
+            container.appendChild(toast);
+            
+            // Animate in
+            setTimeout(() => {
+                toast.classList.remove('translate-x-full');
+            }, 100);
+            
+            // Animate out
+            setTimeout(() => {
+                toast.classList.add('translate-x-full');
+                setTimeout(() => {
+                    if (container.contains(toast)) {
+                        container.removeChild(toast);
+                    }
+                }, 300);
+            }, 3000);
+        }
+
         // --- Init ---
         document.addEventListener('DOMContentLoaded', () => {
-            // Attach event listener for transport type
+            startTracking();
+            
             document.getElementById('order-transport-type').addEventListener('change', (e) => {
                 const branchInfo = document.getElementById('branch-info');
                 if (e.target.value === 'איסוף עצמי') {
@@ -755,9 +927,9 @@ ${orderData.notes || "--- אין תוכן ---"}
                     branchInfo.classList.add('hidden');
                 }
             });
-
-            // Start the main tracking logic
-            startTracking();
+            
+            // [NEW] Attach listener to file input
+            document.getElementById('file-upload').addEventListener('change', handleFileUpload);
         });
     </script>
 </body>
