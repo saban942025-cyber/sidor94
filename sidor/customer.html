@@ -3,16 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>מעקב הזמנה - v34.2 (Id Fix)</title>
+    <title>מעקב הזמנה - v34.3 (Customer Fix)</title>
     <!-- 
-      DeliveryMaster Customer App v34.2 (Id Fix)
+      DeliveryMaster Customer App v34.3 (Customer Fix)
+      - [FIX] שדרוג `startTracking` כך שיבדוק אם נתוני הלקוח בהזמנה חלקיים.
+        אם כן (למשל, חסר שם), האפליקציה תנסה לשלוף את פרופיל הלקוח המלא
+        מהאוסף `customers` לפני שהיא מאפשרת יצירת הזמנה חדשה.
+        זה מונע יצירת הזמנות חדשות עם "לקוח לא ידוע".
       - [FIX] שדרוג `startTracking` לנסות לאתר הזמנה לפי Document ID (ישן)
-        וגם לפי שדה `order_id` (חדש), כדי לתמוך בשני סוגי הקישורים.
-      - [NEW] הוספת יכולת העלאת קבצים (תמונות, PDF וכו') באמצעות Firebase Storage.
-      - [NEW] הוספת כפתור "אטב" לצ'אט.
-      - [NEW] העלאת קובץ שולחת אוטומטית הודעה עם קישור להורדה.
-      - [NEW] בועות הצ'אט מזהות קישורים והופכות אותם ללחיצים.
-      - הוספת מודל "ברוכים הבאים" עם הדרכה למשתמש.
+        וגם לפי שדה `order_id` (חדש).
+      - [NEW] הוספת יכולת העלאת קבצים (Firebase Storage).
+      - [NEW] הוספת מודל "ברוכים הבאים" עם הדרכה למשתמש.
     -->
 
     <!-- PWA Manifest -->
@@ -510,7 +511,7 @@
             } catch (e) { SmartLog.error(e, { context: "Error reading URL params" }); showError("שגיאה בעיבוד הקישור."); return null; }
         }
         
-        // [FIX v34.2] Updated function
+        // [FIX v34.3] Updated function
         async function startTracking() {
             currentOrderId = getOrderIdFromUrl(); // This could be '6209643' OR '8RJXj3...'
             if (!currentOrderId) return;
@@ -555,6 +556,34 @@
                     SmartLog.error(new Error("Order not found"), { id_searched: currentOrderId });
                     return;
                 }
+                
+                const orderData = orderDoc.data();
+                
+                // --- [NEW FIX v34.3] ---
+                // Validate and fetch full customer data if missing
+                if (orderData.customer && orderData.customer.id && !orderData.customer.name) {
+                    SmartLog.warn("Customer data is partial. Fetching full profile.", { customerId: orderData.customer.id });
+                    try {
+                        const customerRef = doc(db, "customers", orderData.customer.id);
+                        const customerSnap = await getDoc(customerRef);
+                        if (customerSnap.exists()) {
+                            currentCustomerData = customerSnap.data(); // Get the full, correct data
+                            SmartLog.info("Full customer profile fetched.", currentCustomerData);
+                        } else {
+                            currentCustomerData = orderData.customer; // Fallback
+                        }
+                    } catch (e) {
+                        SmartLog.error(e, "Failed to fetch full customer profile");
+                        currentCustomerData = orderData.customer; // Fallback
+                    }
+                } else if (orderData.customer) {
+                    currentCustomerData = orderData.customer; // Data seems fine
+                } else {
+                    SmartLog.error(new Error("No customer object found on order"), { orderId: currentFirestoreDocId });
+                    currentCustomerData = { name: "לקוח לא ידוע" }; // Fallback
+                }
+                // --- END FIX ---
+
 
                 // --- [NEW] Welcome Modal Logic ---
                 const messagesColRef = collection(db, "orders", currentFirestoreDocId, "messages");
@@ -562,7 +591,7 @@
                 const messagesSnapshot = await getDocs(messagesQuery);
                 
                 if (messagesSnapshot.empty) {
-                    const customerName = orderDoc.data().customer?.name || 'לקוח יקר';
+                    const customerName = currentCustomerData.name || 'לקוח יקר';
                     document.getElementById('welcome-customer-name').innerText = customerName;
                     document.getElementById('welcome-modal').showModal();
                     feather.replace(); 
@@ -577,18 +606,23 @@
                          return;
                     }
                     
-                    const orderData = docSnap.data();
-                    orderListenerUnsubscribe.snapshot = docSnap; // [NEW] Attach snapshot for easy access
-                    currentCustomerData = orderData.customer; 
-                    renderOrderData(orderData); 
+                    const newOrderData = docSnap.data();
+                    orderListenerUnsubscribe.snapshot = docSnap; // Attach snapshot for easy access
                     
-                    const driverId = orderData.driver?.id;
-                    if (driverId && (orderData.status === 'שויך' || orderData.status === 'בדרך')) {
-                        listenToDriverLocation(driverId, orderData);
+                    // [FIX v34.3] Only update customer data if it's newer/better
+                    if (newOrderData.customer && newOrderData.customer.name) {
+                         currentCustomerData = newOrderData.customer; 
+                    }
+                    
+                    renderOrderData(newOrderData); 
+                    
+                    const driverId = newOrderData.driver?.id;
+                    if (driverId && (newOrderData.status === 'שויך' || newOrderData.status === 'בדרך')) {
+                        listenToDriverLocation(driverId, newOrderData);
                     } else {
                         if (locationListenerUnsubscribe) { locationListenerUnsubscribe(); locationListenerUnsubscribe = null; }
-                        if (orderData.latitude && orderData.longitude) {
-                            updateMap([orderData.latitude, orderData.longitude], null);
+                        if (newOrderData.latitude && newOrderData.longitude) {
+                            updateMap([newOrderData.latitude, newOrderData.longitude], null);
                         }
                     }
                     
@@ -628,7 +662,10 @@
         function renderOrderData(order) {
             const displayId = order.orderNumber || order.order_id || `#${currentOrderId.slice(-6)}`;
             document.getElementById('order-id-display').innerText = `הזמנה ${displayId}`;
-            document.getElementById('customer-name').innerText = order.customer?.name || 'לקוח';
+            
+            // [FIX v34.3] Use the master currentCustomerData which is now reliable
+            document.getElementById('customer-name').innerText = currentCustomerData.name || 'לקוח';
+            
             updateStatusTracker(order.status);
             
             const driverDetailsEl = document.getElementById('driver-details');
@@ -769,6 +806,8 @@
                 alert("טוען פרטי לקוח, אנא המתן רגע...");
                 return;
             }
+            
+            // [FIX v34.3] Use reliable customer data
             document.getElementById('modal-customer-name').innerText = currentCustomerData.name || 'לא ידוע';
             
             if (orderListenerUnsubscribe && orderListenerUnsubscribe.snapshot) {
@@ -776,7 +815,8 @@
                 if (orderData && orderData.address) {
                     document.getElementById('order-location').value = orderData.address;
                 } else if (currentCustomerData.defaultAddress) {
-                    document.getElementById('order-location').value = currentCustomerData.defaultAddress;
+                    // [FIX v34.3] Check for correct field name
+                    document.getElementById('order-location').value = currentCustomerData.defaultAddress || currentCustomerData.default_address || '';
                 }
             }
             
@@ -790,8 +830,8 @@
             btn.disabled = true;
             btn.innerText = "שולח...";
 
-            if (!currentCustomerData) {
-                alert("שגיאה: פרטי הלקוח המקורי לא נטענו.");
+            if (!currentCustomerData || !currentCustomerData.name) {
+                alert("שגיאה: פרטי הלקוח שלך אינם שלמים. אנא צור קשר עם המשרד לעדכון פרטים.");
                 btn.disabled = false;
                 btn.innerText = "שלח הזמנה";
                 return;
@@ -812,7 +852,7 @@
             const orderData = orderListenerUnsubscribe.snapshot.data();
 
             const newOrder = {
-                customer: currentCustomerData, 
+                customer: currentCustomerData, // [FIX v34.3] This is now the full, reliable customer object
                 address: location || orderData.address || 'לא צוינה כתובת',
                 latitude: orderData.latitude, 
                 longitude: orderData.longitude,
