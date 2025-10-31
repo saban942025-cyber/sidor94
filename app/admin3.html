@@ -454,7 +454,7 @@
                 
                 snapshot.forEach(doc => {
                     const data = doc.data();
-                    // --- [FIX] נרמול שדות ---
+                    // --- [FIX v33.2] נרמול שדות ---
                     const customer = {
                         id: doc.id,
                         ...data,
@@ -526,15 +526,15 @@
             
             // שאילתת Collection Group
             // דורש אינדקס: messages (type ASC, readByViewer ASC, timestamp DESC)
-            // --- [FIX] ---
-            // הסרנו את המיון לפי זמן כדי למנוע שגיאת אינדקס.
-            // המיון הידני בהמשך הקוד יטפל בזה.
+            // --- [FIX v33.3] ---
+            // הסרנו את המיון וגם את המגבלה כדי להסתמך על האינדקס הפשוט ביותר
+            // הדרוש: messages (type ASC, readByViewer ASC)
             const q = query(
                 collectionGroup(db, 'messages'),
                 where('type', '==', 'message_to_admin'),
-                where('readByViewer', '==', false),
-                // orderBy('timestamp', 'desc'), // <-- [FIX] Removed this line
-                limit(30)
+                where('readByViewer', '==', false)
+                // orderBy('timestamp', 'desc'), // <-- [FIX v33.2] Removed this line
+                // limit(30) // <-- [FIX v33.3] Removed this line
             );
             
             messagesUnsubscribe = onSnapshot(q, (snapshot) => {
@@ -873,8 +873,18 @@ ${orderData.projectName || "--- אין ---"}
             const customerId = form['edit-customer-doc-id'].value;
             const customerRef = doc(db, 'customers', customerId);
             
-            const oldData = allCustomers.find(c => c.id === customerId);
-            
+            // --- [FIX v33.3] ---
+            // 1. קרא את הנתונים הישנים מחוץ לטרנזקציה *רק* לצורך השוואת כתובת ו-ID
+            const oldDataSnapshot = await getDoc(customerRef);
+            if (!oldDataSnapshot.exists()) {
+                showToast('שגיאה: לא ניתן למצוא לקוח', 'error');
+                return;
+            }
+            const oldDataForQuery = oldDataSnapshot.data();
+            const oldAddress = oldDataForQuery.defaultAddress || oldDataForQuery.default_address || null;
+            const oldCustomerId = oldDataForQuery.customerNumber || oldDataForQuery.customer_id || null;
+            // --- [סוף תיקון] ---
+
             const updatedData = {
                 name: form['edit-customer-name'].value,
                 customer_id: form['edit-customer-number'].value, // שדה מאוחד
@@ -888,48 +898,77 @@ ${orderData.projectName || "--- אין ---"}
             SmartLog.info(`Updating customer ${customerId}`, "CRUD.Customer.Update", { new: updatedData });
 
             try {
+                // --- [FIX v33.3] ---
+                // 1. התחלת טרנזקציה לעדכון הלקוח והלוג
                 await runTransaction(db, async (transaction) => {
+                    // 1א. קריאה טרנזקציונית של הנתונים הישנים (עבור הלוג)
+                    const customerDoc = await transaction.get(customerRef);
+                    if (!customerDoc.exists()) {
+                        throw new Error("Customer document not found in transaction");
+                    }
+                    const oldDataForLog = customerDoc.data();
+
+                    // 1ב. נרמול נתונים ישנים *בתוך* הטרנזקציה עבור הלוג
+                    const oldName_log = oldDataForLog.name || null;
+                    const oldId_log = oldDataForLog.customerNumber || oldDataForLog.customer_id || null;
+                    const oldPhone_log = oldDataForLog.phone || null;
+                    const oldAddress_log = oldDataForLog.defaultAddress || oldDataForLog.default_address || null;
+
+                    // 1ג. עדכון מסמך הלקוח
                     transaction.update(customerRef, updatedData);
                     
-                    // --- [FIX] ודא ששדות קיימים לפני שליחה ללוג ---
-                    // השתמש בשדות המנורמלים וספק `null` אם הם לא קיימים
-                    const oldName = oldData.name || null;
-                    const oldId = oldData.customerNumber || oldData.customer_id || null;
-                    const oldPhone = oldData.phone || null;
-                    const oldAddress = oldData.defaultAddress || oldData.default_address || null;
-
+                    // 1ד. יצירת רשומת לוג
                     const logRef = doc(collection(db, 'customers', customerId, 'auditLog'));
                     transaction.set(logRef, {
                         timestamp: serverTimestamp(),
                         action: "ADMIN_UPDATE",
                         userId: currentUserId,
                         changes: {
-                            old: { name: oldName, id: oldId, phone: oldPhone, address: oldAddress },
+                            old: { name: oldName_log, id: oldId_log, phone: oldPhone_log, address: oldAddress_log },
                             new: { name: updatedData.name, id: updatedData.customerNumber, phone: updatedData.phone, address: updatedData.defaultAddress }
                         }
                     });
+                });
+                
+                // 2. טיפול בעדכון הזמנות נלוות (מחוץ לטרנזקציה, באמצעות Batch)
+                if (oldAddress !== updatedData.defaultAddress) {
+                    SmartLog.info(`Address changed for ${customerId}. Checking active orders...`, "CRUD.Customer.Update");
 
-                    // 3. (v31.6) Check if default address changed, and if so, update active orders
-                    if (oldAddress !== updatedData.defaultAddress) {
-                        const q = query(
-                            collection(db, 'orders'), 
-                            where('customer_id', '==', oldId), // חפש לפי המזהה הישן
-                            where('status', 'not-in', ['סופק', 'מבוטל'])
-                        );
+                    const q = query(
+                        collection(db, 'orders'), 
+                        where('customer_id', '==', oldCustomerId), // שימוש ב-ID הישן שנשמר
+                        where('status', 'not-in', ['סופק', 'מבוטל'])
+                    );
+                    
+                    const ordersSnap = await getDocs(q);
+                    
+                    if (!ordersSnap.empty) {
+                        const batch = writeBatch(db); // שימוש ב-Batch לעדכונים מרובים
+                        let updatedCount = 0;
                         
-                        const ordersSnap = await getDocs(q);
                         ordersSnap.forEach(orderDoc => {
                             if (orderDoc.data().customer_address === oldAddress) {
-                                transaction.update(orderDoc.ref, {
+                                batch.update(orderDoc.ref, {
                                     customer_address: updatedData.default_address,
                                     lastModified: serverTimestamp(),
                                     log: `Address auto-updated by admin edit (${new Date().toISOString()})`
                                 });
+                                updatedCount++;
                             }
                         });
-                        SmartLog.info(`Found ${ordersSnap.size} active orders to check for address update`, "CRUD.Customer.Update");
+                        
+                        if (updatedCount > 0) {
+                            await batch.commit(); // שלח את כל העדכונים יחד
+                            SmartLog.info(`Found and updated ${updatedCount} active orders for address change.`, "CRUD.Customer.Update");
+                            showToast(`עדכון כתובת אוטומטי בוצע עבור ${updatedCount} הזמנות פעילות`, 'info');
+                        } else {
+                            SmartLog.info(`Found ${ordersSnap.size} active orders, but none matched the old address.`, "CRUD.Customer.Update");
+                        }
+                    } else {
+                        SmartLog.info(`No active orders found for customer ${oldCustomerId} to update address.`, "CRUD.Customer.Update");
                     }
-                });
+                }
+                // --- [סוף תיקון v33.3] ---
                 
                 showToast('פרטי לקוח עודכנו בהצלחה', 'success');
                 SmartLog.info(`Customer ${customerId} updated successfully`, "CRUD.Customer.UpdateSuccess");
@@ -1148,4 +1187,5 @@ ${orderData.projectName || "--- אין ---"}
     </script>
 </body>
 </html>
+
 
