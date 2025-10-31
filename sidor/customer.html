@@ -3,17 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>מעקב הזמנה - v34.3 (Customer Fix)</title>
+    <title>מעקב הזמנה - v34.5 (Lat/Lon Fix)</title>
     <!-- 
-      DeliveryMaster Customer App v34.3 (Customer Fix)
-      - [FIX] שדרוג `startTracking` כך שיבדוק אם נתוני הלקוח בהזמנה חלקיים.
-        אם כן (למשל, חסר שם), האפליקציה תנסה לשלוף את פרופיל הלקוח המלא
-        מהאוסף `customers` לפני שהיא מאפשרת יצירת הזמנה חדשה.
-        זה מונע יצירת הזמנות חדשות עם "לקוח לא ידוע".
-      - [FIX] שדרוג `startTracking` לנסות לאתר הזמנה לפי Document ID (ישן)
-        וגם לפי שדה `order_id` (חדש).
-      - [NEW] הוספת יכולת העלאת קבצים (Firebase Storage).
-      - [NEW] הוספת מודל "ברוכים הבאים" עם הדרכה למשתמש.
+      DeliveryMaster Customer App v34.5 (Lat/Lon Fix)
+      - [FIX] תיקון קריטי ב-`submitNewOrder`:
+        הפונקציה ניסתה להעתיק `latitude` ו-`longitude` מההזמנה
+        הקיימת להזמנה החדשה. אם השדות היו חסרים (undefined),
+        ה-addDoc נכשל בשקט.
+        התיקון מוסיף את השדות רק אם הם קיימים.
+      - [FIX] שדרוג `startTracking` לבדיקת לקוח "N/A".
+      - [FIX] שדרוג `startTracking` לתמיכה ב-ID ישן וחדש.
+      - [NEW] העלאת קבצים (Firebase Storage).
+      - [NEW] מודל "ברוכים הבאים".
     -->
 
     <!-- PWA Manifest -->
@@ -511,7 +512,7 @@
             } catch (e) { SmartLog.error(e, { context: "Error reading URL params" }); showError("שגיאה בעיבוד הקישור."); return null; }
         }
         
-        // [FIX v34.3] Updated function
+        // [FIX v34.4] Updated function
         async function startTracking() {
             currentOrderId = getOrderIdFromUrl(); // This could be '6209643' OR '8RJXj3...'
             if (!currentOrderId) return;
@@ -559,25 +560,30 @@
                 
                 const orderData = orderDoc.data();
                 
-                // --- [NEW FIX v34.3] ---
+                // --- [NEW FIX v34.4] ---
                 // Validate and fetch full customer data if missing
-                if (orderData.customer && orderData.customer.id && !orderData.customer.name) {
-                    SmartLog.warn("Customer data is partial. Fetching full profile.", { customerId: orderData.customer.id });
+                const customerInOrder = orderData.customer;
+                const customerId = customerInOrder ? customerInOrder.id : null;
+                const customerName = customerInOrder ? customerInOrder.name : null;
+                
+                // [FIX] Check for "N/A" or other placeholders as well as missing name
+                if (customerId && (!customerName || customerName === 'N/A' || customerName === 'לקוח לא ידוע')) {
+                    SmartLog.warn("Customer data is partial. Fetching full profile.", { customerId: customerId });
                     try {
-                        const customerRef = doc(db, "customers", orderData.customer.id);
+                        const customerRef = doc(db, "customers", customerId);
                         const customerSnap = await getDoc(customerRef);
                         if (customerSnap.exists()) {
                             currentCustomerData = customerSnap.data(); // Get the full, correct data
                             SmartLog.info("Full customer profile fetched.", currentCustomerData);
                         } else {
-                            currentCustomerData = orderData.customer; // Fallback
+                            currentCustomerData = customerInOrder; // Fallback
                         }
                     } catch (e) {
                         SmartLog.error(e, "Failed to fetch full customer profile");
-                        currentCustomerData = orderData.customer; // Fallback
+                        currentCustomerData = customerInOrder; // Fallback
                     }
-                } else if (orderData.customer) {
-                    currentCustomerData = orderData.customer; // Data seems fine
+                } else if (customerInOrder) {
+                    currentCustomerData = customerInOrder; // Data seems fine
                 } else {
                     SmartLog.error(new Error("No customer object found on order"), { orderId: currentFirestoreDocId });
                     currentCustomerData = { name: "לקוח לא ידוע" }; // Fallback
@@ -830,7 +836,7 @@
             btn.disabled = true;
             btn.innerText = "שולח...";
 
-            if (!currentCustomerData || !currentCustomerData.name) {
+            if (!currentCustomerData || !currentCustomerData.name || currentCustomerData.name === 'N/A' || currentCustomerData.name === 'לקוח לא ידוע') {
                 alert("שגיאה: פרטי הלקוח שלך אינם שלמים. אנא צור קשר עם המשרד לעדכון פרטים.");
                 btn.disabled = false;
                 btn.innerText = "שלח הזמנה";
@@ -851,11 +857,12 @@
             
             const orderData = orderListenerUnsubscribe.snapshot.data();
 
+            // [FIX v34.5] Only add lat/lon if they exist
             const newOrder = {
                 customer: currentCustomerData, // [FIX v34.3] This is now the full, reliable customer object
                 address: location || orderData.address || 'לא צוינה כתובת',
-                latitude: orderData.latitude, 
-                longitude: orderData.longitude,
+                ...(orderData.latitude && { latitude: orderData.latitude }),
+                ...(orderData.longitude && { longitude: orderData.longitude }),
                 notes: `--- הזמנה חדשה מלקוח ---\nפרויקט: ${project}\nתוכן: ${pasteContent}`,
                 deliveryType: transportType,
                 orderDate: new Date().toISOString().split('T')[0], 
