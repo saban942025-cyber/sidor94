@@ -3,17 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>DeliveryMaster Viewer v50.15 (Layout Fix)</title>
+    <title>DeliveryMaster Viewer v50.15 (Index/UI Fix)</title>
     <!-- 
       DeliveryMaster Live Viewer App v50.15
       
       Changelog:
-      - v50.15 (חדש):
+      - v50.15 (FIX):
+        - תוקנה שגיאת אינדקס ב-Firestore (Data.Messages.ListenFailed) ע"י שינוי השאילתה.
+        - נוספה אנימציה מהבהבת לאייקון ההודעות בסרגל התחתון כשיש הודעה חדשה.
         - הוספת שדה "סוג הובלה" (עם אייקון) לכרטיס ההזמנה הראשי (v50.12)
         - הוספת שדה "סוג הובלה" לכרטיס המורחב בדפים המלאים.
       - v50.14 (FIX):
-        - תוקנה שגיאת אינדקס ב-Firestore (Data.Messages.ListenFailed).
-        - השאילתה שונתה לסינון לפי שדה יחיד (readByViewer) עם סינון JS משלים (type).
         - נוסף כפתור "צור הודעת בדיקה" לבדיקת פונקציונליות.
     -->
     
@@ -246,25 +246,35 @@
             justify-content: center; color: var(--text-light); font-weight: 500;
             font-size: 0.75rem; border: none; background: none; cursor: pointer;
             padding: 0.5rem 0; border-radius: 8px; transition: all 0.2s ease; height: 100%;
-            position: relative; /* חדש: עבור החיווי */
+            position: relative; 
         }
         .bottom-nav-button i { width: 24px; height: 24px; margin-bottom: 2px; }
         .bottom-nav-button:hover { background-color: var(--bg-light); color: var(--primary-color); }
         
-        /* חיווי הודעה חדשה (חדש) */
+        /* חיווי הודעה חדשה */
         .nav-badge {
             position: absolute;
             top: 4px;
-            right: 20px; /* התאם לפי הצורך */
+            right: 20px; 
             width: 10px;
             height: 10px;
             background-color: #ef4444; /* red-500 */
             border-radius: 50%;
             border: 2px solid white;
-            display: none; /* מוסתר כברירת מחדל */
+            display: none; 
         }
         .nav-badge.active {
             display: block;
+        }
+        
+        /* [NEW v50.15] Blinking Icon Animation */
+        @keyframes pulse-fast {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.2; transform: scale(0.8); }
+        }
+        .blinking-icon {
+            animation: pulse-fast 1.2s infinite;
+            color: var(--primary-color); /* Make the icon itself blink blue */
         }
 
 
@@ -277,16 +287,16 @@
         .customer-list-item { padding: 0.5rem 0; border-bottom: 1px solid var(--border-color); font-weight: 500; }
         .customer-list-item:last-child { border-bottom: none; }
 
-        /* סגנונות חדשים לצ'אט במודל */
+        /* Chat Modal Styles */
         .chat-bubble {
             max-width: 80%; padding: 0.75rem 1rem; border-radius: 1rem;
             margin-bottom: 0.5rem; word-wrap: break-word;
         }
-        .chat-bubble-admin { /* הודעה מהמנהל */
+        .chat-bubble-admin { 
             background-color: #e2e8f0; color: #1e293b;
             border-bottom-left-radius: 0.25rem; align-self: flex-start;
         }
-        .chat-bubble-customer { /* הודעה מהלקוח */
+        .chat-bubble-customer { 
             background-color: #2563eb; color: white;
             border-bottom-right-radius: 0.25rem; align-self: flex-end;
         }
@@ -370,9 +380,9 @@
                 <i data-feather="archive"></i>
                 <span>מכולות</span>
             </button>
-            <!-- כפתור הודעות חדש -->
+            <!-- [EDIT v50.15] Added ID to icon -->
             <button class="bottom-nav-button" onclick="showMessagesPage()">
-                <i data-feather="message-square"></i>
+                <i data-feather="message-square" id="message-icon"></i>
                 <span>הודעות</span>
                 <span id="message-alert-badge" class="nav-badge"></span>
             </button>
@@ -593,10 +603,14 @@
         const driverIconActive = L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png', shadowSize: [41, 41] });
         const driverIconStuck = L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png', shadowSize: [41, 41] });
         const orderIconActive = L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-blue.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png', shadowSize: [41, 41] });
+        // --- [NEW v50.15] Added more types ---
         const orderTypeDetails = {
             'הובלת מנוף': { icon: '🏗️', className: 'type-manof' },
             'הובלת משאית': { icon: '🚚', className: 'type-masait' },
             'איסוף עצמי': { icon: '👤', className: 'type-isuf' },
+            'הצבת מכולה': { icon: '🗑️', className: 'type-isuf' },
+            'החלפת מכולה': { icon: '♻️', className: 'type-isuf' },
+            'הוצאת מכולה': { icon: '🚮', className: 'type-isuf' },
             'default': { icon: '📦', className: '' }
         };
 
@@ -608,7 +622,7 @@
         });
         
         async function initializeViewerApplication() {
-            SmartLog.info("v50.12 (Full) Viewer: Initializing...", "Init");
+            SmartLog.info("v50.15 (Layout Fix) Viewer: Initializing...", "Init");
             try {
                 updateConnectionStatus('connecting', 'מפעיל מפה...');
                 initViewerMap();
@@ -734,8 +748,6 @@
             SmartLog.info("Listening for Unread Messages...", "Firestore.Listen.Messages");
             
             // [FIX v50.14] שינוי השאילתה כדי להשתמש באינדקס שדה יחיד
-            // במקום לסנן שני שדות, נסנן רק לפי 'טרם נקרא' ונסנן את הסוג ב-JS
-            // זה מונע את הצורך באינדקס מורכב (Composite Index)
             const q = query(
                 collectionGroup(db, 'messages'),
                 where('readByViewer', '==', false)
@@ -1060,6 +1072,7 @@
             const displayId = order.orderNumber || `#${order.id.slice(-6)}`;
             const createdTime = order.createdAt?.toDate ? order.createdAt.toDate().toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' }) : '';
             const orderDate = order.orderDate ? new Date(order.orderDate).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit' }) : '';
+            // --- [EDIT] v50.12: Add Customer Number and Order Time ---
             const customerNumber = order.customer?.customerNumber || order.customer?.customer_id || 'N/A';
             const orderTime = order.orderTime || 'N/A';
             
@@ -1180,13 +1193,15 @@
         
         function updateMessageBadge() {
             const badge = document.getElementById('message-alert-badge');
-            if (!badge) return;
+            const icon = document.getElementById('message-icon'); // [NEW v50.15]
+            if (!badge || !icon) return;
             
             if (viewerState.unreadMessages.size > 0) {
                 badge.classList.add('active');
-                // badge.innerText = viewerState.unreadMessages.size; // אפשר להוסיף ספירה
+                icon.classList.add('blinking-icon'); // [NEW v50.15]
             } else {
                 badge.classList.remove('active');
+                icon.classList.remove('blinking-icon'); // [NEW v50.15]
             }
         }
         
