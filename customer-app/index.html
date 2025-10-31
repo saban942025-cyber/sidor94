@@ -4,13 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>מעקב משלוח</title>
-    <!-- 
-      DeliveryMaster Customer App v1.0 (Firebase)
-      - Rebuilt to use live Firestore data
-      - Reads order ID from URL
-      - Listens to order status and driver location in real-time
-      - Modern UI with status tracker and live map
-    -->
+    <!-- DeliveryMaster Customer App v27.9 -->
 
     <!-- TailwindCSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -22,12 +16,9 @@
     <!-- Icons (Feather) -->
     <script src="https://unpkg.com/feather-icons"></script>
 
-    <!-- Google Font: Rubik -->
-    <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700&display=swap" rel="stylesheet">
-
     <style>
         body {
-            font-family: 'Rubik', sans-serif;
+            font-family: 'Arial', sans-serif;
             background-color: #f4f7f6;
         }
         #map {
@@ -38,7 +29,7 @@
         }
         .loader {
             border: 4px solid #f3f3f3;
-            border-top: 4px solid #3b82f6; /* blue-500 */
+            border-top: 4px solid #3498db;
             border-radius: 50%;
             width: 40px;
             height: 40px;
@@ -49,101 +40,24 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
-        
-        /* Status Tracker */
-        .status-tracker {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            position: relative;
-            margin-bottom: 2.5rem;
-        }
-        .status-tracker::before { /* The line */
-            content: '';
-            position: absolute;
-            top: 16px; /* Align with center of dot */
-            right: 0;
-            left: 0;
-            height: 4px;
-            background-color: #e5e7eb; /* gray-200 */
-            z-index: 1;
-        }
-        .status-tracker-progress { /* The colored progress line */
-            position: absolute;
-            top: 16px;
-            right: 0;
-            height: 4px;
-            background-color: #3b82f6; /* blue-500 */
-            z-index: 2;
-            width: 0%; /* Default width */
-            transition: width 0.5s ease;
-        }
-        .status-step {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            text-align: center;
-            width: 60px; /* Width for text wrapping */
-            z-index: 3;
-        }
-        .status-dot {
-            width: 36px;
-            height: 36px;
-            border-radius: 50%;
-            background-color: #e5e7eb; /* gray-200 */
-            border: 4px solid #f4f7f6; /* body bg */
-            color: #9ca3af; /* gray-400 */
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 700;
-            transition: all 0.3s ease;
-        }
-        .status-label {
-            font-size: 0.75rem; /* 12px */
-            font-weight: 500;
-            color: #9ca3af; /* gray-400 */
-            margin-top: 0.5rem;
-            line-height: 1.2;
-        }
-        
-        /* Active Status Styling */
-        .status-step.completed .status-dot {
-            background-color: #3b82f6; /* blue-500 */
-            color: white;
-            border-color: #dbeafe; /* blue-100 */
-        }
-        .status-step.completed .status-label {
-            color: #1f2937; /* gray-800 */
-        }
-        .status-step.active .status-dot {
-            background-color: white;
-            border-color: #3b82f6; /* blue-500 */
-            color: #3b82f6;
-            transform: scale(1.1);
-        }
-        .status-step.active .status-label {
-            color: #3b82f6; /* blue-500 */
-            font-weight: 700;
-        }
     </style>
 </head>
 <body class="bg-gray-100">
 
     <div class="container mx-auto max-w-lg p-4">
         
-        <header class="text-center my-6 flex flex-col items-center">
-            <img src="https://i.postimg.cc/ryPT3r29/image.png" alt="Company Logo" class="w-20 h-20 mx-auto mb-4 rounded-lg shadow-sm">
+        <header class="text-center my-6">
+            <!-- לוגו יוחלף בלוגו של הלקוח -->
             <h1 class="text-3xl font-bold text-gray-800">מעקב משלוח</h1>
-            <p id="order-id-display" class="text-gray-600">טוען פרטי הזמנה...</p>
+            <p class="text-gray-600">ההזמנה שלך בדרך!</p>
         </header>
 
-        <main class="bg-white p-6 rounded-lg shadow-lg">
+        <main class="bg-white p-6 rounded-lg shadow-md">
             
             <!-- Loader -->
             <div id="loader" class="text-center py-10">
                 <div class="loader"></div>
-                <p class="text-gray-600">מאתר את ההזמנה שלך...</p>
+                <p class="text-gray-600">טוען נתוני הזמנה...</p>
             </div>
 
             <!-- Error Message -->
@@ -154,43 +68,32 @@
 
             <!-- Order Details -->
             <div id="order-content" class="hidden">
-                <p class="text-gray-700 text-lg mb-6">שלום <strong id="customer-name"></strong>, ההזמנה שלך בסטטוס:</p>
+                <div class="mb-4">
+                    <h2 class="text-xl font-semibold">הזמנה <span id="order-id" class="text-blue-600"></span></h2>
+                    <p class="text-gray-700">שלום <strong id="customer-name"></strong>, ההזמנה שלך לכתובת <strong id="customer-address"></strong> צפויה להגיע בקרוב.</p>
+                </div>
 
-                <!-- Status Tracker -->
-                <div class="status-tracker">
-                    <div class="status-tracker-progress" id="status-progress-bar"></div>
-                    <div class="status-step" id="step-new">
-                        <div class="status-dot"><i data-feather="check"></i></div>
-                        <div class="status-label">התקבלה</div>
-                    </div>
-                    <div class="status-step" id="step-assigned">
-                        <div class="status-dot"><i data-feather="user-check"></i></div>
-                        <div class="status-label">שויכה לנהג</div>
-                    </div>
-                    <div class="status-step" id="step-onway">
-                        <div class="status-dot"><i data-feather="truck"></i></div>
-                        <div class="status-label">בדרך אליך</div>
-                    </div>
-                    <div class="status-step" id="step-completed">
-                        <div class="status-dot"><i data-feather="flag"></i></div>
-                        <div class="status-label">הושלמה</div>
-                    </div>
+                <!-- Status Steps -->
+                <div class="mb-6">
+                    <h3 class="font-semibold mb-3">סטטוס הזמנה: <span id="status-text" class="text-blue-600"></span></h3>
+                    <!-- כאן ניתן להוסיף גרפיקה של שלבי התקדמות -->
                 </div>
                 
                 <!-- Map -->
-                <div class="mb-6" id="map-container" style="display: none;">
-                    <h3 class="font-semibold mb-3">מעקב חי</h3>
+                <div class="mb-6">
+                    <h3 class="font-semibold mb-3">מיקום הנהג</h3>
                     <div id="map"></div>
                 </div>
 
                 <!-- Driver Details -->
-                <div id="driver-details" class="bg-gray-50 p-4 rounded-lg flex items-center space-x-4 space-x-reverse" style="display: none;">
+                <div class="bg-gray-50 p-4 rounded-lg flex items-center space-x-4 space-x-reverse">
                     <div class="bg-blue-100 p-3 rounded-full">
                         <i data-feather="truck" class="w-6 h-6 text-blue-600"></i>
                     </div>
                     <div>
                         <p class="font-semibold">הנהג שלך: <span id="driver-name"></span></p>
-                        <a href="#" id="driver-phone-link" class="text-blue-600 text-sm font-medium">
+                        <p class="text-sm text-gray-600">סוג רכב: <span id="driver-vehicle"></span></p>
+                        <a href="#" id="driver-phone-link" class="text-blue-600 text-sm">
                             <i data-feather="phone" class="w-4 h-4 inline-block ml-1"></i>
                             <span id="driver-phone"></span>
                         </a>
@@ -198,341 +101,236 @@
                 </div>
                 
                 <!-- Order Notes -->
-                <div class="mt-6 border-t pt-4" id="notes-container" style="display: none;">
+                <div class="mt-6 border-t pt-4">
                     <h3 class="font-semibold mb-2">הערות למשלוח</h3>
-                    <p id="order-notes" class="text-gray-700 bg-gray-50 p-3 rounded-md"></p>
+                    <p id="order-notes" class="text-gray-700 bg-gray-50 p-3 rounded-md">
+                        <!-- הערות יוזרקו לכאן -->
+                    </p>
                 </div>
             </div>
 
         </main>
 
         <footer class="text-center mt-6 text-gray-500 text-sm">
-            <p>&copy; 2024 DeliveryMaster</p>
+            <p>&copy; 2025 DeliveryMaster</p>
         </footer>
 
     </div>
 
-    <script type="module">
-        // --- Inlined Firebase SDK Imports ---
-        import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
-        import { getFirestore, collection, doc, onSnapshot, query, orderBy, addDoc, updateDoc, serverTimestamp, deleteDoc, arrayUnion, where, getDocs, getDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-
-        // --- Inlined Config Logic ---
-        const firebaseConfig = {
-          apiKey: "AIzaSyDq0oVwS6zbEfsgrYBRkeBq80dDUKMedzo", authDomain: "saban94-78949.firebaseapp.com", projectId: "saban94-78949",
-          storageBucket: "saban94-78949.firebasestorage.app", messagingSenderId: "41553157903", appId: "1:41553157903:web:cc33d252cff023be97a87a", measurementId: "G-XV6RZDESSB"
-        };
-        let app, auth, db; let initializationError = null;
-        try {
-            app = getApps().length ? getApp() : initializeApp(firebaseConfig);
-            auth = getAuth(app); db = getFirestore(app);
-        } catch (error) { console.error("CRITICAL: Firebase init failed!", error); initializationError = error; }
-
-        const MAX_AUTH_RETRIES = 3; const RETRY_DELAY_MS = 3000;
-        async function ensureAuth() {
-            console.log("ensureAuth: Starting..."); let tries = 0;
-            while (tries < MAX_AUTH_RETRIES) {
-                tries++;
-                try {
-                    if (initializationError) throw new Error(`Init failed: ${initializationError.message}`);
-                    if (!auth) throw new Error("Auth object missing");
-                    const userCredential = await signInAnonymously(auth);
-                    console.log("ensureAuth: Success.", userCredential.user.uid); return userCredential.user;
-                } catch (e) {
-                    console.warn(`[FirebaseAuth] Attempt ${tries} failed:`, e.code, e.message);
-                    if (tries >= MAX_AUTH_RETRIES) { console.error("ensureAuth: All attempts failed."); throw e; }
-                    await new Promise(r => setTimeout(r, RETRY_DELAY_MS));
-                }
-            } throw new Error("ensureAuth: Max retries reached.");
-        }
-        const authReadyPromise = ensureAuth();
-        
-        // --- SmartLog (Minimal) ---
-        const SmartLog = {
-            info: (msg, ctx) => console.log("[INFO]", msg, ctx || ''),
-            warn: (msg, ctx) => console.warn("[WARN]", msg, ctx || ''),
-            error: (err, ctx) => console.error("[ERROR]", err, ctx || '')
-        };
-
-        // --- Map & State ---
+    <script>
+        // --- Config ---
+        const API_URL = 'https://script.google.com/macros/s/AKfycbxhJjLpnh8qZFutncdTLOX_ul8PIqZRrgjeE4289pPFiTozPcYiV8b0VzAg7KmuE6KZ/exec';
         let map;
         let driverMarker;
         let orderMarker;
-        let orderListenerUnsubscribe = null;
-        let locationListenerUnsubscribe = null;
-        let currentOrderId = null;
 
         // --- Icons ---
         const driverIcon = L.icon({
-            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png',
-            iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34],
-            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png', shadowSize: [41, 41]
-        });
-        const orderIcon = L.icon({
-            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-blue.png',
-            iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34],
-            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png', shadowSize: [41, 41]
+            iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+            iconSize: [25, 41],
+            iconAnchor: [12, 41],
+            popupAnchor: [1, -34],
+            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+            shadowSize: [41, 41]
         });
 
-        // --- UI Functions ---
-        function showLoader(show) {
-            document.getElementById('loader').style.display = show ? 'block' : 'none';
-        }
-        function showError(message) {
-            showLoader(false);
-            document.getElementById('order-content').style.display = 'none';
-            document.getElementById('error-message').style.display = 'block';
-            document.getElementById('error-text').innerText = message || 'אירעה שגיאה. אנא בדוק את הקישור ונסה שוב.';
-        }
-        function showContent() {
-            showLoader(false);
-            document.getElementById('error-message').style.display = 'none';
-            document.getElementById('order-content').style.display = 'block';
-            feather.replace(); // Initialize icons
-        }
-        
-        // --- Map Functions ---
-        function initializeMap(orderLatLng) {
+        const orderIcon = L.icon({
+            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-blue.png',
+            iconSize: [25, 41],
+            iconAnchor: [12, 41],
+            popupAnchor: [1, -34],
+            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+            shadowSize: [41, 41]
+        });
+
+        // --- API ---
+        async function apiFetch(action) {
+            const url = `${API_URL}?${action}`;
             try {
-                if (map) map.remove(); // Remove old map if exists
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const result = await response.json();
+                if (result.status === 'error') {
+                    throw new Error(result.data);
+                }
+                return result.data;
+            } catch (error) {
+                console.error(`API Fetch Error (${action}):`, error);
+                showError(error.message);
+                throw error;
+            }
+        }
+
+        // --- Map Functions ---
+        function initializeMap(orderLatLng, driverLatLng) {
+            try {
                 map = L.map('map');
+                
                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                     maxZoom: 19,
-                    attribution: '&copy; OpenStreetMap'
+                    attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
                 }).addTo(map);
 
                 const bounds = L.latLngBounds();
+
+                // Add order marker
                 if (orderLatLng) {
                     orderMarker = L.marker(orderLatLng, { icon: orderIcon })
                         .addTo(map)
                         .bindPopup("כתובת האספקה שלך");
                     bounds.extend(orderLatLng);
                 }
+
+                // Add driver marker
+                if (driverLatLng) {
+                    driverMarker = L.marker(driverLatLng, { icon: driverIcon })
+                        .addTo(map)
+                        .bindPopup("מיקום הנהג");
+                    bounds.extend(driverLatLng);
+                }
                 
                 if (bounds.isValid()) {
-                    map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+                    map.fitBounds(bounds, { padding: [50, 50] });
                 } else {
-                    map.setView([32.0853, 34.7818], 9); // Default to Israel center
+                    // Default view if no coords
+                    map.setView([32.0853, 34.7818], 9);
                 }
+
             } catch (error) {
-                SmartLog.error(error, { context: "Error initializing map" });
+                console.error("Error initializing map:", error);
                 document.getElementById('map').innerHTML = "שגיאה בטעינת המפה.";
             }
         }
         
-        function updateMap(orderLatLng, driverLatLng) {
+        function updateMap(driverLatLng) {
             if (!map) return;
             
-            const bounds = L.latLngBounds();
-            if (orderLatLng) {
-                if (orderMarker) {
-                    orderMarker.setLatLng(orderLatLng);
-                } else {
-                    orderMarker = L.marker(orderLatLng, { icon: orderIcon })
-                        .addTo(map)
-                        .bindPopup("כתובת האספקה");
-                }
-                bounds.extend(orderLatLng);
-            }
+            const latLng = [driverLatLng[0], driverLatLng[1]];
 
-            if (driverLatLng) {
-                document.getElementById('map-container').style.display = 'block'; // Show map if hidden
-                if (driverMarker) {
-                    driverMarker.setLatLng(driverLatLng);
-                } else {
-                    driverMarker = L.marker(driverLatLng, { icon: driverIcon })
+            if (driverMarker) {
+                driverMarker.setLatLng(latLng);
+            } else {
+                 driverMarker = L.marker(latLng, { icon: driverIcon })
                         .addTo(map)
                         .bindPopup("מיקום הנהג");
-                }
-                bounds.extend(driverLatLng);
-            } else {
-                // If no driver location, hide driver marker if it exists
-                if (driverMarker) {
-                    map.removeLayer(driverMarker);
-                    driverMarker = null;
-                }
             }
             
+            // Recalculate bounds
+            const bounds = L.latLngBounds();
+            if (orderMarker) bounds.extend(orderMarker.getLatLng());
+            if (driverMarker) bounds.extend(driverMarker.getLatLng());
+            
             if (bounds.isValid()) {
-                 setTimeout(() => map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 }), 50); // Delay fixes leaflet resize issue
+                map.fitBounds(bounds, { padding: [50, 50] });
             }
         }
-        
-        // --- Status Tracker UI ---
-        function updateStatusTracker(status) {
-            const steps = {
-                'חדש': 0,
-                'שויך': 1,
-                'בדרך': 2,
-                'הושלם': 3,
-                'בוטל': -1
-            };
-            const stepIndex = steps[status] ?? 0; // Default to first step if status unknown
 
-            // Handle cancelled state
-            if (stepIndex === -1) {
-                document.getElementById('status-progress-bar').style.width = '0%';
-                document.querySelectorAll('.status-step').forEach(step => {
-                    step.classList.remove('active', 'completed');
-                });
-                // Maybe add a specific "cancelled" UI state
+        // --- UI ---
+        function showLoader(show) {
+            document.getElementById('loader').style.display = show ? 'block' : 'none';
+        }
+
+        function showError(message) {
+            showLoader(false);
+            document.getElementById('order-content').style.display = 'none';
+            document.getElementById('error-message').style.display = 'block';
+            document.getElementById('error-text').innerText = message || 'אירעה שגיאה. אנא בדוק את הקישור ונסה שוב.';
+        }
+
+        function showContent() {
+            showLoader(false);
+            document.getElementById('error-message').style.display = 'none';
+            document.getElementById('order-content').style.display = 'block';
+            feather.replace(); // Initialize icons
+        }
+
+        // --- Logic ---
+        function getUrlParams() {
+            const params = new URLSearchParams(window.location.search);
+            // v27.9 uses 'id' (orderId) or 'phone' (customerPhone)
+            const orderId = params.get('id');
+            const phone = params.get('phone');
+            
+            if (orderId) {
+                return `action=getTrackingData&orderId=${orderId}`;
+            }
+            if (phone) {
+                 return `action=getTrackingData&customerPhone=${phone}`;
+            }
+            return null;
+        }
+
+        async function loadOrderData() {
+            const params = getUrlParams();
+            if (!params) {
+                showError("קישור לא תקין. חסר מזהה הזמנה או מספר טלפון.");
                 return;
             }
 
-            // Update progress bar width
-            // 0 -> 0%, 1 -> 33%, 2 -> 66%, 3 -> 100%
-            const progressPercentage = (stepIndex / 3) * 100;
-            document.getElementById('status-progress-bar').style.width = `${progressPercentage}%`;
-            
-            // Update step classes
-            document.getElementById('step-new').classList.toggle('completed', stepIndex >= 0);
-            document.getElementById('step-assigned').classList.toggle('completed', stepIndex >= 1);
-            document.getElementById('step-onway').classList.toggle('completed', stepIndex >= 2);
-            document.getElementById('step-completed').classList.toggle('completed', stepIndex >= 3);
-
-            // Remove 'active' from all, then add to current
-            document.querySelectorAll('.status-step').forEach(step => step.classList.remove('active'));
-            if (stepIndex === 0) document.getElementById('step-new').classList.add('active');
-            if (stepIndex === 1) document.getElementById('step-assigned').classList.add('active');
-            if (stepIndex === 2) document.getElementById('step-onway').classList.add('active');
-            if (stepIndex === 3) document.getElementById('step-completed').classList.add('active');
-        }
-
-        // --- Main Logic ---
-        function getOrderIdFromUrl() {
             try {
-                const params = new URLSearchParams(window.location.search);
-                const id = params.get('id');
-                if (!id) {
-                    showError("קישור לא תקין. חסר מזהה הזמנה.");
-                    return null;
-                }
-                return id;
-            } catch (e) {
-                SmartLog.error(e, { context: "Error reading URL params" });
-                showError("שגיאה בעיבוד הקישור.");
-                return null;
-            }
-        }
-        
-        async function startTracking() {
-            currentOrderId = getOrderIdFromUrl();
-            if (!currentOrderId) return;
-            
-            try {
-                await authReadyPromise; // Ensure we are authenticated
-                SmartLog.info("Auth ready, starting to track order.", { orderId: currentOrderId });
+                // 1. Get Order and Driver Details
+                // 'getTrackingData' is mapped to 'getOrderDetails' on backend (v30.0 fix)
+                const order = await apiFetch(params);
                 
-                // Attach listener to the order
-                const orderRef = doc(db, "orders", currentOrderId);
-                orderListenerUnsubscribe = onSnapshot(orderRef, (docSnap) => {
-                    if (!docSnap.exists()) {
-                        showError("ההזמנה לא נמצאה. אנא בדוק את הקישור.");
-                        SmartLog.error(new Error("Order not found"), { orderId: currentOrderId });
-                        return;
+                // 2. Get Live Driver Location
+                let driverLocation = null;
+                if (order.driverId && (order.status === 'בדרך' || order.status === 'שויך')) {
+                    const liveData = await apiFetch('action=getLiveMapData');
+                    if (liveData.drivers && liveData.drivers[order.driverId]) {
+                        driverLocation = liveData.drivers[order.driverId];
                     }
-                    
-                    const orderData = docSnap.data();
-                    renderOrderData(orderData); // Update UI
-                    
-                    // Check if we need to listen to driver location
-                    const driverId = orderData.driver?.id;
-                    if (driverId && (orderData.status === 'שויך' || orderData.status === 'בדרך')) {
-                        listenToDriverLocation(driverId, orderData);
-                    } else {
-                        // No driver or order completed/cancelled, stop listening to location
-                        if (locationListenerUnsubscribe) {
-                            locationListenerUnsubscribe();
-                            locationListenerUnsubscribe = null;
-                        }
-                        updateMap([orderData.latitude, orderData.longitude], null); // Show only order location
-                    }
-                    
-                }, (error) => {
-                    SmartLog.error(error, { context: "Error in order listener" });
-                    showError("שגיאה בקבלת נתוני הזמנה.");
-                });
+                }
+                
+                // 3. Get Driver's full details (phone, vehicle)
+                let driverDetails = null;
+                if (order.driverId) {
+                    const allDrivers = await apiFetch('action=getDrivers');
+                    driverDetails = allDrivers.find(d => d.driverId === order.driverId);
+                }
+
+                // 4. Render all data
+                renderOrder(order, driverLocation, driverDetails);
+                showContent();
 
             } catch (error) {
-                SmartLog.error(error, { context: "Failed auth before tracking" });
-                showError("שגיאת התחברות. נסה לרענן.");
+                showError(error.message);
             }
         }
-        
-        function listenToDriverLocation(driverId, orderData) {
-            // Stop previous listener if any
-            if (locationListenerUnsubscribe) {
-                locationListenerUnsubscribe();
-                locationListenerUnsubscribe = null;
-            }
-            
-            SmartLog.info("Listening to driver location...", { driverId });
-            const locationRef = doc(db, "driverLocations", driverId);
-            locationListenerUnsubscribe = onSnapshot(locationRef, (docSnap) => {
-                 const orderLatLng = [orderData.latitude, orderData.longitude];
-                 if (docSnap.exists() && orderData.status === 'בדרך') {
-                     const locData = docSnap.data();
-                     const driverLatLng = [locData.latitude, locData.longitude];
-                     updateMap(orderLatLng, driverLatLng);
-                 } else {
-                     // Driver doc doesn't exist or order not "on way" yet, just show order location
-                     updateMap(orderLatLng, null);
-                 }
-            }, (error) => {
-                SmartLog.error(error, { context: "Error in location listener", driverId });
-                // Don't show error to user, just stop tracking driver on map
-                updateMap([orderData.latitude, orderData.longitude], null);
-            });
-        }
-        
-        function renderOrderData(order) {
-            // --- Update Text ---
-            const displayId = order.orderNumber || `#${currentOrderId.slice(-6)}`;
-            document.getElementById('order-id-display').innerText = `הזמנה ${displayId}`;
-            document.getElementById('customer-name').innerText = order.customer?.name || 'לקוח';
-            
-            // --- Update Status Tracker ---
-            updateStatusTracker(order.status);
-            
-            // --- Update Driver & Notes ---
-            const driverDetailsEl = document.getElementById('driver-details');
-            const notesContainerEl = document.getElementById('notes-container');
-            
-            if (order.driver?.name && (order.status === 'שויך' || order.status === 'בדרך')) {
-                document.getElementById('driver-name').innerText = order.driver.name;
-                
-                // Try to get phone from customer doc's 'driver' object (if it's there)
-                // This is a guess, might need to query 'drivers' collection
-                const phone = order.driver.phone || 'לא זמין'; 
-                document.getElementById('driver-phone').innerText = phone;
-                document.getElementById('driver-phone-link').href = `tel:${phone}`;
-                driverDetailsEl.style.display = 'flex';
+
+        function renderOrder(order, driverLocation, driverDetails) {
+            // Fill text fields
+            document.getElementById('order-id').innerText = `#${order.orderId}`;
+            document.getElementById('customer-name').innerText = order.customerName;
+            document.getElementById('customer-address').innerText = order.address;
+            document.getElementById('status-text').innerText = order.status || 'טוען...';
+            document.getElementById('order-notes').innerText = order.notes || 'אין הערות מיוחדות.';
+
+            // Fill driver details
+            if (driverDetails) {
+                document.getElementById('driver-name').innerText = driverDetails.name;
+                document.getElementById('driver-vehicle').innerText = driverDetails.vehicleType;
+                document.getElementById('driver-phone').innerText = driverDetails.phone;
+                document.getElementById('driver-phone-link').href = `tel:${driverDetails.phone}`;
             } else {
-                driverDetailsEl.style.display = 'none';
+                 document.getElementById('driver-name').innerText = 'לא שויך';
+                 document.getElementById('driver-vehicle').innerText = 'N/A';
+                 document.getElementById('driver-phone').innerText = 'N/A';
             }
 
-            if (order.notes) {
-                document.getElementById('order-notes').innerText = order.notes;
-                notesContainerEl.style.display = 'block';
-            } else {
-                notesContainerEl.style.display = 'none';
-            }
+            // Initialize map
+            const orderLatLng = (order.latitude && order.longitude) ? [order.latitude, order.longitude] : null;
+            const driverLatLng = (driverLocation && driverLocation.latitude) ? [driverLocation.latitude, driverLocation.longitude] : null;
+
+            initializeMap(orderLatLng, driverLatLng);
             
-            // --- Initialize or Update Map ---
-            const orderLatLng = [order.latitude, order.longitude];
-            if (!map && orderLatLng[0]) { // Initialize map only if we have order coords
-                 document.getElementById('map-container').style.display = 'block';
-                 initializeMap(orderLatLng);
-            }
-            
-            showContent();
+            // TODO: Start timer to update driver location periodically if status is 'בדרך'
         }
 
         // --- Init ---
         document.addEventListener('DOMContentLoaded', () => {
-            // Check for order ID and start tracking
-            startTracking();
+            loadOrderData();
         });
     </script>
 </body>
