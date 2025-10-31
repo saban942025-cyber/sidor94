@@ -3,17 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>DeliveryMaster Viewer v50.11 (Chat)</title>
+    <title>DeliveryMaster Viewer v50.12 (Chat + Fix)</title>
     <!-- 
-      DeliveryMaster Live Viewer App v50.11 (Chat)
+      DeliveryMaster Live Viewer App v50.12
       
       Changelog:
-      - v50.11 (חדש):
-        - נוסף כפתור "הודעות" לסרגל הניווט התחתון.
-        - נוסף חיווי (Badge) על הכפתור עבור הודעות חדשות.
-        - נוסף דף "fullpage-messages" המציג רשימת הזמנות עם הודעות שלא נקראו.
-        - נוסף מודל צ'אט מלא (`openChatModal`) המאפשר צפייה בהיסטוריה ושליחת תגובות.
-        - פונקציות (`listenToUnreadMessages`, `updateMessagesAsRead`, `sendAdminReply`) הותאמו מקבצי מנהל אחרים.
+      - v50.13 (FIX):
+        - Changed Firebase module imports from '//www.gstatic.com' back to 'https://www.gstatic.com' to fix loading error.
+      - v50.12 (חדש):
+        - הוספת שדה "מספר לקוח" לכרטיס ההזמנה הראשי.
+        - הוספת שדה "מספר לקוח" ו"שעת אספקה" לכרטיס ההזמנה המורחב (בדפים המלאים).
+      - v50.11 (קיים):
+        - הוטמעה מערכת הודעות מלאה (כפתור, חיווי, מודל צ'אט, ופונקציות).
     -->
     
     <!-- PWA Manifest & Theme -->
@@ -519,6 +520,7 @@
 
     <script type="module">
         // --- Inlined Firebase SDK Imports ---
+        // --- [FIX v50.13] Using HTTPS URLs ---
         import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
         import { 
@@ -602,7 +604,7 @@
         });
         
         async function initializeViewerApplication() {
-            SmartLog.info("v50.11 Viewer: Initializing...", "Init");
+            SmartLog.info("v50.12 (Full) Viewer: Initializing...", "Init");
             try {
                 updateConnectionStatus('connecting', 'מפעיל מפה...');
                 initViewerMap();
@@ -727,8 +729,8 @@
         function listenToUnreadMessages() {
             SmartLog.info("Listening for Unread Messages...", "Firestore.Listen.Messages");
             
-            // שאילתה זו דורשת אינדקס כפי שמופיע בתמונה image_1fb01e.png
-            // messages -> type (ASC) -> readByViewer (ASC) -> __name__ (ASC)
+            // שאילתה זו דורשת אינדקס:
+            // messages -> type (ASC) -> readByViewer (ASC)
             const q = query(
                 collectionGroup(db, 'messages'),
                 where('type', '==', 'message_to_admin'),
@@ -793,6 +795,7 @@
              feather.replace();
         }
         
+        // --- [FIX v50.12] ---
         function createViewerOrderCard(order) {
             const el = document.createElement('div');
             el.className = `order-card`;
@@ -805,6 +808,8 @@
             const displayId = order.orderNumber || `#${order.id.slice(-6)}`;
             const orderDateForDisplay = order.orderDate ? new Date(order.orderDate).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '...';
             const orderTimeForDisplay = order.orderTime || '...';
+            // --- [FIX v50.12] Get Customer Number ---
+            const customerNumber = order.customer?.customerNumber || order.customer?.customer_id || 'N/A';
             
             el.innerHTML = `
                 <div class="order-card-header-center">
@@ -812,6 +817,11 @@
                     <span class="customer-name">${customerName}</span>
                 </div>
                 <div class="order-card-details mt-4">
+                    <!-- [EDIT] v50.12: Added Customer Number -->
+                    <div class="flex items-center gap-2 text-gray-700">
+                        <i data-feather="user" class="w-4 h-4"></i>
+                        <span class="font-medium">לקוח: ${customerNumber}</span>
+                    </div>
                     <div class="flex items-center gap-2 text-gray-700">
                         <i data-feather="map-pin" class="w-4 h-4"></i>
                         <span class="font-medium truncate">${address}</span>
@@ -1028,6 +1038,8 @@
             else { viewerState.futureOrders.sort((a,b) => (a.orderDate ? new Date(a.orderDate) : 0) - (b.orderDate ? new Date(b.orderDate) : 0)).forEach(order => container.appendChild(createEnhancedOrderCard(order, true))); }
             showFullPageView('list-future');
         }
+        
+        // --- [FIX v50.12] ---
         function createEnhancedOrderCard(order, showTime = false) {
             const typeInfo = orderTypeDetails[order.deliveryType] || orderTypeDetails['default'];
             const customerName = order.customer?.name || '...';
@@ -1035,7 +1047,32 @@
             const displayId = order.orderNumber || `#${order.id.slice(-6)}`;
             const createdTime = order.createdAt?.toDate ? order.createdAt.toDate().toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' }) : '';
             const orderDate = order.orderDate ? new Date(order.orderDate).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit' }) : '';
-            return `<div class="enhanced-order-card ${typeInfo.className}"><div class="order-card-header"><div class="order-main-info"><div class="flex items-center gap-2 mb-1"><span class="font-bold text-lg">${displayId}</span><span class="order-type-icon text-xl">${typeInfo.icon}</span><span class="order-badge badge-status-${getStatusClass(order.status)}">${order.status}</span></div><div class="font-semibold text-gray-800">${customerName}</div><div class="text-gray-600 text-sm">${address}</div></div></div><div class="order-meta"><span>${order.warehouse || ''}</span>${showTime && orderDate ? `<span>📅 ${orderDate}</span>` : ''}${order.driver?.name ? `<span>👤 ${order.driver.name}</span>` : ''}</div></div>`;
+            // --- [EDIT] v50.12: Add Customer Number and Order Time ---
+            const customerNumber = order.customer?.customerNumber || order.customer?.customer_id || 'N/A';
+            const orderTime = order.orderTime || 'N/A';
+            
+            return `<div class="enhanced-order-card ${typeInfo.className}">
+                        <div class="order-card-header">
+                            <div class="order-main-info">
+                                <div class="flex items-center gap-2 mb-1">
+                                    <span class="font-bold text-lg">${displayId}</span>
+                                    <span class="order-type-icon text-xl">${typeInfo.icon}</span>
+                                    <span class="order-badge badge-status-${getStatusClass(order.status)}">${order.status}</span>
+                                </div>
+                                <div class="font-semibold text-gray-800">${customerName}</div>
+                                <div class="text-gray-600 text-sm">${address}</div>
+                            </div>
+                        </div>
+                        <div class="order-meta">
+                            <span><i data-feather="home" class="w-4 h-4 inline-block ml-1"></i>${order.warehouse || ''}</span>
+                            <!-- [EDIT] v50.12: Added Customer Number -->
+                            <span><i data-feather="hash" class="w-4 h-4 inline-block ml-1"></i>${customerNumber}</span>
+                            ${showTime && orderDate ? `<span><i data-feather="calendar" class="w-4 h-4 inline-block ml-1"></i>${orderDate}</span>` : ''}
+                            <!-- [EDIT] v50.12: Added Order Time -->
+                            ${showTime && orderTime !== 'N/A' ? `<span><i data-feather="clock" class="w-4 h-4 inline-block ml-1"></i>${orderTime}</span>` : ''}
+                            ${order.driver?.name ? `<span><i data-feather="user" class="w-4 h-4 inline-block ml-1"></i>${order.driver.name}</span>` : ''}
+                        </div>
+                    </div>`;
         }
         function getStatusClass(status) {
             const statusMap = { 'חדש': 'new', 'שויך': 'assigned', 'בדרך': 'onway', 'הושלם': 'completed' };
@@ -1267,7 +1304,7 @@
                 wrapper.classList.add('items-start'); // שמאל
             }
             
-            const time = msg.timestamp ? new Date(msg.timestamp.seconds * 1000).toLocaleString('he-IL') : '...';
+            const time = msg.timestamp ? new Date(msg.timestamp.seconds * 1000).toLocaleString('he-IL', {hour: '2-digit', minute: '2-digit'}) : '...';
             
             wrapper.innerHTML = `
                 <div class="${bubbleClass}">
@@ -1315,7 +1352,10 @@
         window.showMessagesPage = showMessagesPage; // --- חדש
         window.openChatModal = openChatModal; // --- חדש
         window.sendAdminReply = sendAdminReply; // --- חדש
+        window.filterViewerLists = filterViewerLists; // [FIX v50.13] Expose filter function
+        window.focusViewerMapItem = focusViewerMapItem; // [FIX v50.13] Expose focus function
 
     </script>
 </body>
 </html>
+
