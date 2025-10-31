@@ -3,9 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>מעקב הזמנה - v34.1 (File Upload)</title>
+    <title>מעקב הזמנה - v34.2 (Id Fix)</title>
     <!-- 
-      DeliveryMaster Customer App v34.1 (File Upload)
+      DeliveryMaster Customer App v34.2 (Id Fix)
+      - [FIX] שדרוג `startTracking` לנסות לאתר הזמנה לפי Document ID (ישן)
+        וגם לפי שדה `order_id` (חדש), כדי לתמוך בשני סוגי הקישורים.
       - [NEW] הוספת יכולת העלאת קבצים (תמונות, PDF וכו') באמצעות Firebase Storage.
       - [NEW] הוספת כפתור "אטב" לצ'אט.
       - [NEW] העלאת קובץ שולחת אוטומטית הודעה עם קישור להורדה.
@@ -357,6 +359,7 @@
         // --- [FIX v50.13] Using HTTPS URLs ---
         import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+        // [FIX v34.2] Added 'limit'
         import { getFirestore, collection, doc, onSnapshot, query, orderBy, addDoc, updateDoc, serverTimestamp, deleteDoc, arrayUnion, where, getDocs, getDoc, limit } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         // [NEW] Import Firebase Storage
         import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-storage.js";
@@ -507,28 +510,51 @@
             } catch (e) { SmartLog.error(e, { context: "Error reading URL params" }); showError("שגיאה בעיבוד הקישור."); return null; }
         }
         
+        // [FIX v34.2] Updated function
         async function startTracking() {
-            currentOrderId = getOrderIdFromUrl(); // This is the order_id (e.g., 6209643)
+            currentOrderId = getOrderIdFromUrl(); // This could be '6209643' OR '8RJXj3...'
             if (!currentOrderId) return;
             
             try {
                 await authReadyPromise; 
                 SmartLog.info("Auth ready, starting to track order.", { orderId: currentOrderId });
                 
-                const ordersRef = collection(db, "orders");
-                const q = query(ordersRef, where("order_id", "==", currentOrderId), limit(1));
-                
-                const querySnapshot = await getDocs(q);
-                
-                if (querySnapshot.empty) {
-                    showError("ההזמנה לא נמצאה. אנא בדוק את הקישור.");
-                    SmartLog.error(new Error("Order not found with order_id"), { order_id: currentOrderId });
-                    return;
+                let orderDoc;
+                let found = false;
+
+                // --- [FIX] Strategy 1: Try finding by Document ID first (old links)
+                try {
+                    const docRef = doc(db, "orders", currentOrderId);
+                    const docSnap = await getDoc(docRef);
+                    if (docSnap.exists()) {
+                        orderDoc = docSnap;
+                        found = true;
+                        currentFirestoreDocId = docSnap.id;
+                        SmartLog.info(`Found order by Document ID: ${currentFirestoreDocId}`, {});
+                    }
+                } catch (e) {
+                    SmartLog.warn("Not a valid Document ID, trying by order_id field...", { id: currentOrderId });
+                }
+
+                // --- [FIX] Strategy 2: Try finding by 'order_id' field (new links)
+                if (!found) {
+                    const ordersRef = collection(db, "orders");
+                    const q = query(ordersRef, where("order_id", "==", currentOrderId), limit(1));
+                    const querySnapshot = await getDocs(q);
+                    
+                    if (!querySnapshot.empty) {
+                        orderDoc = querySnapshot.docs[0];
+                        found = true;
+                        currentFirestoreDocId = orderDoc.id;
+                        SmartLog.info(`Found order by order_id field: ${currentFirestoreDocId}`, {});
+                    }
                 }
                 
-                const orderDoc = querySnapshot.docs[0];
-                currentFirestoreDocId = orderDoc.id; // [NEW] Store the real document ID
-                SmartLog.info(`Found document ID: ${currentFirestoreDocId} for order_id: ${currentOrderId}`, {});
+                if (!found) {
+                    showError("ההזמנה לא נמצאה. אנא בדוק את הקישור.");
+                    SmartLog.error(new Error("Order not found"), { id_searched: currentOrderId });
+                    return;
+                }
 
                 // --- [NEW] Welcome Modal Logic ---
                 const messagesColRef = collection(db, "orders", currentFirestoreDocId, "messages");
@@ -745,11 +771,13 @@
             }
             document.getElementById('modal-customer-name').innerText = currentCustomerData.name || 'לא ידוע';
             
-            const orderData = orderListenerUnsubscribe.snapshot.data();
-            if (orderData && orderData.address) {
-                document.getElementById('order-location').value = orderData.address;
-            } else if (currentCustomerData.defaultAddress) {
-                document.getElementById('order-location').value = currentCustomerData.defaultAddress;
+            if (orderListenerUnsubscribe && orderListenerUnsubscribe.snapshot) {
+                const orderData = orderListenerUnsubscribe.snapshot.data();
+                if (orderData && orderData.address) {
+                    document.getElementById('order-location').value = orderData.address;
+                } else if (currentCustomerData.defaultAddress) {
+                    document.getElementById('order-location').value = currentCustomerData.defaultAddress;
+                }
             }
             
             document.getElementById('new-order-modal').showModal();
