@@ -3,13 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>מעקב הזמנה - v34.3 (Customer Fix)</title>
+    <title>מעקב הזמנה - v34.4 (Customer N/A Fix)</title>
     <!-- 
-      DeliveryMaster Customer App v34.3 (Customer Fix)
+      DeliveryMaster Customer App v34.4 (Customer N/A Fix)
       - [FIX] שדרוג `startTracking` כך שיבדוק אם נתוני הלקוח בהזמנה חלקיים.
-        אם כן (למשל, חסר שם), האפליקציה תנסה לשלוף את פרופיל הלקוח המלא
-        מהאוסף `customers` לפני שהיא מאפשרת יצירת הזמנה חדשה.
-        זה מונע יצירת הזמנות חדשות עם "לקוח לא ידוע".
+        [!!!] התיקון בודק עכשיו גם אם השם הוא "N/A" או "לקוח לא ידוע",
+        ולא רק אם הוא ריק. זה מונע יצירת הזמנות חדשות עם "לקוח לא ידוע".
       - [FIX] שדרוג `startTracking` לנסות לאתר הזמנה לפי Document ID (ישן)
         וגם לפי שדה `order_id` (חדש).
       - [NEW] הוספת יכולת העלאת קבצים (Firebase Storage).
@@ -511,7 +510,7 @@
             } catch (e) { SmartLog.error(e, { context: "Error reading URL params" }); showError("שגיאה בעיבוד הקישור."); return null; }
         }
         
-        // [FIX v34.3] Updated function
+        // [FIX v34.4] Updated function
         async function startTracking() {
             currentOrderId = getOrderIdFromUrl(); // This could be '6209643' OR '8RJXj3...'
             if (!currentOrderId) return;
@@ -559,25 +558,30 @@
                 
                 const orderData = orderDoc.data();
                 
-                // --- [NEW FIX v34.3] ---
+                // --- [NEW FIX v34.4] ---
                 // Validate and fetch full customer data if missing
-                if (orderData.customer && orderData.customer.id && !orderData.customer.name) {
-                    SmartLog.warn("Customer data is partial. Fetching full profile.", { customerId: orderData.customer.id });
+                const customerInOrder = orderData.customer;
+                const customerId = customerInOrder ? customerInOrder.id : null;
+                const customerName = customerInOrder ? customerInOrder.name : null;
+                
+                // [FIX] Check for "N/A" or other placeholders as well as missing name
+                if (customerId && (!customerName || customerName === 'N/A' || customerName === 'לקוח לא ידוע')) {
+                    SmartLog.warn("Customer data is partial. Fetching full profile.", { customerId: customerId });
                     try {
-                        const customerRef = doc(db, "customers", orderData.customer.id);
+                        const customerRef = doc(db, "customers", customerId);
                         const customerSnap = await getDoc(customerRef);
                         if (customerSnap.exists()) {
                             currentCustomerData = customerSnap.data(); // Get the full, correct data
                             SmartLog.info("Full customer profile fetched.", currentCustomerData);
                         } else {
-                            currentCustomerData = orderData.customer; // Fallback
+                            currentCustomerData = customerInOrder; // Fallback
                         }
                     } catch (e) {
                         SmartLog.error(e, "Failed to fetch full customer profile");
-                        currentCustomerData = orderData.customer; // Fallback
+                        currentCustomerData = customerInOrder; // Fallback
                     }
-                } else if (orderData.customer) {
-                    currentCustomerData = orderData.customer; // Data seems fine
+                } else if (customerInOrder) {
+                    currentCustomerData = customerInOrder; // Data seems fine
                 } else {
                     SmartLog.error(new Error("No customer object found on order"), { orderId: currentFirestoreDocId });
                     currentCustomerData = { name: "לקוח לא ידוע" }; // Fallback
@@ -830,7 +834,7 @@
             btn.disabled = true;
             btn.innerText = "שולח...";
 
-            if (!currentCustomerData || !currentCustomerData.name) {
+            if (!currentCustomerData || !currentCustomerData.name || currentCustomerData.name === 'N/A' || currentCustomerData.name === 'לקוח לא ידוע') {
                 alert("שגיאה: פרטי הלקוח שלך אינם שלמים. אנא צור קשר עם המשרד לעדכון פרטים.");
                 btn.disabled = false;
                 btn.innerText = "שלח הזמנה";
