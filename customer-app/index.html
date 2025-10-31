@@ -2,721 +2,336 @@
 <html lang="he" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>מעקב הזמנה - ח. סבן</title>
-    
-    <!-- Tailwind CSS -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>מעקב משלוח</title>
+    <!-- DeliveryMaster Customer App v27.9 -->
+
+    <!-- TailwindCSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- LeafletJS for Map -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     
-    <!-- Font Awesome Icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Icons (Feather) -->
+    <script src="https://unpkg.com/feather-icons"></script>
 
     <style>
         body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            background-color: #f3f4f6; /* gray-100 */
+            font-family: 'Arial', sans-serif;
+            background-color: #f4f7f6;
         }
-        
-        /* Custom styles for progress bar */
-        .progress-step {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            position: relative;
-            flex: 1;
-        }
-        .progress-step-icon {
-            width: 50px;
-            height: 50px;
-            border-radius: 50%;
-            background-color: #d1d5db; /* gray-300 */
-            color: #6b7280; /* gray-500 */
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.5rem;
-            z-index: 10;
-            transition: all 0.3s ease;
-        }
-        .progress-step-label {
-            margin-top: 10px;
-            font-size: 0.8rem;
-            color: #4b5563; /* gray-600 */
-            text-align: center;
-        }
-        .progress-step-line {
-            position: absolute;
-            top: 25px;
-            left: 50%;
+        #map {
+            height: 300px;
             width: 100%;
-            height: 4px;
-            background-color: #d1d5db; /* gray-300 */
-            z-index: 5;
-            transform: translateX(-50%);
-        }
-        .progress-step:first-child .progress-step-line {
-            left: 100%;
-        }
-        .progress-step:last-child .progress-step-line {
-            left: 0;
-        }
-        
-        /* Active state */
-        .progress-step.active .progress-step-icon {
-            background-color: #3b82f6; /* blue-500 */
-            color: white;
-            box-shadow: 0 0 15px rgba(59, 130, 246, 0.5);
-        }
-        .progress-step.active .progress-step-label {
-            color: #1f2937; /* gray-800 */
-            font-weight: 600;
-        }
-        .progress-step.active .progress-step-line-fill {
-            width: 100%;
-        }
-
-        /* Progress line fill */
-        .progress-step-line-fill {
-            position: absolute;
-            top: 25px;
-            left: 50%;
-            width: 0;
-            height: 4px;
-            background-color: #3b82f6; /* blue-500 */
-            z-index: 6;
-            transform: translateX(-50%);
-            transition: width 0.5s ease 0.3s;
-        }
-        .progress-step:first-child .progress-step-line-fill {
-            left: 100%;
-        }
-        .progress-step:last-child .progress-step-line-fill {
-            left: 0;
-        }
-        
-        .hidden {
-            display: none;
-        }
-
-        /* Custom Modal for alerts */
-        .alert-modal {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background-color: rgba(0, 0, 0, 0.5);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 1000;
-            opacity: 0;
-            transition: opacity 0.3s ease;
-            pointer-events: none;
-        }
-        .alert-modal.show {
-            opacity: 1;
-            pointer-events: all;
-        }
-        .alert-modal-content {
-            background-color: white;
-            padding: 24px;
-            border-radius: 12px;
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
-            width: 90%;
-            max-width: 400px;
-            text-align: center;
-            transform: scale(0.95);
-            transition: transform 0.3s ease;
-        }
-        .alert-modal.show .alert-modal-content {
-            transform: scale(1);
-        }
-        .alert-modal-title {
-            font-size: 1.25rem;
-            font-weight: 600;
-            color: #1f2937;
-            margin-bottom: 12px;
-        }
-        .alert-modal-body {
-            font-size: 1rem;
-            color: #4b5563;
-            margin-bottom: 20px;
-        }
-        .alert-modal-button {
-            background-color: #3b82f6;
-            color: white;
-            border: none;
-            padding: 10px 20px;
             border-radius: 8px;
-            font-size: 1rem;
-            font-weight: 500;
-            cursor: pointer;
-            transition: background-color 0.2s ease;
+            background-color: #eee;
         }
-        .alert-modal-button:hover {
-            background-color: #2563eb;
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
         }
-
-        /* Notification Banner */
-        #notification-banner {
-            position: fixed;
-            top: -100px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 95%;
-            max-width: 600px;
-            z-index: 1001;
-            transition: top 0.5s ease-in-out;
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
     </style>
 </head>
 <body class="bg-gray-100">
 
-    <!-- Header -->
-    <header class="bg-white shadow-md sticky top-0 z-50">
-        <div class="container mx-auto px-4 py-4 max-w-3xl">
-            <div class="flex justify-between items-center">
-                <div>
-                    <h1 class="text-2xl font-bold text-gray-800">מעקב הזמנה</h1>
-                    <p id="order-number-header" class="text-sm text-gray-500">טוען...</p>
-                </div>
-                <img src="https://saban.fra1.digitaloceanspaces.com/saban-logo.png" alt="לוגו ח. סבן" class="h-12"
-                     onerror="this.onerror=null; this.src='https://placehold.co/100x50/cccccc/333333?text=Logo';">
-            </div>
-        </div>
-    </header>
-
-    <!-- Notification Banner -->
-    <div id="notification-banner" class="bg-green-500 text-white p-4 rounded-b-lg shadow-lg">
-        <div class="flex items-center">
-            <i class="fas fa-check-circle mr-3 ml-2 text-xl"></i>
-            <div>
-                <p class="font-bold">עדכון מהמנהל:</p>
-                <p id="notification-text">ההודעה שלך כאן</p>
-            </div>
-        </div>
-    </div>
-
-    <!-- Main Content -->
-    <main id="app-content" class="container mx-auto p-4 max-w-3xl hidden">
+    <div class="container mx-auto max-w-lg p-4">
         
-        <!-- Order Details Card -->
-        <div class="bg-white p-5 rounded-xl shadow-lg mb-6">
-            <h2 class="text-xl font-semibold text-gray-900 mb-4">פרטי ההזמנה</h2>
-            <div class="space-y-3">
-                <div class="flex items-center">
-                    <i class="fas fa-user text-blue-500 w-5 text-center mr-3 ml-2"></i>
-                    <span id="customer-name" class="text-gray-700">טוען...</span>
-                </div>
-                <div class="flex items-center">
-                    <i class="fas fa-map-marker-alt text-blue-500 w-5 text-center mr-3 ml-2"></i>
-                    <span id="customer-address" class="text-gray-700">טוען...</span>
-                </div>
-                <div class="flex items-center">
-                    <i class="fas fa-calendar-alt text-blue-500 w-5 text-center mr-3 ml-2"></i>
-                    <span id="delivery-date" class="text-gray-700">טוען...</span>
-                </div>
-                <div class="flex items-center">
-                    <i class="fas fa-warehouse text-blue-500 w-5 text-center mr-3 ml-2"></i>
-                    <span id="warehouse" class="text-gray-700">טוען...</span>
-                </div>
-            </div>
-        </div>
+        <header class="text-center my-6">
+            <!-- לוגו יוחלף בלוגו של הלקוח -->
+            <h1 class="text-3xl font-bold text-gray-800">מעקב משלוח</h1>
+            <p class="text-gray-600">ההזמנה שלך בדרך!</p>
+        </header>
 
-        <!-- Progress Bar Card -->
-        <div class="bg-white p-5 rounded-xl shadow-lg mb-6">
-            <h2 class="text-xl font-semibold text-gray-900 mb-6 text-center">סטטוס התקדמות</h2>
-            <div class="flex justify-between items-start relative px-2">
-                
-                <div class="progress-step" id="step-new">
-                    <div class="progress-step-line"></div>
-                    <div class="progress-step-line-fill"></div>
-                    <div class="progress-step-icon"><i class="fas fa-receipt"></i></div>
-                    <div class="progress-step-label">הזמנה חדשה</div>
-                </div>
-                
-                <div class="progress-step" id="step-processing">
-                    <div class="progress-step-line"></div>
-                    <div class="progress-step-line-fill"></div>
-                    <div class="progress-step-icon"><i class="fas fa-box-open"></i></div>
-                    <div class="progress-step-label">בטיפול</div>
-                </div>
-                
-                <div class="progress-step" id="step-shipping">
-                    <div class="progress-step-line"></div>
-                    <div class="progress-step-line-fill"></div>
-                    <div class="progress-step-icon"><i class="fas fa-truck"></i></div>
-                    <div class="progress-step-label">בדרך אליכם</div>
-                </div>
-                
-                <div class="progress-step" id="step-delivered">
-                    <div class="progress-step-line"></div>
-                    <div class="progress-step-line-fill"></div>
-                    <div class="progress-step-icon"><i class="fas fa-check-circle"></i></div>
-                    <div class="progress-step-label">סופק</div>
-                </div>
-                
-            </div>
-        </div>
-
-        <!-- Customer Service Card -->
-        <div class="bg-white p-5 rounded-xl shadow-lg mb-6">
-            <h2 class="text-xl font-semibold text-gray-900 mb-4">שירות לקוחות</h2>
-            <p class="text-gray-600 mb-4">צריכים עזרה? שלחו לנו הודעה או שתפו את פרטי ההזמנה בוואטסאפ.</p>
+        <main class="bg-white p-6 rounded-lg shadow-md">
             
-            <textarea id="customer-message" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none" rows="4" placeholder="כתבו את ההודעה שלכם כאן..."></textarea>
-            
-            <div class="flex flex-col sm:flex-row gap-3 mt-4">
-                <button onclick="sendMessageToAdmin()" class="flex-1 bg-blue-600 text-white font-semibold py-3 px-4 rounded-lg shadow-md hover:bg-blue-700 transition duration-200 flex items-center justify-center">
-                    <i class="fas fa-paper-plane mr-2 ml-2"></i>
-                    <span>שלח הודעה למנהל</span>
-                </button>
-                <button onclick="shareToWhatsApp()" class="flex-1 bg-green-500 text-white font-semibold py-3 px-4 rounded-lg shadow-md hover:bg-green-600 transition duration-200 flex items-center justify-center">
-                    <i class="fab fa-whatsapp mr-2 ml-2"></i>
-                    <span>שתף בוואטסאפ</span>
-                </button>
-            </div>
-        </div>
-
-        <!-- Self-Pickup Card -->
-        <div class="bg-white p-5 rounded-xl shadow-lg mb-6">
-            <h2 class="text-xl font-semibold text-gray-900 mb-4">איסוף עצמי?</h2>
-            <p class="text-gray-600 mb-4">בחר סניף כדי לקבל פרטים מלאים וקישור לניווט.</p>
-            
-            <div class="flex gap-3 mb-4">
-                <button onclick="showBranch('talmid')" class="flex-1 bg-gray-200 text-gray-800 font-semibold py-3 px-4 rounded-lg hover:bg-gray-300 transition duration-200">
-                    סניף התלמיד
-                </button>
-                <button onclick="showBranch('harash')" class="flex-1 bg-gray-200 text-gray-800 font-semibold py-3 px-4 rounded-lg hover:bg-gray-300 transition duration-200">
-                    סניף החרש
-                </button>
+            <!-- Loader -->
+            <div id="loader" class="text-center py-10">
+                <div class="loader"></div>
+                <p class="text-gray-600">טוען נתוני הזמנה...</p>
             </div>
 
-            <div id="branch-info" class="hidden border-t pt-4">
-                <div class="w-full h-48 rounded-lg overflow-hidden mb-4 border">
-                    <iframe id="branch-map" class="w-full h-full"
-                        src=""
-                        style="border:0;" allowfullscreen="" loading="lazy" referrerpolicy="no-referrer-when-downgrade">
-                    </iframe>
+            <!-- Error Message -->
+            <div id="error-message" class="hidden text-center py-10">
+                <i data-feather="alert-triangle" class="w-12 h-12 mx-auto text-red-500"></i>
+                <p class="text-red-600 mt-4" id="error-text">שגיאה בטעינת הנתונים. אנא נסה שוב.</p>
+            </div>
+
+            <!-- Order Details -->
+            <div id="order-content" class="hidden">
+                <div class="mb-4">
+                    <h2 class="text-xl font-semibold">הזמנה <span id="order-id" class="text-blue-600"></span></h2>
+                    <p class="text-gray-700">שלום <strong id="customer-name"></strong>, ההזמנה שלך לכתובת <strong id="customer-address"></strong> צפויה להגיע בקרוב.</p>
                 </div>
-                <p id="branch-address" class="text-gray-800 font-medium mb-2"></p>
-                <p id="branch-phone" class="text-gray-600 mb-4"></p>
-                <div class="flex gap-3">
-                    <a id="waze-link" href="#" target="_blank" class="flex-1 bg-blue-500 text-white font-semibold py-3 px-4 rounded-lg shadow-md hover:bg-blue-600 transition duration-200 flex items-center justify-center">
-                        <i class="fab fa-waze mr-2 ml-2"></i>
-                        <span>ניווט עם Waze</span>
-                    </a>
-                    <a id="google-link" href="#" target="_blank" class="flex-1 bg-red-500 text-white font-semibold py-3 px-4 rounded-lg shadow-md hover:bg-red-600 transition duration-200 flex items-center justify-center">
-                        <i class="fab fa-google mr-2 ml-2"></i>
-                        <span>ניווט עם Google</span>
-                    </a>
+
+                <!-- Status Steps -->
+                <div class="mb-6">
+                    <h3 class="font-semibold mb-3">סטטוס הזמנה: <span id="status-text" class="text-blue-600"></span></h3>
+                    <!-- כאן ניתן להוסיף גרפיקה של שלבי התקדמות -->
+                </div>
+                
+                <!-- Map -->
+                <div class="mb-6">
+                    <h3 class="font-semibold mb-3">מיקום הנהג</h3>
+                    <div id="map"></div>
+                </div>
+
+                <!-- Driver Details -->
+                <div class="bg-gray-50 p-4 rounded-lg flex items-center space-x-4 space-x-reverse">
+                    <div class="bg-blue-100 p-3 rounded-full">
+                        <i data-feather="truck" class="w-6 h-6 text-blue-600"></i>
+                    </div>
+                    <div>
+                        <p class="font-semibold">הנהג שלך: <span id="driver-name"></span></p>
+                        <p class="text-sm text-gray-600">סוג רכב: <span id="driver-vehicle"></span></p>
+                        <a href="#" id="driver-phone-link" class="text-blue-600 text-sm">
+                            <i data-feather="phone" class="w-4 h-4 inline-block ml-1"></i>
+                            <span id="driver-phone"></span>
+                        </a>
+                    </div>
+                </div>
+                
+                <!-- Order Notes -->
+                <div class="mt-6 border-t pt-4">
+                    <h3 class="font-semibold mb-2">הערות למשלוח</h3>
+                    <p id="order-notes" class="text-gray-700 bg-gray-50 p-3 rounded-md">
+                        <!-- הערות יוזרקו לכאן -->
+                    </p>
                 </div>
             </div>
-        </div>
 
-    </main>
+        </main>
 
-    <!-- Loading / Error State -->
-    <div id="loading-spinner" class="flex items-center justify-center h-64">
-        <i class="fas fa-spinner fa-spin text-blue-500 text-4xl"></i>
+        <footer class="text-center mt-6 text-gray-500 text-sm">
+            <p>&copy; 2025 DeliveryMaster</p>
+        </footer>
+
     </div>
 
-    <div id="error-message" class="hidden text-center p-10">
-        <i class="fas fa-exclamation-triangle text-red-500 text-5xl mb-4"></i>
-        <p class="text-xl font-semibold text-gray-700" id="error-text">טוען...</p>
-    </div>
-
-    <!-- Custom Alert Modal -->
-    <div id="alert-modal" class="alert-modal">
-        <div class="alert-modal-content">
-            <h3 id="alert-title" class="alert-modal-title">כותרת</h3>
-            <p id="alert-body" class="alert-modal-body">גוף ההודעה</p>
-            <button id="alert-ok-button" class="alert-modal-button">אישור</button>
-        </div>
-    </div>
-
-    <!-- Firebase SDK -->
-    <script type="module">
-        // Firebase v9 Modular SDK
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
-        import { 
-            getFirestore, doc, getDoc, addDoc, onSnapshot, 
-            collection, query, where, Timestamp, serverTimestamp, 
-            getDocs, limit, setLogLevel 
-        } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-
+    <script>
         // --- Config ---
-        const WHATSAPP_PHONE_NUMBER = "972508860896";
-        const branches = {
-            talmid: {
-                address: "התלמיד 6, הוד השרון",
-                phone: "09-7602010",
-                map_url: "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3378.8351703185316!2d34.89321131516623!3d32.15246998117361!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x151d3820626388f3%3A0x6d859e13b836f6d!2sHatalmid%206%2C%20Hod%20HaSharon!5e0!3m2!1sen!2sil!4v1678888888888",
-                waze_url: "https://waze.com/ul?ll=32.15246990,34.89321130&navigate=yes",
-                google_url: "https://www.google.com/maps/search/?api=1&query=32.15246990,34.89321130"
-            },
-            harash: {
-                address: "החרש 10, הוד השרון",
-                phone: "09-7402575",
-                map_url: "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3378.868019082424!2d34.89437191516622!3d32.15155708117326!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x151d382713f040d7%3A0x2e0220a6b7019688!2sHaHarash%2010%2C%20Hod%20HaSharon!5e0!3m2!1sen!2sil!4v1678888999999",
-                waze_url: "https://waze.com/ul?ll=32.15155700,34.89437190&navigate=yes",
-                google_url: "https://www.google.com/maps/search/?api=1&query=32.15155700,34.89437190"
-            }
-        };
+        const API_URL = 'https://script.google.com/macros/s/AKfycbxhJjLpnh8qZFutncdTLOX_ul8PIqZRrgjeE4289pPFiTozPcYiV8b0VzAg7KmuE6KZ/exec';
+        let map;
+        let driverMarker;
+        let orderMarker;
 
-        // --- Global Variables ---
-        let db, auth;
-        let orderId = null;
-        let orderData = null; // Store order data globally
-        let unsubscribeOrder = null; // To stop listening for order updates
-        let unsubscribeMessages = null; // To stop listening for messages
+        // --- Icons ---
+        const driverIcon = L.icon({
+            iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+            iconSize: [25, 41],
+            iconAnchor: [12, 41],
+            popupAnchor: [1, -34],
+            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+            shadowSize: [41, 41]
+        });
 
-        // --- Firebase Initialization ---
-        async function initializeFirebase() {
+        const orderIcon = L.icon({
+            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-blue.png',
+            iconSize: [25, 41],
+            iconAnchor: [12, 41],
+            popupAnchor: [1, -34],
+            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+            shadowSize: [41, 41]
+        });
+
+        // --- API ---
+        async function apiFetch(action) {
+            const url = `${API_URL}?${action}`;
             try {
-                // Use provided config or fallback
-                const firebaseConfig = JSON.parse(
-                    typeof __firebase_config !== 'undefined' 
-                    ? __firebase_config 
-                    : '{"apiKey": "AIzaSyDq0oVwS6zbEfsgrYBRkeBq80dDUKMedzo", "authDomain": "saban94-76543.firebaseapp.com", "projectId": "saban94-76543", "storageBucket": "saban94-76543.appspot.com", "messagingSenderId": "41553157903", "appId": "1:41553157903:web:cc33d252cff023be97a87a"}'
-                );
-                
-                if (!firebaseConfig.apiKey) {
-                    throw new Error("Firebase config is missing.");
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
                 }
-
-                const app = initializeApp(firebaseConfig);
-                db = getFirestore(app);
-                auth = getAuth(app);
-                
-                // Enable Firestore debug logging
-                setLogLevel('debug');
-
-                // Sign in
-                if (typeof __initial_auth_token !== 'undefined') {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                    await signInAnonymously(auth);
+                const result = await response.json();
+                if (result.status === 'error') {
+                    throw new Error(result.data);
                 }
-                console.log("Firebase Initialized & User Signed In:", auth.currentUser.uid);
-                
+                return result.data;
             } catch (error) {
-                console.error("Firebase Initialization Error:", error);
-                showAppStatus(`שגיאה בהתחברות למערכת: ${error.message}`, true);
+                console.error(`API Fetch Error (${action}):`, error);
+                showError(error.message);
+                throw error;
             }
         }
 
-        /**
-         * Main function to start the app
-         */
-        async function startApp() {
-            await initializeFirebase();
-            if (!db) return; // Stop if initialization failed
+        // --- Map Functions ---
+        function initializeMap(orderLatLng, driverLatLng) {
+            try {
+                map = L.map('map');
+                
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    maxZoom: 19,
+                    attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                }).addTo(map);
 
-            // 1. Get Order ID from URL
+                const bounds = L.latLngBounds();
+
+                // Add order marker
+                if (orderLatLng) {
+                    orderMarker = L.marker(orderLatLng, { icon: orderIcon })
+                        .addTo(map)
+                        .bindPopup("כתובת האספקה שלך");
+                    bounds.extend(orderLatLng);
+                }
+
+                // Add driver marker
+                if (driverLatLng) {
+                    driverMarker = L.marker(driverLatLng, { icon: driverIcon })
+                        .addTo(map)
+                        .bindPopup("מיקום הנהג");
+                    bounds.extend(driverLatLng);
+                }
+                
+                if (bounds.isValid()) {
+                    map.fitBounds(bounds, { padding: [50, 50] });
+                } else {
+                    // Default view if no coords
+                    map.setView([32.0853, 34.7818], 9);
+                }
+
+            } catch (error) {
+                console.error("Error initializing map:", error);
+                document.getElementById('map').innerHTML = "שגיאה בטעינת המפה.";
+            }
+        }
+        
+        function updateMap(driverLatLng) {
+            if (!map) return;
+            
+            const latLng = [driverLatLng[0], driverLatLng[1]];
+
+            if (driverMarker) {
+                driverMarker.setLatLng(latLng);
+            } else {
+                 driverMarker = L.marker(latLng, { icon: driverIcon })
+                        .addTo(map)
+                        .bindPopup("מיקום הנהג");
+            }
+            
+            // Recalculate bounds
+            const bounds = L.latLngBounds();
+            if (orderMarker) bounds.extend(orderMarker.getLatLng());
+            if (driverMarker) bounds.extend(driverMarker.getLatLng());
+            
+            if (bounds.isValid()) {
+                map.fitBounds(bounds, { padding: [50, 50] });
+            }
+        }
+
+        // --- UI ---
+        function showLoader(show) {
+            document.getElementById('loader').style.display = show ? 'block' : 'none';
+        }
+
+        function showError(message) {
+            showLoader(false);
+            document.getElementById('order-content').style.display = 'none';
+            document.getElementById('error-message').style.display = 'block';
+            document.getElementById('error-text').innerText = message || 'אירעה שגיאה. אנא בדוק את הקישור ונסה שוב.';
+        }
+
+        function showContent() {
+            showLoader(false);
+            document.getElementById('error-message').style.display = 'none';
+            document.getElementById('order-content').style.display = 'block';
+            feather.replace(); // Initialize icons
+        }
+
+        // --- Logic ---
+        function getUrlParams() {
             const params = new URLSearchParams(window.location.search);
-            const idFromUrl = params.get('id');
+            // v27.9 uses 'id' (orderId) or 'phone' (customerPhone)
+            const orderId = params.get('id');
+            const phone = params.get('phone');
             
-            // 2. Check if ID exists
-            if (!idFromUrl) {
-                console.error("Order ID is missing from URL.");
-                showAppStatus("שגיאה: מזהה הזמנה חסר.", true);
+            if (orderId) {
+                return `action=getTrackingData&orderId=${orderId}`;
+            }
+            if (phone) {
+                 return `action=getTrackingData&customerPhone=${phone}`;
+            }
+            return null;
+        }
+
+        async function loadOrderData() {
+            const params = getUrlParams();
+            if (!params) {
+                showError("קישור לא תקין. חסר מזהה הזמנה או מספר טלפון.");
                 return;
             }
 
-            console.log("Attempting to find order with ID:", idFromUrl);
-
             try {
-                // 3. Query for the order using the 'order_id' field
-                // *** זה התיקון הקריטי: מחפשים לפי order_id ***
-                const q = query(collection(db, "orders"), where("order_id", "==", idFromUrl), limit(1));
-                const querySnapshot = await getDocs(q);
-
-                if (querySnapshot.empty) {
-                    console.error("No document found with order_id:", idFromUrl);
-                    showAppStatus(`שגיאה: ההזמנה ${idFromUrl} לא נמצאה. אנא בדוק את הקישור.`, true);
-                    return;
-                }
-
-                // 4. Get the full document reference
-                const orderDoc = querySnapshot.docs[0];
-                orderData = orderDoc.data();
-                orderId = orderDoc.id; // Save the *real* document ID for listeners
-
-                console.log("Order found! Doc ID:", orderId, "Data:", orderData);
+                // 1. Get Order and Driver Details
+                // 'getTrackingData' is mapped to 'getOrderDetails' on backend (v30.0 fix)
+                const order = await apiFetch(params);
                 
-                // 5. Populate initial data
-                populateOrderDetails(orderData);
-                updateProgress(orderData.status);
-                showAppStatus("", false); // Show the app
-
-                // 6. Listen for realtime updates to the order
-                listenForOrderUpdates(orderId);
-                
-                // 7. Listen for new messages/notifications
-                listenForNotifications(orderId);
-
-            } catch (error) {
-                console.error("Error fetching order:", error);
-                showAppStatus(`שגיאה בטעינת ההזמנה: ${error.message}`, true);
-            }
-        }
-
-        /**
-         * Populates the static order details
-         */
-        function populateOrderDetails(data) {
-            document.getElementById('order-number-header').innerText = `הזמנה מס' ${data.order_id || data.orderNumber || 'N/A'}`;
-            document.getElementById('customer-name').innerText = data.customer_name || 'לא צוין';
-            document.getElementById('customer-address').innerText = data.customer_address || 'לא צוין';
-            document.getElementById('delivery-date').innerText = data.delivery_date ? `תאריך אספקה: ${data.delivery_date}` : 'לא צוין';
-            document.getElementById('warehouse').innerText = data.warehouse ? `מחסן: ${data.warehouse}` : 'לא צוין';
-        }
-
-        /**
-         * Updates the progress bar based on status
-         */
-        function updateProgress(status) {
-            const steps = ['new', 'processing', 'shipping', 'delivered'];
-            const stepMapping = {
-                'חדש': 'new',
-                'בטיפול': 'processing',
-                'בדרך': 'shipping',
-                'סופק': 'delivered',
-                'מבוטל': 'new' // Canceled orders show as new
-            };
-
-            const currentStep = stepMapping[status] || 'new';
-            let activeFound = false;
-
-            steps.forEach(step => {
-                const stepEl = document.getElementById(`step-${step}`);
-                const lineFillEl = stepEl.querySelector('.progress-step-line-fill');
-                
-                if (activeFound) {
-                    stepEl.classList.remove('active');
-                    if (lineFillEl) lineFillEl.style.width = '0%';
-                } else {
-                    stepEl.classList.add('active');
-                    if (lineFillEl) lineFillEl.style.width = '100%';
-                }
-
-                if (step === currentStep) {
-                    activeFound = true;
-                }
-            });
-            
-            // Special handling for "canceled"
-            if (status === 'מבוטל') {
-                const canceledStep = document.getElementById('step-new');
-                canceledStep.classList.add('active');
-                canceledStep.querySelector('.progress-step-icon').innerHTML = '<i class="fas fa-times-circle text-red-500"></i>';
-                canceledStep.querySelector('.progress-step-label').innerText = 'הזמנה בוטלה';
-                // Deactivate all other steps
-                steps.slice(1).forEach(step => {
-                     const stepEl = document.getElementById(`step-${step}`);
-                     stepEl.classList.remove('active');
-                     const lineFillEl = stepEl.querySelector('.progress-step-line-fill');
-                     if (lineFillEl) lineFillEl.style.width = '0%';
-                });
-            }
-        }
-
-        /**
-         * Listens for realtime changes to the order document (e.g., status changes)
-         */
-        function listenForOrderUpdates(docId) {
-            if (unsubscribeOrder) unsubscribeOrder(); // Stop previous listener
-            
-            const orderRef = doc(db, 'orders', docId);
-            unsubscribeOrder = onSnapshot(orderRef, (docSnap) => {
-                if (docSnap.exists()) {
-                    console.log("Realtime update received:", docSnap.data());
-                    orderData = docSnap.data(); // Update global data
-                    updateProgress(orderData.status);
-                    // Update any other dynamic fields if needed
-                }
-            }, (error) => {
-                console.error("Error listening to order updates:", error);
-            });
-        }
-        
-        /**
-         * Listens for new messages of type 'notification_to_customer'
-         */
-        function listenForNotifications(docId) {
-            if (unsubscribeMessages) unsubscribeMessages(); // Stop previous listener
-            
-            const messagesRef = collection(db, 'orders', docId, 'messages');
-            const q = query(messagesRef, 
-                where('type', '==', 'notification_to_customer'),
-                where('timestamp', '>', new Date(Date.now() - 600000)) // Only show for 10 mins
-            );
-            
-            unsubscribeMessages = onSnapshot(q, (snapshot) => {
-                snapshot.docChanges().forEach((change) => {
-                    if (change.type === "added") {
-                        const messageData = change.doc.data();
-                        console.log("New notification received:", messageData);
-                        showNotification(messageData.text);
+                // 2. Get Live Driver Location
+                let driverLocation = null;
+                if (order.driverId && (order.status === 'בדרך' || order.status === 'שויך')) {
+                    const liveData = await apiFetch('action=getLiveMapData');
+                    if (liveData.drivers && liveData.drivers[order.driverId]) {
+                        driverLocation = liveData.drivers[order.driverId];
                     }
-                });
-            }, (error) => {
-                console.error("Error listening to notifications:", error);
-            });
-        }
-        
-        /**
-         * Shows the green notification banner
-         */
-        function showNotification(text) {
-            const banner = document.getElementById('notification-banner');
-            const bannerText = document.getElementById('notification-text');
-            
-            bannerText.innerText = text || 'קיבלת עדכון חדש.';
-            banner.style.top = '70px'; // Slide in
-            
-            setTimeout(() => {
-                banner.style.top = '-100px'; // Slide out
-            }, 5000); // Hide after 5 seconds
-        }
-
-        /**
-         * Shows/Hides loading/error states
-         */
-        function showAppStatus(message, isError = false) {
-            const loadingEl = document.getElementById('loading-spinner');
-            const errorEl = document.getElementById('error-message');
-            const errorTextEl = document.getElementById('error-text');
-            const appEl = document.getElementById('app-content');
-
-            if (message && isError) {
-                if (loadingEl) loadingEl.style.display = 'none';
-                if (appEl) appEl.style.display = 'none';
-                if (errorTextEl) errorTextEl.innerText = message;
-                if (errorEl) errorEl.style.display = 'block';
-            } else if (message) { // Loading state
-                if (loadingEl) loadingEl.style.display = 'flex';
-                if (appEl) appEl.style.display = 'none';
-                if (errorEl) errorEl.style.display = 'none';
-            } else { // Show app
-                if (loadingEl) loadingEl.style.display = 'none';
-                if (errorEl) errorEl.style.display = 'none';
-                if (appEl) appEl.style.display = 'block';
-            }
-        }
-
-        /**
-         * Shows a custom alert modal
-         */
-        function customAlert(title, body) {
-            const modal = document.getElementById('alert-modal');
-            document.getElementById('alert-title').innerText = title;
-            document.getElementById('alert-body').innerText = body;
-            modal.classList.add('show');
-            
-            // Hide modal on OK click
-            document.getElementById('alert-ok-button').onclick = () => {
-                modal.classList.remove('show');
-            };
-        }
-
-        // --- Public Functions (exposed to window) ---
-
-        /**
-         * Sends a message to the admin via Firestore
-         */
-        async function sendMessageToAdmin() {
-            const messageInput = document.getElementById('customer-message');
-            const message = messageInput.value.trim();
-            
-            if (!message) {
-                customAlert('שגיאה', 'אנא כתוב תוכן להודעה.');
-                return;
-            }
-            if (!orderId || !orderData) {
-                customAlert('שגיאה', 'לא ניתן לשלוח הודעה, פרטי הזמנה חסרים.');
-                return;
-            }
-
-            try {
-                const messagesRef = collection(db, 'orders', orderId, 'messages');
-                await addDoc(messagesRef, {
-                    text: message,
-                    timestamp: serverTimestamp(),
-                    type: 'message_to_admin',
-                    senderName: orderData.customer_name || 'לקוח',
-                    senderId: 'customer_app',
-                    readByViewer: false // <-- *** קריטי! זה ידליק את המנורה בסדרן ***
-                });
+                }
                 
-                customAlert('ההודעה נשלחה', 'ההודעה שלך נשלחה למנהל המערכת. ניצור קשר בהקדם.');
-                messageInput.value = ''; // Clear input
-                
+                // 3. Get Driver's full details (phone, vehicle)
+                let driverDetails = null;
+                if (order.driverId) {
+                    const allDrivers = await apiFetch('action=getDrivers');
+                    driverDetails = allDrivers.find(d => d.driverId === order.driverId);
+                }
+
+                // 4. Render all data
+                renderOrder(order, driverLocation, driverDetails);
+                showContent();
+
             } catch (error) {
-                console.error("Error sending message:", error);
-                customAlert('שגיאה', 'אירעה שגיאה בשליחת ההודעה. נסה שוב מאוחר יותר.');
+                showError(error.message);
             }
         }
 
-        /**
-         * Opens WhatsApp with pre-filled order details
-         */
-        function shareToWhatsApp() {
-            if (!orderData) {
-                customAlert('שגיאה', 'פרטי ההזמנה עדיין בטעינה. נסה בעוד רגע.');
-                return;
+        function renderOrder(order, driverLocation, driverDetails) {
+            // Fill text fields
+            document.getElementById('order-id').innerText = `#${order.orderId}`;
+            document.getElementById('customer-name').innerText = order.customerName;
+            document.getElementById('customer-address').innerText = order.address;
+            document.getElementById('status-text').innerText = order.status || 'טוען...';
+            document.getElementById('order-notes').innerText = order.notes || 'אין הערות מיוחדות.';
+
+            // Fill driver details
+            if (driverDetails) {
+                document.getElementById('driver-name').innerText = driverDetails.name;
+                document.getElementById('driver-vehicle').innerText = driverDetails.vehicleType;
+                document.getElementById('driver-phone').innerText = driverDetails.phone;
+                document.getElementById('driver-phone-link').href = `tel:${driverDetails.phone}`;
+            } else {
+                 document.getElementById('driver-name').innerText = 'לא שויך';
+                 document.getElementById('driver-vehicle').innerText = 'N/A';
+                 document.getElementById('driver-phone').innerText = 'N/A';
             }
-            
-            const messageInput = document.getElementById('customer-message');
-            const message = messageInput.value.trim();
-            
-            const phone = WHATSAPP_PHONE_NUMBER;
-            const template = `
-*הודעה חדשה מלקוח (DeliveryMaster):*
------------------------------
-*שם לקוח:* ${orderData.customer_name || 'לא צוין'}
-*מספר הזמנה:* ${orderData.order_id || orderData.orderNumber || orderId}
-*כתובת:* ${orderData.customer_address || 'לא צוין'}
-*תאריך אספקה:* ${orderData.delivery_date || 'לא צוין'}
------------------------------
 
-*תוכן ההודעה:*
-${message || "--- אין תוכן ---"}
-            `;
+            // Initialize map
+            const orderLatLng = (order.latitude && order.longitude) ? [order.latitude, order.longitude] : null;
+            const driverLatLng = (driverLocation && driverLocation.latitude) ? [driverLocation.latitude, driverLocation.longitude] : null;
+
+            initializeMap(orderLatLng, driverLatLng);
             
-            const whatsappUrl = `https://api.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(template)}`;
-            window.open(whatsappUrl, '_blank');
+            // TODO: Start timer to update driver location periodically if status is 'בדרך'
         }
 
-        /**
-         * מציג מידע על סניף
-         */
-        function showBranch(branchName) {
-            const branch = branches[branchName];
-            if (!branch) return;
-            
-            document.getElementById('branch-map').src = branch.map_url;
-            document.getElementById('branch-address').innerText = branch.address;
-            document.getElementById('branch-phone').innerText = `טלפון: ${branch.phone}`;
-            document.getElementById('waze-link').href = branch.waze_url;
-            document.getElementById('google-link').href = branch.google_url;
-            
-            document.getElementById('branch-info').classList.remove('hidden');
-        }
-
-        // --- חשיפת פונקציות לחלון הגלובלי ---\
-        window.sendMessageToAdmin = sendMessageToAdmin;
-        window.shareToWhatsApp = shareToWhatsApp;
-        window.showBranch = showBranch;
-
-        // --- Start the App ---
-        document.addEventListener('DOMContentLoaded', startApp);
-
+        // --- Init ---
+        document.addEventListener('DOMContentLoaded', () => {
+            loadOrderData();
+        });
     </script>
-
 </body>
 </html>
-
