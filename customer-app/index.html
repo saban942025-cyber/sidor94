@@ -2,336 +2,492 @@
 <html lang="he" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>מעקב משלוח</title>
-    <!-- DeliveryMaster Customer App v27.9 -->
-
-    <!-- TailwindCSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-
-    <!-- LeafletJS for Map -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>מעקב הזמנה - ח. סבן</title>
     
-    <!-- Icons (Feather) -->
-    <script src="https://unpkg.com/feather-icons"></script>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <style>
         body {
-            font-family: 'Arial', sans-serif;
-            background-color: #f4f7f6;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: #f3f4f6; /* gray-100 */
         }
-        #map {
-            height: 300px;
-            width: 100%;
-            border-radius: 8px;
-            background-color: #eee;
+        
+        /* Custom styles for progress bar */
+        .progress-step {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+            flex: 1;
         }
-        .loader {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #3498db;
+        .progress-step-icon {
+            width: 50px;
+            height: 50px;
             border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-            margin: 20px auto;
+            background-color: #d1d5db; /* gray-300 */
+            color: #6b7280; /* gray-500 */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+            border: 4px solid #f3f4f6; /* gray-100 */
+            z-index: 10;
+            transition: all 0.3s ease;
         }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+        .progress-step-label {
+            margin-top: 0.5rem;
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: #6b7280; /* gray-500 */
+            text-align: center;
+        }
+        .progress-bar {
+            position: absolute;
+            top: 25px;
+            left: 50%;
+            right: -50%;
+            height: 4px;
+            background-color: #d1d5db; /* gray-300 */
+            z-index: 5;
+        }
+        .progress-step:last-child .progress-bar {
+            display: none;
+        }
+        
+        /* Active state */
+        .progress-step.active .progress-step-icon {
+            background-color: #3b82f6; /* blue-500 */
+            color: white;
+        }
+        .progress-step.active .progress-step-label {
+            color: #3b82f6; /* blue-500 */
+            font-weight: 600;
+        }
+        
+        /* Completed state */
+        .progress-step.completed .progress-step-icon {
+            background-color: #10b981; /* green-500 */
+            color: white;
+        }
+        .progress-step.completed .progress-step-label {
+            color: #059669; /* green-600 */
+        }
+        .progress-step.completed .progress-bar {
+            background-color: #10b981; /* green-500 */
+        }
+        
+        /* Custom Toast for Alerts */
+        #alert-toast {
+            position: fixed;
+            top: 1rem;
+            left: 1rem;
+            right: 1rem;
+            z-index: 9999;
+            transform: translateY(-200%);
+            transition: transform 0.4s ease-out;
+        }
+        #alert-toast.show {
+            transform: translateY(0);
+        }
+
+        /* Map Placeholder */
+        #map-placeholder {
+            height: 250px;
+            background-color: #e5e7eb;
+            border-radius: 0.5rem;
         }
     </style>
 </head>
-<body class="bg-gray-100">
+<body class="p-4 pt-6 md:p-8">
 
-    <div class="container mx-auto max-w-lg p-4">
+    <div id="loader" class="text-center p-10">
+        <i class="fas fa-spinner fa-spin fa-3x text-blue-500"></i>
+        <p class="mt-4 text-gray-600">טוען פרטי הזמנה...</p>
+    </div>
+
+    <div id="app-content" class="max-w-3xl mx-auto hidden">
         
-        <header class="text-center my-6">
-            <!-- לוגו יוחלף בלוגו של הלקוח -->
-            <h1 class="text-3xl font-bold text-gray-800">מעקב משלוח</h1>
-            <p class="text-gray-600">ההזמנה שלך בדרך!</p>
-        </header>
-
-        <main class="bg-white p-6 rounded-lg shadow-md">
-            
-            <!-- Loader -->
-            <div id="loader" class="text-center py-10">
-                <div class="loader"></div>
-                <p class="text-gray-600">טוען נתוני הזמנה...</p>
+        <!-- Alert Toast -->
+        <div id="alert-toast">
+            <div id="alert-content" class="w-full bg-green-500 text-white font-bold p-4 rounded-lg shadow-lg flex justify-between items-center">
+                <span id="alert-text">ההזמנה אושרה ותועבר לאריזה!</span>
+                <button onclick="document.getElementById('alert-toast').classList.remove('show')">
+                    <i class="fas fa-times"></i>
+                </button>
             </div>
-
-            <!-- Error Message -->
-            <div id="error-message" class="hidden text-center py-10">
-                <i data-feather="alert-triangle" class="w-12 h-12 mx-auto text-red-500"></i>
-                <p class="text-red-600 mt-4" id="error-text">שגיאה בטעינת הנתונים. אנא נסה שוב.</p>
+        </div>
+        
+        <!-- Header -->
+        <div class="flex justify-between items-center mb-6">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-800">מעקב הזמנה</h1>
+                <p class="text-gray-600">שלום, <span id="customer-name" class="font-semibold"></span>!</p>
             </div>
+            <img src="https://placehold.co/100x40/000000/FFFFFF?text=SABAN" alt="לוגו ח. סבן" class="h-10">
+        </div>
 
-            <!-- Order Details -->
-            <div id="order-content" class="hidden">
-                <div class="mb-4">
-                    <h2 class="text-xl font-semibold">הזמנה <span id="order-id" class="text-blue-600"></span></h2>
-                    <p class="text-gray-700">שלום <strong id="customer-name"></strong>, ההזמנה שלך לכתובת <strong id="customer-address"></strong> צפויה להגיע בקרוב.</p>
+        <!-- Order Info Card -->
+        <div class="bg-white p-5 rounded-lg shadow-md mb-6">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">פרטי הזמנה <span id="order-id" class="text-blue-600"></span></h2>
+            <div class="space-y-3 text-gray-700">
+                <p><i class="fas fa-map-marker-alt fa-fw text-gray-500 mr-2"></i> <strong class="font-medium">כתובת:</strong> <span id="order-address"></span></p>
+                <p><i class="fas fa-calendar-alt fa-fw text-gray-500 mr-2"></i> <strong class="font-medium">תאריך אספקה:</strong> <span id="order-date"></span></p>
+                <p><i class="fas fa-truck fa-fw text-gray-500 mr-2"></i> <strong class="font-medium">נהג:</strong> <span id="driver-name">טרם שויך</span></p>
+            </div>
+        </div>
+
+        <!-- Progress Bar -->
+        <div class="bg-white p-6 rounded-lg shadow-md mb-6">
+            <h2 class="text-xl font-semibold text-gray-800 mb-8 text-center">סטטוס התקדמות</h2>
+            <div class="flex justify-between items-start">
+                <div class="progress-step completed" id="step-received">
+                    <div class="progress-step-icon"><i class="fas fa-receipt"></i></div>
+                    <span class="progress-step-label">הזמנה התקבלה</span>
+                    <div class="progress-bar"></div>
                 </div>
-
-                <!-- Status Steps -->
-                <div class="mb-6">
-                    <h3 class="font-semibold mb-3">סטטוס הזמנה: <span id="status-text" class="text-blue-600"></span></h3>
-                    <!-- כאן ניתן להוסיף גרפיקה של שלבי התקדמות -->
+                <div class="progress-step" id="step-processing">
+                    <div class="progress-step-icon"><i class="fas fa-box-open"></i></div>
+                    <span class="progress-step-label">בליקוט ואריזה</span>
+                    <div class="progress-bar"></div>
+                </div>
+                <div class="progress-step" id="step-out">
+                    <div class="progress-step-icon"><i class="fas fa-truck"></i></div>
+                    <span class="progress-step-label">בדרך אליך</span>
+                    <div class="progress-bar"></div>
+                </div>
+                <div class="progress-step" id="step-delivered">
+                    <div class="progress-step-icon"><i class="fas fa-check"></i></div>
+                    <span class="progress-step-label">המשלוח סופק</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Customer Service / Self Pickup -->
+        <div class="bg-white p-5 rounded-lg shadow-md">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">שירות לקוחות ואיסוף עצמי</h2>
+            
+            <!-- Customer Service -->
+            <div class="mb-6">
+                <h3 class="font-semibold text-gray-700 mb-2">צריך עזרה? שלח לנו הודעה</h3>
+                <textarea id="customer-message" class="w-full p-3 border border-gray-300 rounded-lg" rows="4" placeholder="כתוב את הודעתך כאן..."></textarea>
+                <div class="flex gap-2 mt-2">
+                    <button onclick="sendMessageToAdmin()" class="flex-1 bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-4 rounded-lg">
+                        <i class="fas fa-paper-plane mr-2"></i>שלח למנהל
+                    </button>
+                    <button onclick="shareToWhatsApp()" class="flex-1 bg-gray-700 hover:bg-gray-800 text-white font-bold py-3 px-4 rounded-lg">
+                        <i class="fab fa-whatsapp mr-2"></i>שתף בווטסאפ
+                    </button>
+                </div>
+                <p id="message-status" class="text-green-600 font-medium text-sm mt-2 hidden"></p>
+            </div>
+            
+            <!-- Self Pickup -->
+            <div>
+                <h3 class="font-semibold text-gray-700 mb-3">מעדיף לאסוף בעצמך?</h3>
+                <div class="flex gap-3 mb-4">
+                    <button onclick="showBranch('hatalmid')" class="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 px-4 rounded-lg">סניף התלמיד</button>
+                    <button onclick="showBranch('hahoresh')" class="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 px-4 rounded-lg">סניף החרש</button>
                 </div>
                 
-                <!-- Map -->
-                <div class="mb-6">
-                    <h3 class="font-semibold mb-3">מיקום הנהג</h3>
-                    <div id="map"></div>
-                </div>
-
-                <!-- Driver Details -->
-                <div class="bg-gray-50 p-4 rounded-lg flex items-center space-x-4 space-x-reverse">
-                    <div class="bg-blue-100 p-3 rounded-full">
-                        <i data-feather="truck" class="w-6 h-6 text-blue-600"></i>
+                <div id="branch-info" class="hidden bg-gray-50 p-4 rounded-lg">
+                    <div id="map-placeholder">
+                         <iframe id="branch-map" width="100%" height="100%" frameborder="0" scrolling="no" marginheight="0" marginwidth="0" src=""></iframe>
                     </div>
-                    <div>
-                        <p class="font-semibold">הנהג שלך: <span id="driver-name"></span></p>
-                        <p class="text-sm text-gray-600">סוג רכב: <span id="driver-vehicle"></span></p>
-                        <a href="#" id="driver-phone-link" class="text-blue-600 text-sm">
-                            <i data-feather="phone" class="w-4 h-4 inline-block ml-1"></i>
-                            <span id="driver-phone"></span>
+                    <p id="branch-address" class="font-semibold text-gray-800 my-3"></p>
+                    <p id="branch-phone" class="text-gray-700 mb-4"></p>
+                    <div class="flex gap-2">
+                        <a id="waze-link" href="#" target="_blank" class="flex-1 text-center bg-blue-100 text-blue-700 font-semibold py-3 px-4 rounded-lg">
+                            <i class="fab fa-waze mr-2"></i>ניווט עם Waze
+                        </a>
+                        <a id="google-link" href="#" target="_blank" class="flex-1 text-center bg-gray-200 text-gray-800 font-semibold py-3 px-4 rounded-lg">
+                            <i class="fab fa-google mr-2"></i>ניווט עם Google
                         </a>
                     </div>
                 </div>
-                
-                <!-- Order Notes -->
-                <div class="mt-6 border-t pt-4">
-                    <h3 class="font-semibold mb-2">הערות למשלוח</h3>
-                    <p id="order-notes" class="text-gray-700 bg-gray-50 p-3 rounded-md">
-                        <!-- הערות יוזרקו לכאן -->
-                    </p>
-                </div>
             </div>
+        </div>
 
-        </main>
+    </div> <!-- End #app-content -->
+    
+    <!-- 
+      ==========================================================
+      ===        שדרוג ל-Firebase v9 (Modular SDK)            ===
+      ==========================================================
+    -->
+    <script type="module">
+        // ייבוא פונקציות Firebase v9
+        import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+        import { 
+            getFirestore, doc, onSnapshot, collection, 
+            addDoc, serverTimestamp 
+        } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
-        <footer class="text-center mt-6 text-gray-500 text-sm">
-            <p>&copy; 2025 DeliveryMaster</p>
-        </footer>
+        // --- Globals for Firebase ---
+        let db;
+        let auth;
+        let orderId;
+        let orderData = {}; // Store order data globally for WhatsApp
+        let unsubscribeOrder = null; // Listener for order status
+        let unsubscribeAlerts = null; // Listener for admin alerts
 
-    </div>
-
-    <script>
-        // --- Config ---
-        const API_URL = 'https://script.google.com/macros/s/AKfycbxhJjLpnh8qZFutncdTLOX_ul8PIqZRrgjeE4289pPFiTozPcYiV8b0VzAg7KmuE6KZ/exec';
-        let map;
-        let driverMarker;
-        let orderMarker;
-
-        // --- Icons ---
-        const driverIcon = L.icon({
-            iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-            iconSize: [25, 41],
-            iconAnchor: [12, 41],
-            popupAnchor: [1, -34],
-            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-            shadowSize: [41, 41]
-        });
-
-        const orderIcon = L.icon({
-            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-blue.png',
-            iconSize: [25, 41],
-            iconAnchor: [12, 41],
-            popupAnchor: [1, -34],
-            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-            shadowSize: [41, 41]
-        });
-
-        // --- API ---
-        async function apiFetch(action) {
-            const url = `${API_URL}?${action}`;
-            try {
-                const response = await fetch(url);
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                const result = await response.json();
-                if (result.status === 'error') {
-                    throw new Error(result.data);
-                }
-                return result.data;
-            } catch (error) {
-                console.error(`API Fetch Error (${action}):`, error);
-                showError(error.message);
-                throw error;
+        // --- סניפים (כמו שהוגדר) ---
+        const branches = {
+            hatalmid: {
+                name: "סניף התלמיד",
+                address: "התלמיד 6, הוד השרון",
+                phone: "09-7602010",
+                map_url: "https://maps.google.com/maps?width=100%25&amp;height=100%25&amp;hl=he&amp;q=%D7%94%D7%AA%D7%9C%D7%9E%D7%99%D7%93%206,%20%D7%94%D7%95%D7%93%20%D7%94%D7%A9%D7%A8%D7%95%D7%9F&amp;t=&amp;z=17&amp;ie=UTF8&amp;iwloc=B&amp;output=embed",
+                waze_url: "https://waze.com/ul?q=התלמיד%206,%20הוד%20השרון",
+                google_url: "https://www.google.com/maps/search/?api=1&query=התלמיד%206,%20הוד%20השרון"
+            },
+            hahoresh: {
+                name: "סניף החרש",
+                address: "החרש 10, הוד השרון",
+                phone: "09-7402575",
+                map_url: "https://maps.google.com/maps?width=100%25&amp;height=100%25&amp;hl=he&amp;q=%D7%94%D7%97%D7%A8%D7%A9%2010,%20%D7%94%D7%95%D7%93%20%D7%94%D7%A9%D7%A8%D7%95%D7%9F&amp;t=&amp;z=17&amp;ie=UTF8&amp;iwloc=B&amp;output=embed",
+                waze_url: "https://waze.com/ul?q=החרש%2010,%20הוד%20השרון",
+                google_url: "https://www.google.com/maps/search/?api=1&query=החרש%2010,%20הוד%20השרון"
             }
-        }
+        };
 
-        // --- Map Functions ---
-        function initializeMap(orderLatLng, driverLatLng) {
-            try {
-                map = L.map('map');
-                
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                    maxZoom: 19,
-                    attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                }).addTo(map);
-
-                const bounds = L.latLngBounds();
-
-                // Add order marker
-                if (orderLatLng) {
-                    orderMarker = L.marker(orderLatLng, { icon: orderIcon })
-                        .addTo(map)
-                        .bindPopup("כתובת האספקה שלך");
-                    bounds.extend(orderLatLng);
-                }
-
-                // Add driver marker
-                if (driverLatLng) {
-                    driverMarker = L.marker(driverLatLng, { icon: driverIcon })
-                        .addTo(map)
-                        .bindPopup("מיקום הנהג");
-                    bounds.extend(driverLatLng);
-                }
-                
-                if (bounds.isValid()) {
-                    map.fitBounds(bounds, { padding: [50, 50] });
-                } else {
-                    // Default view if no coords
-                    map.setView([32.0853, 34.7818], 9);
-                }
-
-            } catch (error) {
-                console.error("Error initializing map:", error);
-                document.getElementById('map').innerHTML = "שגיאה בטעינת המפה.";
-            }
-        }
-        
-        function updateMap(driverLatLng) {
-            if (!map) return;
-            
-            const latLng = [driverLatLng[0], driverLatLng[1]];
-
-            if (driverMarker) {
-                driverMarker.setLatLng(latLng);
-            } else {
-                 driverMarker = L.marker(latLng, { icon: driverIcon })
-                        .addTo(map)
-                        .bindPopup("מיקום הנהג");
-            }
-            
-            // Recalculate bounds
-            const bounds = L.latLngBounds();
-            if (orderMarker) bounds.extend(orderMarker.getLatLng());
-            if (driverMarker) bounds.extend(driverMarker.getLatLng());
-            
-            if (bounds.isValid()) {
-                map.fitBounds(bounds, { padding: [50, 50] });
-            }
-        }
-
-        // --- UI ---
-        function showLoader(show) {
-            document.getElementById('loader').style.display = show ? 'block' : 'none';
-        }
-
-        function showError(message) {
-            showLoader(false);
-            document.getElementById('order-content').style.display = 'none';
-            document.getElementById('error-message').style.display = 'block';
-            document.getElementById('error-text').innerText = message || 'אירעה שגיאה. אנא בדוק את הקישור ונסה שוב.';
-        }
-
-        function showContent() {
-            showLoader(false);
-            document.getElementById('error-message').style.display = 'none';
-            document.getElementById('order-content').style.display = 'block';
-            feather.replace(); // Initialize icons
-        }
-
-        // --- Logic ---
-        function getUrlParams() {
+        // --- אתחול האפליקציה ---
+        document.addEventListener('DOMContentLoaded', async () => {
+            // 1. קבל ID מה-URL
             const params = new URLSearchParams(window.location.search);
-            // v27.9 uses 'id' (orderId) or 'phone' (customerPhone)
-            const orderId = params.get('id');
-            const phone = params.get('phone');
+            orderId = params.get('id');
             
-            if (orderId) {
-                return `action=getTrackingData&orderId=${orderId}`;
-            }
-            if (phone) {
-                 return `action=getTrackingData&customerPhone=${phone}`;
-            }
-            return null;
-        }
-
-        async function loadOrderData() {
-            const params = getUrlParams();
-            if (!params) {
-                showError("קישור לא תקין. חסר מזהה הזמנה או מספר טלפון.");
+            if (!orderId) {
+                document.getElementById('loader').innerHTML = '<p class="text-red-500 font-bold">שגיאה: לא סופק מזהה הזמנה.</p>';
                 return;
             }
 
+            // 2. אתחול Firebase v9
             try {
-                // 1. Get Order and Driver Details
-                // 'getTrackingData' is mapped to 'getOrderDetails' on backend (v30.0 fix)
-                const order = await apiFetch(params);
-                
-                // 2. Get Live Driver Location
-                let driverLocation = null;
-                if (order.driverId && (order.status === 'בדרך' || order.status === 'שויך')) {
-                    const liveData = await apiFetch('action=getLiveMapData');
-                    if (liveData.drivers && liveData.drivers[order.driverId]) {
-                        driverLocation = liveData.drivers[order.driverId];
-                    }
-                }
-                
-                // 3. Get Driver's full details (phone, vehicle)
-                let driverDetails = null;
-                if (order.driverId) {
-                    const allDrivers = await apiFetch('action=getDrivers');
-                    driverDetails = allDrivers.find(d => d.driverId === order.driverId);
+                const fallbackConfig = {
+                    apiKey: "AIzaSyDq0oVwS6zbEfsgrYBRkeBq80dDUKMedzo", 
+                    authDomain: "saban94-76543.firebaseapp.com", 
+                    projectId: "saban94-76543",
+                    storageBucket: "saban94-76543.appspot.com", 
+                    messagingSenderId: "41553157903", 
+                    appId: "1:41553157903:web:cc33d252cff023be97a87a", 
+                    measurementId: "G-XV6RZDESSB"
+                };
+
+                let firebaseConfig;
+                if (typeof __firebase_config !== 'undefined' && __firebase_config !== '{}') {
+                    firebaseConfig = JSON.parse(__firebase_config);
+                } else {
+                    console.warn("Using fallback Firebase config.");
+                    firebaseConfig = fallbackConfig;
                 }
 
-                // 4. Render all data
-                renderOrder(order, driverLocation, driverDetails);
-                showContent();
+                if (!firebaseConfig.apiKey) {
+                    throw new Error("Firebase config is missing.");
+                }
+
+                let app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+
+                // 3. אימות
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+                console.log("Firebase Initialized & User Signed In:", auth.currentUser.uid);
+
+                // 4. התחל להאזין לנתונים
+                startListeners();
 
             } catch (error) {
-                showError(error.message);
+                console.error('Error initializing Firebase:', error);
+                document.getElementById('loader').innerHTML = `<p class="text-red-500 font-bold">שגיאה בהתחברות למערכת.</p><p>${error.message}</p>`;
             }
-        }
-
-        function renderOrder(order, driverLocation, driverDetails) {
-            // Fill text fields
-            document.getElementById('order-id').innerText = `#${order.orderId}`;
-            document.getElementById('customer-name').innerText = order.customerName;
-            document.getElementById('customer-address').innerText = order.address;
-            document.getElementById('status-text').innerText = order.status || 'טוען...';
-            document.getElementById('order-notes').innerText = order.notes || 'אין הערות מיוחדות.';
-
-            // Fill driver details
-            if (driverDetails) {
-                document.getElementById('driver-name').innerText = driverDetails.name;
-                document.getElementById('driver-vehicle').innerText = driverDetails.vehicleType;
-                document.getElementById('driver-phone').innerText = driverDetails.phone;
-                document.getElementById('driver-phone-link').href = `tel:${driverDetails.phone}`;
-            } else {
-                 document.getElementById('driver-name').innerText = 'לא שויך';
-                 document.getElementById('driver-vehicle').innerText = 'N/A';
-                 document.getElementById('driver-phone').innerText = 'N/A';
-            }
-
-            // Initialize map
-            const orderLatLng = (order.latitude && order.longitude) ? [order.latitude, order.longitude] : null;
-            const driverLatLng = (driverLocation && driverLocation.latitude) ? [driverLocation.latitude, driverLocation.longitude] : null;
-
-            initializeMap(orderLatLng, driverLatLng);
-            
-            // TODO: Start timer to update driver location periodically if status is 'בדרך'
-        }
-
-        // --- Init ---
-        document.addEventListener('DOMContentLoaded', () => {
-            loadOrderData();
         });
+
+        // --- פונקציות האזנה (v9) ---
+        function startListeners() {
+            // האזנה לשינויים בהזמנה (סטטוס, נהג)
+            const orderRef = doc(db, 'orders', orderId);
+            
+            unsubscribeOrder = onSnapshot(orderRef, (docSnap) => {
+                if (docSnap.exists()) {
+                    orderData = docSnap.data(); // שמור נתונים גלובלית
+                    renderOrderData(orderData);
+                    updateProgress(orderData.status);
+                    
+                    document.getElementById('loader').style.display = 'none';
+                    document.getElementById('app-content').classList.remove('hidden');
+                } else {
+                    document.getElementById('loader').innerHTML = '<p class="text-red-500 font-bold">שגיאה: ההזמנה לא נמצאה.</p>';
+                }
+            }, (error) => {
+                console.error("Error fetching order:", error);
+                document.getElementById('loader').innerHTML = '<p class="text-red-500 font-bold">שגיאה בטעינת נתוני ההזמנה.</p>';
+            });
+
+            // האזנה להתראות מהמנהל
+            const messagesRef = collection(db, 'orders', orderId, 'messages');
+            const q = query(messagesRef, where('type', '==', 'notification_to_customer'), orderBy('timestamp', 'desc'), limit(1));
+            
+            unsubscribeAlerts = onSnapshot(q, (snapshot) => {
+                if (!snapshot.empty) {
+                    const latestAlert = snapshot.docs[0].data();
+                    // בדוק אם זו התראה חדשה (למניעת הצגה חוזרת ברענון)
+                    const lastAlertTime = sessionStorage.getItem('lastAlertTime');
+                    const alertTimestamp = latestAlert.timestamp?.seconds;
+                    
+                    if (alertTimestamp && alertTimestamp != lastAlertTime) {
+                        sessionStorage.setItem('lastAlertTime', alertTimestamp);
+                        showAlert(latestAlert.text);
+                    }
+                }
+            }, (error) => {
+                console.error("Error listening for alerts:", error);
+            });
+        }
+
+        // --- פונקציות תצוגה ---
+        function renderOrderData(data) {
+            document.getElementById('customer-name').innerText = data.customer_name || 'לקוח';
+            document.getElementById('order-id').innerText = data.order_id || `#${orderId.substring(0, 6)}`;
+            document.getElementById('order-address').innerText = data.customer_address || 'לא צוינה';
+            document.getElementById('order-date').innerText = data.delivery_date || 'לא צוין';
+            document.getElementById('driver-name').innerText = data.driver_name || 'טרם שויך';
+        }
+
+        function updateProgress(status) {
+            const steps = ['received', 'processing', 'out', 'delivered'];
+            const stepMap = {
+                'חדש': 'received',
+                'בטיפול': 'processing',
+                'בדרך': 'out',
+                'סופק': 'delivered'
+            };
+            
+            let currentStepName = stepMap[status] || 'received';
+            let stepReached = false;
+
+            steps.forEach(stepName => {
+                const stepEl = document.getElementById(`step-${stepName}`);
+                if (!stepEl) return;
+                
+                stepEl.classList.remove('active', 'completed');
+                
+                if (stepReached) {
+                    // This step is after the completed one
+                } else if (stepName === currentStepName) {
+                    stepEl.classList.add('active');
+                    stepReached = true;
+                } else {
+                    stepEl.classList.add('completed');
+                }
+            });
+        }
+        
+        function showAlert(message) {
+            document.getElementById('alert-text').innerText = message;
+            document.getElementById('alert-toast').classList.add('show');
+            
+            // הסתר אוטומטית אחרי 5 שניות
+            setTimeout(() => {
+                document.getElementById('alert-toast').classList.remove('show');
+            }, 5000);
+        }
+
+        // --- פונקציות אינטראקציה (v9) ---
+        
+        /**
+         * שולח הודעה למנהל (v9)
+         * !!! חשוב: מוסיף readByViewer: false
+         */
+        async function sendMessageToAdmin() {
+            const messageText = document.getElementById('customer-message').value.trim();
+            if (!messageText) return;
+
+            const statusEl = document.getElementById('message-status');
+            statusEl.innerText = "שולח הודעה...";
+            statusEl.classList.remove('hidden', 'text-red-500');
+            statusEl.classList.add('text-gray-600');
+            
+            const messageData = {
+                text: messageText,
+                senderName: orderData.customer_name || 'לקוח',
+                senderId: auth.currentUser.uid,
+                timestamp: serverTimestamp(),
+                type: 'message_to_admin',
+                readByViewer: false // !!! השדה הקריטי שביקשת !!!
+            };
+
+            try {
+                const messagesColRef = collection(db, 'orders', orderId, 'messages');
+                await addDoc(messagesColRef, messageData);
+                
+                statusEl.innerText = "ההודעה נשלחה בהצלחה!";
+                statusEl.classList.replace('text-gray-600', 'text-green-600');
+                document.getElementById('customer-message').value = '';
+                
+            } catch (error) {
+                console.error("Error sending message:", error);
+                statusEl.innerText = "שגיאה בשליחת ההודעה. נסה שוב.";
+                statusEl.classList.replace('text-gray-600', 'text-red-500');
+            }
+            
+            setTimeout(() => statusEl.classList.add('hidden'), 3000);
+        }
+
+        /**
+         * משתף לוואטסאפ
+         */
+        function shareToWhatsApp() {
+            const message = document.getElementById('customer-message').value.trim();
+            const phone = "972508860896"; // המספר שהגדרת
+            
+            const template = `
+*הודעה חדשה מלקוח (DeliveryMaster):*
+-----------------------------
+*שם לקוח:* ${orderData.customer_name || 'לא צוין'}
+*מספר הזמנה:* ${orderData.order_id || orderId}
+*כתובת:* ${orderData.customer_address || 'לא צוין'}
+*תאריך אספקה:* ${orderData.delivery_date || 'לא צוין'}
+-----------------------------
+
+*תוכן ההודעה:*
+${message || "--- אין תוכן ---"}
+            `;
+            
+            const whatsappUrl = `https://api.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(template)}`;
+            window.open(whatsappUrl, '_blank');
+        }
+
+        /**
+         * מציג מידע על סניף
+         */
+        function showBranch(branchName) {
+            const branch = branches[branchName];
+            if (!branch) return;
+            
+            document.getElementById('branch-map').src = branch.map_url;
+            document.getElementById('branch-address').innerText = branch.address;
+            document.getElementById('branch-phone').innerText = `טלפון: ${branch.phone}`;
+            document.getElementById('waze-link').href = branch.waze_url;
+            document.getElementById('google-link').href = branch.google_url;
+            
+            document.getElementById('branch-info').classList.remove('hidden');
+        }
+
+        // --- חשיפת פונקציות לחלון הגלובלי ---
+        window.sendMessageToAdmin = sendMessageToAdmin;
+        window.shareToWhatsApp = shareToWhatsApp;
+        window.showBranch = showBranch;
+
     </script>
 </body>
 </html>
