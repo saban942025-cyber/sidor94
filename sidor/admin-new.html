@@ -3,19 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DeliveryMaster v34 (Full Upgrade)</title>
+    <title>DeliveryMaster v34.2 (Critical Fixes)</title>
     <!-- 
-      DeliveryMaster Admin App v34 (Full Upgrade)
+      DeliveryMaster Admin App v34.2 (Critical Fixes)
       
       Changelog:
-      - v34 (NEW):
-        - שילוב מערכת הודעות מלאה (מ-v32) לתוך מבנה v31.
-        - הוספת תצוגת "הודעות" ופעמון התראות.
+      - v34.2 (FIX):
+        - הסרת orderBy משאילתת ההודעות (listenForNewMessages) כדי למנוע שגיאת אינדקס.
+        - הוספת מיון הודעות ידני בצד הלקוח.
+        - הסרת קריאות לפונקציות מתות (listenForLogs) שגרמו ל-TypeError.
+        - הסרת עדכון רכיבי UI לא קיימים (active-orders-count) שגרמו ל-TypeError.
+        - העברת event listeners (history-filter-btn) לתוך showView כדי למנוע שגיאות טעינה.
+      - v34 (Full Upgrade):
+        - שילוב מערכת הודעות מלאה (מ-v32).
         - שילוב טופס הזמנה חדשה משודרג (עם "שם פרויקט").
-        - הוספת פונקציית שיתוף WhatsApp אוטומטית (מ-v33.5) לאחר יצירה.
+        - הוספת פונקציית שיתוף WhatsApp אוטומטית (מ-v33.5).
         - תיקון פונקציית `copyCustomerLink` לשימוש ב-order_id ונתיב יחסי.
-      - v31.9.2 (BASE):
-        - מבנה קיים של מפה, רשימות, היסטוריה וניהול לקוחות.
     -->
     
     <!-- TailwindCSS -->
@@ -490,7 +493,7 @@
 <body class="antialiased">
 
     <!-- [NEW] Modal: שלח תשובה/התראה ללקוח -->
-    <div id="reply-modal" class="modal-overlay hidden" onclick="closeReplyModal()">
+    <div id="reply-modal" class="modal-overlay hidden flex items-center justify-center p-4" onclick="closeReplyModal()">
         <div class="modal-content bg-white w-11/12 md:w-1/2 lg:w-1/3 rounded-lg shadow-xl" onclick="event.stopPropagation()">
             <div class="p-6">
                 <h3 class="text-lg font-semibold mb-4">שלח התראה ללקוח</h3>
@@ -540,10 +543,6 @@
             <a href="#" class="nav-link flex items-center p-3 space-x-4 space-x-reverse rounded-lg" onclick="openNewOrderForm()">
                 <i data-feather="plus-circle" class="w-6 h-6"></i>
                 <span class="font-semibold text-lg hidden lg:block">הזמנה חדשה</span>
-            </a>
-            <a href="log.html" target="_blank" class="nav-link flex items-center p-3 space-x-4 space-x-reverse rounded-lg">
-                <i data-feather="file-text" class="w-6 h-6"></i>
-                <span class="font-semibold text-lg hidden lg:block">לוגים</span>
             </a>
             
             <div class="flex-grow"></div> <!-- Spacer -->
@@ -914,7 +913,7 @@
 
     <!-- 
       ==========================================================
-      ===               תחילת סקריפט ראשי (v34)              ===
+      ===               תחילת סקריפט ראשי (v34.1)            ===
       ==========================================================
     -->
     <script type="module">
@@ -932,7 +931,7 @@
         let db, auth;
         let allOrders = [];
         let allCustomers = [];
-        let logUnsubscribe = null;
+        // [FIX] Removed logUnsubscribe
         let ordersUnsubscribe = null;
         let customersUnsubscribe = null;
         let messagesUnsubscribe = null; // [NEW]
@@ -1022,7 +1021,7 @@
         function attachAllListeners() {
             listenForActiveOrders();
             listenForCustomers();
-            listenForLogs();
+            // [FIX] Removed call to listenForLogs()
             listenForNewMessages(); // [NEW]
         }
 
@@ -1053,7 +1052,8 @@
                     return (a.createdAt?.toMillis() || 0) - (b.createdAt?.toMillis() || 0);
                 });
                 
-                document.getElementById('active-orders-count').innerText = allOrders.length;
+                // [FIX] Removed reference to 'active-orders-count'
+                // document.getElementById('active-orders-count').innerText = allOrders.length;
                 renderOrdersList();
                 SmartLog.info(`Loaded ${allOrders.length} active orders`, "Data.Orders");
             }, (error) => {
@@ -1074,63 +1074,34 @@
 
                 allCustomers = [];
                 const selectEl = document.getElementById('order-customer-id');
-                selectEl.innerHTML = '<option value="">-- בחר לקוח --</option>'; 
+                if (selectEl) {
+                    selectEl.innerHTML = '<option value="">-- בחר לקוח --</option>'; 
+                }
                 
                 snapshot.forEach(doc => {
                     const customer = { id: doc.id, ...doc.data() };
                     allCustomers.push(customer);
                     
-                    const option = document.createElement('option');
-                    option.value = customer.id;
-                    option.text = `${customer.name} (${customer.customerNumber || customer.customer_id || 'ללא מספר'})`;
-                    selectEl.appendChild(option);
+                    if (selectEl) {
+                        const option = document.createElement('option');
+                        option.value = customer.id;
+                        option.text = `${customer.name} (${customer.customerNumber || customer.customer_id || 'ללא מספר'})`;
+                        selectEl.appendChild(option);
+                    }
                 });
                 
-                document.getElementById('customers-count').innerText = allCustomers.length;
+                // [FIX] Removed reference to 'customers-count'
+                // document.getElementById('customers-count').innerText = allCustomers.length;
                 renderCustomersList();
                 SmartLog.info(`Loaded ${allCustomers.length} customers`, "Data.Customers");
             }, (error) => {
                 SmartLog.error(error, "Data.Customers.ListenFailed");
-                document.getElementById('customers-loading').innerText = 'שגיאה בטעינת לקוחות.';
+                const loadingEl = document.getElementById('customers-loading');
+                if (loadingEl) loadingEl.innerText = 'שגיאה בטעינת לקוחות.';
             });
         }
 
-        // 3. Listen for Logs
-        function listenForLogs() {
-            if (logUnsubscribe) logUnsubscribe();
-            
-            const q = query(
-                collection(db, 'system_logs_v3'), 
-                orderBy('timestamp', 'desc'), 
-                limit(50)
-            );
-            
-            const logsList = document.getElementById('logs-list');
-            
-            logUnsubscribe = onSnapshot(q, (snapshot) => {
-                if (logsList) {
-                    logsList.innerHTML = ''; // Clear logs
-                    snapshot.forEach(doc => {
-                        const log = doc.data();
-                        const logTime = log.timestamp ? new Date(log.timestamp.seconds * 1000).toLocaleString('he-IL') : '...';
-                        const levelColor = log.level === 'error' ? 'text-red-400' : (log.level === 'warn' ? 'text-yellow-400' : 'text-green-400');
-                        
-                        const logEntry = document.createElement('p');
-                        logEntry.className = 'mb-2 border-b border-gray-700 pb-2';
-                        logEntry.innerHTML = `
-                            <span class="text-gray-500">${logTime}</span><br>
-                            <span class="${levelColor} font-bold">[${log.level.toUpperCase()}]</span>
-                            <span class="text-cyan-400">[${log.category}]</span><br>
-                            <span class="whitespace-pre-wrap">${log.message}</span>
-                        `;
-                        logsList.appendChild(logEntry);
-                    });
-                }
-            }, (error) => {
-                SmartLog.error(error, "Data.Logs.ListenFailed");
-                if (logsList) logsList.innerHTML = '<p class="text-red-400">שגיאה בטעינת לוגים.</p>';
-            });
-        }
+        // 3. [FIX] Removed listenForLogs() function
         
         // 4. [NEW] האזנה להודעות חדשות מלקוחות
         function listenForNewMessages() {
@@ -1139,39 +1110,50 @@
             const badge = document.getElementById('notification-badge');
             const list = document.getElementById('messages-list');
             
-            // דורש אינדקס: messages (type ASC, readByViewer ASC, timestamp DESC)
+            // [FIX v34.2] הסרת orderBy כדי למנוע שגיאת אינדקס.
+            // המיון יתבצע ידנית ב-JS.
             const q = query(
                 collectionGroup(db, 'messages'),
                 where('type', '==', 'message_to_admin'),
-                where('readByViewer', '==', false),
-                orderBy('timestamp', 'desc'),
-                limit(30)
+                where('readByViewer', '==', false)
+                // orderBy('timestamp', 'desc'), // <-- [FIX] Removed this line
+                // limit(30) // [FIX] Removed this line
             );
             
             messagesUnsubscribe = onSnapshot(q, (snapshot) => {
                 const loadingEl = document.getElementById('messages-loading');
                 if (loadingEl) loadingEl.style.display = 'none';
                 
-                list.innerHTML = ''; 
-                const newMessagesCount = snapshot.size;
-                updateNotificationBadge(newMessagesCount);
+                if (!list) return; // הגנה
                 
-                if (snapshot.empty) {
+                list.innerHTML = ''; 
+                const newMessages = [];
+                
+                snapshot.forEach(doc => {
+                    const message = { id: doc.id, ...doc.data() };
+                    message.orderId = doc.ref.parent.parent.id;
+                    newMessages.push(message);
+                });
+                
+                // עדכון הפעמון
+                updateNotificationBadge(newMessages.length);
+                
+                // [FIX v34.2] מיון ידני ב-JS
+                newMessages.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+
+                if (newMessages.length === 0) {
                     list.innerHTML = '<p class="text-gray-500 text-center">אין הודעות חדשות מלקוחות.</p>';
                     return;
                 }
                 
-                snapshot.forEach(doc => {
-                    const message = doc.data();
-                    const orderId = doc.ref.parent.parent.id;
-                    const messageId = doc.id;
-                    list.appendChild(createMessageCard(message, orderId, messageId));
+                newMessages.forEach(msg => {
+                    list.appendChild(createMessageCard(msg, msg.orderId, msg.id));
                 });
                 
             }, (error) => {
                 SmartLog.error(error, "Data.Messages.ListenFailed");
                 console.error("Error listening to messages: ", error);
-                document.getElementById('messages-loading').innerText = 'שגיאה בטעינת הודעות. ייתכן שנדרש אינדקס ב-Firestore.';
+                if (list) list.innerHTML = 'שגיאה בטעינת הודעות. ייתכן שנדרש אינדקס ב-Firestore.';
             });
         }
 
@@ -1179,14 +1161,14 @@
         
         function renderOrdersList() {
             const list = document.getElementById('orders-list');
-            if (!list) return;
+            if (!list) return; // הגנה
             const search = document.getElementById('orders-search').value.toLowerCase();
             list.innerHTML = '';
             
             const filtered = allOrders.filter(order => 
-                (order.customer_name && order.customer_name.toLowerCase().includes(search)) ||
-                (order.order_id && order.order_id.includes(search)) ||
-                (order.customer_id && order.customer_id.includes(search)) ||
+                (order.customer?.name && order.customer.name.toLowerCase().includes(search)) || // [FIX] Access customer object
+                (order.orderNumber && order.orderNumber.includes(search)) ||
+                (order.customer?.id && order.customer.id.includes(search)) ||
                 (order.address && order.address.toLowerCase().includes(search))
             );
             
@@ -1200,18 +1182,18 @@
                 card.className = 'bg-white p-4 rounded-lg shadow border-l-4 border-blue-500';
                 card.innerHTML = `
                     <div class="flex justify-between items-center mb-2">
-                        <h3 class="font-bold text-lg">${order.customer_name}</h3>
-                        <span class="text-sm font-mono bg-gray-200 text-gray-700 px-2 py-1 rounded">${order.order_id || order.id}</span>
+                        <h3 class="font-bold text-lg">${order.customer?.name || 'N/A'}</h3>
+                        <span class="text-sm font-mono bg-gray-200 text-gray-700 px-2 py-1 rounded">${order.orderNumber || order.order_id || order.id}</span>
                     </div>
-                    <p class="text-gray-600">${order.address}</p>
-                    <p class="text-sm text-gray-500">${order.orderDate} | ${order.warehouse}</p>
+                    <p class="text-gray-600">${order.address || 'N/A'}</p>
+                    <p class="text-sm text-gray-500">${order.orderDate || 'N/A'} | ${order.warehouse || 'N/A'}</p>
                     <div class="mt-4 flex gap-2 flex-wrap">
                         <select onchange="updateOrderStatus(event, '${order.id}')" class="border p-2 rounded-md bg-gray-50 text-sm">
                             <option value="חדש" ${order.status === 'חדש' ? 'selected' : ''}>חדש</option>
-                            <option value="בטיפול" ${order.status === 'בטיפול' ? 'selected' : ''}>בטיפול</option>
+                            <option value="שויך" ${order.status === 'שויך' ? 'selected' : ''}>שויך</option>
                             <option value="בדרך" ${order.status === 'בדרך' ? 'selected' : ''}>בדרך</option>
-                            <option value="סופק" ${order.status === 'סופק' ? 'selected' : ''}>סופק</option>
-                            <option value="מבוטל" ${order.status === 'מבוטל' ? 'selected' : ''}>מבוטל</option>
+                            <option value="הושלם" ${order.status === 'הושלם' ? 'selected' : ''}>הושלם</option>
+                            <option value="בוטל" ${order.status === 'בוטל' ? 'selected' : ''}>בוטל</option>
                         </select>
                         <button onclick="showAssignDriverModal('${order.id}')" class="text-sm bg-green-500 text-white py-2 px-3 rounded-md hover:bg-green-600"><i class="fas fa-truck"></i> שייך נהג</button>
                         <button onclick="copyCustomerLink('${order.id}')" class="text-sm bg-blue-500 text-white py-2 px-3 rounded-md hover:bg-blue-600"><i class="fas fa-link"></i> לינק ללקוח</button>
@@ -1223,14 +1205,13 @@
         
         function renderCustomersList() {
             const list = document.getElementById('customers-list');
-            if (!list) return;
+            if (!list) return; // הגנה
             const search = document.getElementById('customers-search').value.toLowerCase();
             list.innerHTML = '';
             
             const filtered = allCustomers.filter(customer => 
                 (customer.name && customer.name.toLowerCase().includes(search)) ||
                 (customer.customerNumber && customer.customerNumber.includes(search)) ||
-                (customer.customer_id && customer.customer_id.includes(search)) ||
                 (customer.phone && customer.phone.includes(search)) ||
                 (customer.defaultAddress && customer.defaultAddress.toLowerCase().includes(search))
             );
@@ -1245,7 +1226,7 @@
                 card.className = 'bg-white p-4 rounded-lg shadow';
                 card.innerHTML = `
                     <h3 class="font-bold text-lg">${customer.name}</h3>
-                    <p class="text-gray-600">${customer.customerNumber || customer.customer_id || 'ללא מספר לקוח'}</p>
+                    <p class="text-gray-600">${customer.customerNumber || 'ללא מספר לקוח'}</p>
                     <p class="text-gray-600">${customer.phone || 'ללא טלפון'}</p>
                     <p class="text-sm text-gray-500">${customer.defaultAddress || 'ללא כתובת'}</p>
                     <div class="mt-4 flex gap-2">
@@ -1268,6 +1249,18 @@
             document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
             const navLink = document.querySelector(`.nav-link[onclick*="showView('${viewName}')"]`);
             if (navLink) navLink.classList.add('active');
+
+            // [FIX] Move listener attachment here
+            if (viewName === 'history') {
+                try {
+                    document.getElementById('history-filter-btn').addEventListener('click', renderHistoryTable);
+                } catch(e) { SmartLog.error(e, "UI.AttachListener", { button: "history-filter-btn" }); }
+            }
+            if (viewName === 'driver-history') {
+                 try {
+                    document.getElementById('driver-history-filter-btn').addEventListener('click', fetchAndDrawDriverRoute);
+                } catch(e) { SmartLog.error(e, "UI.AttachListener", { button: "driver-history-filter-btn" }); }
+            }
 
             // Refresh maps if needed
             if (viewName === 'dashboard' && map) setTimeout(() => map.invalidateSize(), 10);
@@ -1355,19 +1348,27 @@
         async function submitNewOrder(e) {
             e.preventDefault();
             const form = e.target;
+            const btn = document.getElementById('submit-order-btn');
+            btn.disabled = true;
+            btn.innerText = 'מעבד...';
             
             const customOrderNumber = form['order-number'].value.trim();
             const customCustomerNumber = form['order-customer-number-custom'].value.trim();
 
             const orderData = {
-                customer_name: form['order-customer-name'].value,
-                customer_id: customCustomerNumber || form['order-customer-id'].value,
-                customer_phone: form['order-customer-phone'].value,
-                customer_address: form['order-customer-address'].value,
-                delivery_date: form['order-date'].value,
+                customer: { // [FIX] Store as object
+                    id: form['order-customer-id'].value || null,
+                    name: form['order-customer-name'].value,
+                    phone: form['order-customer-phone'].value,
+                    customerNumber: customCustomerNumber || null
+                },
+                customer_name: form['order-customer-name'].value, // Keep flat for compatibility
+                customer_id: customCustomerNumber || form['order-customer-id'].value, // Keep flat
+                address: form['order-customer-address'].value,
+                orderDate: form['order-date'].value,
                 orderTime: form['order-time'].value,
-                projectName: form['order-project-name'].value.trim(), // [NEW]
-                notes: form['order-notes'].value, // תוכן הזמנה
+                projectName: form['order-project-name'].value.trim(),
+                notes: form['order-notes'].value, 
                 warehouse: form['order-warehouse'].value,
                 deliveryType: form['order-delivery-type'].value,
                 status: "חדש",
@@ -1379,29 +1380,33 @@
             SmartLog.info("Attempting to create new order...", "CRUD.Order.Create", orderData);
             
             try {
-                // --- [FIX] Using setDoc for manual ID if provided ---
                 let orderRef;
+                let finalOrderId = orderData.order_id;
+
                 if (customOrderNumber) {
-                    // Use manual ID
                     orderRef = doc(db, "orders", customOrderNumber);
                     await setDoc(orderRef, orderData);
-                    SmartLog.info(`Order created successfully with manual ID: ${customOrderNumber}`, "CRUD.Order.CreateSuccess");
                 } else {
-                    // Use auto ID
                     orderRef = await addDoc(collection(db, "orders"), orderData);
-                    SmartLog.info(`Order created successfully with auto ID: ${orderRef.id}`, "CRUD.Order.CreateSuccess");
+                    // Update the order with its own auto-generated ID as the order_id if not set
+                    finalOrderId = orderRef.id;
+                    await updateDoc(orderRef, { order_id: finalOrderId });
                 }
 
+                SmartLog.info(`Order created successfully: ${finalOrderId}`, "CRUD.Order.CreateSuccess");
                 showToast('הזמנה חדשה נוצרה בהצלחה!', 'success');
                 form.reset();
-                showPanelTab('orders-panel');
+                document.getElementById('order-date').value = new Date().toISOString().split('T')[0]; // Reset date
+                showView('dashboard'); // Switch to dashboard
                 
-                // --- [NEW] Auto-share to WhatsApp ---
                 await shareToWhatsApp(orderData);
 
             } catch (error) {
                 SmartLog.error(error, "CRUD.Order.CreateFailed", orderData);
                 showToast('שגיאה ביצירת הזמנה.', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerText = 'צור ושתף ב-WhatsApp';
             }
         }
 
@@ -1409,24 +1414,23 @@
         async function shareToWhatsApp(orderData) {
             const phone = "972508860896"; // יש להגדיר מספר טלפון קבוע
             
-            // Find customer details from state
-            const customer = allCustomers.find(c => c.id === orderData.customer_id || c.customerNumber === orderData.customer_id);
+            const customer = allCustomers.find(c => c.id === orderData.customer.id);
             const customerContact = customer?.contactPerson || 'לא צוין';
             
             const template = `
 *✅ הזמנה חדשה (פאנל ניהול)*
 =================
-*לקוח:* ${orderData.customer_name || 'לא צוין'}
-*מס' לקוח:* ${orderData.customer_id || 'N/A'}
-*טלפון:* ${orderData.customer_phone || 'N/A'}
+*לקוח:* ${orderData.customer.name || 'לא צוין'}
+*מס' לקוח:* ${orderData.customer.customerNumber || 'N/A'}
+*טלפון:* ${orderData.customer.phone || 'N/A'}
 *איש קשר:* ${customerContact}
 
 *פרויקט:* ${orderData.projectName || 'לא צוין'}
 =================
 *פרטי אספקה:*
 *סוג הובלה:* ${orderData.deliveryType || 'לא צוין'}
-*מיקום:* ${orderData.customer_address || 'לא צוין'}
-*תאריך:* ${orderData.delivery_date}
+*מיקום:* ${orderData.address || 'לא צוין'}
+*תאריך:* ${orderData.orderDate}
 *שעה:* ${orderData.orderTime || 'לא צוין'}
 =================
 *תוכן ההזמנה:*
@@ -1437,7 +1441,7 @@ ${orderData.notes || "--- אין תוכן ---"}
             window.open(whatsappUrl, '_blank');
             SmartLog.info("Opened WhatsApp share window", "CRUD.Order.WhatsApp");
         }
-        window.shareToWhatsApp = shareToWhatsApp; // Expose
+        window.shareToWhatsApp = shareToWhatsApp;
 
 
         function fillCustomerData(customerId) {
@@ -1480,7 +1484,6 @@ ${orderData.notes || "--- אין תוכן ---"}
         // 3. Assign Driver (Placeholder for Modal)
         function showAssignDriverModal(orderId) {
             SmartLog.info(`Opening assign driver modal for order: ${orderId}`, "UI.Modal");
-            // Placeholder: This modal logic is not in v31, using generic modal
             const modalContent = `
                 <div class="p-4">
                     <h3 class="text-lg font-semibold mb-4">שייך נהג להזמנה ${orderId.slice(0,6)}</h3>
@@ -1502,72 +1505,57 @@ ${orderData.notes || "--- אין תוכן ---"}
                 return;
             }
             
-            // Handle variations in field names
             const customer_id = customer.customer_id || customer.customerNumber || '';
             const default_address = customer.default_address || customer.defaultAddress || '';
             const contactPerson = customer.contactPerson || '';
 
-            const content = `
-                <div class="p-6">
-                    <h3 class="text-lg font-semibold mb-4">עריכת לקוח: ${customer.name}</h3>
-                    <form id="edit-customer-form" class="space-y-3">
-                        <input type="hidden" id="edit-customer-doc-id" value="${customer.id}">
-                        <div>
-                            <label class="block text-sm font-medium">שם לקוח (חובה)</label>
-                            <input type="text" id="edit-customer-name" class="mt-1 w-full p-2 border rounded" value="${customer.name || ''}" required>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium">מספר לקוח</label>
-                            <input type="text" id="edit-customer-number" class="mt-1 w-full p-2 border rounded" value="${customer_id}">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium">טלפון</label>
-                            <input type="tel" id="edit-customer-phone" class="mt-1 w-full p-2 border rounded" value="${customer.phone || ''}">
-                        </div>
-                         <div>
-                            <label class="block text-sm font-medium">איש קשר</label>
-                            <input type="text" id="edit-customer-contact" class="mt-1 w-full p-2 border rounded" value="${contactPerson}">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium">כתובת ברירת מחדל</label>
-                            <input type="text" id="edit-customer-address" class="mt-1 w-full p-2 border rounded" value="${default_address}">
-                        </div>
-                        <div class="flex justify-end gap-3 mt-4">
-                            <button type="button" onclick="closeCustomerEditModal()" class="py-2 px-4 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300">ביטול</button>
-                            <button type="submit" class="py-2 px-4 bg-green-500 text-white rounded-md hover:bg-green-600">שמור שינויים</button>
-                        </div>
-                    </form>
-                </div>
-            `;
-            // Use the <dialog> modal, not the generic one
-            document.getElementById('customer-edit-modal').innerHTML = content;
-            document.getElementById('customer-edit-modal').showModal();
+            // Use the <dialog> modal
+            const modal = document.getElementById('customer-edit-modal');
             
-            document.getElementById('edit-customer-form').addEventListener('submit', handleSaveCustomer);
+            modal.querySelector('#customer-edit-id').value = customer.id;
+            modal.querySelector('#customer-edit-title').innerText = `עריכת לקוח: ${customer.name}`;
+            modal.querySelector('#customer-edit-name').value = customer.name || '';
+            modal.querySelector('#customer-edit-number').value = customer_id;
+            modal.querySelector('#customer-edit-phone').value = customer.phone || '';
+            modal.querySelector('#customer-edit-contact').value = contactPerson;
+            
+            // Separate address fields
+            modal.querySelector('#customer-edit-street').value = customer.addressStreet || '';
+            modal.querySelector('#customer-edit-streetnum').value = customer.addressNumber || '';
+            modal.querySelector('#customer-edit-city').value = customer.addressCity || '';
+            
+            modal.querySelector('#customer-edit-coords').value = customer.customLat ? `${customer.customLat}, ${customer.customLon}` : '';
+            
+            // Populate audit log
+            const logList = modal.querySelector('#customer-audit-log');
+            if (customer.auditLog && Array.isArray(customer.auditLog) && customer.auditLog.length > 0) {
+                 logList.innerHTML = customer.auditLog
+                    .filter(log => log.timestamp)
+                    .sort((a, b) => (b.timestamp.seconds || 0) - (a.timestamp.seconds || 0))
+                    .slice(0, 5) 
+                    .map(log => {
+                        const time = new Date(log.timestamp.seconds * 1000).toLocaleString('he-IL');
+                        const changes = log.action === "Created" ? "נוצר" : (log.changes ? Object.keys(log.changes).join(', ') : 'עדכון');
+                        return `<li>${time}: ${changes}</li>`;
+                    }).join('');
+            } else {
+                 logList.innerHTML = '<li>אין היסטוריית שינויים</li>';
+            }
+            
+            modal.showModal();
+            feather.replace();
         }
         window.showEditCustomerModal = showEditCustomerModal;
 
         async function handleSaveCustomer(e) {
             e.preventDefault();
-            const form = e.target;
-            const customerId = form['edit-customer-doc-id'].value;
+            const btn = document.getElementById('customer-save-btn');
+            btn.disabled = true;
+            btn.innerText = 'שומר...';
+            
+            const customerId = document.getElementById('customer-edit-id').value;
             const customerRef = doc(db, 'customers', customerId);
             
-            const oldData = allCustomers.find(c => c.id === customerId);
-            
-            const updatedData = {
-                name: form['edit-customer-name'].value,
-                customerNumber: form['edit-customer-number'].value, // Use the one from v31.5
-                customer_id: form['edit-customer-number'].value, // Keep consistent
-                phone: form['edit-customer-phone'].value,
-                contactPerson: form['edit-customer-contact'].value, // Use the one from v31.5
-                defaultAddress: form['edit-customer-address'].value, // Use the one from v31.5
-                default_address: form['edit-customer-address'].value, // Keep consistent
-                lastModified: serverTimestamp()
-            };
-
-            SmartLog.info(`Updating customer ${customerId}`, "CRUD.Customer.Update", { new: updatedData });
-
             try {
                 // [FIX v33.3] Read old data *inside* the transaction
                 await runTransaction(db, async (transaction) => {
@@ -1576,28 +1564,67 @@ ${orderData.notes || "--- אין תוכן ---"}
                         throw "Document does not exist!";
                     }
                     const oldData = customerDoc.data();
-                    
-                    transaction.update(customerRef, updatedData);
-                    
-                    // Create audit log entry
-                    const logRef = doc(collection(db, 'customers', customerId, 'auditLog'));
                     const oldAddress = oldData.defaultAddress || oldData.default_address || '';
                     const oldCustId = oldData.customerNumber || oldData.customer_id || '';
+
+                    const coordsString = document.getElementById('customer-edit-coords').value.trim();
+                    let customLat = null;
+                    let customLon = null;
                     
-                    transaction.set(logRef, {
-                        timestamp: serverTimestamp(), // This is OK here
-                        action: "ADMIN_UPDATE",
-                        userId: currentUserId,
-                        changes: {
-                            old: { name: oldData.name, id: oldCustId, phone: oldData.phone, address: oldAddress },
-                            new: { name: updatedData.name, id: updatedData.customerNumber, phone: updatedData.phone, address: updatedData.defaultAddress }
+                    if (coordsString) {
+                        const parts = coordsString.split(',');
+                        if (parts.length === 2 && !isNaN(parseFloat(parts[0])) && !isNaN(parseFloat(parts[1]))) {
+                            customLat = parseFloat(parts[0]);
+                            customLon = parseFloat(parts[1]);
+                        } else {
+                            throw new Error("פורמט קואורדינטות לא תקין. השתמש ב- lat, lon");
                         }
-                    });
+                    }
+
+                    const updatedData = {
+                        name: document.getElementById('customer-edit-name').value,
+                        customerNumber: document.getElementById('customer-edit-number').value || null,
+                        phone: document.getElementById('customer-edit-phone').value,
+                        contactPerson: document.getElementById('customer-edit-contact').value || null,
+                        defaultAddress: `${document.getElementById('customer-edit-street').value} ${document.getElementById('customer-edit-streetnum').value}, ${document.getElementById('customer-edit-city').value}`,
+                        addressStreet: document.getElementById('customer-edit-street').value,
+                        addressNumber: document.getElementById('customer-edit-streetnum').value,
+                        addressCity: document.getElementById('customer-edit-city').value,
+                        customLat: customLat,
+                        customLon: customLon
+                    };
+
+                    const changes = {};
+                    let hasChanges = false;
+                    for (const key in updatedData) {
+                        if ((updatedData[key] || '') !== (oldData[key] || '')) {
+                            changes[key] = { from: oldData[key] ?? null, to: updatedData[key] };
+                            hasChanges = true;
+                        }
+                    }
+                    
+                    if (hasChanges) {
+                        const logEntry = {
+                            timestamp: serverTimestamp(), // [FIX v33.3] This should be serverTimestamp
+                            action: "Updated",
+                            changes: changes
+                        };
+                        transaction.update(customerRef, {
+                            ...updatedData,
+                            auditLog: arrayUnion(logEntry),
+                            lastModified: serverTimestamp()
+                        });
+                    } else {
+                        SmartLog.info("No changes detected for customer update", "CRUD.Customer", { id: customerId });
+                    }
                 });
-                
-                // [FIX v33.3] Run order updates in a separate Batch *after* transaction succeeds
-                const oldAddress = oldData.defaultAddress || oldData.default_address || '';
-                if (oldAddress !== updatedData.defaultAddress) {
+
+                // [FIX v33.3] Batch update logic moved out of transaction
+                const updatedCustomerData = (await getDoc(customerRef)).data(); // Get the final updated data
+                const newAddress = updatedCustomerData.defaultAddress;
+                const oldAddress = allCustomers.find(c => c.id === customerId)?.defaultAddress || ''; // Get old address from state
+
+                if (newAddress !== oldAddress) {
                     SmartLog.info("Address changed, updating linked active orders...", "CRUD.Customer.Update");
                     const q = query(
                         collection(db, 'orders'), 
@@ -1611,11 +1638,15 @@ ${orderData.notes || "--- אין תוכן ---"}
 
                     ordersSnap.forEach(orderDoc => {
                         if (orderDoc.data().address === oldAddress) {
-                            batch.update(orderDoc.ref, {
-                                address: updatedData.defaultAddress,
-                                lastModified: serverTimestamp(),
-                                log: `Address auto-updated by admin edit`
-                            });
+                            const updatePayload = {
+                                address: newAddress,
+                                lastModified: serverTimestamp()
+                            };
+                            if (updatedCustomerData.customLat && updatedCustomerData.customLon) {
+                                updatePayload.latitude = updatedCustomerData.customLat;
+                                updatePayload.longitude = updatedCustomerData.customLon;
+                            }
+                            batch.update(orderDoc.ref, updatePayload);
                             updatedCount++;
                         }
                     });
@@ -1632,10 +1663,14 @@ ${orderData.notes || "--- אין תוכן ---"}
                 
             } catch (error) {
                 SmartLog.error(error, "CRUD.Customer.UpdateFailed", { customerId });
-                showToast('שגיאה בעדכון פרטי לקוח.', 'error');
+                showToast(`שגיאה בעדכון פרטי לקוח: ${error.message}`, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerText = 'שמור שינויים';
             }
         }
-        window.handleSaveCustomer = handleSaveCustomer; // Expose
+        // [FIX] No need to expose, listener is attached in showEditCustomerModal
+        // window.handleSaveCustomer = handleSaveCustomer; 
 
         // 5. [NEW] Copy Customer Link (v33.4 Fix)
         async function copyCustomerLink(orderId) {
@@ -1663,7 +1698,7 @@ ${orderData.notes || "--- אין תוכן ---"}
                      return;
                 }
 
-                // [FIX] Use relative path
+                // [FIX v33.4] Use relative path
                 const customerLink = `../sidor/customer.html?id=${shortOrderId}`;
                 
                 const tempInput = document.createElement("textarea");
@@ -1715,29 +1750,35 @@ ${orderData.notes || "--- אין תוכן ---"}
 
         function updateNotificationBadge(count) {
             const badge = document.getElementById('notification-badge');
-            if (count > 0) {
-                badge.innerText = count;
-                badge.style.display = 'flex';
-            } else {
-                badge.style.display = 'none';
+            if (badge) {
+                if (count > 0) {
+                    badge.innerText = count;
+                    badge.style.display = 'flex';
+                } else {
+                    badge.style.display = 'none';
+                }
             }
         }
 
         function showSendReplyModal(event, orderId, messageId, customerName) {
             event.stopPropagation();
             
-            document.getElementById('reply-modal-order-id').innerText = orderId || 'לא ידוע';
-            document.getElementById('reply-modal-customer-name').innerText = customerName || 'לקוח';
-            document.getElementById('reply-modal-doc-id').value = orderId; 
-            document.getElementById('reply-modal-msg-id').value = messageId;
-            document.getElementById('reply-message-text').value = '';
+            const modal = document.getElementById('reply-modal');
+            if (!modal) return;
             
-            document.getElementById('reply-modal').classList.remove('hidden');
+            modal.querySelector('#reply-modal-order-id').innerText = orderId || 'לא ידוע';
+            modal.querySelector('#reply-modal-customer-name').innerText = customerName || 'לקוח';
+            modal.querySelector('#reply-modal-doc-id').value = orderId; 
+            modal.querySelector('#reply-modal-msg-id').value = messageId;
+            modal.querySelector('#reply-message-text').value = '';
+            
+            modal.classList.remove('hidden');
         }
         window.showSendReplyModal = showSendReplyModal;
 
         function closeReplyModal() {
-            document.getElementById('reply-modal').classList.add('hidden');
+            const modal = document.getElementById('reply-modal');
+            if (modal) modal.classList.add('hidden');
         }
         window.closeReplyModal = closeReplyModal;
 
@@ -1818,10 +1859,9 @@ ${orderData.notes || "--- אין תוכן ---"}
 
         // --- Generic Modal Functions (from v31) ---
         
-        // This is the generic modal, used for Assign Driver
         const genericModal = document.createElement('div');
         genericModal.id = 'generic-modal';
-        genericModal.className = 'modal-overlay hidden';
+        genericModal.className = 'modal-overlay hidden flex items-center justify-center p-4';
         genericModal.innerHTML = `
             <div class="modal-content bg-white w-11/12 md:w-1/2 lg:w-1/3 rounded-lg shadow-xl" onclick="event.stopPropagation()">
                 <div id="generic-modal-content-inner"></div>
@@ -1854,7 +1894,17 @@ ${orderData.notes || "--- אין תוכן ---"}
         }
         window.closeCustomerEditModal = closeCustomerEditModal; // Expose
         window.closeModal = closeModal; // Expose generic close
+        
+        // [FIX] Expose all functions to global scope
+        window.openNewOrderForm = openNewOrderForm;
+        window.handleCustomerSearch = handleCustomerSearch;
+        window.submitNewOrder = submitNewOrder;
+        window.closeNewOrderForm = closeNewOrderForm;
+        window.renderCustomerTable = renderCustomerTable;
+        window.renderHistoryTable = renderHistoryTable;
+        window.fetchAndDrawDriverRoute = fetchAndDrawDriverRoute;
 
     </script>
 </body>
 </html>
+
