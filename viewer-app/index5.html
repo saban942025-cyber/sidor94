@@ -3,19 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>DeliveryMaster Viewer v50.14 (Index Fix)</title>
+    <title>DeliveryMaster Viewer v50.15 (Layout Fix)</title>
     <!-- 
-      DeliveryMaster Live Viewer App v50.14
+      DeliveryMaster Live Viewer App v50.15
       
       Changelog:
+      - v50.15 (חדש):
+        - הוספת שדה "סוג הובלה" (עם אייקון) לכרטיס ההזמנה הראשי (v50.12)
+        - הוספת שדה "סוג הובלה" לכרטיס המורחב בדפים המלאים.
       - v50.14 (FIX):
         - תוקנה שגיאת אינדקס ב-Firestore (Data.Messages.ListenFailed).
         - השאילתה שונתה לסינון לפי שדה יחיד (readByViewer) עם סינון JS משלים (type).
         - נוסף כפתור "צור הודעת בדיקה" לבדיקת פונקציונליות.
-      - v50.13 (FIX):
-        - תוקנו נתיבי ייבוא של Firebase ל-HTTPS.
-      - v50.12 (חדש):
-        - הוספת שדות "מספר לקוח" ו"שעת אספקה" לכרטיסי ההזמנה.
     -->
     
     <!-- PWA Manifest & Theme -->
@@ -805,7 +804,7 @@
              feather.replace();
         }
         
-        // --- [FIX v50.12] ---
+        // --- [FIX v50.15] ---
         function createViewerOrderCard(order) {
             const el = document.createElement('div');
             el.className = `order-card`;
@@ -818,7 +817,6 @@
             const displayId = order.orderNumber || `#${order.id.slice(-6)}`;
             const orderDateForDisplay = order.orderDate ? new Date(order.orderDate).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '...';
             const orderTimeForDisplay = order.orderTime || '...';
-            // --- [FIX v50.12] Get Customer Number ---
             const customerNumber = order.customer?.customerNumber || order.customer?.customer_id || 'N/A';
             
             el.innerHTML = `
@@ -839,6 +837,11 @@
                     <div class="flex items-center gap-2 text-gray-700">
                         <i data-feather="home" class="w-4 h-4"></i>
                         <span class="font-medium">מחסן: ${order.warehouse || '?'}</span>
+                    </div>
+                    <!-- [NEW v50.15] Add Delivery Type -->
+                    <div class="flex items-center gap-2 text-gray-700">
+                        <span class="text-lg w-4 h-4 text-center">${orderTypeDetails[order.deliveryType]?.icon || '📦'}</span>
+                        <span class="font-medium">${order.deliveryType || 'לא צוין'}</span>
                     </div>
                 </div>
                 <div class="mt-3 bg-gray-100 p-3 rounded-lg flex items-center justify-center gap-4 text-gray-800">
@@ -1049,7 +1052,7 @@
             showFullPageView('list-future');
         }
         
-        // --- [FIX v50.12] ---
+        // --- [FIX v50.15] ---
         function createEnhancedOrderCard(order, showTime = false) {
             const typeInfo = orderTypeDetails[order.deliveryType] || orderTypeDetails['default'];
             const customerName = order.customer?.name || '...';
@@ -1057,7 +1060,6 @@
             const displayId = order.orderNumber || `#${order.id.slice(-6)}`;
             const createdTime = order.createdAt?.toDate ? order.createdAt.toDate().toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' }) : '';
             const orderDate = order.orderDate ? new Date(order.orderDate).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit' }) : '';
-            // --- [EDIT] v50.12: Add Customer Number and Order Time ---
             const customerNumber = order.customer?.customerNumber || order.customer?.customer_id || 'N/A';
             const orderTime = order.orderTime || 'N/A';
             
@@ -1075,10 +1077,10 @@
                         </div>
                         <div class="order-meta">
                             <span><i data-feather="home" class="w-4 h-4 inline-block ml-1"></i>${order.warehouse || ''}</span>
-                            <!-- [EDIT] v50.12: Added Customer Number -->
+                            <!-- [NEW v50.15] Add Delivery Type -->
+                            <span>${orderTypeDetails[order.deliveryType]?.icon || '📦'} ${order.deliveryType || 'לא צוין'}</span>
                             <span><i data-feather="hash" class="w-4 h-4 inline-block ml-1"></i>${customerNumber}</span>
                             ${showTime && orderDate ? `<span><i data-feather="calendar" class="w-4 h-4 inline-block ml-1"></i>${orderDate}</span>` : ''}
-                            <!-- [EDIT] v50.12: Added Order Time -->
                             ${showTime && orderTime !== 'N/A' ? `<span><i data-feather="clock" class="w-4 h-4 inline-block ml-1"></i>${orderTime}</span>` : ''}
                             ${order.driver?.name ? `<span><i data-feather="user" class="w-4 h-4 inline-block ml-1"></i>${order.driver.name}</span>` : ''}
                         </div>
