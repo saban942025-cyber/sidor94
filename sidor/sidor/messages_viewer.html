@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>מרכז הודעות (v1)</title>
+    <!-- 
+      DeliveryMaster Admin - דף הודעות ייעודי (v1)
+      - קובץ נפרד לניהול הודעות בלבד לביצועים מהירים.
+      - כולל "מלשינון" (תשובות מוכנות מראש).
+      - מאזין בזמן אמת להודעות חדשות.
+    -->
+    
+    <!-- TailwindCSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Icons (Feather & Font Awesome) -->
+    <script src="https://unpkg.com/feather-icons"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Google Font: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --primary-color: #3b82f6; /* blue-500 */
+            --bg-light: #f3f4f6; /* gray-100 */
+            --border-color: #e5e7eb; /* gray-200 */
+            --text-dark: #1f2937; /* gray-800 */
+            --text-light: #6b7280; /* gray-500 */
+        }
+        body {
+            font-family: 'Inter', 'Arial', sans-serif;
+            background-color: var(--bg-light);
+            color: var(--text-dark);
+        }
+        
+        /* Modal Dialog */
+        .modal-overlay { 
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0; 
+            background: rgba(0,0,0,0.5); z-index: 1000; 
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-overlay.hidden { display: none; }
+        .modal-overlay:not(.hidden) { display: flex; }
+
+        .modal-content { 
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            width: 90%;
+            max-width: 600px;
+            z-index: 1001; 
+        }
+        
+        .notification-badge {
+            background-color: #ef4444; /* red-500 */
+            color: white;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            font-size: 0.8rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+        .message-card.unread {
+            background-color: #fefce8; /* yellow-50 */
+            border-right: 4px solid #facc15; /* yellow-400 */
+        }
+        .message-card.read {
+            background-color: #f9fafb; /* gray-50 */
+            opacity: 0.8;
+        }
+        
+        /* "מלשינון" - תשובות מהירות */
+        #quick-reply-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--border-color);
+        }
+        .quick-reply-btn {
+            background-color: #e0f2fe; /* sky-100 */
+            color: #0c4a6e; /* sky-800 */
+            padding: 0.25rem 0.75rem;
+            border-radius: 99px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .quick-reply-btn:hover {
+            background-color: #bae6fd; /* sky-200 */
+        }
+        .quick-reply-category {
+            font-weight: 600;
+            color: var(--text-light);
+            width: 100%;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: -0.25rem;
+        }
+
+        /* Loader */
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid var(--primary-color);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 4rem auto;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="antialiased p-4 md:p-6">
+
+    <!-- Modal: שלח תשובה/התראה ללקוח -->
+    <div id="reply-modal" class="modal-overlay hidden" onclick="closeReplyModal()">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div class="p-6">
+                <h3 class="text-lg font-semibold mb-4">שלח התראה ללקוח</h3>
+                <p class="text-sm text-gray-600 mb-2">עבור הזמנה: <strong id="reply-modal-order-id"></strong></p>
+                <p class="text-sm text-gray-600 mb-4">לקוח: <strong id="reply-modal-customer-name"></strong></p>
+                
+                <textarea id="reply-message-text" rows="4" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="הקלד את תוכן ההתראה כאן..."></textarea>
+                
+                <input type="hidden" id="reply-modal-doc-id">
+                <input type="hidden" id="reply-modal-msg-id">
+                
+                <!-- [NEW] "מלשינון" - תשובות מהירות -->
+                <div id="quick-reply-container">
+                    <span class="quick-reply-category">טוען תשובות...</span>
+                </div>
+
+                <div class="flex justify-end gap-3 mt-4">
+                    <button onclick="closeReplyModal()" class="py-2 px-4 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300">ביטול</button>
+                    <button onclick="sendAdminReply()" class="py-2 px-4 bg-blue-500 text-white rounded-md hover:bg-blue-600">שלח התראה</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Toast Container -->
+    <div id="toast-container" class="fixed bottom-5 right-5 z-[5000]"></div>
+
+    <!-- Main Content -->
+    <main class="max-w-4xl mx-auto">
+        <header class="flex justify-between items-center mb-6">
+            <div class="flex items-center gap-3">
+                <i data-feather="message-square" class="w-8 h-8 text-blue-500"></i>
+                <h1 class="text-3xl font-bold text-gray-800">מרכז הודעות</h1>
+            </div>
+            <div class="flex items-center gap-2">
+                <span class="text-sm font-medium text-gray-600">הודעות חדשות:</span>
+                <span id="notification-badge" class="notification-badge">0</span>
+            </div>
+        </header>
+
+        <div class="bg-white rounded-lg shadow p-4 md:p-6">
+            <h2 class="text-xl font-semibold mb-4">הודעות אחרונות מלקוחות</h2>
+            <div id="messages-list" class="flex flex-col gap-4">
+                <div id="messages-loading" class="text-center text-gray-500 py-10">
+                    <div class="loader"></div>
+                    <span class="block mt-2">טוען הודעות...</span>
+                </div>
+                <!-- Message cards will be injected here -->
+            </div>
+        </div>
+    </main>
+
+    <!-- 
+      ==========================================================
+      ===               תחילת סקריפט (v36)                   ===
+      ==========================================================
+    -->
+    <script type="module">
+        // --- Inlined Firebase SDK Imports ---
+        import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+        import { 
+            getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot, 
+            collection, query, where, Timestamp, runTransaction, getDocs, orderBy, 
+            serverTimestamp, limit, writeBatch, collectionGroup
+        } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { setLogLevel } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+
+        // --- Global Variables ---
+        let db, auth;
+        let messagesUnsubscribe = null;
+        let currentUserId = null;
+        
+        // [NEW] "מלשינון" - תשובות מהירות
+        const quickReplyCategories = {
+            "אישור הזמנה": [
+                "הזמנתך אושרה ומטופלת.",
+                "קיבלנו, תודה! ההזמנה בטיפול.",
+                "ההזמנה אושרה. נעדכן כשהנהג בדרך."
+            ],
+            "בירור פרטים": [
+                "אנא שלח כתובת מדויקת למשלוח.",
+                "מה מספר הטלפון של איש הקשר בשטח?",
+                "לאיזו שעה תרצה לתאם את האספקה?",
+                "אנא פרט כמויות מדויקות.",
+                "האם דרוש מנוף לפריקה?"
+            ],
+            "בדרך/נהג": [
+                "הנהג בדרך אליך.",
+                "הנהג יגיע בקרוב.",
+                "שלחנו לך לינק למעקב אחר הנהג.",
+                "הנהג אוסף כעת את הסחורה מהמחסן."
+            ],
+            "דחייה / בעיה": [
+                "לא נוכל לספק בתאריך המבוקש. אנא בחר תאריך חלופי.",
+                "הפריט אזל מהמלאי. נעדכן כשיחזור.",
+                "חיוב האשראי נכשל. אנא צור קשר עם המשרד.",
+                "אנא צור קשר טלפוני עם המשרד להשלמת ההזמנה."
+            ],
+            "כללי": [
+                "קיבלנו, תודה.",
+                "בטיפול.",
+                "תודה על פנייתך.",
+                "יום טוב!"
+            ]
+        };
+
+
+        // --- Firebase Config & Auth ---
+        const fallbackConfig = {
+          apiKey: "AIzaSyDq0oVwS6zbEfsgrYBRkeBq80dDUKMedzo", 
+          authDomain: "saban94-78949.firebaseapp.com", 
+          projectId: "saban94-78949",
+          storageBucket: "saban94-78949.firebasestorage.app", 
+          messagingSenderId: "41553157903", 
+          appId: "1:41553157903:web:cc33d252cff023be97a87a", 
+          measurementId: "G-XV6RZDESSB"
+        };
+        
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : JSON.stringify(fallbackConfig));
+        
+        try {
+            const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+            db = getFirestore(app);
+            auth = getAuth(app);
+            setLogLevel('Debug');
+            console.log("Firebase Initialized (Project: saban94-78949).");
+            
+            // --- Authentication ---
+            onAuthStateChanged(auth, async (user) => {
+                if (user) {
+                    currentUserId = user.uid;
+                    console.log("User Signed In:", currentUserId);
+                    SmartLog.info("Admin user signed in", "Auth.SignIn");
+                    listenForNewMessages();
+                } else {
+                    console.log("No user. Trying auth...");
+                    try {
+                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                            await signInWithCustomToken(auth, __initial_auth_token);
+                        } else {
+                            await signInAnonymously(auth);
+                        }
+                    } catch (error) {
+                        SmartLog.error(error, "Auth.SignInFailed");
+                        console.error("Firebase Auth Error:", error);
+                    }
+                }
+            });
+
+        } catch (e) {
+            console.error("Firebase Initialization Failed:", e);
+            SmartLog.error(e, "App.Init");
+            showToast('שגיאת התחברות חמורה ל-Firebase', 'error');
+        }
+
+        // --- Smart Logging Utility ---
+        const SmartLog = {
+            info: (msg, cat, ctx) => console.log(`[INFO|${cat}]`, msg, ctx || ''),
+            warn: (msg, cat, ctx) => console.warn(`[WARN|${cat}]`, msg, ctx || ''),
+            error: (err, cat, ctx) => console.error(`[ERROR|${cat}]`, err, ctx || ''),
+            // No logging to DB in this separated file for simplicity
+        };
+        
+        // --- Toast Notification ---
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            if (!container) return;
+            
+            const toast = document.createElement('div');
+            let icon = '<i class="fas fa-info-circle"></i>';
+            let bgColor = 'bg-blue-500';
+            if (type === 'success') {
+                icon = '<i class="fas fa-check-circle"></i>';
+                bgColor = 'bg-green-500';
+            } else if (type === 'error') {
+                icon = '<i class="fas fa-times-circle"></i>';
+                bgColor = 'bg-red-500';
+            }
+            
+            toast.className = `p-4 rounded-lg shadow-lg text-white ${bgColor} mb-2 transform translate-y-10 opacity-0 transition-all duration-300 ease-out`;
+            toast.innerHTML = `<span class="mr-2">${icon}</span> ${message}`;
+            
+            container.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.classList.remove('translate-y-10');
+                toast.classList.remove('opacity-0');
+            }, 100);
+            
+            setTimeout(() => {
+                toast.classList.add('opacity-0');
+                toast.classList.add('-translate-x-full');
+                setTimeout(() => {
+                    if (container.contains(toast)) {
+                        container.removeChild(toast);
+                    }
+                }, 300);
+            }, 5000);
+        }
+
+        // --- Messaging System Functions ---
+
+        function listenForNewMessages() {
+            if (messagesUnsubscribe) messagesUnsubscribe();
+            
+            const badge = document.getElementById('notification-badge');
+            const list = document.getElementById('messages-list');
+            
+            const q = query(
+                collectionGroup(db, 'messages'),
+                where('type', '==', 'message_to_admin'),
+                // orderBy('timestamp', 'desc') // Removed for fewer indexes
+            );
+            
+            messagesUnsubscribe = onSnapshot(q, (snapshot) => {
+                const loadingEl = document.getElementById('messages-loading');
+                if (loadingEl) loadingEl.style.display = 'none';
+                
+                if (!list) return;
+                
+                list.innerHTML = ''; 
+                const allMessages = [];
+                
+                snapshot.forEach(doc => {
+                    const message = { id: doc.id, ...doc.data() };
+                    message.orderId = doc.ref.parent.parent.id;
+                    allMessages.push(message);
+                });
+                
+                // Sort messages by read status (unread first), then by time
+                allMessages.sort((a, b) => {
+                    if (a.readByViewer !== b.readByViewer) {
+                        return a.readByViewer ? 1 : -1; // Unread (false) come first
+                    }
+                    return (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0); // Newest first
+                });
+                
+                const unreadCount = allMessages.filter(m => !m.readByViewer).length;
+                updateNotificationBadge(unreadCount);
+
+                if (allMessages.length === 0) {
+                    list.innerHTML = '<p class="text-gray-500 text-center">אין הודעות מלקוחות.</p>';
+                    return;
+                }
+                
+                allMessages.forEach(msg => {
+                    list.appendChild(createMessageCard(msg, msg.orderId, msg.id));
+                });
+                
+            }, (error) => {
+                SmartLog.error(error, "Data.Messages.ListenFailed", { msg: "Check Firestore indexes for 'messages' collection group" });
+                console.error("Error listening to messages: ", error);
+                if (list) list.innerHTML = 'שגיאה בטעינת הודעות. ייתכן שנדרש אינדקס ב-Firestore.';
+            });
+        }
+
+        function createMessageCard(message, orderId, messageId) {
+            const card = document.createElement('div');
+            card.className = `message-card p-4 rounded-lg shadow border-l-4 ${message.readByViewer ? 'read' : 'unread'}`;
+            
+            const time = message.timestamp ? new Date(message.timestamp.seconds * 1000).toLocaleString('he-IL') : 'לא ידוע';
+            
+            card.innerHTML = `
+                <div class="flex justify-between items-start mb-2">
+                    <div>
+                        <span class="font-bold text-lg text-gray-800">${message.senderName || 'לקוח'}</span>
+                        <span class="text-sm text-gray-600">(הזמנה: ${orderId.substring(0, 6)})</span>
+                    </div>
+                    <span class="text-xs text-gray-500">${time}</span>
+                </div>
+                <p class="text-gray-700 mb-3">${message.text}</p>
+                <div class="text-xs text-gray-500 mb-3">
+                    מזהה הזמנה: <span class="font-mono">${orderId}</span>
+                </div>
+                <button onclick="showSendReplyModal(event, '${orderId}', '${messageId}', '${message.senderName || 'לקוח'}')" class="text-sm bg-blue-500 text-white py-1 px-3 rounded-md hover:bg-blue-600">
+                    <i class="fas fa-reply"></i> שלח תשובה
+                </button>
+                ${!message.readByViewer ? `
+                    <button onclick="markMessageAsRead('${orderId}', '${messageId}')" class="text-sm bg-gray-200 text-gray-700 py-1 px-3 rounded-md hover:bg-gray-300 mr-2">
+                        <i class="fas fa-check"></i> סמן כנקרא
+                    </button>
+                ` : ''}
+            `;
+            return card;
+        }
+
+        function updateNotificationBadge(count) {
+            const badge = document.getElementById('notification-badge');
+            if (badge) {
+                if (count > 0) {
+                    badge.innerText = count;
+                    badge.style.display = 'flex';
+                } else {
+                    badge.innerText = '0';
+                    badge.style.display = 'flex'; // Show 0
+                }
+            }
+        }
+        
+        // [NEW] Populate quick replies
+        function populateQuickReplies() {
+            const container = document.getElementById('quick-reply-container');
+            container.innerHTML = ''; // Clear
+            
+            for (const [category, replies] of Object.entries(quickReplyCategories)) {
+                const catEl = document.createElement('span');
+                catEl.className = 'quick-reply-category';
+                catEl.innerText = category;
+                container.appendChild(catEl);
+                
+                replies.forEach(reply => {
+                    const btn = document.createElement('button');
+                    btn.className = 'quick-reply-btn';
+                    btn.innerText = reply;
+                    btn.onclick = () => {
+                        const textarea = document.getElementById('reply-message-text');
+                        textarea.value = reply;
+                        textarea.focus();
+                    };
+                    container.appendChild(btn);
+                });
+            }
+        }
+
+        function showSendReplyModal(event, orderId, messageId, customerName) {
+            event.stopPropagation();
+            
+            const modal = document.getElementById('reply-modal');
+            if (!modal) return;
+            
+            modal.querySelector('#reply-modal-order-id').innerText = orderId || 'לא ידוע';
+            modal.querySelector('#reply-modal-customer-name').innerText = customerName || 'לקוח';
+            modal.querySelector('#reply-modal-doc-id').value = orderId; 
+            modal.querySelector('#reply-modal-msg-id').value = messageId;
+            modal.querySelector('#reply-message-text').value = '';
+            
+            populateQuickReplies(); // [NEW] Load "מלשינון"
+            
+            modal.classList.remove('hidden');
+        }
+        window.showSendReplyModal = showSendReplyModal;
+
+        function closeReplyModal() {
+            const modal = document.getElementById('reply-modal');
+            if (modal) modal.classList.add('hidden');
+        }
+        window.closeReplyModal = closeReplyModal;
+
+        async function sendAdminReply() {
+            const orderId = document.getElementById('reply-modal-doc-id').value;
+            const originalMessageId = document.getElementById('reply-modal-msg-id').value;
+            const messageText = document.getElementById('reply-message-text').value.trim();
+            
+            if (!orderId || !originalMessageId || !messageText) {
+                showToast('שגיאה: חסרים נתונים לשליחת תשובה', 'error');
+                return;
+            }
+            
+            const batch = writeBatch(db);
+            
+            const msgRef = doc(db, 'orders', orderId, 'messages', originalMessageId);
+            batch.update(msgRef, { readByViewer: true });
+            
+            const newAlertRef = doc(collection(db, 'orders', orderId, 'messages'));
+            batch.set(newAlertRef, {
+                text: messageText,
+                type: "notification_to_customer",
+                senderName: "שירות לקוחות",
+                timestamp: serverTimestamp(),
+                readByViewer: true
+            });
+            
+            SmartLog.info(`Sending reply to ${orderId}`, "CRUD.Message.Reply", { text: messageText });
+
+            try {
+                await batch.commit();
+                showToast('התראה נשלחה ללקוח בהצלחה', 'success');
+                closeReplyModal();
+            } catch (error) {
+                SmartLog.error(error, "CRUD.Message.ReplyFailed");
+                showToast('שגיאה בשליחת התראה', 'error');
+            }
+        }
+        window.sendAdminReply = sendAdminReply;
+        
+        async function markMessageAsRead(orderId, messageId) {
+             const messageRef = doc(db, 'orders', orderId, 'messages', messageId);
+             try {
+                await updateDoc(messageRef, { readByViewer: true });
+                showToast('ההודעה סומנה כנקראה', 'success');
+             } catch (error) {
+                 SmartLog.error(error, "CRUD.Message.MarkRead");
+                 showToast('שגיאה בסימון הודעה', 'error');
+             }
+        }
+        window.markMessageAsRead = markMessageAsRead;
+
+        // --- Init ---
+        document.addEventListener('DOMContentLoaded', () => {
+            feather.replace();
+        });
+    </script>
+</body>
+</html>
+
