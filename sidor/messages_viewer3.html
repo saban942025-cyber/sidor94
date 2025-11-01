@@ -3,20 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>מרכז הודעות (v3.0 - CRM)</title>
+    <title>מרכז הודעות (v3.1 - CRM Fix)</title>
     <!-- 
-      DeliveryMaster Admin - מרכז הודעות v3.0 (CRM UI)
+      DeliveryMaster Admin - מרכז הודעות v3.1 (CRM Fix)
       
       Changelog:
-      - [NEW v3.0] שדרוג ל-3 עמודות: רשימת שיחות, צ'אט, וכרטיס לקוח.
-      - [NEW v3.0] הוספת `<aside id="customer-profile-panel">`.
-      - [NEW v3.0] לחיצה על שם הלקוח ב-`#chat-header` פותחת/סוגרת את כרטיס הלקוח.
-      - [NEW v3.0] פונקציה חדשה `loadCustomerProfile(customerId)`:
-        - שולפת את מסמך הלקוח מ-`customers` ומציגה פרטים אישיים.
-        - שולפת את כל ההזמנות של הלקוח מ-`orders` (לפי `customer.id`).
-        - מציגה היסטוריית הזמנות.
-        - מציגה רשימת פרויקטים ייחודית.
-      - [FIX v3.0] התאמות UI למובייל (כרטיס הלקוח מחליק מעל הצ'אט).
+      - [CRITICAL FIX v3.1]:
+        - תיקון באג "הצללת משתנים" ב-`listenForConversations`.
+        - הלולאה `for (const doc of snapshot.docs)` שונתה ל-`for (const messageDoc of snapshot.docs)`.
+        - זה מנע קריסה של `TypeError: doc is not a function`
+          ומנע את השגיאה הנלווית `No customerId provided`.
+      - [v3.0] שדרוג ל-3 עמודות: רשימת שיחות, צ'אט, וכרטיס לקוח.
       - [v2.0] בסיס קוד דמוי WhatsApp Web.
     -->
     
@@ -455,7 +452,7 @@
 
     <!-- 
       ==========================================================
-      ===               תחילת סקריפט (v3.0)                  ===
+      ===               תחילת סקריפט (v3.1)                  ===
       ==========================================================
     -->
     <script type="module">
@@ -589,15 +586,17 @@
                 const convMap = new Map();
                 const orderDataCache = new Map(); 
 
-                for (const doc of snapshot.docs) {
-                    const message = doc.data();
-                    const orderId = doc.ref.parent.parent.id;
+                // [FIX v3.1] Changed loop variable from `doc` to `messageDoc`
+                for (const messageDoc of snapshot.docs) {
+                    const message = messageDoc.data();
+                    const orderId = messageDoc.ref.parent.parent.id;
                     let customerId = message.senderId; // Assuming senderId is customerId
 
                     if (!convMap.has(orderId)) {
                         if (!orderDataCache.has(orderId)) {
                             try {
-                                const orderRef = doc(db, 'orders', orderId);
+                                // [FIX v3.1] `doc` (function) is no longer shadowed by `doc` (variable)
+                                const orderRef = doc(db, 'orders', orderId); 
                                 const orderSnap = await getDoc(orderRef);
                                 if (orderSnap.exists()) {
                                     orderDataCache.set(orderId, orderSnap.data());
