@@ -3,14 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>מעקב הזמנה - v34.5 (Lat/Lon Fix)</title>
+    <title>מעקב הזמנה - v34.6 (שדרוג UI)</title>
     <!-- 
-      DeliveryMaster Customer App v34.5 (Lat/Lon Fix)
-      - [FIX] תיקון קריטי ב-`submitNewOrder`:
-        הפונקציה ניסתה להעתיק `latitude` ו-`longitude` מההזמנה
-        הקיימת להזמנה החדשה. אם השדות היו חסרים (undefined),
-        ה-addDoc נכשל בשקט.
-        התיקון מוסיף את השדות רק אם הם קיימים.
+      DeliveryMaster Customer App v34.6 (UI Upgrade)
+      - [NEW] הוספת ברכה דינאמית (בוקר/צהריים/ערב טוב) + שם פרטי.
+      - [NEW] החלפת הברכה הסטטית "שלום..." בכותרת H2 דינאמית.
+      - [NEW] הגדלת תיבת הצ'אט (h-48 -> h-80) למראה מודרני.
+      - [FIX] תיקון קריטי ב-`submitNewOrder` (Lat/Lon undefined).
       - [FIX] שדרוג `startTracking` לבדיקת לקוח "N/A".
       - [FIX] שדרוג `startTracking` לתמיכה ב-ID ישן וחדש.
       - [NEW] העלאת קבצים (Firebase Storage).
@@ -258,7 +257,10 @@
             <!-- Order Details -->
             <div id="order-content" class="hidden space-y-6">
                 <div>
-                    <p class="text-gray-700 text-lg">שלום <strong id="customer-name"></strong>, ההזמנה שלך בסטטוס:</p>
+                    <!-- [NEW v34.6] Dynamic Greeting -->
+                    <h2 id="dynamic-greeting" class="text-2xl font-bold text-gray-800 mb-2"></h2>
+                    <p class="text-gray-600 text-lg">ההזמנה שלך בסטטוס:</p>
+                    
                     <!-- Status Tracker -->
                     <div class="status-tracker mt-6">
                         <div class="status-tracker-progress" id="status-progress-bar"></div>
@@ -310,7 +312,8 @@
                 <!-- פיצ'ר צ'אט חדש -->
                 <div id="chat-section">
                     <h3 class="font-semibold mb-3 text-lg">תקשורת עם המנהל</h3>
-                    <div id="chat-history" class="h-48 bg-gray-100 rounded-lg p-3 overflow-y-auto flex flex-col space-y-2 border">
+                    <!-- [NEW v34.6] Upgraded chatbox height -->
+                    <div id="chat-history" class="h-80 bg-gray-100 rounded-lg p-3 overflow-y-auto flex flex-col space-y-2 border">
                         <!-- הודעות צ'אט יופיעו כאן -->
                         <p class="text-gray-500 text-sm text-center">טוען היסטוריית הודעות...</p>
                     </div>
@@ -501,6 +504,29 @@
             if (stepIndex === 2) document.getElementById('step-onway').classList.add('active');
             if (stepIndex === 3) document.getElementById('step-completed').classList.add('active');
         }
+        
+        // [NEW v34.6] Dynamic Greeting
+        function setDynamicGreeting(customerName) {
+            const greetingEl = document.getElementById('dynamic-greeting');
+            if (!greetingEl) return;
+
+            const hour = new Date().getHours();
+            let greeting = "ברוך הבא";
+            if (hour >= 5 && hour < 12) {
+                greeting = "בוקר טוב";
+            } else if (hour >= 12 && hour < 18) {
+                greeting = "צהריים טובים";
+            } else if (hour >= 18 && hour < 22) {
+                greeting = "ערב טוב";
+            } else {
+                greeting = "לילה טוב";
+            }
+            
+            // Get first name
+            const firstName = (customerName || 'לקוח').split(' ')[0].replace(',', ''); // Clean up name
+            
+            greetingEl.innerText = `${greeting}, ${firstName}!`;
+        }
 
         // --- Main Logic ---
         function getOrderIdFromUrl() {
@@ -669,8 +695,8 @@
             const displayId = order.orderNumber || order.order_id || `#${currentOrderId.slice(-6)}`;
             document.getElementById('order-id-display').innerText = `הזמנה ${displayId}`;
             
-            // [FIX v34.3] Use the master currentCustomerData which is now reliable
-            document.getElementById('customer-name').innerText = currentCustomerData.name || 'לקוח';
+            // [FIX v34.6] Use dynamic greeting
+            setDynamicGreeting(currentCustomerData.name || 'לקוח');
             
             updateStatusTracker(order.status);
             
