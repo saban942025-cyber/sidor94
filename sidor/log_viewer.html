@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>מערכת לוגים (v1)</title>
+    <!-- 
+      DeliveryMaster Admin - דף לוגים ייעודי (v1)
+      - קובץ נפרד לצפייה בלוגים.
+      - כולל תרגום לעברית של הודעות נפוצות.
+      - כולל סינון לפי רמת לוג (הכל, שגיאה, מידע).
+      - הצגה בטבלה.
+    -->
+    
+    <!-- TailwindCSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Icons (Feather) -->
+    <script src="https://unpkg.com/feather-icons"></script>
+    
+    <!-- Google Font: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --primary-color: #3b82f6; /* blue-500 */
+            --bg-light: #f3f4f6; /* gray-100 */
+            --border-color: #e5e7eb; /* gray-200 */
+            --text-dark: #1f2937; /* gray-800 */
+            --text-light: #6b7280; /* gray-500 */
+            --error-bg: #fef2f2; /* red-50 */
+            --error-text: #b91c1c; /* red-700 */
+            --warn-bg: #fefce8; /* yellow-50 */
+            --warn-text: #a16207; /* yellow-700 */
+            --info-bg: #f9fafb; /* gray-50 */
+            --info-text: #374151; /* gray-700 */
+        }
+        body {
+            font-family: 'Inter', 'Arial', sans-serif;
+            background-color: var(--bg-light);
+            color: var(--text-dark);
+        }
+        
+        .tab-button {
+            padding: 0.5rem 1rem;
+            border-radius: 0.375rem;
+            font-weight: 500;
+            color: var(--text-light);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .tab-button.active {
+            background-color: var(--primary-color);
+            color: white;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .tab-button:not(.active):hover {
+            background-color: #ffffff;
+        }
+        
+        .log-level-error {
+            background-color: var(--error-bg);
+            color: var(--error-text);
+        }
+        .log-level-warn {
+            background-color: var(--warn-bg);
+            color: var(--warn-text);
+        }
+        .log-level-info {
+            background-color: var(--info-bg);
+            color: var(--info-text);
+        }
+        
+        /* Loader */
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid var(--primary-color);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 4rem auto;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="antialiased p-4 md:p-6">
+
+    <main class="max-w-7xl mx-auto">
+        <header class="flex justify-between items-center mb-6">
+            <div class="flex items-center gap-3">
+                <i data-feather="file-text" class="w-8 h-8 text-blue-500"></i>
+                <h1 class="text-3xl font-bold text-gray-800">מערכת לוגים</h1>
+            </div>
+            <a href="index_admin.html" class="text-sm text-blue-500 hover:underline">
+                &rarr; חזרה לניהול
+            </a>
+        </header>
+
+        <!-- [NEW] פילטרים -->
+        <div class="bg-white rounded-lg shadow p-4 mb-4 flex gap-2">
+            <button class="tab-button active" onclick="filterLogs('all')">הכל</button>
+            <button class="tab-button" onclick="filterLogs('error')">שגיאות</button>
+            <button class="tab-button" onclick="filterLogs('warn')">אזהרות</button>
+            <button class="tab-button" onclick="filterLogs('info')">מידע (Info)</button>
+        </div>
+        
+        <div class="bg-white rounded-lg shadow overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">זמן</th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">רמה</th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">קטגוריה</th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">הודעה (מתורגמת)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="logs-table-body" class="bg-white divide-y divide-gray-200">
+                        <tr>
+                            <td colspan="4" class="text-center p-8">
+                                <div class="loader"></div>
+                                <p class="text-gray-500">טוען לוגים...</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <!-- 
+      ==========================================================
+      ===               תחילת סקריפט (v36)                   ===
+      ==========================================================
+    -->
+    <script type="module">
+        // --- Inlined Firebase SDK Imports ---
+        import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+        import { 
+            getFirestore, doc, onSnapshot, collection, query, orderBy, serverTimestamp, limit
+        } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { setLogLevel } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+
+        // --- Global Variables ---
+        let db, auth;
+        let logUnsubscribe = null;
+        let currentUserId = null;
+        let allLogs = []; // Store all logs
+        let currentFilter = 'all'; // Store current filter
+        
+        // --- [NEW] תרגום הודעות לוג ---
+        const logTranslations = {
+            "Admin user signed in": "מנהל התחבר למערכת",
+            "Loaded active orders": "הזמנות פעילות נטענו",
+            "Loaded customers": "לקוחות נטענו",
+            "Loaded drivers": "נהגים נטענו",
+            "Driver locations updated": "מיקומי נהגים עודכנו",
+            "Switched to view": "מעבר תצוגה",
+            "Data.Orders.ListenFailed": "כשל בטעינת הזמנות",
+            "Data.Customers.ListenFailed": "כשל בטעינת לקוחות",
+            "Data.Drivers.ListenFailed": "כשל בטעינת נהגים",
+            "Data.Locations.ListenFailed": "כשל בטעינת מיקומים",
+            "Auth.SignInFailed": "כשל באימות משתמש",
+            "CRUD.Order.Create": "ניסיון יצירת הזמנה חדשה",
+            "CRUD.Order.CreateSuccess": "הזמנה חדשה נוצרה בהצלחה",
+            "CRUD.Order.CreateFailed": "שגיאה ביצירת הזמנה חדשה",
+            "CRUD.Customer.Update": "ניסיון עדכון פרטי לקוח",
+            "CRUD.Customer.UpdateSuccess": "פרטי לקוח עודכנו בהצלחה",
+            "CRUD.Customer.UpdateFailed": "שגיאה בעדכון פרטי לקוח",
+            "UI.CopyLink": "מכין לינק ללקוח",
+            "UI.CopyLinkSuccess": "לינק הועתק בהצלחה",
+            "UI.CopyLinkFailed": "שגיאה בהעתקת לינק",
+            "CRUD.Ping": "שליחת התראה גלובלית",
+        };
+
+        function translateLogMessage(message, category) {
+            // Try specific category first
+            if (logTranslations[category]) {
+                return logTranslations[category];
+            }
+            // Try generic message
+            for (const [key, value] of Object.entries(logTranslations)) {
+                if (message.includes(key)) {
+                    return value;
+                }
+            }
+            // Fallback
+            return message;
+        }
+
+
+        // --- Firebase Config & Auth ---
+        const fallbackConfig = {
+          apiKey: "AIzaSyDq0oVwS6zbEfsgrYBRkeBq80dDUKMedzo", 
+          authDomain: "saban94-78949.firebaseapp.com", 
+          projectId: "saban94-78949",
+          storageBucket: "saban94-78949.firebasestorage.app", 
+          messagingSenderId: "41553157903", 
+          appId: "1:41553157903:web:cc33d252cff023be97a87a", 
+          measurementId: "G-XV6RZDESSB"
+        };
+        
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : JSON.stringify(fallbackConfig));
+        
+        try {
+            const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+            db = getFirestore(app);
+            auth = getAuth(app);
+            setLogLevel('Debug');
+            console.log("Firebase Initialized (Project: saban94-78949).");
+            
+            // --- Authentication ---
+            onAuthStateChanged(auth, async (user) => {
+                if (user) {
+                    currentUserId = user.uid;
+                    console.log("User Signed In:", currentUserId);
+                    listenForLogs();
+                } else {
+                    console.log("No user. Trying auth...");
+                    try {
+                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                            await signInWithCustomToken(auth, __initial_auth_token);
+                        } else {
+                            await signInAnonymously(auth);
+                        }
+                    } catch (error) {
+                        console.error("Firebase Auth Error:", error);
+                    }
+                }
+            });
+
+        } catch (e) {
+            console.error("Firebase Initialization Failed:", e);
+        }
+
+        // --- Log Fetching ---
+        function listenForLogs() {
+            if (logUnsubscribe) logUnsubscribe();
+            
+            const q = query(
+                collection(db, 'system_logs_v3'), 
+                orderBy('timestamp', 'desc'), 
+                limit(200) // Load more logs
+            );
+            
+            logUnsubscribe = onSnapshot(q, (snapshot) => {
+                allLogs = []; // Clear
+                snapshot.forEach(doc => {
+                    allLogs.push(doc.data());
+                });
+                renderLogTable(); // Render initially with 'all'
+            }, (error) => {
+                console.error("Error listening to logs: ", error);
+                const tbody = document.getElementById('logs-table-body');
+                tbody.innerHTML = '<tr><td colspan="4" class="text-center p-8 text-red-500">שגיאה בטעינת לוגים.</td></tr>';
+            });
+        }
+        
+        // --- [NEW] Rendering & Filtering ---
+        function renderLogTable() {
+            const tbody = document.getElementById('logs-table-body');
+            tbody.innerHTML = ''; // Clear
+            
+            const filteredLogs = allLogs.filter(log => {
+                if (currentFilter === 'all') return true;
+                return log.level === currentFilter;
+            });
+
+            if (filteredLogs.length === 0) {
+                 tbody.innerHTML = '<tr><td colspan="4" class="text-center p-8 text-gray-500">לא נמצאו לוגים תואמים לסינון.</td></tr>';
+                 return;
+            }
+            
+            filteredLogs.forEach(log => {
+                const logTime = log.timestamp ? new Date(log.timestamp.seconds * 1000).toLocaleString('he-IL', { dateStyle: 'short', timeStyle: 'medium' }) : '...';
+                const level = log.level || 'info';
+                const levelClass = `log-level-${level}`;
+                
+                const tr = document.createElement('tr');
+                tr.className = `text-sm ${levelClass}`;
+                
+                tr.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap font-mono">${logTime}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${levelClass}">
+                            ${level.toUpperCase()}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap font-medium">${log.category || 'N/A'}</td>
+                    <td class="px-6 py-4">
+                        ${translateLogMessage(log.message, log.category)}
+                        <span class="block text-xs font-mono opacity-60">${log.message}</span>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+        
+        function filterLogs(level) {
+            currentFilter = level;
+            // Update active button
+            document.querySelectorAll('.tab-button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            document.querySelector(`.tab-button[onclick="filterLogs('${level}')"]`).classList.add('active');
+            
+            renderLogTable(); // Re-render the table with the new filter
+        }
+        window.filterLogs = filterLogs; // Expose to global
+
+        // --- Init ---
+        document.addEventListener('DOMContentLoaded', () => {
+            feather.replace();
+        });
+    </script>
+</body>
+</html>
+
