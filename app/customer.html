@@ -3,29 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>מעקב הזמנה - v36.1 (Race Fix)</title>
+    <title>מעקב הזמנה - v36.2 (Logic Fix)</title>
     <!-- 
-      DeliveryMaster Customer App v36.1 (Race Condition Fix)
+      DeliveryMaster Customer App v36.2 (Logic Fix)
       
       Changelog:
-      - [CRITICAL FIX v36.1]:
-        - תיקון Race Condition ב-`startTracking`.
-        - המאזין `onSnapshot` הוזז לסוף הפונקציה,
-          כדי להבטיח ש-`currentCustomerData` יוגדר (גם אם כ-fallback)
-          *לפני* שהמאזין יופעל ויקרא ל-`renderOrderData`.
-        - זה פותר את הקריסה `Cannot read properties of null (reading 'name')`.
+      - [CRITICAL FIX v36.2]:
+        - ארגון מחדש של `startTracking` ו-`onSnapshot`.
+        - `startTracking` מאתר כעת רק את ה-docId ומצמיד את המאזין.
+        - *כל* הלוגיקה של בדיקת הלקוח (כולל שליפה מ-`customers`),
+          שליפת פרויקטים, והגדרת fallback ("לקוח לא מזוהה")
+          עברה *לתוך* הקולבק של `onSnapshot`.
+        - זה פותר סופית את ה-Race Condition ואת קריסת `null.name`.
+      - [v36.1]:
+        - ניסיון תיקון Race Condition שהזיז את המאזין לסוף.
       - [v36]:
         - שדרוג העלאת קבצים לפתיחת WhatsApp אוטומטית.
-        - עדכון כתובת WEB_APP_URL.
       - [v35]:
         - הסרת Firebase Storage לטובת Apps Script (Google Drive).
-      - [v34.8]:
-        - תיקון קריסה בעת טעינת הזמנה ללא לקוח.
-      - [v34.7]:
-        - טופס הזמנה חכם (שליפת פרויקטים).
-      - [v34.6]:
-        - ברכה דינאמית (בוקר/צהריים/ערב).
-        - תיבת צ'אט מוגדלת.
     -->
 
     <!-- PWA Manifest -->
@@ -564,7 +559,7 @@
             } catch (e) { SmartLog.error(e, { context: "Error reading URL params" }); showError("שגיאה בעיבוד הקישור."); return null; }
         }
         
-        // [FIX v36.1] Updated function
+        // [FIX v36.2] Updated function
         async function startTracking() {
             currentOrderId = getOrderIdFromUrl(); // This could be '6209643' OR '8RJXj3...'
             if (!currentOrderId) return;
@@ -610,79 +605,11 @@
                     return;
                 }
                 
-                const orderData = orderDoc.data();
+                // [FIX v36.2] Moved all logic *inside* the listener
                 
-                // --- [NEW FIX v34.8] ---
-                // Validate and fetch full customer data if missing
-                const customerInOrder = orderData.customer;
-                const customerId = customerInOrder ? customerInOrder.id : null;
-                const customerName = customerInOrder ? customerInOrder.name : null;
-                
-                if (customerId && (!customerName || customerName === 'N/A' || customerName === 'לקוח לא ידוע')) {
-                    SmartLog.warn("Customer data is partial. Fetching full profile.", { customerId: customerId });
-                    try {
-                        const customerRef = doc(db, "customers", customerId);
-                        const customerSnap = await getDoc(customerRef);
-                        if (customerSnap.exists()) {
-                            currentCustomerData = { id: customerSnap.id, ...customerSnap.data() }; // Get the full, correct data
-                            SmartLog.info("Full customer profile fetched.", currentCustomerData);
-                        } else {
-                            currentCustomerData = customerInOrder; // Fallback
-                        }
-                    } catch (e) {
-                        SmartLog.error(e, "Failed to fetch full customer profile");
-                        currentCustomerData = customerInOrder; // Fallback
-                    }
-                } else if (customerInOrder && customerId) {
-                    currentCustomerData = customerInOrder; // Data seems fine
-                } else {
-                    SmartLog.error(new Error("No customer object or ID found on order"), { orderId: currentFirestoreDocId });
-                    // [CRITICAL FIX] Provide a fallback object to prevent crash
-                    currentCustomerData = { id: null, name: "לקוח לא מזוהה" }; 
-                }
-                // --- END FIX ---
-
-
-                // [NEW v34.7] Fetch project history if customer is valid
-                if (currentCustomerData && currentCustomerData.id) {
-                    try {
-                        const projectsQuery = query(
-                            collection(db, "orders"), 
-                            where("customer.id", "==", currentCustomerData.id),
-                            orderBy("createdAt", "desc"),
-                            limit(20) // Get last 20 orders
-                        );
-                        const projectsSnap = await getDocs(projectsQuery);
-                        const projectSet = new Set();
-                        projectsSnap.forEach(doc => { 
-                            if (doc.data().projectName) projectSet.add(doc.data().projectName); 
-                        });
-                        customerProjects = Array.from(projectSet);
-                        SmartLog.info("Fetched customer projects", { projects: customerProjects });
-                    } catch (e) {
-                         SmartLog.error(e, "Failed to fetch project history");
-                    }
-                }
-                // --- END FIX ---
-
-
-                // --- [NEW] Welcome Modal Logic ---
-                const messagesColRef = collection(db, "orders", currentFirestoreDocId, "messages");
-                const messagesQuery = query(messagesColRef, limit(1));
-                const messagesSnapshot = await getDocs(messagesQuery);
-                
-                if (messagesSnapshot.empty && currentCustomerData && currentCustomerData.id) { // Only show if customer is valid
-                    const customerName = currentCustomerData.name || 'לקוח יקר';
-                    document.getElementById('welcome-customer-name').innerText = customerName;
-                    document.getElementById('welcome-modal').showModal();
-                    feather.replace(); 
-                }
-                // --- End Welcome Modal Logic ---
-
-                // [FIX v36.1] Move listener to the *end* of the function
-                // This ensures currentCustomerData is set *before* onSnapshot fires
+                // Now listen to the specific document using its real ID
                 const orderRef = doc(db, "orders", currentFirestoreDocId);
-                orderListenerUnsubscribe = onSnapshot(orderRef, (docSnap) => {
+                orderListenerUnsubscribe = onSnapshot(orderRef, async (docSnap) => {
                     if (!docSnap.exists()) {
                          showError("ההזמנה נמחקה או שאינה קיימת.");
                          return;
@@ -690,11 +617,70 @@
                     
                     const newOrderData = docSnap.data();
                     orderListenerUnsubscribe.snapshot = docSnap; // Attach snapshot for easy access
+
+                    // --- [FIX v36.2] All customer logic is now INSIDE the listener ---
+                    const customerInOrder = newOrderData.customer;
+                    const customerId = customerInOrder ? customerInOrder.id : null;
+                    const customerName = customerInOrder ? customerInOrder.name : null;
                     
-                    // [FIX v34.3] Only update customer data if it's newer/better
-                    if (newOrderData.customer && newOrderData.customer.name && newOrderData.customer.name !== 'N/A' && newOrderData.customer.name !== 'לקוח לא מזוהה') {
-                         currentCustomerData = newOrderData.customer; 
+                    if (customerId && (!customerName || customerName === 'N/A' || customerName === 'לקוח לא ידוע')) {
+                        SmartLog.warn("Customer data is partial. Fetching full profile.", { customerId: customerId });
+                        try {
+                            const customerRef = doc(db, "customers", customerId);
+                            const customerSnap = await getDoc(customerRef);
+                            if (customerSnap.exists()) {
+                                currentCustomerData = { id: customerSnap.id, ...customerSnap.data() }; // Get the full, correct data
+                                SmartLog.info("Full customer profile fetched.", currentCustomerData);
+                            } else {
+                                currentCustomerData = customerInOrder; // Fallback
+                            }
+                        } catch (e) {
+                            SmartLog.error(e, "Failed to fetch full customer profile");
+                            currentCustomerData = customerInOrder; // Fallback
+                        }
+                    } else if (customerInOrder && customerId) {
+                        currentCustomerData = customerInOrder; // Data seems fine
+                    } else {
+                        SmartLog.error(new Error("No customer object or ID found on order"), { orderId: currentFirestoreDocId });
+                        // [CRITICAL FIX] Provide a fallback object to prevent crash
+                        currentCustomerData = { id: null, name: "לקוח לא מזוהה" }; 
                     }
+                    // --- END CUSTOMER LOGIC ---
+
+                    // --- [FIX v36.2] Fetch projects *after* customer is set ---
+                    if (currentCustomerData && currentCustomerData.id && customerProjects.length === 0) { // Only fetch once
+                        try {
+                            const projectsQuery = query(
+                                collection(db, "orders"), 
+                                where("customer.id", "==", currentCustomerData.id),
+                                orderBy("createdAt", "desc"),
+                                limit(20) // Get last 20 orders
+                            );
+                            const projectsSnap = await getDocs(projectsQuery);
+                            const projectSet = new Set();
+                            projectsSnap.forEach(doc => { 
+                                if (doc.data().projectName) projectSet.add(doc.data().projectName); 
+                            });
+                            customerProjects = Array.from(projectSet);
+                            SmartLog.info("Fetched customer projects", { projects: customerProjects });
+                        } catch (e) {
+                             SmartLog.error(e, "Failed to fetch project history");
+                        }
+                    }
+                    // --- END PROJECT LOGIC ---
+
+                    // --- [FIX v36.2] Welcome modal logic ---
+                    const messagesColRef = collection(db, "orders", currentFirestoreDocId, "messages");
+                    const messagesQuery = query(messagesColRef, limit(1));
+                    const messagesSnapshot = await getDocs(messagesQuery);
+                    
+                    if (messagesSnapshot.empty && currentCustomerData && currentCustomerData.id) { // Only show if customer is valid
+                        const customerName = currentCustomerData.name || 'לקוח יקר';
+                        document.getElementById('welcome-customer-name').innerText = customerName;
+                        document.getElementById('welcome-modal').showModal();
+                        feather.replace(); 
+                    }
+                    // --- End Welcome Modal Logic ---
                     
                     renderOrderData(newOrderData); 
                     
