@@ -3,16 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DeliveryMaster v34.4 (Path Fix)</title>
+    <title>DeliveryMaster v34.5 (Final Path Fix)</title>
     <!-- 
-      DeliveryMaster Admin App v34.4 (Path Fix)
+      DeliveryMaster Admin App v34.5 (Final Path Fix)
       
       Changelog:
-      - [CRITICAL FIX v34.4]:
-        - תיקון נתיב בפונקציה `copyCustomerLink`.
-        - הוסר `../` מיותר מהלינק שנוצר.
-        - הלינק יווצר כעת כ-`sidor/customer.html?id=...` 
-          (בהנחה שקובץ הניהול `index.html` נמצא בתיקייה הראשית).
+      - [CRITICAL FIX v34.5]:
+        - התאמת נתיב ב-`copyCustomerLink` להנחה שקובץ הניהול
+          נמצא *בתוך* תיקיית `sidor`, לצד `customer.html`.
+        - הלינק יווצר כעת כ-`customer.html?id=...`
+      - [v34.4]:
+        - תיקון נתיב ראשוני (הסרת ../).
       - [v34.3]:
         - שחזור פונקציות חסרות (renderHistoryTable וכו').
         - תיקון ID ב-renderOrdersList.
@@ -913,7 +914,7 @@
 
     <!-- 
       ==========================================================
-      ===               תחילת סקריפט ראשי (v34.3)            ===
+      ===               תחילת סקריפט ראשי (v34.4)            ===
       ==========================================================
     -->
     <script type="module">
@@ -923,7 +924,7 @@
         import { 
             getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot, 
             collection, query, where, Timestamp, runTransaction, getDocs, orderBy, 
-            serverTimestamp, limit, writeBatch, collectionGroup
+            serverTimestamp, limit, writeBatch, collectionGroup, arrayUnion
         } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { setLogLevel } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
@@ -1902,7 +1903,7 @@ ${orderData.notes || "--- אין תוכן ---"}
                     
                     if (hasChanges) {
                         const logEntry = {
-                            timestamp: serverTimestamp(), // [FIX v33.3] This should be serverTimestamp
+                            timestamp: serverTimestamp(), // [FIX v3R.R] This should be serverTimestamp
                             action: "Updated",
                             changes: changes
                         };
@@ -2314,4 +2315,6 @@ ${orderData.notes || "--- אין תוכן ---"}
     </script>
 </body>
 </html>
+
+
 
