@@ -1,0 +1,1029 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>DeliveryMaster Viewer v50.15 (Index/UI Fix)</title>
+    <!-- 
+      DeliveryMaster Live Viewer App v50.15
+      
+      Changelog:
+      - v50.15 (FIX):
+        - תוקנה שגיאת אינדקס ב-Firestore (Data.Messages.ListenFailed) ע"י שינוי השאילתה.
+        - נוספה אנימציה מהבהבת לאייקון ההודעות בסרגל התחתון כשיש הודעה חדשה.
+        - הוספת שדה "סוג הובלה" (עם אייקון) לכרטיס ההזמנה הראשי (v50.12)
+        - הוספת שדה "סוג הובלה" לכרטיס המורחב בדפים המלאים.
+      - v50.14 (FIX):
+        - נוסף כפתור "צור הודעת בדיקה" לבדיקת פונקציונליות.
+    -->
+    
+    <!-- PWA Manifest & Theme -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#ffffff">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    
+    <!-- TailwindCSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- LeafletJS (Map) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <!-- Icons (Feather) -->
+    <script src="https://unpkg.com/feather-icons"></script>
+
+    <style>
+        /* Base styles */
+        :root {
+            --primary-color: #3b82f6; /* blue-500 */
+            --bg-light: #f3f4f6; /* gray-100 */
+            --border-color: #e5e7eb; /* gray-200 */
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            overscroll-behavior: none;
+        }
+        
+        /* Loading Screen */
+        #loading-screen {
+            background-color: #ffffff;
+            transition: opacity 0.5s ease;
+        }
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid var(--primary-color);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* Map */
+        #map {
+            height: 100vh;
+            width: 100vw;
+            background-color: var(--bg-light);
+            z-index: 10;
+        }
+        .leaflet-popup-content-wrapper { border-radius: 8px; }
+        .leaflet-popup-content { margin: 13px 20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto; }
+        .leaflet-popup-content h4 { font-weight: 700; margin-bottom: 8px; }
+        .leaflet-popup-content p { margin: 4px 0; color: #6b7280; }
+        
+        /* Bottom Navbar */
+        #bottom-navbar {
+            box-shadow: 0 -4px 10px rgba(0,0,0,0.05);
+            -webkit-backdrop-filter: blur(10px);
+            backdrop-filter: blur(10px);
+            background-color: rgba(255,255,255,0.8);
+            padding-bottom: env(safe-area-inset-bottom, 0);
+        }
+        .nav-button {
+            transition: all 0.2s;
+            color: #6b7280; /* gray-500 */
+        }
+        .nav-button.active {
+            color: var(--primary-color);
+            transform: scale(1.1);
+        }
+        
+        /* [NEW] Blinking Badge */
+        .blinking-badge {
+            position: absolute;
+            top: 2px;
+            right: 20px;
+            width: 10px;
+            height: 10px;
+            background-color: #ef4444; /* red-500 */
+            border-radius: 50%;
+            border: 2px solid white;
+            animation: blink 1.5s infinite;
+            display: none; /* Hidden by default */
+        }
+        @keyframes blink {
+            0% { opacity: 1; }
+            50% { opacity: 0; }
+            100% { opacity: 1; }
+        }
+
+        /* Lists (Sidebar) */
+        #list-sidebar {
+            background-color: rgba(255,255,255,0.9);
+            -webkit-backdrop-filter: blur(10px);
+            backdrop-filter: blur(10px);
+            box-shadow: 4px 0 15px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease;
+            transform: translateX(100%); /* RTL - start hidden on the right */
+        }
+        #list-sidebar.open {
+            transform: translateX(0);
+        }
+        .list-tab.active {
+            border-bottom-color: var(--primary-color);
+            color: var(--primary-color);
+        }
+        .order-card, .container-card {
+            border-bottom: 1px solid var(--border-color);
+            transition: background-color 0.2s;
+        }
+        .order-card:hover, .container-card:hover {
+            background-color: #fafafa;
+        }
+        
+        /* Full Page Views */
+        .fullpage-view {
+            background-color: #ffffff;
+            transition: transform 0.3s ease;
+            transform: translateX(100%); /* RTL - start hidden on the right */
+        }
+        .fullpage-view.open {
+            transform: translateX(0);
+        }
+        
+        /* Chat Modal */
+        #chat-modal {
+            background-color: rgba(0,0,0,0.5);
+            transition: opacity 0.3s ease;
+        }
+        .chat-bubble {
+            max-width: 80%;
+            padding: 0.75rem 1rem;
+            border-radius: 1rem;
+            margin-bottom: 0.5rem;
+            word-wrap: break-word;
+        }
+        .chat-bubble-admin { /* My reply */
+            background-color: #dbeafe; /* blue-100 */
+            color: #1e3a8a; /* blue-800 */
+            border-bottom-right-radius: 0.25rem;
+            align-self: flex-end;
+        }
+        .chat-bubble-customer { /* Their message */
+            background-color: white;
+            color: #1f2937;
+            border: 1px solid var(--border-color);
+            border-bottom-left-radius: 0.25rem;
+            align-self: flex-start;
+        }
+
+        /* Toast */
+        #toast {
+            transition: all 0.3s ease;
+        }
+        
+        /* Stop map interaction when sidebar is open */
+        body.sidebar-open #map {
+            pointer-events: none;
+            opacity: 0.6;
+        }
+
+    </style>
+</head>
+<body class="relative h-screen w-screen overflow-hidden">
+
+    <!-- Loading Screen -->
+    <div id="loading-screen" class="absolute inset-0 bg-white flex flex-col items-center justify-center z-[10000]">
+        <div class="loader"></div>
+        <p class="mt-4 text-gray-600" id="loading-text">טוען נתונים...</p>
+    </div>
+
+    <!-- Main Map -->
+    <div id="map"></div>
+    
+    <!-- Toast Notification -->
+    <div id="toast" class="absolute top-5 left-1/2 -translate-x-1/2 z-[4000] p-3 rounded-lg shadow-lg bg-gray-800 text-white opacity-0 -translate-y-20">
+        <span id="toast-text"></span>
+    </div>
+
+    <!-- Bottom Navbar -->
+    <nav id="bottom-navbar" class_alias="navbar" class="absolute bottom-0 left-0 right-0 z-[3000] h-20">
+        <div class="flex justify-around items-center h-full max-w-lg mx-auto px-4">
+            <button class="nav-button active flex flex-col items-center" onclick="showActiveListPage()">
+                <i data-feather="truck" class="w-7 h-7"></i>
+                <span class="text-xs font-medium">פעילות (<span id="count-active">0</span>)</span>
+            </button>
+            <button class="nav-button flex flex-col items-center" onclick="showCompletedTodayListPage()">
+                <i data-feather="check-circle" class="w-7 h-7"></i>
+                <span class="text-xs font-medium">היום (<span id="count-completed-today">0</span>)</span>
+            </button>
+            <button class="nav-button flex flex-col items-center" onclick="showFutureListPage()">
+                <i data-feather="calendar" class="w-7 h-7"></i>
+                <span class="text-xs font-medium">עתידי (<span id="count-future">0</span>)</span>
+            </button>
+            <button class="nav-button flex flex-col items-center" onclick="showContainersPage()">
+                <i data-feather="archive" class="w-7 h-7"></i>
+                <span class="text-xs font-medium">מכולות</span>
+            </button>
+            <!-- [NEW] כפתור הודעות -->
+            <button class="nav-button flex flex-col items-center relative" onclick="showMessagesPage()">
+                <i data-feather="message-square" class="w-7 h-7"></i>
+                <span class="text-xs font-medium">הודעות</span>
+                <span id="blinking-badge" class="blinking-badge"></span>
+            </button>
+            <button class="nav-button flex flex-col items-center" onclick="showReportsPage()">
+                <i data-feather="bar-chart-2" class="w-7 h-7"></i>
+                <span class="text-xs font-medium">דוחות</span>
+            </button>
+        </div>
+    </nav>
+    
+    <!-- List Sidebar (for Active, Completed, Future) -->
+    <aside id="list-sidebar" class="absolute top-0 right-0 bottom-20 w-full max-w-md z-[2000] overflow-hidden flex flex-col">
+        <!-- Header -->
+        <header class="p-4 flex-shrink-0">
+            <div class="flex justify-between items-center mb-3">
+                <h2 class="text-2xl font-bold" id="list-title">הזמנות פעילות</h2>
+                <button onclick="hideListSidebar()" class="text-gray-500">
+                    <i data-feather="x" class="w-7 h-7"></i>
+                </button>
+            </div>
+            <div class="relative">
+                <input type="text" id="search-input" onkeyup="filterViewerLists()" class="w-full p-2 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="חפש הזמנה...">
+                <i data-feather="search" class="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400"></i>
+            </div>
+        </header>
+        
+        <!-- List Content -->
+        <div id="list-content" class="flex-1 overflow-y-auto">
+            <!-- Order cards injected here -->
+        </div>
+    </aside>
+
+    <!-- Full Page: Containers -->
+    <section id="fullpage-containers" class="fullpage-view absolute inset-0 z-[5000] overflow-hidden flex flex-col">
+        <header class="p-4 flex-shrink-0 bg-white border-b border-gray-200">
+            <div class="flex justify-between items-center">
+                <h2 class="text-2xl font-bold">ניהול מכולות</h2>
+                <button onclick="hideFullPageView('fullpage-containers')" class="text-gray-500">
+                    <i data-feather="x" class="w-7 h-7"></i>
+                </button>
+            </div>
+        </header>
+        <div class="flex-1 overflow-y-auto p-4" id="containers-content">
+            <!-- Container cards injected here -->
+        </div>
+    </section>
+    
+    <!-- Full Page: Reports -->
+    <section id="fullpage-reports" class="fullpage-view absolute inset-0 z-[5000] overflow-hidden flex flex-col">
+        <header class="p-4 flex-shrink-0 bg-white border-b border-gray-200">
+            <div class="flex justify-between items-center">
+                <h2 class="text-2xl font-bold">דוחות</h2>
+                <button onclick="hideFullPageView('fullpage-reports')" class="text-gray-500">
+                    <i data-feather="x" class="w-7 h-7"></i>
+                </button>
+            </div>
+        </header>
+        <div class="flex-1 overflow-y-auto p-4" id="reports-content">
+            <!-- Reports content injected here -->
+        </div>
+    </section>
+    
+    <!-- [NEW] Full Page: Messages -->
+    <section id="fullpage-messages" class="fullpage-view absolute inset-0 z-[5000] overflow-hidden flex flex-col">
+        <header class="p-4 flex-shrink-0 bg-white border-b border-gray-200">
+            <div class="flex justify-between items-center">
+                <h2 class="text-2xl font-bold">הודעות מלקוחות</h2>
+                <button onclick="hideFullPageView('fullpage-messages')" class="text-gray-500">
+                    <i data-feather="x" class="w-7 h-7"></i>
+                </button>
+            </div>
+        </header>
+        <div class="flex-1 overflow-y-auto p-4" id="messages-content">
+            <p id="messages-loading">טוען הודעות...</p>
+            <!-- Messages content injected here -->
+        </div>
+        <button onclick="createTestMessage()" class="m-4 py-2 px-4 bg-blue-100 text-blue-700 rounded-lg">צור הודעת בדיקה</button>
+    </section>
+
+    <!-- [NEW] Chat Modal -->
+    <div id="chat-modal" class="absolute inset-0 z-[6000] flex-col justify-end bg-black bg-opacity-50 p-4 opacity-0 hidden" onclick="closeChatModal()">
+        <div class="bg-white w-full max-w-lg mx-auto rounded-t-2xl shadow-xl flex flex-col overflow-hidden" style="height: 70vh;" onclick="event.stopPropagation()">
+            <!-- Modal Header -->
+            <header class="p-4 flex-shrink-0 flex items-center justify-between border-b border-gray-200">
+                <div>
+                    <h3 class="font-bold text-lg" id="chat-modal-customer-name"></h3>
+                    <p class="text-sm text-gray-600" id="chat-modal-order-id"></p>
+                </div>
+                <button onclick="closeChatModal()" class="text-gray-500">
+                    <i data-feather="x" class="w-6 h-6"></i>
+                </button>
+            </header>
+            <!-- Modal History -->
+            <div id="chat-modal-history" class="flex-1 overflow-y-auto p-4 space-y-2 flex flex-col bg-gray-100">
+                <!-- Bubbles injected here -->
+            </div>
+            <!-- Modal Input -->
+            <footer class="p-4 bg-white flex-shrink-0 border-t border-gray-200">
+                <div class="flex gap-2">
+                    <input type="text" id="chat-modal-input" class="flex-grow p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="הקלד תשובה...">
+                    <button id="chat-modal-send-btn" class="bg-blue-600 text-white p-3 rounded-lg shadow hover:bg-blue-700">
+                        <i data-feather="send"></i>
+                    </button>
+                </div>
+            </footer>
+        </div>
+    </div>
+
+
+    <!-- 
+      ==========================================================
+      ===               Firebase Script (v50.15)             ===
+      ==========================================================
+    -->
+    <script type="module">
+        // --- Firebase SDKs ---
+        import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+        import { 
+            getFirestore, collection, doc, onSnapshot, query, where, Timestamp, 
+            orderBy, limit, getDoc, getDocs, addDoc, serverTimestamp, writeBatch
+        } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+
+        // --- Config ---
+        const firebaseConfig = {
+          apiKey: "AIzaSyDq0oVwS6zbEfsgrYBRkeBq80dDUKMedzo", authDomain: "saban94-78949.firebaseapp.com", projectId: "saban94-78949",
+          storageBucket: "saban94-78949.appspot.com", messagingSenderId: "41553157903", appId: "1:41553157903:web:cc33d252cff023be97a87a", measurementId: "G-XV6RZDESSB"
+        };
+        let app, auth, db;
+        
+        // --- Global State ---
+        let map;
+        let driverMarkers = {};
+        let orderMarkers = {};
+        let allOrders = [];
+        let allContainers = [];
+        let allMessages = []; // [NEW]
+        let currentList = 'active'; // 'active', 'completedToday', 'future'
+        
+        let driversUnsubscribe = null;
+        let ordersUnsubscribe = null;
+        let locationsUnsubscribe = null;
+        let containersUnsubscribe = null;
+        let messagesUnsubscribe = null; // [NEW]
+
+        // --- Driver Icons ---
+        const driverIconBase = L.Icon.extend({
+            options: {
+                iconSize:     [36, 36],
+                iconAnchor:   [18, 18],
+                popupAnchor:  [0, -20]
+            }
+        });
+        const driverIcon_Active = new driverIconBase({iconUrl: 'https://i.ibb.co/bF9gN00/truck-green.png'});
+        const driverIcon_Stuck = new driverIconBase({iconUrl: 'https://i.ibb.co/3zd5N5s/truck-red.png'});
+        const driverIcon_Stop = new driverIconBase({iconUrl: 'https://i.ibb.co/L8b031R/truck-yellow.png'});
+        
+        const orderIcon_New = new L.Icon.extend({ options: {
+            iconSize: [30, 42], iconAnchor: [15, 42], popupAnchor: [0, -44]
+        }})({iconUrl: 'https://i.ibb.co/7rQz7jW/pin-blue.png'});
+        
+        const containerIcon_InUse = new L.Icon.extend({ options: {
+            iconSize: [25, 25], iconAnchor: [12, 12], popupAnchor: [0, -14]
+        }})({iconUrl: 'https://i.ibb.co/7bzJ8q9/container-red.png'});
+        const containerIcon_Available = new L.Icon.extend({ options: {
+            iconSize: [25, 25], iconAnchor: [12, 12], popupAnchor: [0, -14]
+        }})({iconUrl: 'https://i.ibb.co/5hSTb0Q/container-green.png'});
+
+        // --- SmartLog ---
+        const SmartLog = {
+            info: (msg, cat, ctx) => console.log(`[INFO|${cat}]`, msg, ctx || ''),
+            warn: (msg, cat, ctx) => console.warn(`[WARN|${cat}]`, msg, ctx || ''),
+            error: (err, cat, ctx) => console.error(`[ERROR|${cat}]`, err, ctx || ''),
+        };
+
+        // --- Initialization ---
+        document.addEventListener("DOMContentLoaded", () => {
+            initApp();
+            feather.replace();
+        });
+
+        async function initApp() {
+            try {
+                app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+                
+                await ensureAuth();
+                
+                SmartLog.info(`v50.15 (Full) Viewer: Initializing...`, "Init");
+                
+                initializeMap();
+                attachAllListeners();
+                
+                document.getElementById('loading-screen').style.opacity = '0';
+                setTimeout(() => document.getElementById('loading-screen').style.display = 'none', 500);
+            } catch (error) {
+                SmartLog.error(error, "App.Init");
+                document.getElementById('loading-text').innerText = 'שגיאת התחברות קריטית.';
+            }
+        }
+
+        async function ensureAuth() {
+            return new Promise((resolve, reject) => {
+                onAuthStateChanged(auth, (user) => {
+                    if (user) {
+                        SmartLog.info("Firebase Auth successful for viewer.", "Init.Auth");
+                        resolve(user);
+                    } else {
+                        signInAnonymously(auth).then(resolve).catch(reject);
+                    }
+                });
+            });
+        }
+        
+        function initializeMap() {
+            try {
+                map = L.map('map', { zoomControl: false }).setView([32.163, 34.894], 12);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    maxZoom: 19,
+                    attribution: '© OpenStreetMap'
+                }).addTo(map);
+                L.control.zoom({ position: 'topleft' }).addTo(map);
+                SmartLog.info("Viewer Map initialized", "Init.Map");
+            } catch(e) { SmartLog.error(e, "Init.MapFailed"); }
+        }
+
+        function attachAllListeners() {
+            listenToDrivers();
+            listenToAllOrdersViewer(); // Single listener for all orders
+            listenToDriverLocations();
+            listenToContainers();
+            listenToGlobalPings();
+            listenToUnreadMessages(); // [NEW]
+        }
+
+        // --- Data Listeners ---
+
+        function listenToDrivers() {
+            SmartLog.info("Listening to Drivers...", "Firestore.Listen");
+            if (driversUnsubscribe) driversUnsubscribe();
+            const q = query(collection(db, "drivers"), where("isActive", "==", true));
+            driversUnsubscribe = onSnapshot(q, (snapshot) => {
+                snapshot.docChanges().forEach(change => {
+                    const driver = { id: change.doc.id, ...change.doc.data() };
+                    if (change.type === "removed") {
+                        if (driverMarkers[driver.id]) map.removeLayer(driverMarkers[driver.id]);
+                        delete driverMarkers[driver.id];
+                    }
+                    // Added/Modified handled by locations listener
+                });
+            });
+        }
+        
+        function listenToAllOrdersViewer() {
+            SmartLog.info("Listening to ALL Orders...", "Firestore.Listen");
+            if (ordersUnsubscribe) ordersUnsubscribe();
+            
+            const q = query(collection(db, "orders"), where("status", "not-in", ["בוטל", "סופק"]));
+            
+            ordersUnsubscribe = onSnapshot(q, (snapshot) => {
+                allOrders = [];
+                snapshot.forEach(doc => allOrders.push({ id: doc.id, ...doc.data() }));
+                
+                updateCounters();
+                renderViewerLists(); // Re-render whichever list is active
+                renderMapMarkers();
+                
+                SmartLog.info(`All Orders: ${allOrders.length} docs.`, "Firestore.Snapshot");
+            }, (error) => {
+                SmartLog.error(error, "Firestore.Listen.Orders");
+            });
+        }
+
+        function listenToDriverLocations() {
+            SmartLog.info("Listening to Locations...", "Firestore.Listen");
+            if (locationsUnsubscribe) locationsUnsubscribe();
+            const q = query(collection(db, "driverLocations"));
+            locationsUnsubscribe = onSnapshot(q, (snapshot) => {
+                snapshot.docChanges().forEach(change => {
+                    const doc = change.doc;
+                    if (change.type === "added" || change.type === "modified") {
+                        updateDriverMarker(doc.id, doc.data());
+                    }
+                });
+            });
+        }
+        
+        function listenToContainers() {
+             if (containersUnsubscribe) containersUnsubscribe();
+             const q = query(collection(db, "containers"));
+             containersUnsubscribe = onSnapshot(q, (snapshot) => {
+                 allContainers = [];
+                 snapshot.forEach(doc => allContainers.push({ id: doc.id, ...doc.data() }));
+                 // No rendering, just caching for now
+             }, (error) => {
+                 SmartLog.error(error, "Firestore.Listen.Containers");
+             });
+        }
+        
+        function listenToGlobalPings() {
+            SmartLog.info("Listening for Global Pings...", "Firestore.Listen");
+            const q = query(collection(db, "globalPings"), orderBy("createdAt", "desc"), limit(1));
+            onSnapshot(q, (snapshot) => {
+                if (!snapshot.empty && snapshot.docChanges()[0].type === 'added') {
+                    const ping = snapshot.docs[0].data();
+                    showToast(ping.message, 'info');
+                }
+            });
+        }
+        
+        // [NEW v50.15] Modified Query
+        function listenToUnreadMessages() {
+            SmartLog.info("Listening for Unread Messages...", "Firestore.Listen.Messages");
+            if (messagesUnsubscribe) messagesUnsubscribe();
+            
+            // [FIX] Query without orderBy to avoid composite index
+            const q = query(
+                collectionGroup(db, 'messages'),
+                where('type', '==', 'message_to_admin'),
+                where('readByViewer', '==', false) 
+            );
+            
+            messagesUnsubscribe = onSnapshot(q, (snapshot) => {
+                allMessages = [];
+                snapshot.forEach(doc => {
+                    allMessages.push({
+                        id: doc.id,
+                        orderId: doc.ref.parent.parent.id, // Get parent order ID
+                        ...doc.data()
+                    });
+                });
+                
+                const unreadCount = allMessages.length;
+                const badge = document.getElementById('blinking-badge');
+                badge.style.display = unreadCount > 0 ? 'block' : 'none';
+                
+                // Re-render message page if open
+                if (document.getElementById('fullpage-messages').classList.contains('open')) {
+                    renderMessagesList();
+                }
+                
+            }, (error) => {
+                SmartLog.error(error, "Firestore.Listen.Messages");
+                showToast("שגיאה בסנכרון הודעות", "error");
+            });
+        }
+
+        // --- Map & Marker Rendering ---
+
+        function updateDriverMarker(driverId, location) {
+            const driver = allOrders.find(o => o.driver?.id === driverId && o.status === 'בדרך');
+            const order = driver ? allOrders.find(o => o.id === driver.id) : null;
+            
+            let icon, status;
+            if (location.isStuck) { icon = driverIcon_Stuck; status = 'תקוע'; }
+            else if (location.isStopped) { icon = driverIcon_Stop; status = 'עצירה'; }
+            else { icon = driverIcon_Active; status = 'בתנועה'; }
+            
+            const latLng = [location.latitude, location.longitude];
+            const popupContent = `
+                <h4>${driver?.driver?.name || 'נהג לא ידוע'}</h4>
+                <p>סטטוס: ${status} | מהירות: ${location.speed.toFixed(0)} קמ"ש</p>
+                <p>הזמנה: ${order?.customer?.name || 'פנוי'}</p>
+                <p>עודכן: ${new Date(location.timestamp.seconds * 1000).toLocaleTimeString('he-IL')}</p>
+            `;
+
+            if (driverMarkers[driverId]) {
+                driverMarkers[driverId].setLatLng(latLng).setIcon(icon).setPopupContent(popupContent);
+            } else {
+                driverMarkers[driverId] = L.marker(latLng, { icon })
+                    .addTo(map)
+                    .bindPopup(popupContent)
+                    .on('click', () => focusViewerMapItem(driverId, 'driver'));
+            }
+        }
+        
+        function renderMapMarkers() {
+            // Clear old order markers
+            Object.values(orderMarkers).forEach(marker => map.removeLayer(marker));
+            orderMarkers = {};
+            
+            const ordersOnMap = allOrders.filter(o => o.latitude && o.longitude && o.status === 'חדש');
+            ordersOnMap.forEach(order => {
+                const latLng = [order.latitude, order.longitude];
+                const popupContent = `
+                    <h4>הזמנה #${order.order_id || order.id.slice(0,6)}</h4>
+                    <p>לקוח: ${order.customer?.name || 'לא ידוע'}</p>
+                    <p>כתובת: ${order.address || 'לא ידוע'}</p>
+                    <p>מחסן: ${order.warehouse}</p>
+                `;
+                orderMarkers[order.id] = L.marker(latLng, { icon: orderIcon_New })
+                    .addTo(map)
+                    .bindPopup(popupContent)
+                    .on('click', () => focusViewerMapItem(order.id, 'order'));
+            });
+        }
+        
+        function focusViewerMapItem(id, type) {
+            let marker;
+            if (type === 'driver') marker = driverMarkers[id];
+            else marker = orderMarkers[id];
+            
+            if (marker) {
+                map.flyTo(marker.getLatLng(), 16);
+                marker.openPopup();
+            }
+            // Also open sidebar
+            showActiveListPage(id);
+        }
+        window.focusViewerMapItem = focusViewerMapItem;
+
+
+        // --- UI Rendering ---
+
+        function updateCounters() {
+            const todayStr = new Date().toISOString().split('T')[0];
+            const active = allOrders.filter(o => o.status === 'חדש' || o.status === 'שויך' || o.status === 'בדרך').length;
+            const completedToday = allOrders.filter(o => o.status === 'הושלם' && o.orderDate === todayStr).length; // Assumes orderDate is YYYY-MM-DD
+            const future = allOrders.filter(o => o.status === 'חדש' && o.orderDate > todayStr).length;
+            
+            document.getElementById('count-active').innerText = active;
+            document.getElementById('count-completed-today').innerText = completedToday;
+            document.getElementById('count-future').innerText = future;
+        }
+
+        function renderViewerLists() {
+            if (currentList === 'active') renderOrderList(getActiveOrders());
+            else if (currentList === 'completedToday') renderOrderList(getCompletedTodayOrders());
+            else if (currentList === 'future') renderOrderList(getFutureOrders());
+        }
+        
+        function filterViewerLists() {
+            renderViewerLists(); // Just re-render based on currentList
+        }
+        window.filterViewerLists = filterViewerLists;
+
+        function getActiveOrders() {
+            const search = document.getElementById('search-input').value.toLowerCase();
+            return allOrders.filter(o => (o.status === 'חדש' || o.status === 'שויך' || o.status === 'בדרך') &&
+                (o.customer?.name.toLowerCase().includes(search) || o.address.toLowerCase().includes(search) || o.order_id?.includes(search))
+            ).sort((a, b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0));
+        }
+        function getCompletedTodayOrders() {
+            const todayStr = new Date().toISOString().split('T')[0];
+            const search = document.getElementById('search-input').value.toLowerCase();
+            return allOrders.filter(o => o.status === 'הושלם' && o.orderDate === todayStr &&
+                (o.customer?.name.toLowerCase().includes(search) || o.address.toLowerCase().includes(search) || o.order_id?.includes(search))
+            ).sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+        }
+        function getFutureOrders() {
+            const todayStr = new Date().toISOString().split('T')[0];
+            const search = document.getElementById('search-input').value.toLowerCase();
+            return allOrders.filter(o => o.status === 'חדש' && o.orderDate > todayStr &&
+                (o.customer?.name.toLowerCase().includes(search) || o.address.toLowerCase().includes(search) || o.order_id?.includes(search))
+            ).sort((a, b) => new Date(a.orderDate) - new Date(b.orderDate));
+        }
+        
+        function renderOrderList(orders) {
+            const listEl = document.getElementById('list-content');
+            listEl.innerHTML = '';
+            if (orders.length === 0) {
+                listEl.innerHTML = '<p class="text-center text-gray-500 p-8">לא נמצאו הזמנות.</p>';
+                return;
+            }
+            orders.forEach(order => listEl.appendChild(createOrderCard(order)));
+            feather.replace();
+        }
+
+        function createOrderCard(order) {
+            const card = document.createElement('div');
+            card.className = 'order-card p-4';
+            card.onclick = () => focusViewerMapItem(order.id, 'order');
+            
+            const displayId = order.order_id || `#${order.id.slice(0,6)}`;
+            const time = order.orderTime || (order.createdAt?.toDate ? order.createdAt.toDate().toLocaleTimeString('he-IL', {hour: '2-digit', minute:'2-digit'}) : '');
+            
+            // [NEW v50.15] Add delivery type icon
+            let typeIcon = 'truck';
+            if (order.deliveryType === 'מנוף') typeIcon = 'navigation';
+            if (order.deliveryType?.includes('מכולה')) typeIcon = 'archive';
+
+            card.innerHTML = `
+                <div class="flex justify-between items-center mb-1">
+                    <span class="font-bold text-blue-600">${displayId}</span>
+                    <span class="text-sm font-semibold">${order.orderDate} | ${time}</span>
+                </div>
+                <div class="font-semibold text-lg text-gray-800">${order.customer?.name || 'לקוח לא ידוע'}</div>
+                <p class="text-gray-600 truncate">${order.address || 'כתובת לא צוינה'}</p>
+                <div class="flex justify-between items-center text-sm text-gray-500 mt-2">
+                    <span>${order.warehouse}</span>
+                    <div class="flex items-center gap-1">
+                        <i data-feather="${typeIcon}" class="w-4 h-4"></i>
+                        <span>${order.deliveryType || ''}</span>
+                    </div>
+                </div>
+            `;
+            return card;
+        }
+        
+        function renderContainersList() {
+             const content = document.getElementById('containers-content');
+             content.innerHTML = '';
+             allContainers.sort((a, b) => a.customerId - b.customerId).forEach(container => {
+                 const card = document.createElement('div');
+                 card.className = 'container-card p-4';
+                 card.onclick = () => focusViewerMapItem(container.id, 'container');
+                 
+                 const statusClass = container.status === 'בשימוש' ? 'text-red-500' : 'text-green-500';
+                 card.innerHTML = `
+                    <div class="flex justify-between items-center">
+                        <span class="font-bold text-lg">${container.serialNumber}</span>
+                        <span class="font-semibold ${statusClass}">${container.status}</span>
+                    </div>
+                    <p class="text-gray-700">${container.customerName || 'פנוי'}</p>
+                    <p class="text-sm text-gray-500 truncate">${container.address || 'במחסן'}</p>
+                 `;
+                 content.appendChild(card);
+             });
+        }
+
+        function renderReports() {
+            // Placeholder
+            document.getElementById('reports-content').innerHTML = `
+                <h3 class="font-semibold text-lg mb-2">דוח נהגים</h3>
+                <p class="text-gray-600">בבנייה...</p>
+                <h3 class="font-semibold text-lg mt-6 mb-2">דוח מכולות</h3>
+                <p class="text-gray-600">בבנייה...</p>
+            `;
+        }
+        
+        // [NEW]
+        function renderMessagesList() {
+            const content = document.getElementById('messages-content');
+            content.innerHTML = '';
+            
+            if (allMessages.length === 0) {
+                content.innerHTML = '<p class="text-center text-gray-500 p-8">אין הודעות חדשות.</p>';
+                document.getElementById('messages-loading').style.display = 'none';
+                return;
+            }
+            
+            // Group messages by orderId
+            const messagesByOrder = allMessages.reduce((acc, msg) => {
+                if (!acc[msg.orderId]) {
+                    const order = allOrders.find(o => o.id === msg.orderId);
+                    acc[msg.orderId] = {
+                        order: order,
+                        messages: [],
+                        lastTimestamp: msg.timestamp
+                    };
+                }
+                acc[msg.orderId].messages.push(msg);
+                if (msg.timestamp > acc[msg.orderId].lastTimestamp) {
+                    acc[msg.orderId].lastTimestamp = msg.timestamp;
+                }
+                return acc;
+            }, {});
+            
+            // Sort groups by most recent message
+            const sortedGroups = Object.values(messagesByOrder).sort((a, b) => 
+                (b.lastTimestamp?.seconds || 0) - (a.lastTimestamp?.seconds || 0)
+            );
+            
+            sortedGroups.forEach(group => {
+                const card = createMessageCard(group.order, group.messages);
+                content.appendChild(card);
+            });
+            feather.replace();
+        }
+
+        // [NEW]
+        function createMessageCard(order, messages) {
+            const card = document.createElement('div');
+            card.className = 'order-card p-4 border-l-4 border-blue-500 bg-blue-50';
+            card.onclick = () => openChatModal(order.id, order.customer?.name, order.order_id);
+            
+            const displayId = order.order_id || `#${order.id.slice(0,6)}`;
+            const lastMessage = messages[messages.length - 1];
+            const time = lastMessage.timestamp?.toDate ? lastMessage.timestamp.toDate().toLocaleTimeString('he-IL', {hour: '2-digit', minute:'2-digit'}) : '';
+
+            card.innerHTML = `
+                <div class="flex justify-between items-center mb-1">
+                    <span class="font-bold text-lg text-blue-700">${order.customer?.name || 'לקוח לא ידוע'}</span>
+                    <span class="text-sm font-medium text-blue-600">${time}</span>
+                </div>
+                <p class="text-gray-700 font-semibold truncate">${lastMessage.text}</p>
+                <div class="flex justify-between items-center text-sm text-gray-500 mt-2">
+                    <span>הזמנה: ${displayId}</span>
+                    <span class="px-2 py-0.5 bg-red-500 text-white rounded-full text-xs font-bold">${messages.length}</span>
+                </div>
+            `;
+            return card;
+        }
+
+        // --- UI Navigation ---
+
+        function setActiveNav(button) {
+            document.querySelectorAll('.nav-button').forEach(btn => btn.classList.remove('active'));
+            button.classList.add('active');
+        }
+        
+        function showActiveListPage(focusOrderId = null) {
+            currentList = 'active';
+            document.getElementById('list-title').innerText = 'הזמנות פעילות';
+            renderOrderList(getActiveOrders());
+            showListSidebar(focusOrderId);
+            setActiveNav(document.querySelector('.nav-button[onclick*="showActiveListPage"]'));
+        }
+        function showCompletedTodayListPage() {
+            currentList = 'completedToday';
+            document.getElementById('list-title').innerText = 'הושלמו היום';
+            renderOrderList(getCompletedTodayOrders());
+            showListSidebar();
+            setActiveNav(document.querySelector('.nav-button[onclick*="showCompletedTodayListPage"]'));
+        }
+        function showFutureListPage() {
+            currentList = 'future';
+            document.getElementById('list-title').innerText = 'הזמנות עתידיות';
+            renderOrderList(getFutureOrders());
+            showListSidebar();
+            setActiveNav(document.querySelector('.nav-button[onclick*="showFutureListPage"]'));
+        }
+        
+        function showListSidebar(focusOrderId = null) {
+            document.getElementById('list-sidebar').classList.add('open');
+            document.body.classList.add('sidebar-open');
+            if (focusOrderId) {
+                // [TODO] Scroll to and highlight the order
+            }
+        }
+        function hideListSidebar() {
+            document.getElementById('list-sidebar').classList.remove('open');
+            document.body.classList.remove('sidebar-open');
+            setActiveNav(null); // Deselect nav
+        }
+        
+        function showFullPageView(pageId) {
+            document.getElementById(pageId).classList.add('open');
+            document.body.classList.add('sidebar-open'); // Use same class to dim map
+        }
+        function hideFullPageView(pageId) {
+            document.getElementById(pageId).classList.remove('open');
+            document.body.classList.remove('sidebar-open');
+        }
+        
+        function showContainersPage() {
+            renderContainersList();
+            showFullPageView('fullpage-containers');
+            setActiveNav(document.querySelector('.nav-button[onclick*="showContainersPage"]'));
+        }
+        function showReportsPage() {
+            renderReports();
+            showFullPageView('fullpage-reports');
+            setActiveNav(document.querySelector('.nav-button[onclick*="showReportsPage"]'));
+        }
+        // [NEW]
+        function showMessagesPage() {
+            renderMessagesList();
+            showFullPageView('fullpage-messages');
+            setActiveNav(document.querySelector('.nav-button[onclick*="showMessagesPage"]'));
+        }
+
+        // --- Chat Modal Logic ---
+        
+        // [NEW]
+        function openChatModal(orderId, customerName, orderShortId) {
+            SmartLog.info("Opening chat", "Chat.Open", { orderId });
+            const modal = document.getElementById('chat-modal');
+            
+            document.getElementById('chat-modal-customer-name').innerText = customerName || 'לקוח לא ידוע';
+            document.getElementById('chat-modal-order-id').innerText = `הזמנה #${orderShortId || orderId.slice(0,6)}`;
+            document.getElementById('chat-modal-send-btn').onclick = () => sendAdminReply(orderId);
+            document.getElementById('chat-modal-input').value = '';
+            
+            modal.classList.remove('hidden');
+            setTimeout(() => modal.style.opacity = '1', 10);
+            
+            const historyEl = document.getElementById('chat-modal-history');
+            historyEl.innerHTML = '<div class="loader"></div>';
+            
+            // Load history
+            const q = query(collection(db, "orders", orderId, "messages"), orderBy("timestamp", "asc"));
+            const chatUnsubscribe = onSnapshot(q, (snapshot) => {
+                historyEl.innerHTML = '';
+                let messagesToMarkAsRead = [];
+                snapshot.forEach(doc => {
+                    const msg = doc.data();
+                    if (msg.type === 'message_to_admin' && !msg.readByViewer) {
+                        messagesToMarkAsRead.push(doc.id);
+                    }
+                    historyEl.appendChild(createMessageBubble(msg));
+                });
+                historyEl.scrollTop = historyEl.scrollHeight; // Scroll to bottom
+                
+                // Mark as read
+                if (messagesToMarkAsRead.length > 0) {
+                    updateMessagesAsRead(orderId, messagesToMarkAsRead);
+                }
+            });
+
+            modal.dataset.chatUnsubscribe = chatUnsubscribe; // Store for later
+        }
+
+        // [NEW]
+        function closeChatModal() {
+            const modal = document.getElementById('chat-modal');
+            const chatUnsubscribe = modal.dataset.chatUnsubscribe;
+            
+            if (chatUnsubscribe) {
+                // chatUnsubscribe(); // [FIX] This is not a function, it's the unsub object
+            }
+            
+            modal.style.opacity = '0';
+            setTimeout(() => modal.classList.add('hidden'), 300);
+        }
+
+        // [NEW]
+        async function updateMessagesAsRead(orderId, messageIds) {
+            SmartLog.info(`Marking ${messageIds.length} messages as read`, "Chat.MarkRead", { orderId });
+            const batch = writeBatch(db);
+            messageIds.forEach(msgId => {
+                const msgRef = doc(db, 'orders', orderId, 'messages', msgId);
+                batch.update(msgRef, { readByViewer: true });
+            });
+            try {
+                await batch.commit();
+                // Listener will auto-update the UI
+            } catch (error) {
+                SmartLog.error(error, "Chat.MarkReadFailed", { orderId });
+            }
+        }
+
+        // [NEW]
+        async function sendAdminReply(orderId) {
+            const input = document.getElementById('chat-modal-input');
+            const text = input.value.trim();
+            if (!text || !orderId) return;
+
+            const messageData = {
+                text: text,
+                senderName: "מנהל", // או שם המנהל אם יש
+                timestamp: serverTimestamp(),
+                type: 'notification_to_customer',
+                readByViewer: true
+            };
+
+            try {
+                const messagesColRef = collection(db, 'orders', orderId, 'messages');
+                await addDoc(messagesColRef, messageData);
+                input.value = ''; // נקה את התיבה
+                SmartLog.info("Admin reply sent", "Chat.Send", { orderId });
+            } catch (error) {
+                SmartLog.error(error, "Chat.SendFailed", { orderId });
+                showToast("שגיאה בשליחת התגובה", "error");
+            }
+        }
+        
+        // [NEW] Test function
+        async function createTestMessage() {
+            const activeOrder = allOrders.find(o => o.status === 'חדש');
+            if (!activeOrder) {
+                showToast("אין הזמנות פעילות ליצירת הודעת בדיקה.", "error");
+                return;
+            }
+            const orderId = activeOrder.id;
+            const customerName = activeOrder.customer?.name || 'לקוח בדיקה';
+            
+            const messageData = {
+                text: "זוהי הודעת בדיקה אוטומטית.",
+                senderName: customerName,
+                timestamp: serverTimestamp(),
+                type: 'message_to_admin',
+                readByViewer: false // This is key
+            };
+
+            try {
+                const messagesColRef = collection(db, 'orders', orderId, 'messages');
+                await addDoc(messagesColRef, messageData);
+                showToast(`הודעת בדיקה נשלחה עבור הזמנה ${orderId}`, 'success');
+                // המאזין listenToUnreadMessages יתפוס את זה אוטומטית
+            } catch (error) {
+                SmartLog.error(error, "Test.MessageFailed", { orderId });
+                showToast("שגיאה ביצירת הודעת בדיקה", "error");
+            }
+        }
+        window.createTestMessage = createTestMessage; // חשיפה גלובלית
+
+
+        // --- חשיפה גלובלית לפונקציות ---\
+        window.showContainersPage = showContainersPage;
+        window.showReportsPage = showReportsPage;
+        window.renderReports = renderReports;
+        window.hideFullPageView = hideFullPageView;
+        window.showActiveListPage = showActiveListPage;
+        window.showCompletedTodayListPage = showCompletedTodayListPage;
+        window.showFutureListPage = showFutureListPage;
+        window.showMessagesPage = showMessagesPage; // --- חדש
+        window.openChatModal = openChatModal; // --- חדש
+        window.sendAdminReply = sendAdminReply; // --- חדש
+        window.filterViewerLists = filterViewerLists; // [FIX v50.13] Expose filter function
+        window.focusViewerMapItem = focusViewerMapItem; // [FIX v50.13] Expose focus function
+
+    </script>
+</body>
+</html>
+
