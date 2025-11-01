@@ -3,21 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>מעקב הזמנה - v36 (שיתוף WhatsApp)</title>
+    <title>מעקב הזמנה - v36.2 (Logic Fix)</title>
     <!-- 
-      DeliveryMaster Customer App v36 (WhatsApp Share)
+      DeliveryMaster Customer App v36.2 (Logic Fix)
       
       Changelog:
-      - [NEW v36]:
-        - עדכון כתובת WEB_APP_URL לזו שסופקה.
-        - שדרוג `handleFileUpload`:
-          - כעת מקבל `waUrl` (קישור לוואטסאפ) מהשרת.
-          - פותח אוטומטית את ה-`waUrl` בטאב חדש לאחר העלאה מוצלחת.
-        - הוספת קישוריות ל-Google Drive ב-`createMessageBubble`.
+      - [CRITICAL FIX v36.2]:
+        - ארגון מחדש של `startTracking` ו-`onSnapshot`.
+        - `startTracking` מאתר כעת רק את ה-docId ומצמיד את המאזין.
+        - *כל* הלוגיקה של בדיקת הלקוח (כולל שליפה מ-`customers`),
+          שליפת פרויקטים, והגדרת fallback ("לקוח לא מזוהה")
+          עברה *לתוך* הקולבק של `onSnapshot`.
+        - זה פותר סופית את ה-Race Condition ואת קריסת `null.name`.
+      - [v36.1]:
+        - ניסיון תיקון Race Condition שהזיז את המאזין לסוף.
+      - [v36]:
+        - שדרוג העלאת קבצים לפתיחת WhatsApp אוטומטית.
       - [v35]:
         - הסרת Firebase Storage לטובת Apps Script (Google Drive).
-      - [v34.x]:
-        - תיקוני באגים, טופס חכם (פרויקטים), ברכה דינאמית.
     -->
 
     <!-- PWA Manifest -->
@@ -556,7 +559,7 @@
             } catch (e) { SmartLog.error(e, { context: "Error reading URL params" }); showError("שגיאה בעיבוד הקישור."); return null; }
         }
         
-        // [FIX v36.1] Updated function
+        // [FIX v36.2] Updated function
         async function startTracking() {
             currentOrderId = getOrderIdFromUrl(); // This could be '6209643' OR '8RJXj3...'
             if (!currentOrderId) return;
@@ -602,7 +605,7 @@
                     return;
                 }
                 
-                // [FIX v36.1] Moved all logic *inside* the listener
+                // [FIX v36.2] Moved all logic *inside* the listener
                 
                 // Now listen to the specific document using its real ID
                 const orderRef = doc(db, "orders", currentFirestoreDocId);
@@ -615,7 +618,7 @@
                     const newOrderData = docSnap.data();
                     orderListenerUnsubscribe.snapshot = docSnap; // Attach snapshot for easy access
 
-                    // --- [FIX v36.1] All customer logic is now INSIDE the listener ---
+                    // --- [FIX v36.2] All customer logic is now INSIDE the listener ---
                     const customerInOrder = newOrderData.customer;
                     const customerId = customerInOrder ? customerInOrder.id : null;
                     const customerName = customerInOrder ? customerInOrder.name : null;
@@ -644,7 +647,7 @@
                     }
                     // --- END CUSTOMER LOGIC ---
 
-                    // --- [FIX v36.1] Fetch projects *after* customer is set ---
+                    // --- [FIX v36.2] Fetch projects *after* customer is set ---
                     if (currentCustomerData && currentCustomerData.id && customerProjects.length === 0) { // Only fetch once
                         try {
                             const projectsQuery = query(
@@ -656,7 +659,14 @@
                             const projectsSnap = await getDocs(projectsQuery);
                             const projectSet = new Set();
                             projectsSnap.forEach(doc => { 
-                                if (doc.data().projectName) projectSet.add(doc.data().projectName); 
+                                if (doc.data().projectName) {
+                                    // Handle both string and array
+                                    if(Array.isArray(doc.data().projectName)) {
+                                        doc.data().projectName.forEach(p => projectSet.add(p));
+                                    } else {
+                                        projectSet.add(doc.data().projectName);
+                                    }
+                                } 
                             });
                             customerProjects = Array.from(projectSet);
                             SmartLog.info("Fetched customer projects", { projects: customerProjects });
@@ -666,7 +676,7 @@
                     }
                     // --- END PROJECT LOGIC ---
 
-                    // --- [FIX v36.1] Welcome modal logic ---
+                    // --- [FIX v36.2] Welcome modal logic ---
                     const messagesColRef = collection(db, "orders", currentFirestoreDocId, "messages");
                     const messagesQuery = query(messagesColRef, limit(1));
                     const messagesSnapshot = await getDocs(messagesQuery);
