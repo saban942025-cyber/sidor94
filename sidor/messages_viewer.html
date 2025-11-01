@@ -3,15 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>מרכז הודעות (v2.0)</title>
+    <title>מרכז הודעות (v3.1 - CRM Fix)</title>
     <!-- 
-      DeliveryMaster Admin - מרכז הודעות v2.0
-      - [NEW] שכתוב מלא של הדף לממשק דמוי WhatsApp Web.
-      - [NEW] עיצוב 2 עמודות: רשימת שיחות (ימין) וחלון צ'אט פעיל (שמאל).
-      - [NEW] תמיכה מלאה במובייל (מעבר בין רשימה לצ'אט במסך מלא).
-      - [NEW] טעינה דינאמית של היסטוריית הודעות בלחיצה על שיחה.
-      - [NEW] שילוב "מלשינון" (תשובות מוכנות) במודל התגובה.
-      - [NEW] פונקציונליות חיפוש לסינון שיחות.
+      DeliveryMaster Admin - מרכז הודעות v3.1 (CRM Fix)
+      
+      Changelog:
+      - [CRITICAL FIX v3.1]:
+        - תיקון באג "הצללת משתנים" ב-`listenForConversations`.
+        - הלולאה `for (const doc of snapshot.docs)` שונתה ל-`for (const messageDoc of snapshot.docs)`.
+        - זה מנע קריסה של `TypeError: doc is not a function`
+          ומנע את השגיאה הנלווית `No customerId provided`.
+      - [v3.0] שדרוג ל-3 עמודות: רשימת שיחות, צ'אט, וכרטיס לקוח.
+      - [v2.0] בסיס קוד דמוי WhatsApp Web.
     -->
     
     <!-- TailwindCSS -->
@@ -41,24 +44,81 @@
             height: 100vh;
         }
         
-        /* Layout */
+        /* [NEW v3.0] Layout: 3 Columns */
         .chat-app-layout {
             display: grid;
-            grid-template-columns: 350px 1fr;
+            grid-template-columns: 350px 1fr; /* Default: 2 columns */
             height: 100vh;
             overflow: hidden;
+            transition: grid-template-columns 0.3s ease;
         }
+        /* State when profile is open */
+        .chat-app-layout.profile-open {
+            grid-template-columns: 350px 1fr 300px;
+        }
+
         #conversation-list {
             background-color: var(--bg-app-light);
             border-left: 1px solid var(--border-color);
             display: flex;
             flex-direction: column;
+            overflow-y: auto;
         }
         #chat-window {
             background-color: white;
             display: flex;
             flex-direction: column;
+            border-left: 1px solid var(--border-color);
         }
+
+        /* [NEW v3.0] Customer Profile Panel */
+        #customer-profile-panel {
+            background-color: #ffffff;
+            border-left: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            /* Hide by default */
+            position: absolute;
+            right: 0;
+            top: 0;
+            height: 100%;
+            width: 300px;
+            z-index: 25;
+            transform: translateX(-100%); /* RTL: move left */
+            transition: transform 0.3s ease;
+        }
+        .chat-app-layout.profile-open #customer-profile-panel {
+            position: relative; /* Make part of grid flow */
+            transform: translateX(0);
+        }
+        .profile-section {
+            border-bottom: 1px solid var(--border-color);
+            padding: 1rem;
+        }
+        .profile-detail {
+            font-size: 0.875rem;
+        }
+        .profile-detail strong {
+            color: var(--text-light);
+            font-weight: 500;
+        }
+        .profile-detail span {
+            color: var(--text-dark);
+            font-weight: 500;
+        }
+        .profile-project-tag {
+            background-color: var(--bg-light);
+            color: var(--text-light);
+            font-size: 0.75rem;
+            font-weight: 500;
+            padding: 2px 8px;
+            border-radius: 99px;
+        }
+        .profile-order-item {
+            font-size: 0.875rem;
+        }
+
 
         /* Conversation List Item */
         .conv-item {
@@ -89,6 +149,10 @@
         /* Chat Window */
         #chat-header {
             border-bottom: 1px solid var(--border-color);
+            cursor: pointer;
+        }
+        #chat-header:hover {
+            background-color: var(--bg-app-light);
         }
         #chat-history {
             background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" fill="%23f3f4f6" /><path d="M100 0 L100 400 M200 0 L200 400 M300 0 L300 400 M0 100 L400 100 M0 200 L400 200 M0 300 L400 300" stroke="%23e5e7eb" stroke-width="1" /></svg>');
@@ -186,6 +250,11 @@
             animation: spin 1s linear infinite;
             margin: 4rem auto;
         }
+        .loader-small {
+            width: 20px; height: 20px;
+            border-width: 2px;
+            margin: 0.5rem auto;
+        }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         
         /* Mobile View */
@@ -193,8 +262,10 @@
             .chat-app-layout {
                 grid-template-columns: 1fr;
             }
+            .chat-app-layout.profile-open {
+                grid-template-columns: 1fr;
+            }
             #conversation-list {
-                /* מלא מסך כברירת מחדל */
                 height: 100%;
                 z-index: 20;
             }
@@ -205,10 +276,19 @@
                 width: 100%;
                 height: 100%;
                 z-index: 30;
-                transform: translateX(-100%); /* מוסתר משמאל */
+                transform: translateX(-100%); /* RTL: מוסתר משמאל */
                 transition: transform 0.3s ease;
             }
             #chat-window.active {
+                transform: translateX(0);
+            }
+            /* Profile Panel on Mobile */
+            #customer-profile-panel {
+                z-index: 40; /* Above chat window */
+                width: 300px;
+                transform: translateX(-100%); /* RTL: מוסתר משמאל */
+            }
+            .chat-app-layout.profile-open #customer-profile-panel {
                 transform: translateX(0);
             }
         }
@@ -245,7 +325,7 @@
     <div id="toast-container" class="fixed bottom-5 right-5 z-[5000]"></div>
 
     <!-- Main Layout -->
-    <div class="chat-app-layout">
+    <div id="main-layout" class="chat-app-layout">
         
         <!-- 1. Conversation List (Sidebar) -->
         <aside id="conversation-list">
@@ -283,8 +363,8 @@
             <!-- Active Chat State (Hidden by default) -->
             <div id="chat-active-state" class="hidden flex-1 flex flex-col">
                 <!-- Chat Header -->
-                <header id="chat-header" class="p-4 flex-shrink-0 flex items-center gap-4">
-                    <button id="mobile-back-btn" class="md:hidden" onclick="closeActiveChat()">
+                <header id="chat-header" class="p-4 flex-shrink-0 flex items-center gap-4" onclick="toggleProfilePanel()">
+                    <button id="mobile-back-btn" class="md:hidden" onclick="event.stopPropagation(); closeActiveChat()">
                         <i data-feather="arrow-right"></i>
                     </button>
                     <div class="w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold text-xl flex-shrink-0">
@@ -315,11 +395,64 @@
                 </footer>
             </div>
         </main>
+        
+        <!-- 3. [NEW v3.0] Customer Profile Panel -->
+        <aside id="customer-profile-panel">
+            <header class="p-4 flex-shrink-0 flex items-center justify-between border-b border-gray-200">
+                <h2 class="text-xl font-bold text-gray-800">כרטיס לקוח</h2>
+                <button onclick="toggleProfilePanel()" class="text-gray-500 hover:text-gray-700">
+                    <i data-feather="x" class="w-6 h-6"></i>
+                </button>
+            </header>
+            
+            <!-- Profile Content -->
+            <div id="profile-content-loading" class="text-center p-10">
+                <div class="loader loader-small"></div>
+                <p class="text-sm text-gray-500">טוען פרטי לקוח...</p>
+            </div>
+            
+            <div id="profile-content" class="hidden">
+                <!-- Section 1: Customer Details -->
+                <div class="profile-section space-y-2">
+                    <div class="text-center mb-4">
+                        <div class="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold text-3xl mx-auto">
+                            <span id="profile-initials"></span>
+                        </div>
+                        <h3 class="font-bold text-lg mt-2" id="profile-name"></h3>
+                    </div>
+                    <div class="profile-detail">
+                        <strong>מס' לקוח:</strong> <span id="profile-customer-number"></span>
+                    </div>
+                    <div class="profile-detail">
+                        <strong>טלפון:</strong> <a href="#" id="profile-phone" class="text-blue-500 hover:underline"></a>
+                    </div>
+                    <div class="profile-detail">
+                        <strong>כתובת:</strong> <span id="profile-address"></span>
+                    </div>
+                </div>
+                
+                <!-- Section 2: Projects -->
+                <div class="profile-section">
+                    <h4 class="font-semibold text-gray-700 mb-2">פרויקטים</h4>
+                    <div id="profile-projects-list" class="flex flex-wrap gap-2">
+                        <!-- Project tags injected here -->
+                    </div>
+                </div>
+                
+                <!-- Section 3: Order History -->
+                <div class="profile-section">
+                    <h4 class="font-semibold text-gray-700 mb-2">היסטוריית הזמנות (5 אחרונות)</h4>
+                    <div id="profile-orders-list" class="space-y-2">
+                        <!-- Order items injected here -->
+                    </div>
+                </div>
+            </div>
+        </aside>
     </div>
 
     <!-- 
       ==========================================================
-      ===               תחילת סקריפט (v36)                   ===
+      ===               תחילת סקריפט (v3.1)                  ===
       ==========================================================
     -->
     <script type="module">
@@ -338,10 +471,11 @@
         let messagesUnsubscribe = null;
         let chatUnsubscribe = null;
         let currentUserId = null;
-        let activeConversations = new Map(); // [orderId, { customerName, lastMessage, timestamp, unreadCount }]
+        let activeConversations = new Map(); // [orderId, { customerName, customerId, lastMessage, timestamp, unreadCount }]
         let activeOrderId = null; // The currently open chat
+        let activeCustomerId = null; // [NEW]
         
-        // --- "מלשינון" - תשובות מהירות ---
+        // --- "מלשינון" (כמו קודם) ---
         const quickReplyCategories = {
             "אישור הזמנה": [
                 "הזמנתך אושרה ומטופלת.",
@@ -433,7 +567,7 @@
             // (קוד מלא של showToast כפי שהיה בקובץ הקודם...)
         }
 
-        // --- [NEW] Conversation Logic ---
+        // --- Conversation Logic ---
 
         function listenForConversations() {
             if (messagesUnsubscribe) messagesUnsubscribe();
@@ -449,27 +583,25 @@
                 const loadingEl = document.getElementById('conv-loading');
                 if (loadingEl) loadingEl.style.display = 'none';
                 
-                // Process all messages to build conversation map
                 const convMap = new Map();
-                const orderDataCache = new Map(); // Cache order data to avoid multiple fetches
+                const orderDataCache = new Map(); 
 
-                for (const doc of snapshot.docs) {
-                    const message = doc.data();
-                    const orderId = doc.ref.parent.parent.id;
+                // [FIX v3.1] Changed loop variable from `doc` to `messageDoc`
+                for (const messageDoc of snapshot.docs) {
+                    const message = messageDoc.data();
+                    const orderId = messageDoc.ref.parent.parent.id;
+                    let customerId = message.senderId; // Assuming senderId is customerId
 
-                    // Group by Order ID for now. Grouping by customerId is more complex.
                     if (!convMap.has(orderId)) {
-                        // This is the latest message for this order
-                        
-                        // Fetch order data if not in cache
                         if (!orderDataCache.has(orderId)) {
                             try {
-                                const orderRef = doc(db, 'orders', orderId);
+                                // [FIX v3.1] `doc` (function) is no longer shadowed by `doc` (variable)
+                                const orderRef = doc(db, 'orders', orderId); 
                                 const orderSnap = await getDoc(orderRef);
                                 if (orderSnap.exists()) {
                                     orderDataCache.set(orderId, orderSnap.data());
                                 } else {
-                                    orderDataCache.set(orderId, null); // Mark as fetched but null
+                                    orderDataCache.set(orderId, null);
                                 }
                             } catch (e) {
                                 SmartLog.error(e, "Listen.GetOrder", { orderId });
@@ -479,13 +611,19 @@
                         
                         const order = orderDataCache.get(orderId);
                         
+                        // [FIX v3.0] Get customerId from order object if not on message
+                        if (!customerId && order && order.customer && order.customer.id) {
+                            customerId = order.customer.id;
+                        }
+
                         convMap.set(orderId, {
                             orderId: orderId,
+                            customerId: customerId, // [NEW] Store customerId
                             customerName: order?.customer?.name || message.senderName || 'לקוח לא ידוע',
                             orderShortId: order?.order_id || orderId.slice(0,6),
                             lastMessage: message.text,
                             timestamp: message.timestamp,
-                            unreadCount: 0 // Will calculate this in a moment
+                            unreadCount: 0
                         });
                     }
                     
@@ -500,12 +638,12 @@
                 
                 activeConversations = convMap;
                 renderConversationList();
-                updateTotalBadge();
+                // [REMOVED v3.0] No total badge, unread count is per-conversation
 
             }, (error) => {
                 SmartLog.error(error, "Data.Messages.ListenFailed", { msg: "Check Firestore indexes for 'messages' collection group" });
                 console.error("Error listening to messages: ", error);
-                if (list) list.innerHTML = '<p class="p-4 text-red-500">שגיאה בטעינת שיחות. ייתכן שנדרש אינדקס ב-Firestore.</p>';
+                if (list) list.innerHTML = '<p class="p-4 text-red-500">שגיאה בטעינת שיחות.</p>';
             });
         }
         
@@ -537,7 +675,7 @@
         function createConversationCard(conv) {
             const card = document.createElement('div');
             card.className = `conv-item p-4 flex gap-3 ${conv.orderId === activeOrderId ? 'active' : ''}`;
-            card.onclick = () => openChat(conv.orderId, conv.customerName, conv.orderShortId);
+            card.onclick = () => openChat(conv.orderId, conv.customerId, conv.customerName, conv.orderShortId);
             
             const initials = conv.customerName.split(' ').map(n => n[0]).join('').slice(0, 2);
             const time = conv.timestamp ? new Date(conv.timestamp.seconds * 1000).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' }) : '';
@@ -560,9 +698,10 @@
             return card;
         }
 
-        async function openChat(orderId, customerName, orderShortId) {
-            SmartLog.info("Opening chat", "Chat.Open", { orderId });
+        async function openChat(orderId, customerId, customerName, orderShortId) {
+            SmartLog.info("Opening chat", "Chat.Open", { orderId, customerId });
             activeOrderId = orderId;
+            activeCustomerId = customerId; // [NEW] Store active customer
             
             // Highlight in list
             renderConversationList(); 
@@ -619,6 +758,9 @@
                     markMessagesAsRead(orderId, messagesToMarkAsRead);
                 }
             });
+
+            // [NEW v3.0] Load customer profile
+            loadCustomerProfile(customerId);
         }
         
         function createMessageBubble(msg) {
@@ -716,15 +858,97 @@
             }
         }
         window.markMessagesAsRead = markMessagesAsRead; // For modal button
+
+        // --- [NEW v3.0] Profile Panel Functions ---
         
-        function updateTotalBadge() {
-            const totalUnread = Array.from(activeConversations.values()).reduce((acc, conv) => acc + conv.unreadCount, 0);
-            const badge = document.getElementById('notification-badge');
-            if (badge) {
-                badge.innerText = totalUnread;
-                badge.style.display = totalUnread > 0 ? 'flex' : 'none';
+        function toggleProfilePanel() {
+            document.getElementById('main-layout').classList.toggle('profile-open');
+        }
+        window.toggleProfilePanel = toggleProfilePanel;
+
+        async function loadCustomerProfile(customerId) {
+            const loadingEl = document.getElementById('profile-content-loading');
+            const contentEl = document.getElementById('profile-content');
+            loadingEl.style.display = 'block';
+            contentEl.style.display = 'none';
+            
+            if (!customerId) {
+                SmartLog.warn("No customerId provided, cannot load profile", "Profile");
+                loadingEl.innerHTML = '<p class="p-4 text-red-500">לא זוהה מזהה לקוח.</p>';
+                return;
+            }
+
+            try {
+                // 1. Fetch Customer Details
+                const customerRef = doc(db, "customers", customerId);
+                const customerSnap = await getDoc(customerRef);
+                
+                if (!customerSnap.exists()) {
+                    throw new Error("Customer document not found");
+                }
+                const customer = customerSnap.data();
+                
+                document.getElementById('profile-initials').innerText = customer.name.split(' ').map(n => n[0]).join('').slice(0, 2);
+                document.getElementById('profile-name').innerText = customer.name;
+                document.getElementById('profile-customer-number').innerText = customer.customerNumber || 'N/A';
+                document.getElementById('profile-phone').innerText = customer.phone || 'N/A';
+                document.getElementById('profile-phone').href = `tel:${customer.phone || ''}`;
+                document.getElementById('profile-address').innerText = customer.defaultAddress || 'N/A';
+                
+                // 2. Fetch Order History & Projects
+                const ordersQuery = query(
+                    collection(db, "orders"),
+                    where("customer.id", "==", customerId),
+                    orderBy("createdAt", "desc"),
+                    limit(10) // Get last 10 orders
+                );
+                
+                const ordersSnap = await getDocs(ordersQuery);
+                const projects = new Set();
+                const ordersList = document.getElementById('profile-orders-list');
+                ordersList.innerHTML = '';
+                
+                if (ordersSnap.empty) {
+                     ordersList.innerHTML = '<p class="text-sm text-gray-500">אין היסטוריית הזמנות.</p>';
+                }
+
+                ordersSnap.forEach(orderDoc => {
+                    const order = orderDoc.data();
+                    if (order.projectName) {
+                        projects.add(order.projectName);
+                    }
+                    
+                    const orderEl = document.createElement('div');
+                    orderEl.className = 'profile-order-item p-2 rounded hover:bg-gray-100';
+                    const orderDate = order.orderDate || (order.createdAt?.toDate() ? order.createdAt.toDate().toLocaleDateString('he-IL') : '');
+                    orderEl.innerHTML = `
+                        <span class="font-semibold">${order.order_id || orderDoc.id.slice(0,6)}</span>
+                        <span class->(${orderDate})</span>
+                        <span class="block text-xs text-gray-500">${order.status} - ${order.notes.slice(0, 20)}...</span>
+                    `;
+                    ordersList.appendChild(orderEl);
+                });
+                
+                // 3. Render Projects
+                const projectsList = document.getElementById('profile-projects-list');
+                projectsList.innerHTML = '';
+                if (projects.size === 0) {
+                    projectsList.innerHTML = '<span class="text-sm text-gray-500">אין פרויקטים רשומים.</span>';
+                }
+                projects.forEach(proj => {
+                    projectsList.innerHTML += `<span class="profile-project-tag">${proj}</span>`;
+                });
+
+                // Show content
+                loadingEl.style.display = 'none';
+                contentEl.style.display = 'block';
+                
+            } catch (error) {
+                SmartLog.error(error, "Profile.LoadFailed", { customerId });
+                loadingEl.innerHTML = '<p class="p-4 text-red-500">שגיאה בטעינת כרטיס לקוח.</p>';
             }
         }
+
 
         // --- Modal & Mobile UI ---
         function showSendReplyModal(event, orderId, messageId, customerName) {
@@ -755,11 +979,38 @@
         function closeActiveChat() {
             document.getElementById('chat-window').classList.remove('active');
             activeOrderId = null;
+            activeCustomerId = null;
             if (chatUnsubscribe) chatUnsubscribe();
             chatUnsubscribe = null;
             renderConversationList(); // To remove highlight
+            toggleProfilePanel(); // Close profile panel if open
         }
         
+        // [NEW] Populate quick replies
+        function populateQuickReplies() {
+            const container = document.getElementById('quick-reply-container');
+            container.innerHTML = ''; // Clear
+            
+            for (const [category, replies] of Object.entries(quickReplyCategories)) {
+                const catEl = document.createElement('span');
+                catEl.className = 'quick-reply-category';
+                catEl.innerText = category;
+                container.appendChild(catEl);
+                
+                replies.forEach(reply => {
+                    const btn = document.createElement('button');
+                    btn.className = 'quick-reply-btn';
+                    btn.innerText = reply;
+                    btn.onclick = () => {
+                        const textarea = document.getElementById('reply-message-text');
+                        textarea.value = reply;
+                        textarea.focus();
+                    };
+                    container.appendChild(btn);
+                });
+            }
+        }
+
         // --- Init ---
         document.addEventListener('DOMContentLoaded', () => {
             feather.replace();
@@ -768,4 +1019,3 @@
     </script>
 </body>
 </html>
-
