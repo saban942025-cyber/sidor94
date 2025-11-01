@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>מערכת ספקים - DeliveryMaster</title>
+    
+    <!-- PWA Manifest & Theme -->
+    <link rel="manifest" href="supplier_manifest.json">
+    <meta name="theme-color" content="#1f2937">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    
+    <!-- TailwindCSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Icons (Feather) -->
+    <script src="https://unpkg.com/feather-icons"></script>
+    
+    <!-- Google Font: Rubik -->
+    <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Rubik', sans-serif;
+            background-color: #f3f4f6; /* gray-100 */
+        }
+        
+        /* Dark Mode */
+        html.dark body {
+            background-color: #111827; /* gray-900 */
+        }
+        
+        /* Glassmorphism Card */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+        }
+        
+        html:not(.dark) .glass-card {
+             background: rgba(255, 255, 255, 0.7);
+             border: 1px solid rgba(255, 255, 255, 0.9);
+        }
+
+        /* Permission Button */
+        .permission-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #f3f4f6;
+        }
+        .permission-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+        
+        html:not(.dark) .permission-btn {
+            background: #f9fafb; /* gray-50 */
+            border: 1px solid #e5e7eb; /* gray-200 */
+            color: #374151; /* gray-700 */
+        }
+        html:not(.dark) .permission-btn:hover {
+            background: #f3f4f6; /* gray-100 */
+        }
+        
+        .permission-btn.granted {
+            background: rgba(74, 222, 128, 0.1); /* green-500/10 */
+            border-color: rgba(74, 222, 128, 0.3);
+            color: #22c55e; /* green-500 */
+        }
+        html:not(.dark) .permission-btn.granted {
+             background: #f0fdf4; /* green-50 */
+             border-color: #bbf7d0; /* green-200 */
+             color: #166534; /* green-800 */
+        }
+
+    </style>
+</head>
+<body class="dark"> <!-- התחלה במצב כהה כברירת מחדל -->
+
+    <!-- Dark Mode Toggle -->
+    <button id="theme-toggle" class="absolute top-5 right-5 p-2 rounded-full text-gray-400 hover:bg-gray-700">
+        <i data-feather="moon" class="w-6 h-6 hidden dark:block"></i>
+        <i data-feather="sun" class="w-6 h-6 block dark:hidden"></i>
+    </button>
+    
+    <div class="flex flex-col items-center justify-center min-h-screen p-4 text-white dark:text-white">
+        
+        <img src="https://i.postimg.cc/ryPT3r29/image.png" alt="Company Logo" class="w-24 h-24 mx-auto mb-6 rounded-2xl shadow-lg">
+        
+        <h1 class="text-4xl font-bold mb-3">DeliveryMaster</h1>
+        <p class="text-xl text-gray-300 dark:text-gray-400 mb-10">מערכת ניהול לספקים</p>
+
+        <div class="w-full max-w-md p-8 space-y-6 rounded-2xl shadow-xl glass-card">
+            
+            <div>
+                <h2 class="text-2xl font-semibold text-center">הגדרות ראשוניות</h2>
+                <p class="text-center text-sm text-gray-300 dark:text-gray-400 mt-2">
+                    לאפליקציה מקצועית, נא לאשר את ההרשאות הבאות:
+                </p>
+            </div>
+            
+            <!-- Permission Buttons -->
+            <div class="space-y-3">
+                <button id="btn-install" class="permission-btn w-full flex items-center justify-center gap-3 p-3 rounded-lg font-medium text-lg transition-all hidden">
+                    <i data-feather="download-cloud" class="w-5 h-5"></i>
+                    <span>התקן אפליקציה</span>
+                </button>
+                <button id="btn-notify" class="permission-btn w-full flex items-center justify-center gap-3 p-3 rounded-lg font-medium text-lg transition-all">
+                    <i data-feather="bell" class="w-5 h-5"></i>
+                    <span>אשר קבלת התראות</span>
+                </button>
+                <button id="btn-location" class="permission-btn w-full flex items-center justify-center gap-3 p-3 rounded-lg font-medium text-lg transition-all">
+                    <i data-feather="map-pin" class="w-5 h-5"></i>
+                    <span>שתף מיקום (למעקב)</span>
+                </button>
+            </div>
+            
+            <hr class="border-gray-500/30">
+            
+            <!-- Login Button -->
+            <a href="index_admin.html" id="btn-login" class="block w-full p-4 rounded-lg text-center text-lg font-semibold text-white bg-blue-600 hover:bg-blue-700 shadow-lg transition-all">
+                כניסה למערכת הניהול
+            </a>
+        </div>
+    </div>
+
+    <script>
+        // --- Dark Mode ---
+        const themeToggle = document.getElementById('theme-toggle');
+        const applyTheme = (theme) => {
+            if (theme === 'dark') {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+            feather.replace();
+        };
+        
+        let currentTheme = localStorage.getItem('theme') || 'dark'; // Dark default
+        applyTheme(currentTheme);
+        
+        themeToggle.addEventListener('click', () => {
+            currentTheme = document.documentElement.classList.contains('dark') ? 'light' : 'dark';
+            localStorage.setItem('theme', currentTheme);
+            applyTheme(currentTheme);
+        });
+
+        // --- PWA Install Prompt ---
+        let deferredPrompt;
+        const installButton = document.getElementById('btn-install');
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+            // Prevent Chrome 67 and earlier from automatically showing the prompt
+            e.preventDefault();
+            // Stash the event so it can be triggered later.
+            deferredPrompt = e;
+            // Update UI to notify the user they can add to home screen
+            installButton.classList.remove('hidden');
+        });
+
+        installButton.addEventListener('click', async () => {
+            if (!deferredPrompt) {
+                return; // No prompt available
+            }
+            // Show the prompt
+            deferredPrompt.prompt();
+            // Wait for the user to respond to the prompt
+            const { outcome } = await deferredPrompt.userChoice;
+            if (outcome === 'accepted') {
+                console.log('User accepted the A2HS prompt');
+                installButton.classList.add('granted');
+                installButton.innerText = 'האפליקציה הותקנה!';
+            } else {
+                console.log('User dismissed the A2HS prompt');
+            }
+            deferredPrompt = null;
+        });
+
+        // --- Permissions ---
+        const notifyButton = document.getElementById('btn-notify');
+        const locationButton = document.getElementById('btn-location');
+
+        // Check initial states
+        if (Notification.permission === 'granted') {
+            notifyButton.classList.add('granted');
+            notifyButton.disabled = true;
+            notifyButton.querySelector('span').innerText = 'התראות אושרו';
+        }
+        
+        navigator.permissions.query({ name: 'geolocation' }).then((result) => {
+             if (result.state === 'granted') {
+                locationButton.classList.add('granted');
+                locationButton.disabled = true;
+                locationButton.querySelector('span').innerText = 'מיקום אושר';
+             }
+        });
+
+
+        // Request Notifications
+        notifyButton.addEventListener('click', async () => {
+            try {
+                const permission = await Notification.requestPermission();
+                if (permission === 'granted') {
+                    console.log('Notification permission granted.');
+                    notifyButton.classList.add('granted');
+                    notifyButton.disabled = true;
+                    notifyButton.querySelector('span').innerText = 'התראות אושרו';
+                }
+            } catch (error) {
+                console.error('Error requesting notification permission:', error);
+            }
+        });
+
+        // Request Location
+        locationButton.addEventListener('click', () => {
+            if (!navigator.geolocation) {
+                alert('הדפדפן שלך אינו תומך במיקום.');
+                return;
+            }
+            
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    // Success
+                    console.log('Location permission granted.');
+                    locationButton.classList.add('granted');
+                    locationButton.disabled = true;
+                    locationButton.querySelector('span').innerText = 'מיקום אושר';
+                },
+                (error) => {
+                    // Error
+                    console.error('Error getting location:', error.message);
+                }
+            );
+        });
+
+        // --- Init Icons ---
+        feather.replace();
+    </script>
+</body>
+</html>
