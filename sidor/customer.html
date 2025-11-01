@@ -3,20 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>מעקב הזמנה - v34.7 (טופס חכם)</title>
+    <title>מעקב הזמנה - v34.8 (תיקון קריסה)</title>
     <!-- 
-      DeliveryMaster Customer App v34.7 (Smart Form)
-      - [NEW] שדרוג `startTracking`:
-        - כעת שולף את *כל* הפרויקטים הקודמים של הלקוח מההיסטוריה.
-      - [NEW] שדרוג טופס "הזמנה חדשה":
-        - שדה "שם פרויקט" הוחלף בתפריט נפתח (`<select>`).
-        - התפריט מתמלא אוטומטית בפרויקטים מההיסטוריה של הלקוח.
-        - נוספה אפשרות "פרויקט חדש" שפותחת שדה טקסט.
-      - [FIX] תיקון "לקוח לא ידוע":
-        - `startTracking` שולף פרופיל מלא מ-`customers` אם הנתונים חסרים.
-        - `openNewOrderModal` חוסם יצירת הזמנה אם הלקוח עדיין לא מזוהה.
-      - [FIX] תיקון Lat/Lon `undefined` ב-`submitNewOrder`.
-      - [NEW] ברכה דינאמית (בוקר/צהריים/ערב) ושדרוג תיבת צ'אט.
+      DeliveryMaster Customer App v34.8 (Crash Fix)
+      - [CRITICAL FIX] `startTracking`:
+        - אם נמצאה הזמנה ללא אובייקט לקוח (או ID),
+          הקוד יצר `currentCustomerData = null` וגרם לקריסה.
+        - תוקן: כעת מגדיר `currentCustomerData = { id: null, name: "לקוח לא מזוהה" }`.
+      - [CRITICAL FIX] `renderOrderData`:
+        - נוספה בדיקה לוודא ש-`currentCustomerData` אינו null לפני
+          הניסיון לגשת ל-`currentCustomerData.name`.
+      - [FIX] `submitNewOrder`:
+        - הוספת בדיקה קפדנית יותר (null ו-undefined)
+          לפני העתקת `latitude` ו-`longitude` להזמנה חדשה.
+      - [NEW] טופס הזמנה חכם (שליפת פרויקטים).
+      - [NEW] ברכה דינאמית ושדרוג תיבת צ'אט.
     -->
 
     <!-- PWA Manifest -->
@@ -361,7 +362,7 @@
         </main>
 
         <footer class="text-center mt-6 text-gray-500 text-sm">
-            <p>&copy; 2024 DeliveryMaster</p>
+            <p>&copy;בלעדית ח.סבן חומרי בנין 1994 בע"מ 2025 - DeliveryMaster</p>
         </footer>
 
     </div>
@@ -550,7 +551,7 @@
             } catch (e) { SmartLog.error(e, { context: "Error reading URL params" }); showError("שגיאה בעיבוד הקישור."); return null; }
         }
         
-        // [FIX v34.7] Updated function
+        // [FIX v34.8] Updated function
         async function startTracking() {
             currentOrderId = getOrderIdFromUrl(); // This could be '6209643' OR '8RJXj3...'
             if (!currentOrderId) return;
@@ -598,7 +599,7 @@
                 
                 const orderData = orderDoc.data();
                 
-                // --- [NEW FIX v34.7] ---
+                // --- [NEW FIX v34.8] ---
                 // Validate and fetch full customer data if missing
                 const customerInOrder = orderData.customer;
                 const customerId = customerInOrder ? customerInOrder.id : null;
@@ -623,8 +624,11 @@
                     currentCustomerData = customerInOrder; // Data seems fine
                 } else {
                     SmartLog.error(new Error("No customer object or ID found on order"), { orderId: currentFirestoreDocId });
-                    currentCustomerData = null; // [FIX] Set to null to fail validation later
+                    // [CRITICAL FIX] Provide a fallback object to prevent crash
+                    currentCustomerData = { id: null, name: "לקוח לא מזוהה" }; 
                 }
+                // --- END FIX ---
+
 
                 // [NEW v34.7] Fetch project history if customer is valid
                 if (currentCustomerData && currentCustomerData.id) {
@@ -654,7 +658,7 @@
                 const messagesQuery = query(messagesColRef, limit(1));
                 const messagesSnapshot = await getDocs(messagesQuery);
                 
-                if (messagesSnapshot.empty && currentCustomerData) {
+                if (messagesSnapshot.empty && currentCustomerData && currentCustomerData.id) { // Only show if customer is valid
                     const customerName = currentCustomerData.name || 'לקוח יקר';
                     document.getElementById('welcome-customer-name').innerText = customerName;
                     document.getElementById('welcome-modal').showModal();
@@ -727,8 +731,8 @@
             const displayId = order.orderNumber || order.order_id || `#${currentOrderId.slice(-6)}`;
             document.getElementById('order-id-display').innerText = `הזמנה ${displayId}`;
             
-            // [FIX v34.6] Use dynamic greeting
-            setDynamicGreeting(currentCustomerData.name || 'לקוח');
+            // [FIX v34.8] Check currentCustomerData before accessing name
+            setDynamicGreeting(currentCustomerData ? currentCustomerData.name : 'לקוח');
             
             updateStatusTracker(order.status);
             
@@ -867,7 +871,7 @@
 
         function openNewOrderModal() {
             // [FIX v34.7] Validate customer data before opening modal
-            if (!currentCustomerData || !currentCustomerData.id || !currentCustomerData.name || currentCustomerData.name === 'N/A' || currentCustomerData.name === 'לקוח לא ידוע') {
+            if (!currentCustomerData || !currentCustomerData.id || !currentCustomerData.name || currentCustomerData.name === 'N/A' || currentCustomerData.name === 'לקוח לא מזוהה') {
                 alert("לא ניתן ליצור הזמנה חדשה. פרטי הלקוח בקישור זה פגומים או חסרים. אנא פנה למנהל.");
                 return;
             }
@@ -946,12 +950,13 @@
             
             const orderData = orderListenerUnsubscribe.snapshot.data();
 
-            // [FIX v34.5] Only add lat/lon if they exist
+            // [FIX v34.8] Stricter check for lat/lon
             const newOrder = {
                 customer: currentCustomerData, // This is now the full, reliable customer object
                 address: location || orderData.address || 'לא צוינה כתובת',
-                ...(orderData.latitude && { latitude: orderData.latitude }),
-                ...(orderData.longitude && { longitude: orderData.longitude }),
+                // Only add lat/lon if they are valid numbers
+                ...( (orderData.latitude !== undefined && orderData.latitude !== null) && { latitude: orderData.latitude }),
+                ...( (orderData.longitude !== undefined && orderData.longitude !== null) && { longitude: orderData.longitude }),
                 projectName: projectName, // [NEW v34.7]
                 notes: `--- הזמנה חדשה מלקוח ---\n${pasteContent}`, // [FIX] Removed project from notes
                 deliveryType: transportType,
