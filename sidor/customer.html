@@ -3,23 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>מעקב הזמנה - v34.8 (תיקון קריסה)</title>
+    <title>מעקב הזמנה - v35 (Drive Upload)</title>
     <!-- 
-      DeliveryMaster Customer App v34.8 (Crash Fix)
+      DeliveryMaster Customer App v35 (Drive Upload)
       
       Changelog:
-      - [CRITICAL FIX] `startTracking`:
-        - אם נמצאה הזמנה ללא אובייקט לקוח (או ID),
-          הקוד יצר `currentCustomerData = null` וגרם לקריסה.
-        - תוקן: כעת מגדיר `currentCustomerData = { id: null, name: "לקוח לא מזוהה" }`.
-      - [CRITICAL FIX] `renderOrderData`:
-        - נוספה בדיקה לוודא ש-`currentCustomerData` אינו null לפני
-          הניסיון לגשת ל-`currentCustomerData.name`.
-      - [FIX] `submitNewOrder`:
-        - הוספת בדיקה קפדנית יותר (null ו-undefined)
-          לפני העתקת `latitude` ו-`longitude` להזמנה חדשה.
-      - [NEW] טופס הזמנה חכם (שליפת פרויקטים).
-      - [NEW] ברכה דינאמית ושדרוג תיבת צ'אט.
+      - [CRITICAL CHANGE v35]:
+        - הוסר החיבור ל-Firebase Storage.
+        - הוחלפה פונקציית `handleFileUpload` כך שתבצע Base64
+          ותשלח את הקובץ ל-Apps Script Web App ייעודי (דורש הגדרה).
+        - הוסר ייבוא (import) של `firebase-storage.js`.
+      - [FIX v34.8]:
+        - תיקון קריסה בעת טעינת הזמנה ללא לקוח.
+      - [NEW v34.7]:
+        - טופס הזמנה חכם (שליפת פרויקטים).
+      - [NEW v34.6]:
+        - ברכה דינאמית (בוקר/צהריים/ערב).
+        - תיבת צ'אט מוגדלת.
     -->
 
     <!-- PWA Manifest -->
@@ -380,22 +380,23 @@
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
         // [FIX v34.2] Added 'limit'
         import { getFirestore, collection, doc, onSnapshot, query, orderBy, addDoc, updateDoc, serverTimestamp, deleteDoc, arrayUnion, where, getDocs, getDoc, limit } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-        // [NEW] Import Firebase Storage
-        import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-storage.js";
+        
+        // [REMOVED v35] Firebase Storage import
+        // import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-storage.js";
 
         // --- Inlined Config Logic ---
         const firebaseConfig = {
           apiKey: "AIzaSyDq0oVwS6zbEfsgrYBRkeBq80dDUKMedzo", authDomain: "saban94-78949.firebaseapp.com", projectId: "saban94-78949",
-          storageBucket: "saban94-78949.appspot.com", // [FIX] Make sure this is correct
+          storageBucket: "saban94-78949.firebasestorage.app", // [FIX v34.9] Corrected bucket name
           messagingSenderId: "41553157903", appId: "1:41553157903:web:cc33d252cff023be97a87a", measurementId: "G-XV6RZDESSB"
         };
-        let app, auth, db, storage; // [NEW] Added storage
+        let app, auth, db; // [REMOVED v35] Removed 'storage'
         let initializationError = null;
         try {
             app = getApps().length ? getApp() : initializeApp(firebaseConfig);
             auth = getAuth(app); 
             db = getFirestore(app);
-            storage = getStorage(app); // [NEW] Initialize Storage
+            // [REMOVED v35] Removed storage init
         } catch (error) { console.error("CRITICAL: Firebase init failed!", error); initializationError = error; }
 
         const MAX_AUTH_RETRIES = 3; const RETRY_DELAY_MS = 3000;
@@ -435,6 +436,10 @@
         let currentCustomerData = null; 
         let currentFirestoreDocId = null; // [NEW] Store the real doc ID
         let customerProjects = []; // [NEW v34.7]
+        
+        // [NEW v35] Google Apps Script Web App URL
+        // !!! יש להדביק כאן את ה-URL שקיבלת לאחר פריסת ה-Apps Script
+        const WEB_APP_URL = "YOUR_APPS_SCRIPT_WEB_APP_URL_HERE"; 
 
         // --- Icons ---
         const driverIcon = L.icon({
@@ -799,7 +804,7 @@
                     let msgText = msg.text || '';
                     const urlRegex = /(https?:\/\/[^\s]+)/g;
                     if (urlRegex.test(msgText)) {
-                        msgText = msgText.replace(urlRegex, (url) => `<a href="${url}" target="_blank" rel="noopener noreferrer">${url.includes('firebasestorage') ? 'פתח קובץ מצורף' : 'פתח קישור'}</a>`);
+                        msgText = msgText.replace(urlRegex, (url) => `<a href="${url}" target="_blank" rel="noopener noreferrer">${url.includes('firebasestorage') || url.includes('drive.google') ? 'פתח קובץ מצורף' : 'פתח קישור'}</a>`);
                     }
 
                     if (msg.type === 'notification_to_customer') {
@@ -1015,13 +1020,18 @@ ${orderData.notes || "--- אין תוכן ---"}
             window.open(url, '_blank');
         }
         
-        // [NEW] File Upload Logic
+        // [NEW v35] File Upload Logic (Switched to Apps Script)
         async function handleFileUpload(event) {
+            if (WEB_APP_URL === "YOUR_APPS_SCRIPT_WEB_APP_URL_HERE") {
+                alert("שגיאת תצורה: יש להגדיר את כתובת ה-Web App בקוד תחילה.");
+                return;
+            }
+            
             const file = event.target.files[0];
             if (!file) return;
 
-            if (!currentFirestoreDocId) {
-                alert("שגיאה: לא זוהתה הזמנה.");
+            if (!currentFirestoreDocId || !currentCustomerData || !currentCustomerData.id) {
+                alert("שגיאה: לא זוהתה הזמנה או לקוח.");
                 return;
             }
             
@@ -1030,26 +1040,51 @@ ${orderData.notes || "--- אין תוכן ---"}
             uploadStatusEl.classList.remove('hidden');
 
             try {
-                // 1. Create a unique path
-                const storagePath = `orders/${currentFirestoreDocId}/attachments/${Date.now()}_${file.name}`;
-                const storageRef = ref(storage, storagePath);
+                // 1. Convert file to Base64
+                const base64Data = await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result.split(',')[1]);
+                    reader.onerror = error => reject(error);
+                    reader.readAsDataURL(file);
+                });
 
-                // 2. Upload the file
-                const snapshot = await uploadBytes(storageRef, file);
+                // 2. Prepare payload for Apps Script
+                const payload = {
+                    fileData: base64Data,
+                    fileName: file.name,
+                    mimeType: file.type,
+                    customerId: currentCustomerData.customerNumber || currentCustomerData.id // Use customerNumber if available
+                };
                 
-                // 3. Get the download URL
-                const downloadURL = await getDownloadURL(snapshot.ref);
+                // 3. Send to Apps Script Web App
+                const response = await fetch(WEB_APP_URL, {
+                    method: 'POST',
+                    mode: 'cors', // Required for cross-domain request
+                    body: JSON.stringify(payload),
+                    headers: {
+                        'Content-Type': 'text/plain;charset=utf-8', // Apps Script quirk
+                    }
+                });
 
-                // 4. Send the URL as a chat message
-                await sendCustomerMessage(downloadURL);
+                if (!response.ok) {
+                    throw new Error(`שגיאת שרת: ${response.statusText}`);
+                }
+
+                const result = await response.json();
                 
-                SmartLog.info("File uploaded and link sent", { url: downloadURL });
-                showToast("הקובץ נשלח בהצלחה!", "success");
-                uploadStatusEl.classList.add('hidden');
+                if (result.success && result.url) {
+                    // 4. Send the new Google Drive URL as a chat message
+                    await sendCustomerMessage(result.url);
+                    SmartLog.info("File uploaded to Drive and link sent", { url: result.url, name: result.name });
+                    showToast("הקובץ נשלח בהצלחה!", "success");
+                    uploadStatusEl.classList.add('hidden');
+                } else {
+                    throw new Error(result.error || "שגיאה לא ידועה בשרת");
+                }
 
             } catch (error) {
-                SmartLog.error(error, { context: "File Upload Failed" });
-                uploadStatusEl.innerText = "שגיאה בהעלאת הקובץ.";
+                SmartLog.error(error, { context: "File Upload Failed (Apps Script)" });
+                uploadStatusEl.innerText = `שגיאה בהעלאת הקובץ: ${error.message}`;
                 // Hide error message after 3 seconds
                 setTimeout(() => uploadStatusEl.classList.add('hidden'), 3000);
             } finally {
