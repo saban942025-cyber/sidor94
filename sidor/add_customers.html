@@ -2,561 +2,780 @@
 <html lang="he" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>הקמת לקוח והזמנה חדשה</title>
-    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>הקמת הזמנה (v3.1 - Fix & Design)</title>
+    <!-- 
+      DeliveryMaster CRM Form v3.1 (Fix & Design)
+      
+      Changelog:
+      - [CRITICAL FIX v3.1]:
+        - תיקון שגיאת `serverTimestamp() is not currently supported inside arrays`.
+        - הוחלף `serverTimestamp()` ב-`new Date()` בתוך מערך `auditLog`.
+      - [DESIGN v3.1]:
+        - עיצוב מחדש של תבנית ה-WhatsApp (פונקציה `shareToWhatsApp`)
+          למראה קליל יותר עם אימוג'ים, במקום קווים כבדים.
+      - [DESIGN v3.1]:
+        - הוספת רקעים עדינים (תכלת וירקרק) לשלבי הטופס 
+          כדי לשפר את העיצוב ה"טפל".
+      - [v3.0]:
+        - שילוב מלא של העלאת קבצים ל-Google Drive.
+        - אתחול Firebase מלא.
+      - [v2.2]:
+        - תיקון לוגיקת יצירת לקוח לשימוש ב-Auto-ID.
+      - [v2.1]:
+        - עיצוב CRM מודרני, 2 שלבים, מצב כהה/בהיר, ניהול פרויקטים.
+    -->
+
     <!-- TailwindCSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
     <!-- Icons (Feather) -->
     <script src="https://unpkg.com/feather-icons"></script>
     
-    <!-- Google Font: Inter -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <!-- Google Font: Rubik -->
+    <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700&display=swap" rel="stylesheet">
 
     <style>
-        :root { --blur-value: 12px; }
-        html { scroll-behavior: smooth; }
-        body {
-            font-family: 'Inter', 'Arial', sans-serif;
-            background-color: #f3f4f6; /* gray-100 */
-        }
-        html.dark body {
-            background-color: #1f2937; /* gray-800 */
+        :root {
+            --step-inactive: #9ca3af; /* gray-400 */
+            --step-active: #3b82f6;   /* blue-500 */
+            --step-complete: #16a34a; /* green-600 */
+            --line-inactive: #e5e7eb;  /* gray-200 */
+            --line-active: #dbeafe;    /* blue-100 */
+            --line-complete: #dcfce7;  /* green-100 */
         }
         
-        /* Glassmorphism Card */
-        .glass-card {
-            background: rgba(255, 255, 255, 0.7);
-            backdrop-filter: blur(var(--blur-value));
-            -webkit-backdrop-filter: blur(var(--blur-value));
-            border: 1px solid rgba(255, 255, 255, 0.2);
+        html, body {
+            height: 100%;
         }
-        html.dark .glass-card {
-            background: rgba(31, 41, 55, 0.7); /* gray-800/70 */
-            border: 1px solid rgba(75, 85, 99, 0.5); /* gray-600/50 */
+        body {
+            font-family: 'Rubik', sans-serif;
+            background-color: #f3f4f6; /* gray-100 */
+            color: #1f2937; /* gray-800 */
+            transition: background-color 0.3s, color 0.3s;
+        }
+        
+        /* Dark Mode */
+        html.dark {
+            background-color: #1f2937; /* gray-800 */
+            color: #f3f4f6; /* gray-100 */
+        }
+        html.dark body {
+            background-color: #1f2937;
+            color: #f3f4f6;
+        }
+        html.dark .form-card {
+            background-color: #374151; /* gray-700 */
+            border-color: #4b5563; /* gray-600 */
+        }
+        /* [NEW v3.1] Dark mode step backgrounds */
+        html.dark #step-1-customer {
+             background-color: #2b3646; /* Lighter gray-800 */
+        }
+        html.dark #step-2-order {
+             background-color: #2f3d3d; /* Lighter green-desaturated */
+        }
+        html.dark .form-input {
+            background-color: #4b5563; /* gray-600 */
+            border-color: #5e6875; /* gray-500 */
+            color: #f3f4f6;
+        }
+        html.dark .form-input::placeholder {
+            color: #9ca3af; /* gray-400 */
+        }
+        html.dark .tag-badge {
+            background-color: #1d4ed8; /* blue-700 */
+            color: #eff6ff; /* blue-50 */
+        }
+        html.dark .tag-remove {
+            color: #93c5fd; /* blue-300 */
+        }
+        html.dark .btn-secondary {
+            background-color: #4b5563; /* gray-600 */
+            color: #f3f4f6;
+        }
+        html.dark .btn-secondary:hover {
+            background-color: #5e6875; /* gray-500 */
         }
         
         /* Stepper */
-        .stepper-step {
-            display: flex;
-            align-items: center;
-            opacity: 0.5;
+        .stepper-line {
+            height: 4px;
+            background-color: var(--line-inactive);
+            transition: background-color 0.4s;
         }
-        .stepper-step.active {
-            opacity: 1;
-        }
-        .step-circle {
-            width: 2.5rem; /* 40px */
-            height: 2.5rem; /* 40px */
+        .stepper-dot {
+            width: 40px;
+            height: 40px;
             border-radius: 50%;
+            background-color: var(--line-inactive);
+            color: var(--step-inactive);
             display: flex;
             align-items: center;
             justify-content: center;
             font-weight: 700;
-            background-color: #e5e7eb; /* gray-200 */
-            color: #4b5563; /* gray-600 */
+            font-size: 1.125rem;
+            transition: all 0.4s;
+            border: 4px solid #f3f4f6; /* gray-100 */
         }
-        .stepper-step.active .step-circle {
-            background-color: #3b82f6; /* blue-500 */
+        html.dark .stepper-dot {
+            border-color: #1f2937; /* gray-800 */
+        }
+        
+        .stepper-label {
+            color: var(--step-inactive);
+            font-weight: 500;
+            transition: color 0.4s;
+        }
+        
+        /* Step Complete */
+        .step.complete .stepper-line { background-color: var(--line-complete); }
+        .step.complete .stepper-dot { background-color: var(--step-complete); color: white; border-color: var(--line-complete); }
+        .step.complete .stepper-label { color: var(--step-complete); }
+        
+        /* Step Active */
+        .step.active .stepper-line { background-color: var(--line-active); }
+        .step.active .stepper-dot { background-color: var(--step-active); color: white; border-color: var(--line-active); transform: scale(1.1); }
+        .step.active .stepper-label { color: var(--step-active); font-weight: 700; }
+        
+        /* Project Tags */
+        .tag-badge {
+            background-color: #dbeafe; /* blue-100 */
+            color: #1e40af; /* blue-800 */
+            padding: 4px 8px 4px 12px;
+            border-radius: 9999px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 0.875rem;
+        }
+        .tag-remove {
+            color: #60a5fa; /* blue-400 */
+            cursor: pointer;
+            border-radius: 50%;
+        }
+        .tag-remove:hover {
+            background-color: rgba(255,255,255,0.3);
+            color: #ef4444; /* red-500 */
+        }
+        
+        /* Toast Notification */
+        #toast-container {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 5000;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .toast {
+            padding: 12px 20px;
+            background-color: #1f2937; /* gray-800 */
             color: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.3s ease;
         }
-        .step-line {
-            flex-grow: 1;
-            height: 2px;
-            background-color: #e5e7eb; /* gray-200 */
+        .toast.show {
+            opacity: 1;
+            transform: translateY(0);
         }
-        
-        /* Input Styles */
-        .form-input {
-            @apply w-full p-3 border rounded-md bg-white/50 dark:bg-gray-700/50 border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500;
-        }
-        .form-label {
-            @apply block text-lg font-medium mb-2 text-gray-700 dark:text-gray-200;
-        }
-        .form-grid {
-             @apply grid grid-cols-1 md:grid-cols-2 gap-6;
-        }
-        
-        /* Button Styles */
-        .btn {
-            @apply w-full p-4 text-lg font-bold rounded-lg shadow-md transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2;
-        }
-        .btn-primary {
-            @apply bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500;
-        }
-        .btn-secondary {
-            @apply bg-gray-200 text-gray-800 hover:bg-gray-300 dark:bg-gray-600 dark:text-white dark:hover:bg-gray-500 focus:ring-gray-400;
-        }
+        .toast.success { background-color: #16a34a; } /* green-600 */
+        .toast.error { background-color: #dc2626; } /* red-600 */
+        .toast.info { background-color: #3b82f6; } /* blue-500 */
         
     </style>
 </head>
-<body class="dark:bg-gray-900">
+<body class="flex items-center justify-center min-h-screen p-4">
 
-    <!-- Dark Mode Toggle -->
-    <button id="theme-toggle" class="fixed top-4 right-4 p-3 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 shadow-lg z-50">
-        <i data-feather="sun" class="hidden dark:block"></i>
-        <i data-feather="moon" class="block dark:hidden"></i>
-    </button>
+    <!-- Toast Container -->
+    <div id="toast-container"></div>
 
-    <div class="container mx-auto max-w-3xl p-4 md:p-8">
-        
-        <h1 class="text-5xl font-bold text-center mb-8 text-gray-800 dark:text-white">הקמה מהירה</h1>
-        
-        <!-- Main Card -->
-        <div class="glass-card rounded-xl shadow-2xl overflow-hidden">
-            
-            <!-- Stepper -->
-            <div class="flex p-6 border-b border-gray-200/50 dark:border-gray-700/50">
-                <div id="step-1-indicator" class="stepper-step active w-1/2">
-                    <div class="step-circle">1</div>
-                    <span class="mr-3 text-lg font-semibold text-gray-800 dark:text-white">פרטי לקוח</span>
-                </div>
-                <div class="step-line mt-5 mx-4"></div>
-                <div id="step-2-indicator" class="stepper-step w-1/2 justify-end">
-                    <span class="ml-3 text-lg font-semibold text-gray-800 dark:text-white">פרטי הזמנה</span>
-                    <div class="step-circle">2</div>
+    <div class="w-full max-w-4xl mx-auto">
+        <!-- Dark Mode Toggle -->
+        <button id="theme-toggle" class="absolute top-5 right-5 p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700">
+            <i data-feather="moon" class="w-6 h-6 hidden dark:block"></i>
+            <i data-feather="sun" class="w-6 h-6 block dark:hidden"></i>
+        </button>
+
+        <!-- Header -->
+        <div class="text-center mb-10">
+            <h1 class="text-5xl font-bold mb-3 text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-sky-400">טופס הקמה מהיר</h1>
+            <p class="text-xl text-gray-600 dark:text-gray-400">הקמת לקוח והזמנה בשני שלבים פשוטים</p>
+        </div>
+
+        <!-- Stepper -->
+        <div class="flex items-center w-full max-w-xl mx-auto mb-12">
+            <!-- Step 1 -->
+            <div id="stepper-1" class="step active flex-1">
+                <div class="flex flex-col items-center">
+                    <div class="stepper-dot">1</div>
+                    <div class="stepper-label mt-2 text-center text-sm sm:text-base">פרטי לקוח</div>
                 </div>
             </div>
-
-            <!-- Form Content -->
-            <div class="p-6 md:p-10">
-                
-                <!-- === Step 1: Customer Details === -->
-                <section id="step-1-form" class="space-y-6">
-                    <div class="form-grid">
-                        <div>
-                            <label for="customer-name-new" class="form-label">שם לקוח מלא (חובה)</label>
-                            <input type="text" id="customer-name-new" class="form-input text-xl" required>
-                        </div>
-                        <div>
-                            <label for="customer-number-new" class="form-label">מספר לקוח (חובה)</label>
-                            <input type="text" id="customer-number-new" class="form-input text-xl" placeholder="למשל: 102030" required>
-                        </div>
-                    </div>
-                    
-                    <div class="form-grid">
-                        <div>
-                            <label for="customer-phone-new" class="form-label">טלפון ראשי (חובה)</label>
-                            <input type="tel" id="customer-phone-new" class="form-input text-xl" required>
-                        </div>
-                        <div>
-                            <label for="customer-contact-new" class="form-label">איש קשר (רשות)</label>
-                            <input type="text" id="customer-contact-new" class="form-input text-xl">
-                        </div>
-                    </div>
-                    
-                    <hr class="dark:border-gray-600">
-
-                    <label class="form-label">כתובת (חובה)</label>
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <input type="text" id="customer-city-new" placeholder="עיר" class="form-input text-xl" required>
-                        <input type="text" id="customer-street-new" placeholder="רחוב" class="form-input text-xl" required>
-                        <input type="text" id="customer-streetnum-new" placeholder="מספר" class="form-input text-xl" required>
-                    </div>
-                    
-                    <div>
-                        <label for="customer-edit-coords" class="form-label">קואורדינטות (רשות)</label>
-                        <input type="text" id="customer-edit-coords" class="form-input text-xl" placeholder="הדבק מ-Google Maps (למשל: 32.1, 34.9)">
-                    </div>
-
-                    <button id="next-step-btn" class="btn btn-primary mt-8">
-                        הבא: פרטי הזמנה
-                        <i data-feather="arrow-left" class="inline-block"></i>
-                    </button>
-                </section>
-                
-                <!-- === Step 2: Order Details === -->
-                <section id="step-2-form" class="space-y-6" style="display: none;">
-                    
-                    <div class="p-4 bg-blue-50 dark:bg-gray-700 rounded-lg border border-blue-200 dark:border-blue-600">
-                        <h3 class="text-xl font-bold text-blue-800 dark:text-blue-200">לקוח: <span id="customer-summary-name"></span></h3>
-                        <p class="text-lg text-gray-700 dark:text-gray-300">מספר: <span id="customer-summary-id"></span></p>
-                    </div>
-
-                    <div>
-                        <label for="order-project-name" class="form-label">שם פרויקט (רשות)</label>
-                        <input type="text" id="order-project-name" placeholder="לדוגמה: בניין בראשון" class="form-input text-xl">
-                    </div>
-
-                    <div class="form-grid">
-                        <div>
-                            <label for="order-date" class="form-label">תאריך אספקה</label>
-                            <input type="date" id="order-date" class="form-input text-xl" required>
-                        </div>
-                        <div>
-                            <label for="order-time" class="form-label">שעת אספקה</label>
-                            <input type="time" id="order-time" class="form-input text-xl">
-                        </div>
-                    </div>
-                    
-                    <div class="form-grid">
-                         <div>
-                            <label for="order-delivery-type" class="form-label">סוג הובלה</label>
-                            <select id="order-delivery-type" class="form-input text-xl" required>
-                                <option value="">בחר סוג הובלה</option>
-                                <option value="משאית">משאית</option>
-                                <option value="טריילר">טריילר</option>
-                                <option value="מנוף">מנוף</option>
-                                <option value="הצבת מכולה">הצבת מכולה</option>
-                                <option value="פינוי מכולה">פינוי מכולה</option>
-                                <option value="החלפת מכולה">החלפת מכולה</option>
-                                <option value="איסוף עצמי">איסוף עצמי</option>
-                                <option value="אחר">אחר</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label for="order-warehouse" class="form-label">מחסן</label>
-                            <select id="order-warehouse" class="form-input text-xl" required>
-                                <option value="">בחר מחסן</option>
-                                <option value="החרש">החרש</option>
-                                <option value="התלמיד">התלמיד</option>
-                                <option value="30-שארק">30-שארק</option>
-                                <option value="אחר">אחר</option>
-                            </select>
-                        </div>
-                    </div>
-                
-                    <div>
-                        <label for="order-notes" class="form-label">תוכן ההזמנה (פריטים)</label>
-                        <textarea id="order-notes" rows="4" placeholder="לדוגמה: 10 בלוק 20, 5 מלט..." class="form-input text-xl"></textarea>
-                    </div>
-                    
-                    <div class="grid grid-cols-2 gap-4 pt-8">
-                         <button id="prev-step-btn" type="button" class="btn btn-secondary">
-                             <i data-feather="arrow-right" class="inline-block"></i>
-                             חזור: פרטי לקוח
-                         </button>
-                         <button id="submit-order-btn" type="button" class="btn btn-primary">
-                             צור לקוח והזמנה
-                             <i data-feather="check" class="inline-block"></i>
-                         </button>
-                    </div>
-                </section>
-
+            
+            <div class="stepper-line flex-1"></div>
+            
+            <!-- Step 2 -->
+            <div id="stepper-2" class="step flex-1">
+                <div class="flex flex-col items-center">
+                    <div class="stepper-dot">2</div>
+                    <div class="stepper-label mt-2 text-center text-sm sm:text-base">פרטי הזמנה</div>
+                </div>
             </div>
         </div>
-        
-        <!-- Toast Container -->
-        <div id="toast-container" class="fixed bottom-5 left-5 z-[5000]"></div>
+
+        <!-- Form Card -->
+        <div class="form-card bg-white dark:bg-gray-700 shadow-2xl rounded-2xl border border-gray-200 dark:border-gray-600">
+
+            <!-- Step 1: Customer Details -->
+            <!-- [NEW v3.1] Added subtle background color -->
+            <div id="step-1-customer" class="p-6 sm:p-10 bg-blue-50 dark:bg-gray-800 rounded-2xl">
+                <h2 class="text-3xl font-semibold mb-6 text-blue-600 dark:text-blue-400">שלב 1: פרטי לקוח</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
+                    <!-- Customer Number -->
+                    <div>
+                        <label for="customer-number" class="block text-lg font-medium mb-2">מספר לקוח (חובה)</label>
+                        <input type="text" id="customer-number" class="form-input w-full p-4 text-xl border-2 border-gray-200 rounded-lg shadow-inner focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-600 dark:border-gray-500" placeholder="לדוגמה: 601524">
+                    </div>
+                    <!-- Customer Name -->
+                    <div>
+                        <label for="customer-name" class="block text-lg font-medium mb-2">שם לקוח (חובה)</label>
+                        <input type="text" id="customer-name" class="form-input w-full p-4 text-xl border-2 border-gray-200 rounded-lg shadow-inner focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-600 dark:border-gray-500" placeholder="שם מלא של הלקוח/חברה">
+                    </div>
+                    <!-- Phone -->
+                    <div>
+                        <label for="customer-phone" class="block text-lg font-medium mb-2">טלפון ראשי</label>
+                        <input type="tel" id="customer-phone" class="form-input w-full p-4 text-xl border-2 border-gray-200 rounded-lg shadow-inner focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-600 dark:border-gray-500" placeholder="05X-XXXXXXX">
+                    </div>
+                    <!-- Contact Person -->
+                    <div>
+                        <label for="customer-contact" class="block text-lg font-medium mb-2">איש קשר (רשות)</label>
+                        <input type="text" id="customer-contact" class="form-input w-full p-4 text-xl border-2 border-gray-200 rounded-lg shadow-inner focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-600 dark:border-gray-500" placeholder="שם איש קשר בשטח">
+                    </div>
+                    <!-- Address: Street -->
+                    <div class="md:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-5">
+                        <div>
+                            <label for="customer-street" class="block text-lg font-medium mb-2">רחוב</label>
+                            <input type="text" id="customer-street" class="form-input w-full p-4 text-xl border-2 border-gray-200 rounded-lg shadow-inner focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-600 dark:border-gray-500" placeholder="החשמונאים">
+                        </div>
+                        <div>
+                            <label for="customer-street-num" class="block text-lg font-medium mb-2">מספר</label>
+                            <input type="text" id="customer-street-num" class="form-input w-full p-4 text-xl border-2 border-gray-200 rounded-lg shadow-inner focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-600 dark:border-gray-500" placeholder="90">
+                        </div>
+                        <div>
+                            <label for="customer-city" class="block text-lg font-medium mb-2">עיר</label>
+                            <input type="text" id="customer-city" class="form-input w-full p-4 text-xl border-2 border-gray-200 rounded-lg shadow-inner focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-600 dark:border-gray-500" placeholder="תל אביב">
+                        </div>
+                    </div>
+                </div>
+                <!-- Navigation -->
+                <div class="mt-10 flex justify-end">
+                    <button id="btn-next-step" class="btn-primary py-3 px-8 bg-blue-600 text-white text-lg font-semibold rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                        המשך לשלב 2: פרטי הזמנה <i data-feather="arrow-left" class="inline-block w-5 h-5"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Step 2: Order Details -->
+            <!-- [NEW v3.1] Added subtle background color -->
+            <div id="step-2-order" style="display: none;" class="p-6 sm:p-10 bg-green-50 dark:bg-gray-800 rounded-2xl">
+                <h2 class="text-3xl font-semibold mb-6 text-green-700 dark:text-green-400">שלב 2: פרטי הזמנה</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
+                    
+                    <!-- Projects -->
+                    <div class="md:col-span-2">
+                        <label class="block text-lg font-medium mb-2">ניהול פרויקטים</label>
+                        <div class="flex gap-2">
+                            <input type="text" id="project-input" class="form-input w-full p-4 text-xl border-2 border-gray-200 rounded-lg shadow-inner focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-600 dark:border-gray-500" placeholder="הקלד שם פרויקט ולחץ +">
+                            <button id="btn-add-project" type="button" class="btn-primary p-4 bg-blue-600 text-white rounded-lg shadow-md hover:bg-blue-700">
+                                <i data-feather="plus" class="w-6 h-6"></i>
+                            </button>
+                        </div>
+                        <div id="project-tags-container" class="flex flex-wrap gap-2 mt-3">
+                            <!-- Project tags will be injected here -->
+                        </div>
+                    </div>
+                    
+                    <!-- Transport Type -->
+                    <div>
+                        <label for="order-transport-type" class="block text-lg font-medium mb-2">סוג הובלה</label>
+                        <select id="order-transport-type" class="form-input w-full p-4 text-xl border-2 border-gray-200 rounded-lg shadow-inner focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-600 dark:border-gray-500">
+                            <option value="">-- בחר סוג --</option>
+                            <option value="משאית">משאית</option>
+                            <option value="טריילר">טריילר</option>
+                            <option value="מנוף">מנוף</option>
+                            <option value="הצבת מכולה">הצבת מכולה</option>
+                            <option value="פינוי מכולה">פינוי מכולה</option>
+                            <option value="החלפת מכולה">החלפת מכולה</option>
+                            <option value="איסוף עצמי">איסוף עצמי</option>
+                            <option value="אחר">אחר</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Order Number -->
+                    <div>
+                        <label for="order-number" class="block text-lg font-medium mb-2">מספר הזמנה (רשות)</label>
+                        <input type="text" id="order-number" class="form-input w-full p-4 text-xl border-2 border-gray-200 rounded-lg shadow-inner focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-600 dark:border-gray-500" placeholder="השאר ריק לאוטומטי">
+                    </div>
+
+                    <!-- Order Content -->
+                    <div class="md:col-span-2">
+                        <label for="order-content" class="block text-lg font-medium mb-2">תוכן ההזמנה</label>
+                        <textarea id="order-content" rows="4" class="form-input w-full p-4 text-xl border-2 border-gray-200 rounded-lg shadow-inner focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-600 dark:border-gray-500" placeholder="לדוגמה: 10 בלוק 20, 5 מלט..."></textarea>
+                    </div>
+
+                    <!-- [NEW v3.0] File Upload Section -->
+                    <div class="md:col-span-2">
+                        <label for="file-upload" class="block text-lg font-medium mb-2">צירוף מסמך (אופציונלי)</label>
+                        <input type="file" id="file-upload" class="block w-full text-lg text-gray-700 dark:text-gray-300
+                            file:mr-4 file:py-3 file:px-5 file:rounded-lg file:border-0
+                            file:text-md file:font-semibold file:bg-blue-50 file:text-blue-700
+                            hover:file:bg-blue-100 dark:file:bg-slate-700 dark:file:text-blue-300 dark:hover:file:bg-slate-600"/>
+                        <div id="upload-status" class="text-sm text-blue-600 dark:text-blue-400 mt-2 hidden"></div>
+                    </div>
+                </div>
+                
+                <!-- Navigation -->
+                <div class="mt-10 flex justify-between">
+                    <button id="btn-prev-step" class="btn-secondary py-3 px-8 bg-gray-200 text-gray-700 text-lg font-semibold rounded-lg shadow-md hover:bg-gray-300 dark:bg-gray-600 dark:text-gray-200 dark:hover:bg-gray-500">
+                        <i data-feather="arrow-right" class="inline-block w-5 h-5"></i> חזור לפרטי לקוח
+                    </button>
+                    <button id="btn-submit-full" class="btn-primary py-3 px-8 bg-green-600 text-white text-lg font-semibold rounded-lg shadow-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2">
+                        <i data-feather="check-circle" class="inline-block w-5 h-5"></i> שמור הכל ושלח ל-WhatsApp
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Firebase SDKs -->
     <script type="module">
+        // [FIX v3.0] הוספת אתחול Firebase מלא
         import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
         import { 
-            getFirestore, doc, addDoc, setDoc, updateDoc, 
-            collection, query, where, Timestamp, runTransaction, getDocs, orderBy, 
-            serverTimestamp, writeBatch, arrayUnion
+            getFirestore, collection, doc, onSnapshot, query, orderBy, addDoc, updateDoc, 
+            serverTimestamp, deleteDoc, arrayUnion, where, getDocs, getDoc, limit, setDoc 
         } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
-        // --- Firebase Config ---
+        // --- Inlined Config Logic ---
         const firebaseConfig = {
-          apiKey: "AIzaSyDq0oVwS6zbEfsgrYBRkeBq80dDUKMedzo", 
-          authDomain: "saban94-78949.firebaseapp.com", 
-          projectId: "saban94-78949",
-          storageBucket: "saban94-78949.firebasestorage.app", 
-          messagingSenderId: "41553157903", 
-          appId: "1:41553157903:web:cc33d252cff023be97a87a", 
-          measurementId: "G-XV6RZDESSB"
+          apiKey: "AIzaSyDq0oVwS6zbEfsgrYBRkeBq80dDUKMedzo", authDomain: "saban94-78949.firebaseapp.com", projectId: "saban94-78949",
+          storageBucket: "saban94-78949.firebasestorage.app", // [FIX v34.9] Corrected bucket name
+          messagingSenderId: "41553157903", appId: "1:41553157903:web:cc33d252cff023be97a87a", measurementId: "G-XV6RZDESSB"
         };
-        
-        let db, auth;
-        let allCustomers = [];
-        let newCustomerData = {}; // Store Step 1 data
-        
+        let app, auth, db; 
+        let initializationError = null;
         try {
-            const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+            app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+            auth = getAuth(app); 
             db = getFirestore(app);
-            auth = getAuth(app);
+            // Sign in anonymously
             await signInAnonymously(auth);
-            console.log("Firebase Initialized & Signed in Anonymously.");
-            await listenForCustomers(); // Load customers for validation
-        } catch (e) {
-            console.error("Firebase Initialization Failed:", e);
-            showToast('שגיאת התחברות חמורה ל-Firebase', 'error');
+            console.log("Firebase Initialized and Signed In Anonymously.");
+        } catch (error) { 
+            console.error("CRITICAL: Firebase init failed!", error); 
+            initializationError = error; 
+            showToast("שגיאת התחברות קריטית לשרת", "error");
         }
 
-        // --- Dark Mode Toggle ---
+        // [NEW v3.0] Google Apps Script Web App URL
+        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzwWherCt8LsMCmd9dQ__1RdN4OXb3BBcwYezJG0qVkFKbxowefqBLWbXHTft1QlXhprg/exec"; 
+
+        // --- SmartLog (Minimal) ---
+        const SmartLog = {
+            info: (msg, ctx) => console.log("[INFO]", msg, ctx || ''),
+            warn: (msg, ctx) => console.warn("[WARN]", msg, ctx || ''),
+            error: (err, ctx) => console.error("[ERROR]", err, ctx || '')
+        };
+
+        // --- State ---
+        let projectTags = [];
+        let newCustomerData = {};
+
+        // --- Dark Mode ---
         const themeToggle = document.getElementById('theme-toggle');
-        const htmlEl = document.documentElement;
-        
-        // On page load or when changing themes, best to add inline in `head` to avoid FOUC
-        if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-          htmlEl.classList.add('dark');
+        if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
         } else {
-          htmlEl.classList.remove('dark');
+            document.documentElement.classList.remove('dark');
         }
-
         themeToggle.addEventListener('click', () => {
-            if (htmlEl.classList.contains('dark')) {
-                htmlEl.classList.remove('dark');
-                localStorage.theme = 'light';
-            } else {
-                htmlEl.classList.add('dark');
-                localStorage.theme = 'dark';
-            }
-            feather.replace(); // Refresh icons
+            document.documentElement.classList.toggle('dark');
+            localStorage.setItem('theme', document.documentElement.classList.contains('dark') ? 'dark' : 'light');
+            feather.replace();
         });
-        
-        // --- Stepper UI Logic ---
-        const step1Form = document.getElementById('step-1-form');
-        const step2Form = document.getElementById('step-2-form');
-        const step1Indicator = document.getElementById('step-1-indicator');
-        const step2Indicator = document.getElementById('step-2-indicator');
-        
-        document.getElementById('next-step-btn').addEventListener('click', handleStep1Next);
-        document.getElementById('prev-step-btn').addEventListener('click', showStep1);
-        document.getElementById('submit-order-btn').addEventListener('click', submitFullOrder);
 
-        function showStep1() {
-            step1Form.style.display = 'block';
-            step2Form.style.display = 'none';
-            step1Indicator.classList.add('active');
-            step2Indicator.classList.remove('active');
-            window.scrollTo(0, 0);
-        }
+        // --- Stepper Navigation ---
+        const step1 = document.getElementById('step-1-customer');
+        const step2 = document.getElementById('step-2-order');
+        const stepper1 = document.getElementById('stepper-1');
+        const stepper2 = document.getElementById('stepper-2');
 
-        function showStep2() {
-            step1Form.style.display = 'none';
-            step2Form.style.display = 'block';
-            step1Indicator.classList.remove('active');
-            step2Indicator.classList.add('active');
-            window.scrollTo(0, 0);
-        }
+        document.getElementById('btn-next-step').addEventListener('click', () => {
+            // Validate Step 1
+            const customerNumber = document.getElementById('customer-number').value.trim();
+            const customerName = document.getElementById('customer-name').value.trim();
+            const customerStreet = document.getElementById('customer-street').value.trim();
+            const customerStreetNum = document.getElementById('customer-street-num').value.trim();
+            const customerCity = document.getElementById('customer-city').value.trim();
 
-        // --- Data Listeners ---
-        async function listenForCustomers() {
-            const q = query(collection(db, 'customers'));
-            try {
-                const snapshot = await getDocs(q);
-                allCustomers = [];
-                snapshot.forEach(doc => {
-                    allCustomers.push({ id: doc.id, ...doc.data() });
-                });
-                console.log(`Loaded ${allCustomers.length} customers for validation.`);
-            } catch (error) {
-                console.error("Failed to load customers:", error);
-                showToast("שגיאה בטעינת מאגר לקוחות", "error");
+            if (!customerNumber || !customerName || !customerStreet || !customerStreetNum || !customerCity) {
+                showToast("יש למלא את כל שדות החובה של הלקוח (מספר, שם, כתובת מלאה).", "error");
+                return;
             }
-        }
-        
-        // --- Form Logic ---
-        
-        async function handleStep1Next() {
-            // 1. Read Data
+            
+            // Save Step 1 data
             newCustomerData = {
-                name: document.getElementById('customer-name-new').value.trim(),
-                customerNumber: document.getElementById('customer-number-new').value.trim(),
-                phone: document.getElementById('customer-phone-new').value.trim(),
-                contactPerson: document.getElementById('customer-contact-new').value.trim(),
-                addressStreet: document.getElementById('customer-street-new').value.trim(),
-                addressNumber: document.getElementById('customer-streetnum-new').value.trim(),
-                addressCity: document.getElementById('customer-city-new').value.trim(),
-                coordsString: document.getElementById('customer-edit-coords').value.trim(),
-                customLat: null,
-                customLon: null
+                customerNumber: customerNumber,
+                name: customerName,
+                phone: document.getElementById('customer-phone').value.trim(),
+                contactPerson: document.getElementById('customer-contact').value.trim(),
+                addressStreet: customerStreet,
+                addressNumber: customerStreetNum,
+                addressCity: customerCity,
+                defaultAddress: `${customerStreet} ${customerStreetNum}, ${customerCity}`
+            };
+
+            // Move to Step 2
+            step1.style.display = 'none';
+            step2.style.display = 'block';
+            stepper1.classList.remove('active');
+            stepper1.classList.add('complete');
+            stepper2.classList.add('active');
+            feather.replace();
+        });
+
+        document.getElementById('btn-prev-step').addEventListener('click', () => {
+            step2.style.display = 'none';
+            step1.style.display = 'block';
+            stepper2.classList.remove('active');
+            stepper1.classList.remove('complete');
+            stepper1.classList.add('active');
+        });
+
+        // --- Project Tags Logic ---
+        const projectInput = document.getElementById('project-input');
+        const addProjectBtn = document.getElementById('btn-add-project');
+        const tagsContainer = document.getElementById('project-tags-container');
+
+        const addProjectTag = () => {
+            const tagText = projectInput.value.trim();
+            if (tagText && !projectTags.includes(tagText)) {
+                projectTags.push(tagText);
+                renderProjectTags();
+                projectInput.value = '';
+            }
+        };
+
+        const renderProjectTags = () => {
+            tagsContainer.innerHTML = '';
+            projectTags.forEach(tag => {
+                const tagEl = document.createElement('div');
+                tagEl.className = 'tag-badge';
+                tagEl.innerHTML = `
+                    <span>${tag}</span>
+                    <button type="button" class="tag-remove" data-tag="${tag}">
+                        <i data-feather="x" class="w-4 h-4"></i>
+                    </button>
+                `;
+                tagsContainer.appendChild(tagEl);
+            });
+            feather.replace();
+        };
+
+        tagsContainer.addEventListener('click', (e) => {
+            const removeBtn = e.target.closest('.tag-remove');
+            if (removeBtn) {
+                const tagToRemove = removeBtn.dataset.tag;
+                projectTags = projectTags.filter(tag => tag !== tagToRemove);
+                renderProjectTags();
+            }
+        });
+
+        addProjectBtn.addEventListener('click', addProjectTag);
+        projectInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                addProjectTag();
+            }
+        });
+
+        // --- [NEW v3.0] File Upload Logic ---
+        /**
+         * Uploads a file to Google Apps Script.
+         * @param {File} file - The file object to upload.
+         * @param {string} customerId - The customer ID.
+         * @returns {Promise<object>} - The result object from the server.
+         */
+        async function handleFileUpload(file, customerId) {
+            if (WEB_APP_URL === "YOUR_APPS_SCRIPT_WEB_APP_URL_HERE") {
+                throw new Error("שגיאת תצורה: יש להגדיר את כתובת ה-Web App בקוד תחילה.");
+            }
+            if (!file) throw new Error("לא נבחר קובץ.");
+            
+            // 1. Convert file to Base64
+            const base64Data = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result.split(',')[1]);
+                reader.onerror = error => reject(error);
+                reader.readAsDataURL(file);
+            });
+
+            // 2. Prepare payload for Apps Script
+            const payload = {
+                fileData: base64Data,
+                fileName: file.name,
+                mimeType: file.type,
+                customerId: customerId || 'unknown'
             };
             
-            // 2. Validate
-            if (!newCustomerData.name || !newCustomerData.customerNumber || !newCustomerData.phone || !newCustomerData.addressStreet || !newCustomerData.addressNumber || !newCustomerData.addressCity) {
-                showToast("שם, מספר לקוח, טלפון וכתובת מלאה הם שדות חובה.", "error");
-                return;
-            }
-            
-            // 3. Validate Coords (if provided)
-            if (newCustomerData.coordsString) {
-                const parts = newCustomerData.coordsString.split(',');
-                if (parts.length === 2 && !isNaN(parseFloat(parts[0])) && !isNaN(parseFloat(parts[1]))) {
-                    newCustomerData.customLat = parseFloat(parts[0]);
-                    newCustomerData.customLon = parseFloat(parts[1]);
-                } else {
-                    showToast("פורמט קואורדינטות לא תקין. השתמש ב- lat, lon או השאר ריק.", "error");
-                    return;
+            // 3. Send to Apps Script Web App
+            const response = await fetch(WEB_APP_URL, {
+                method: 'POST',
+                mode: 'cors', // Required for cross-domain request
+                body: JSON.stringify(payload),
+                headers: {
+                    'Content-Type': 'text/plain;charset=utf-8', // Apps Script quirk
                 }
-            }
-            
-            // 4. Validate Customer Number Uniqueness
-            const existingCustomer = allCustomers.find(c => c.customerNumber === newCustomerData.customerNumber);
-            if (existingCustomer) {
-                showToast(`שגיאה: מספר לקוח ${newCustomerData.customerNumber} כבר קיים עבור "${existingCustomer.name}".`, "error");
-                return;
-            }
-            
-            // 5. All good, move to next step
-            document.getElementById('customer-summary-name').innerText = newCustomerData.name;
-            document.getElementById('customer-summary-id').innerText = newCustomerData.customerNumber;
-            document.getElementById('order-date').value = new Date().toISOString().split('T')[0]; // Set default date
-            showStep2();
-        }
-        
-        async function submitFullOrder() {
-            const btn = document.getElementById('submit-order-btn');
-            btn.disabled = true;
-            btn.innerText = 'מעבד...';
-            
-            // 1. Read Order Data
-            const orderData = {
-                projectName: document.getElementById('order-project-name').value.trim(),
-                orderDate: document.getElementById('order-date').value,
-                orderTime: document.getElementById('order-time').value,
-                deliveryType: document.getElementById('order-delivery-type').value,
-                warehouse: document.getElementById('order-warehouse').value,
-                notes: document.getElementById('order-notes').value,
-            };
-            
-            // 2. Validate Order Data
-            if (!orderData.orderDate || !orderData.deliveryType || !orderData.warehouse) {
-                showToast("תאריך, סוג הובלה ומחסן הם שדות חובה.", "error");
-                btn.disabled = false;
-                btn.innerText = 'צור לקוח והזמנה';
-                return;
-            }
-            
-            // 3. Prepare Batch Write
-            try {
-                const batch = writeBatch(db);
-                
-                // --- 3a. Prepare Customer Document ---
-                const customerRef = doc(collection(db, "customers"));
-                const customerObject = {
-                    ...newCustomerData,
-                    defaultAddress: `${newCustomerData.addressStreet} ${newCustomerData.addressNumber}, ${newCustomerData.addressCity}`,
-                    auditLog: arrayUnion({
-                        action: "Created",
-                        timestamp: serverTimestamp()
-                    }),
-                    createdAt: serverTimestamp() // Added for tracking
-                };
-                delete customerObject.coordsString; // Clean up temp field
-                batch.set(customerRef, customerObject);
+            });
 
-                // --- 3b. Prepare Order Document ---
-                const orderRef = doc(collection(db, "orders"));
-                const order_id = `AUTO-${Date.now().toString().slice(-6)}`;
-                const fullOrderObject = {
-                    ...orderData,
-                    customer: {
-                        id: customerRef.id,
-                        name: newCustomerData.name,
-                        phone: newCustomerData.phone,
-                        customerNumber: newCustomerData.customerNumber
-                    },
-                    customer_name: newCustomerData.name, // Flat field for compatibility
-                    customer_id: newCustomerData.customerNumber, // Flat field for compatibility
-                    address: customerObject.defaultAddress,
-                    latitude: newCustomerData.customLat, // Add lat
-                    longitude: newCustomerData.customLon, // Add lon
-                    status: "חדש",
-                    createdAt: serverTimestamp(),
-                    lastModified: serverTimestamp(),
-                    createdBy: "AdminPanel-SingleForm",
-                    order_id: order_id
-                };
-                batch.set(orderRef, fullOrderObject);
-                
-                // --- 4. Commit Batch ---
-                await batch.commit();
-                
-                showToast("הלקוח וההזמנה נוצרו בהצלחה!", "success");
-                
-                // --- 5. Share to WhatsApp ---
-                await shareToWhatsApp(fullOrderObject);
-                
-                // --- 6. Reset Form ---
-                // Reset step 1
-                document.getElementById('customer-name-new').value = '';
-                document.getElementById('customer-number-new').value = '';
-                document.getElementById('customer-phone-new').value = '';
-                document.getElementById('customer-contact-new').value = '';
-                document.getElementById('customer-street-new').value = '';
-                document.getElementById('customer-streetnum-new').value = '';
-                document.getElementById('customer-city-new').value = '';
-                document.getElementById('customer-edit-coords').value = '';
-                // Reset step 2
-                document.getElementById('order-project-name').value = '';
-                document.getElementById('order-time').value = '';
-                document.getElementById('order-delivery-type').value = '';
-                document.getElementById('order-warehouse').value = '';
-                document.getElementById('order-notes').value = '';
-                
-                newCustomerData = {}; // Clear temp data
-                await listenForCustomers(); // Refresh customer list in background
-                showStep1(); // Go back to step 1
+            if (!response.ok) {
+                throw new Error(`שגיאת שרת: ${response.statusText}`);
+            }
 
-            } catch (error) {
-                console.error("Failed to create customer/order:", error);
-                showToast(`שגיאה קריטית: ${error.message}`, "error");
-            } finally {
-                btn.disabled = false;
-                btn.innerText = 'צור לקוח והזמנה';
+            const result = await response.json();
+            
+            if (result.success && result.url) {
+                SmartLog.info("File uploaded to Drive", { url: result.url, name: result.name });
+                return result; // Return the full result (success, url, waUrl)
+            } else {
+                throw new Error(result.error || "שגיאה לא ידועה בשרת");
             }
         }
         
-        async function shareToWhatsApp(orderData) {
-            const phone = "972508860896"; // טלפון מנהל
-            
-            const template = `
-*✅ הזמנה חדשה (טופס הקמה)*
-=================
-*לקוח:* ${orderData.customer.name || 'לא צוין'}
-*מס' לקוח:* ${orderData.customer.customerNumber || 'N/A'}
-*טלפון:* ${orderData.customer.phone || 'N/A'}
-*איש קשר:* ${newCustomerData.contactPerson || 'לא צוין'}
-
-*פרויקט:* ${orderData.projectName || 'לא צוין'}
-=================
-*פרטי אספקה:*
-*סוג הובלה:* ${orderData.deliveryType || 'לא צוין'}
-*מיקום:* ${orderData.address || 'לא צוין'}
-*תאריך:* ${orderData.orderDate}
-*שעה:* ${orderData.orderTime || 'לא צוין'}
-=================
-*תוכן ההזמנה:*
-${orderData.notes || "--- אין תוכן ---"}
-            `;
-            
-            const whatsappUrl = `https://api.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(template)}`;
-            window.open(whatsappUrl, '_blank');
-        }
-
-        // --- Toast Utility ---
+        // --- [NEW v3.0] Toast Notification ---
         function showToast(message, type = 'info') {
             const container = document.getElementById('toast-container');
             if (!container) return;
             
             const toast = document.createElement('div');
-            let bgColor = 'bg-gray-800 dark:bg-gray-200 text-white dark:text-black';
-            if (type === 'success') {
-                bgColor = 'bg-green-500 text-white';
-            } else if (type === 'error') {
-                bgColor = 'bg-red-500 text-white';
-            }
-            
-            toast.className = `p-4 rounded-lg shadow-lg ${bgColor} mb-2 transform translate-y-10 opacity-0 transition-all duration-300 ease-out text-lg`;
-            toast.innerHTML = message;
+            toast.className = `toast ${type}`;
+            toast.innerText = message;
             
             container.appendChild(toast);
             
+            // Animate in
             setTimeout(() => {
-                toast.classList.remove('translate-y-10');
-                toast.classList.remove('opacity-0');
+                toast.classList.add('show');
             }, 100);
             
+            // Animate out
             setTimeout(() => {
-                toast.classList.add('opacity-0');
+                toast.classList.remove('show');
                 setTimeout(() => {
                     if (container.contains(toast)) {
                         container.removeChild(toast);
                     }
                 }, 300);
-            }, 4000);
+            }, 3000);
         }
+
+        // --- [NEW v3.1] Modified WhatsApp Share (Lighter Design) ---
+        /**
+         * Generates a WhatsApp share URL.
+         * @param {object} orderData - The order data object.
+         * @param {string|null} attachmentUrl - Optional URL of the uploaded file.
+         * @returns {string} - The full WhatsApp URL.
+         */
+        function shareToWhatsApp(orderData, attachmentUrl = null) {
+            const phone = "972508860896"; // יעד מחלקת הזמנות
+            
+            const customerContact = newCustomerData.contactPerson || newCustomerData.name;
+            
+            // Create attachment text if URL exists
+            const attachmentText = attachmentUrl 
+                ? `\n📎 *קובץ מצורף:*\n${attachmentUrl}` 
+                : '';
+
+            const template = `
+*✅ הזמנה חדשה (מטופס CRM)*
+
+👤 *פרטי לקוח:*
+• *שם:* ${newCustomerData.name}
+• *מס' לקוח:* ${newCustomerData.customerNumber}
+• *טלפון:* ${newCustomerData.phone}
+• *איש קשר:* ${customerContact}
+
+🚚 *פרטי הזמנה:*
+• *פרויקט:* ${orderData.projectName.join(', ') || 'לא צוין'}
+• *סוג הובלה:* ${orderData.deliveryType || 'לא צוין'}
+• *מיקום:* ${newCustomerData.defaultAddress}
+• *תאריך:* ${orderData.orderDate}
+
+📦 *תוכן:*
+${orderData.notes || "--- אין תוכן ---"}
+${attachmentText}
+            `;
+            
+            const waUrl = `https://api.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(template.trim())}`;
+            SmartLog.info("Generated WhatsApp URL", { url: waUrl });
+            return waUrl;
+        }
+        
+        // --- Main Submit Logic ---
+        document.getElementById('btn-submit-full').addEventListener('click', async (e) => {
+            const btn = e.target;
+            btn.disabled = true;
+            btn.innerHTML = '<div class="loader" style="width:20px; height:20px; border-width: 2px; margin: 0 auto;"></div>';
+
+            try {
+                // --- Step 1: Create or Find Customer ---
+                // Using Auto-ID as discussed (v2.2 logic)
+                const customerRef = doc(collection(db, "customers"));
+                
+                // Add audit log for creation
+                const customerData = {
+                    ...newCustomerData,
+                    createdAt: serverTimestamp(),
+                    auditLog: [{
+                        action: "Created (via CRM Form)",
+                        // [CRITICAL FIX v3.1] Replaced serverTimestamp() with new Date()
+                        timestamp: new Date() 
+                    }]
+                };
+                
+                // Check if customer *number* already exists (to prevent duplicates)
+                const q = query(collection(db, "customers"), where("customerNumber", "==", newCustomerData.customerNumber), limit(1));
+                const existingSnap = await getDocs(q);
+                
+                if (!existingSnap.empty) {
+                    // Customer with this NUMBER already exists
+                    showToast("שגיאה: מספר לקוח זה כבר קיים במערכת.", "error");
+                    throw new Error("Customer number already exists.");
+                }
+                
+                await setDoc(customerRef, customerData);
+                const newCustomerId = customerRef.id; // This is the Auto-ID
+                SmartLog.info("Customer created successfully", { id: newCustomerId });
+                showToast("שלב 1: לקוח נוצר בהצלחה!", "success");
+
+                // --- Step 2: Handle File Upload (if any) ---
+                const file = document.getElementById('file-upload').files[0];
+                let attachmentUrl = null;
+                let whatsAppUrl = null; // This will be the main WA link
+
+                if (file) {
+                    showToast('מעלה קובץ... אנא המתן', 'info');
+                    document.getElementById('upload-status').innerText = 'מעלה קובץ...';
+                    document.getElementById('upload-status').classList.remove('hidden');
+                    
+                    try {
+                        // Pass the customer *number* to the Apps Script
+                        const uploadResult = await handleFileUpload(file, newCustomerData.customerNumber);
+                        attachmentUrl = uploadResult.url; // GDrive URL
+                        whatsAppUrl = uploadResult.waUrl; // WA link with GDrive URL
+                        
+                        document.getElementById('upload-status').innerText = 'קובץ צורף בהצלחה!';
+                        showToast('קובץ צורף בהצלחה!', 'success');
+                        
+                    } catch (uploadError) {
+                        SmartLog.error(uploadError, "Upload.AppsScript");
+                        showToast(`שגיאה בהעלאת קובץ: ${uploadError.message}`, 'error');
+                        // Don't block the order, just log the error
+                        document.getElementById('upload-status').innerText = 'שגיאה בהעלאת קובץ. ההזמנה תיווצר ללא הקובץ.';
+                    }
+                }
+
+                // --- Step 3: Create Order ---
+                const customOrderNumber = document.getElementById('order-number').value.trim();
+                const orderId = customOrderNumber || `AUTO-${Date.now().toString().slice(-6)}`;
+                
+                const orderData = {
+                    order_id: orderId,
+                    customer: {
+                        id: newCustomerId,
+                        name: newCustomerData.name,
+                        phone: newCustomerData.phone,
+                        customerNumber: newCustomerData.customerNumber
+                    },
+                    address: newCustomerData.defaultAddress,
+                    projectName: projectTags, // Save array of projects
+                    deliveryType: document.getElementById('order-transport-type').value,
+                    notes: document.getElementById('order-content').value,
+                    attachmentUrl: attachmentUrl, // Add the GDrive link
+                    orderDate: new Date().toISOString().split('T')[0], // Use today's date
+                    status: "חדש",
+                    createdBy: "CRM-Form",
+                    createdAt: serverTimestamp(),
+                    lastModified: serverTimestamp()
+                };
+
+                const orderRef = doc(db, "orders", orderId);
+                await setDoc(orderRef, orderData);
+                SmartLog.info("Order created successfully", { id: orderId });
+
+                // --- Step 4: Share to WhatsApp ---
+                if (whatsAppUrl) {
+                    // We already have the WA link from the file upload (which includes the file URL)
+                    window.open(whatsAppUrl, '_blank');
+                    showToast('הזמנה וקובץ נוצרו! פותח WhatsApp...', 'success');
+                } else {
+                    // No file was attached, so we generate a WA link for the order *only*
+                    const orderWaUrl = shareToWhatsApp(orderData, null); // Pass null for attachment
+                    window.open(orderWaUrl, '_blank');
+                    showToast('הזמנה נוצרה! פותח WhatsApp...', 'success');
+                }
+
+                // --- Step 5: Reset Form ---
+                setTimeout(() => {
+                    // Reset all fields
+                    document.getElementById('customer-number').value = '';
+                    document.getElementById('customer-name').value = '';
+                    document.getElementById('customer-phone').value = '';
+                    document.getElementById('customer-contact').value = '';
+                    document.getElementById('customer-street').value = '';
+                    document.getElementById('customer-street-num').value = '';
+                    document.getElementById('customer-city').value = '';
+                    document.getElementById('order-number').value = '';
+                    document.getElementById('order-transport-type').value = '';
+                    document.getElementById('order-content').value = '';
+                    document.getElementById('project-input').value = '';
+                    document.getElementById('file-upload').value = '';
+                    document.getElementById('upload-status').classList.add('hidden');
+                    projectTags = [];
+                    renderProjectTags();
+                    
+                    // Go back to step 1
+                    step2.style.display = 'none';
+                    step1.style.display = 'block';
+                    stepper2.classList.remove('active');
+                    stepper1.classList.remove('complete');
+                    stepper1.classList.add('active');
+                    
+                    btn.disabled = false;
+                    btn.innerHTML = '<i data-feather="check-circle" class="inline-block w-5 h-5"></i> שמור הכל ושלח ל-WhatsApp';
+                    feather.replace();
+                }, 2000); // Short delay to let user see success
+
+            } catch (error) {
+                SmartLog.error(error, "Submit.FullOrder");
+                showToast(`שגיאה קריטית: ${error.message}`, "error");
+                btn.disabled = false;
+                btn.innerHTML = '<i data-feather="check-circle" class="inline-block w-5 h-5"></i> שמור הכל ושלח ל-WhatsApp';
+                feather.replace();
+            }
+        });
 
         // --- Init Icons ---
         feather.replace();
-
     </script>
 </body>
 </html>
+
