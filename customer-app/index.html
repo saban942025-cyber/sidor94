@@ -3,16 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>מעקב הזמנה - v34.4 (Customer N/A Fix)</title>
+    <title>מעקב הזמנה - v35 (Drive Upload)</title>
     <!-- 
-      DeliveryMaster Customer App v34.4 (Customer N/A Fix)
-      - [FIX] שדרוג `startTracking` כך שיבדוק אם נתוני הלקוח בהזמנה חלקיים.
-        [!!!] התיקון בודק עכשיו גם אם השם הוא "N/A" או "לקוח לא ידוע",
-        ולא רק אם הוא ריק. זה מונע יצירת הזמנות חדשות עם "לקוח לא ידוע".
-      - [FIX] שדרוג `startTracking` לנסות לאתר הזמנה לפי Document ID (ישן)
-        וגם לפי שדה `order_id` (חדש).
-      - [NEW] הוספת יכולת העלאת קבצים (Firebase Storage).
-      - [NEW] הוספת מודל "ברוכים הבאים" עם הדרכה למשתמש.
+      DeliveryMaster Customer App v35 (Drive Upload)
+      
+      Changelog:
+      - [CRITICAL CHANGE v35]:
+        - הוסר החיבור ל-Firebase Storage.
+        - הוחלפה פונקציית `handleFileUpload` כך שתבצע Base64
+          ותשלח את הקובץ ל-Apps Script Web App ייעודי (דורש הגדרה).
+        - הוסר ייבוא (import) של `firebase-storage.js`.
+      - [FIX v34.8]:
+        - תיקון קריסה בעת טעינת הזמנה ללא לקוח.
+      - [NEW v34.7]:
+        - טופס הזמנה חכם (שליפת פרויקטים).
+      - [NEW v34.6]:
+        - ברכה דינאמית (בוקר/צהריים/ערב).
+        - תיבת צ'אט מוגדלת.
     -->
 
     <!-- PWA Manifest -->
@@ -180,10 +187,18 @@
             </div>
             
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <!-- [NEW v34.7] Smart Project Selector -->
                 <div>
-                    <label for="order-project" class="block text-sm font-medium text-gray-700">שם פרויקט (רשות)</label>
-                    <input type="text" id="order-project" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500" placeholder="לדוגמה: בניין בראשון">
+                    <label for="order-project-select" class="block text-sm font-medium text-gray-700">בחר פרויקט (או צור חדש)</label>
+                    <select id="order-project-select" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500" onchange="handleProjectSelect(this.value)">
+                        <option value="">-- טוען פרויקטים --</option>
+                    </select>
                 </div>
+                <div id="order-project-new-wrapper" class="hidden"> <!-- [NEW] Changed to hidden -->
+                    <label for="order-project-new" class="block text-sm font-medium text-gray-700">שם פרויקט חדש</label>
+                    <input type="text" id="order-project-new" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500" placeholder="הקלד שם פרויקט חדש">
+                </div>
+
                 <div>
                     <label for="order-transport-type" class="block text-sm font-medium text-gray-700">סוג הובלה</label>
                     <select id="order-transport-type" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
@@ -256,7 +271,10 @@
             <!-- Order Details -->
             <div id="order-content" class="hidden space-y-6">
                 <div>
-                    <p class="text-gray-700 text-lg">שלום <strong id="customer-name"></strong>, ההזמנה שלך בסטטוס:</p>
+                    <!-- [NEW v34.6] Dynamic Greeting -->
+                    <h2 id="dynamic-greeting" class="text-2xl font-bold text-gray-800 mb-2"></h2>
+                    <p class="text-gray-600 text-lg">ההזמנה שלך בסטטוס:</p>
+                    
                     <!-- Status Tracker -->
                     <div class="status-tracker mt-6">
                         <div class="status-tracker-progress" id="status-progress-bar"></div>
@@ -308,7 +326,8 @@
                 <!-- פיצ'ר צ'אט חדש -->
                 <div id="chat-section">
                     <h3 class="font-semibold mb-3 text-lg">תקשורת עם המנהל</h3>
-                    <div id="chat-history" class="h-48 bg-gray-100 rounded-lg p-3 overflow-y-auto flex flex-col space-y-2 border">
+                    <!-- [NEW v34.6] Upgraded chatbox height -->
+                    <div id="chat-history" class="h-80 bg-gray-100 rounded-lg p-3 overflow-y-auto flex flex-col space-y-2 border">
                         <!-- הודעות צ'אט יופיעו כאן -->
                         <p class="text-gray-500 text-sm text-center">טוען היסטוריית הודעות...</p>
                     </div>
@@ -361,22 +380,23 @@
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
         // [FIX v34.2] Added 'limit'
         import { getFirestore, collection, doc, onSnapshot, query, orderBy, addDoc, updateDoc, serverTimestamp, deleteDoc, arrayUnion, where, getDocs, getDoc, limit } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-        // [NEW] Import Firebase Storage
-        import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-storage.js";
+        
+        // [REMOVED v35] Firebase Storage import
+        // import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-storage.js";
 
         // --- Inlined Config Logic ---
         const firebaseConfig = {
           apiKey: "AIzaSyDq0oVwS6zbEfsgrYBRkeBq80dDUKMedzo", authDomain: "saban94-78949.firebaseapp.com", projectId: "saban94-78949",
-          storageBucket: "saban94-78949.appspot.com", // [FIX] Make sure this is correct
+          storageBucket: "saban94-78949.firebasestorage.app", // [FIX v34.9] Corrected bucket name
           messagingSenderId: "41553157903", appId: "1:41553157903:web:cc33d252cff023be97a87a", measurementId: "G-XV6RZDESSB"
         };
-        let app, auth, db, storage; // [NEW] Added storage
+        let app, auth, db; // [REMOVED v35] Removed 'storage'
         let initializationError = null;
         try {
             app = getApps().length ? getApp() : initializeApp(firebaseConfig);
             auth = getAuth(app); 
             db = getFirestore(app);
-            storage = getStorage(app); // [NEW] Initialize Storage
+            // [REMOVED v35] Removed storage init
         } catch (error) { console.error("CRITICAL: Firebase init failed!", error); initializationError = error; }
 
         const MAX_AUTH_RETRIES = 3; const RETRY_DELAY_MS = 3000;
@@ -415,6 +435,11 @@
         let currentOrderId = null;
         let currentCustomerData = null; 
         let currentFirestoreDocId = null; // [NEW] Store the real doc ID
+        let customerProjects = []; // [NEW v34.7]
+        
+        // [NEW v35] Google Apps Script Web App URL
+        // !!! יש להדביק כאן את ה-URL שקיבלת לאחר פריסת ה-Apps Script
+        const WEB_APP_URL = "YOUR_APPS_SCRIPT_WEB_APP_URL_HERE"; 
 
         // --- Icons ---
         const driverIcon = L.icon({
@@ -499,6 +524,29 @@
             if (stepIndex === 2) document.getElementById('step-onway').classList.add('active');
             if (stepIndex === 3) document.getElementById('step-completed').classList.add('active');
         }
+        
+        // [NEW v34.6] Dynamic Greeting
+        function setDynamicGreeting(customerName) {
+            const greetingEl = document.getElementById('dynamic-greeting');
+            if (!greetingEl) return;
+
+            const hour = new Date().getHours();
+            let greeting = "ברוך הבא";
+            if (hour >= 5 && hour < 12) {
+                greeting = "בוקר טוב";
+            } else if (hour >= 12 && hour < 18) {
+                greeting = "צהריים טובים";
+            } else if (hour >= 18 && hour < 22) {
+                greeting = "ערב טוב";
+            } else {
+                greeting = "לילה טוב";
+            }
+            
+            // Get first name
+            const firstName = (customerName || 'לקוח').split(' ')[0].replace(',', ''); // Clean up name
+            
+            greetingEl.innerText = `${greeting}, ${firstName}!`;
+        }
 
         // --- Main Logic ---
         function getOrderIdFromUrl() {
@@ -510,7 +558,7 @@
             } catch (e) { SmartLog.error(e, { context: "Error reading URL params" }); showError("שגיאה בעיבוד הקישור."); return null; }
         }
         
-        // [FIX v34.4] Updated function
+        // [FIX v34.8] Updated function
         async function startTracking() {
             currentOrderId = getOrderIdFromUrl(); // This could be '6209643' OR '8RJXj3...'
             if (!currentOrderId) return;
@@ -558,20 +606,19 @@
                 
                 const orderData = orderDoc.data();
                 
-                // --- [NEW FIX v34.4] ---
+                // --- [NEW FIX v34.8] ---
                 // Validate and fetch full customer data if missing
                 const customerInOrder = orderData.customer;
                 const customerId = customerInOrder ? customerInOrder.id : null;
                 const customerName = customerInOrder ? customerInOrder.name : null;
                 
-                // [FIX] Check for "N/A" or other placeholders as well as missing name
                 if (customerId && (!customerName || customerName === 'N/A' || customerName === 'לקוח לא ידוע')) {
                     SmartLog.warn("Customer data is partial. Fetching full profile.", { customerId: customerId });
                     try {
                         const customerRef = doc(db, "customers", customerId);
                         const customerSnap = await getDoc(customerRef);
                         if (customerSnap.exists()) {
-                            currentCustomerData = customerSnap.data(); // Get the full, correct data
+                            currentCustomerData = { id: customerSnap.id, ...customerSnap.data() }; // Get the full, correct data
                             SmartLog.info("Full customer profile fetched.", currentCustomerData);
                         } else {
                             currentCustomerData = customerInOrder; // Fallback
@@ -580,11 +627,35 @@
                         SmartLog.error(e, "Failed to fetch full customer profile");
                         currentCustomerData = customerInOrder; // Fallback
                     }
-                } else if (customerInOrder) {
+                } else if (customerInOrder && customerId) {
                     currentCustomerData = customerInOrder; // Data seems fine
                 } else {
-                    SmartLog.error(new Error("No customer object found on order"), { orderId: currentFirestoreDocId });
-                    currentCustomerData = { name: "לקוח לא ידוע" }; // Fallback
+                    SmartLog.error(new Error("No customer object or ID found on order"), { orderId: currentFirestoreDocId });
+                    // [CRITICAL FIX] Provide a fallback object to prevent crash
+                    currentCustomerData = { id: null, name: "לקוח לא מזוהה" }; 
+                }
+                // --- END FIX ---
+
+
+                // [NEW v34.7] Fetch project history if customer is valid
+                if (currentCustomerData && currentCustomerData.id) {
+                    try {
+                        const projectsQuery = query(
+                            collection(db, "orders"), 
+                            where("customer.id", "==", currentCustomerData.id),
+                            orderBy("createdAt", "desc"),
+                            limit(20) // Get last 20 orders
+                        );
+                        const projectsSnap = await getDocs(projectsQuery);
+                        const projectSet = new Set();
+                        projectsSnap.forEach(doc => { 
+                            if (doc.data().projectName) projectSet.add(doc.data().projectName); 
+                        });
+                        customerProjects = Array.from(projectSet);
+                        SmartLog.info("Fetched customer projects", { projects: customerProjects });
+                    } catch (e) {
+                         SmartLog.error(e, "Failed to fetch project history");
+                    }
                 }
                 // --- END FIX ---
 
@@ -594,7 +665,7 @@
                 const messagesQuery = query(messagesColRef, limit(1));
                 const messagesSnapshot = await getDocs(messagesQuery);
                 
-                if (messagesSnapshot.empty) {
+                if (messagesSnapshot.empty && currentCustomerData && currentCustomerData.id) { // Only show if customer is valid
                     const customerName = currentCustomerData.name || 'לקוח יקר';
                     document.getElementById('welcome-customer-name').innerText = customerName;
                     document.getElementById('welcome-modal').showModal();
@@ -614,7 +685,7 @@
                     orderListenerUnsubscribe.snapshot = docSnap; // Attach snapshot for easy access
                     
                     // [FIX v34.3] Only update customer data if it's newer/better
-                    if (newOrderData.customer && newOrderData.customer.name) {
+                    if (newOrderData.customer && newOrderData.customer.name && newOrderData.customer.name !== 'N/A' && newOrderData.customer.name !== 'לקוח לא מזוהה') {
                          currentCustomerData = newOrderData.customer; 
                     }
                     
@@ -667,8 +738,8 @@
             const displayId = order.orderNumber || order.order_id || `#${currentOrderId.slice(-6)}`;
             document.getElementById('order-id-display').innerText = `הזמנה ${displayId}`;
             
-            // [FIX v34.3] Use the master currentCustomerData which is now reliable
-            document.getElementById('customer-name').innerText = currentCustomerData.name || 'לקוח';
+            // [FIX v34.8] Check currentCustomerData before accessing name
+            setDynamicGreeting(currentCustomerData ? currentCustomerData.name : 'לקוח');
             
             updateStatusTracker(order.status);
             
@@ -733,7 +804,7 @@
                     let msgText = msg.text || '';
                     const urlRegex = /(https?:\/\/[^\s]+)/g;
                     if (urlRegex.test(msgText)) {
-                        msgText = msgText.replace(urlRegex, (url) => `<a href="${url}" target="_blank" rel="noopener noreferrer">${url.includes('firebasestorage') ? 'פתח קובץ מצורף' : 'פתח קישור'}</a>`);
+                        msgText = msgText.replace(urlRegex, (url) => `<a href="${url}" target="_blank" rel="noopener noreferrer">${url.includes('firebasestorage') || url.includes('drive.google') ? 'פתח קובץ מצורף' : 'פתח קישור'}</a>`);
                     }
 
                     if (msg.type === 'notification_to_customer') {
@@ -806,12 +877,12 @@
         window.sendLocation = sendLocation;
 
         function openNewOrderModal() {
-            if (!currentCustomerData) {
-                alert("טוען פרטי לקוח, אנא המתן רגע...");
+            // [FIX v34.7] Validate customer data before opening modal
+            if (!currentCustomerData || !currentCustomerData.id || !currentCustomerData.name || currentCustomerData.name === 'N/A' || currentCustomerData.name === 'לקוח לא מזוהה') {
+                alert("לא ניתן ליצור הזמנה חדשה. פרטי הלקוח בקישור זה פגומים או חסרים. אנא פנה למנהל.");
                 return;
             }
             
-            // [FIX v34.3] Use reliable customer data
             document.getElementById('modal-customer-name').innerText = currentCustomerData.name || 'לא ידוע';
             
             if (orderListenerUnsubscribe && orderListenerUnsubscribe.snapshot) {
@@ -819,35 +890,66 @@
                 if (orderData && orderData.address) {
                     document.getElementById('order-location').value = orderData.address;
                 } else if (currentCustomerData.defaultAddress) {
-                    // [FIX v34.3] Check for correct field name
                     document.getElementById('order-location').value = currentCustomerData.defaultAddress || currentCustomerData.default_address || '';
                 }
             }
+
+            // [NEW v34.7] Populate project dropdown
+            const projectSelect = document.getElementById('order-project-select');
+            projectSelect.innerHTML = '<option value="">-- בחר פרויקט קיים --</option>';
+            customerProjects.forEach(proj => {
+                projectSelect.innerHTML += `<option value="${proj}">${proj}</option>`;
+            });
+            projectSelect.innerHTML += '<option value="--new--">** פרויקט חדש **</option>';
+            document.getElementById('order-project-new-wrapper').style.display = 'none';
+            document.getElementById('order-project-new').value = '';
             
             document.getElementById('new-order-modal').showModal();
             feather.replace(); 
         }
         window.openNewOrderModal = openNewOrderModal;
         
+        // [NEW v34.7]
+        function handleProjectSelect(value) {
+            const newProjectWrapper = document.getElementById('order-project-new-wrapper');
+            newProjectWrapper.style.display = (value === '--new--') ? 'block' : 'none';
+        }
+        window.handleProjectSelect = handleProjectSelect;
+        
         async function submitNewOrder() {
             const btn = document.getElementById('submit-order-btn');
             btn.disabled = true;
             btn.innerText = "שולח...";
 
-            if (!currentCustomerData || !currentCustomerData.name || currentCustomerData.name === 'N/A' || currentCustomerData.name === 'לקוח לא ידוע') {
-                alert("שגיאה: פרטי הלקוח שלך אינם שלמים. אנא צור קשר עם המשרד לעדכון פרטים.");
-                btn.disabled = false;
-                btn.innerText = "שלח הזמנה";
-                return;
+            // [FIX v34.7] Validation moved to openNewOrderModal
+            if (!currentCustomerData || !currentCustomerData.id) {
+                 alert("שגיאת מערכת: פרטי הלקוח אבדו. אנא רענן.");
+                 btn.disabled = false;
+                 btn.innerText = "שלח הזמנה";
+                 return;
             }
             
             const pasteContent = document.getElementById('paste-content').value;
-            const project = document.getElementById('order-project').value;
             const transportType = document.getElementById('order-transport-type').value;
             const location = document.getElementById('order-location').value.trim();
 
-            if (!pasteContent && !project) {
-                alert("אנא מלא תוכן הזמנה או שם פרויקט.");
+            // [NEW v34.7] Get project name from smart selector
+            const projectSelect = document.getElementById('order-project-select');
+            let projectName;
+            if (projectSelect.value === '--new--') {
+                projectName = document.getElementById('order-project-new').value.trim();
+                if (!projectName) {
+                    alert("אנא הקלד שם פרויקט חדש.");
+                    btn.disabled = false;
+                    btn.innerText = "שלח הזמנה";
+                    return;
+                }
+            } else {
+                projectName = projectSelect.value;
+            }
+            
+            if (!pasteContent && !projectName) {
+                alert("אנא מלא תוכן הזמנה או בחר פרויקט.");
                 btn.disabled = false;
                 btn.innerText = "שלח הזמנה";
                 return;
@@ -855,12 +957,15 @@
             
             const orderData = orderListenerUnsubscribe.snapshot.data();
 
+            // [FIX v34.8] Stricter check for lat/lon
             const newOrder = {
-                customer: currentCustomerData, // [FIX v34.3] This is now the full, reliable customer object
+                customer: currentCustomerData, // This is now the full, reliable customer object
                 address: location || orderData.address || 'לא צוינה כתובת',
-                latitude: orderData.latitude, 
-                longitude: orderData.longitude,
-                notes: `--- הזמנה חדשה מלקוח ---\nפרויקט: ${project}\nתוכן: ${pasteContent}`,
+                // Only add lat/lon if they are valid numbers
+                ...( (orderData.latitude !== undefined && orderData.latitude !== null) && { latitude: orderData.latitude }),
+                ...( (orderData.longitude !== undefined && orderData.longitude !== null) && { longitude: orderData.longitude }),
+                projectName: projectName, // [NEW v34.7]
+                notes: `--- הזמנה חדשה מלקוח ---\n${pasteContent}`, // [FIX] Removed project from notes
                 deliveryType: transportType,
                 orderDate: new Date().toISOString().split('T')[0], 
                 orderTime: new Date().toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' }),
@@ -915,13 +1020,18 @@ ${orderData.notes || "--- אין תוכן ---"}
             window.open(url, '_blank');
         }
         
-        // [NEW] File Upload Logic
+        // [NEW v35] File Upload Logic (Switched to Apps Script)
         async function handleFileUpload(event) {
+            if (WEB_APP_URL === "YOUR_APPS_SCRIPT_WEB_APP_URL_HERE") {
+                alert("שגיאת תצורה: יש להגדיר את כתובת ה-Web App בקוד תחילה.");
+                return;
+            }
+            
             const file = event.target.files[0];
             if (!file) return;
 
-            if (!currentFirestoreDocId) {
-                alert("שגיאה: לא זוהתה הזמנה.");
+            if (!currentFirestoreDocId || !currentCustomerData || !currentCustomerData.id) {
+                alert("שגיאה: לא זוהתה הזמנה או לקוח.");
                 return;
             }
             
@@ -930,26 +1040,51 @@ ${orderData.notes || "--- אין תוכן ---"}
             uploadStatusEl.classList.remove('hidden');
 
             try {
-                // 1. Create a unique path
-                const storagePath = `orders/${currentFirestoreDocId}/attachments/${Date.now()}_${file.name}`;
-                const storageRef = ref(storage, storagePath);
+                // 1. Convert file to Base64
+                const base64Data = await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result.split(',')[1]);
+                    reader.onerror = error => reject(error);
+                    reader.readAsDataURL(file);
+                });
 
-                // 2. Upload the file
-                const snapshot = await uploadBytes(storageRef, file);
+                // 2. Prepare payload for Apps Script
+                const payload = {
+                    fileData: base64Data,
+                    fileName: file.name,
+                    mimeType: file.type,
+                    customerId: currentCustomerData.customerNumber || currentCustomerData.id // Use customerNumber if available
+                };
                 
-                // 3. Get the download URL
-                const downloadURL = await getDownloadURL(snapshot.ref);
+                // 3. Send to Apps Script Web App
+                const response = await fetch(WEB_APP_URL, {
+                    method: 'POST',
+                    mode: 'cors', // Required for cross-domain request
+                    body: JSON.stringify(payload),
+                    headers: {
+                        'Content-Type': 'text/plain;charset=utf-8', // Apps Script quirk
+                    }
+                });
 
-                // 4. Send the URL as a chat message
-                await sendCustomerMessage(downloadURL);
+                if (!response.ok) {
+                    throw new Error(`שגיאת שרת: ${response.statusText}`);
+                }
+
+                const result = await response.json();
                 
-                SmartLog.info("File uploaded and link sent", { url: downloadURL });
-                showToast("הקובץ נשלח בהצלחה!", "success");
-                uploadStatusEl.classList.add('hidden');
+                if (result.success && result.url) {
+                    // 4. Send the new Google Drive URL as a chat message
+                    await sendCustomerMessage(result.url);
+                    SmartLog.info("File uploaded to Drive and link sent", { url: result.url, name: result.name });
+                    showToast("הקובץ נשלח בהצלחה!", "success");
+                    uploadStatusEl.classList.add('hidden');
+                } else {
+                    throw new Error(result.error || "שגיאה לא ידועה בשרת");
+                }
 
             } catch (error) {
-                SmartLog.error(error, { context: "File Upload Failed" });
-                uploadStatusEl.innerText = "שגיאה בהעלאת הקובץ.";
+                SmartLog.error(error, { context: "File Upload Failed (Apps Script)" });
+                uploadStatusEl.innerText = `שגיאה בהעלאת הקובץ: ${error.message}`;
                 // Hide error message after 3 seconds
                 setTimeout(() => uploadStatusEl.classList.add('hidden'), 3000);
             } finally {
