@@ -3,23 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>מעקב הזמנה - v35 (Drive Upload)</title>
+    <title>מעקב הזמנה - v36 (שיתוף WhatsApp)</title>
     <!-- 
-      DeliveryMaster Customer App v35 (Drive Upload)
+      DeliveryMaster Customer App v36 (WhatsApp Share)
       
       Changelog:
-      - [CRITICAL CHANGE v35]:
-        - הוסר החיבור ל-Firebase Storage.
-        - הוחלפה פונקציית `handleFileUpload` כך שתבצע Base64
-          ותשלח את הקובץ ל-Apps Script Web App ייעודי (דורש הגדרה).
-        - הוסר ייבוא (import) של `firebase-storage.js`.
-      - [FIX v34.8]:
-        - תיקון קריסה בעת טעינת הזמנה ללא לקוח.
-      - [NEW v34.7]:
-        - טופס הזמנה חכם (שליפת פרויקטים).
-      - [NEW v34.6]:
-        - ברכה דינאמית (בוקר/צהריים/ערב).
-        - תיבת צ'אט מוגדלת.
+      - [NEW v36]:
+        - עדכון כתובת WEB_APP_URL לזו שסופקה.
+        - שדרוג `handleFileUpload`:
+          - כעת מקבל `waUrl` (קישור לוואטסאפ) מהשרת.
+          - פותח אוטומטית את ה-`waUrl` בטאב חדש לאחר העלאה מוצלחת.
+        - הוספת קישוריות ל-Google Drive ב-`createMessageBubble`.
+      - [v35]:
+        - הסרת Firebase Storage לטובת Apps Script (Google Drive).
+      - [v34.x]:
+        - תיקוני באגים, טופס חכם (פרויקטים), ברכה דינאמית.
     -->
 
     <!-- PWA Manifest -->
@@ -437,8 +435,8 @@
         let currentFirestoreDocId = null; // [NEW] Store the real doc ID
         let customerProjects = []; // [NEW v34.7]
         
-        // [NEW v35] Google Apps Script Web App URL
-        // !!! יש להדביק כאן את ה-URL שקיבלת לאחר פריסת ה-Apps Script
+        // [NEW v36] Google Apps Script Web App URL
+        // הוחלפה הכתובת לזו שסיפקת
         const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzwWherCt8LsMCmd9dQ__1RdN4OXb3BBcwYezJG0qVkFKbxowefqBLWbXHTft1QlXhprg/exec"; 
 
         // --- Icons ---
@@ -558,7 +556,7 @@
             } catch (e) { SmartLog.error(e, { context: "Error reading URL params" }); showError("שגיאה בעיבוד הקישור."); return null; }
         }
         
-        // [FIX v34.8] Updated function
+        // [FIX v36.1] Updated function
         async function startTracking() {
             currentOrderId = getOrderIdFromUrl(); // This could be '6209643' OR '8RJXj3...'
             if (!currentOrderId) return;
@@ -604,78 +602,11 @@
                     return;
                 }
                 
-                const orderData = orderDoc.data();
+                // [FIX v36.1] Moved all logic *inside* the listener
                 
-                // --- [NEW FIX v34.8] ---
-                // Validate and fetch full customer data if missing
-                const customerInOrder = orderData.customer;
-                const customerId = customerInOrder ? customerInOrder.id : null;
-                const customerName = customerInOrder ? customerInOrder.name : null;
-                
-                if (customerId && (!customerName || customerName === 'N/A' || customerName === 'לקוח לא ידוע')) {
-                    SmartLog.warn("Customer data is partial. Fetching full profile.", { customerId: customerId });
-                    try {
-                        const customerRef = doc(db, "customers", customerId);
-                        const customerSnap = await getDoc(customerRef);
-                        if (customerSnap.exists()) {
-                            currentCustomerData = { id: customerSnap.id, ...customerSnap.data() }; // Get the full, correct data
-                            SmartLog.info("Full customer profile fetched.", currentCustomerData);
-                        } else {
-                            currentCustomerData = customerInOrder; // Fallback
-                        }
-                    } catch (e) {
-                        SmartLog.error(e, "Failed to fetch full customer profile");
-                        currentCustomerData = customerInOrder; // Fallback
-                    }
-                } else if (customerInOrder && customerId) {
-                    currentCustomerData = customerInOrder; // Data seems fine
-                } else {
-                    SmartLog.error(new Error("No customer object or ID found on order"), { orderId: currentFirestoreDocId });
-                    // [CRITICAL FIX] Provide a fallback object to prevent crash
-                    currentCustomerData = { id: null, name: "לקוח לא מזוהה" }; 
-                }
-                // --- END FIX ---
-
-
-                // [NEW v34.7] Fetch project history if customer is valid
-                if (currentCustomerData && currentCustomerData.id) {
-                    try {
-                        const projectsQuery = query(
-                            collection(db, "orders"), 
-                            where("customer.id", "==", currentCustomerData.id),
-                            orderBy("createdAt", "desc"),
-                            limit(20) // Get last 20 orders
-                        );
-                        const projectsSnap = await getDocs(projectsQuery);
-                        const projectSet = new Set();
-                        projectsSnap.forEach(doc => { 
-                            if (doc.data().projectName) projectSet.add(doc.data().projectName); 
-                        });
-                        customerProjects = Array.from(projectSet);
-                        SmartLog.info("Fetched customer projects", { projects: customerProjects });
-                    } catch (e) {
-                         SmartLog.error(e, "Failed to fetch project history");
-                    }
-                }
-                // --- END FIX ---
-
-
-                // --- [NEW] Welcome Modal Logic ---
-                const messagesColRef = collection(db, "orders", currentFirestoreDocId, "messages");
-                const messagesQuery = query(messagesColRef, limit(1));
-                const messagesSnapshot = await getDocs(messagesQuery);
-                
-                if (messagesSnapshot.empty && currentCustomerData && currentCustomerData.id) { // Only show if customer is valid
-                    const customerName = currentCustomerData.name || 'לקוח יקר';
-                    document.getElementById('welcome-customer-name').innerText = customerName;
-                    document.getElementById('welcome-modal').showModal();
-                    feather.replace(); 
-                }
-                // --- End Welcome Modal Logic ---
-
                 // Now listen to the specific document using its real ID
                 const orderRef = doc(db, "orders", currentFirestoreDocId);
-                orderListenerUnsubscribe = onSnapshot(orderRef, (docSnap) => {
+                orderListenerUnsubscribe = onSnapshot(orderRef, async (docSnap) => {
                     if (!docSnap.exists()) {
                          showError("ההזמנה נמחקה או שאינה קיימת.");
                          return;
@@ -683,11 +614,70 @@
                     
                     const newOrderData = docSnap.data();
                     orderListenerUnsubscribe.snapshot = docSnap; // Attach snapshot for easy access
+
+                    // --- [FIX v36.1] All customer logic is now INSIDE the listener ---
+                    const customerInOrder = newOrderData.customer;
+                    const customerId = customerInOrder ? customerInOrder.id : null;
+                    const customerName = customerInOrder ? customerInOrder.name : null;
                     
-                    // [FIX v34.3] Only update customer data if it's newer/better
-                    if (newOrderData.customer && newOrderData.customer.name && newOrderData.customer.name !== 'N/A' && newOrderData.customer.name !== 'לקוח לא מזוהה') {
-                         currentCustomerData = newOrderData.customer; 
+                    if (customerId && (!customerName || customerName === 'N/A' || customerName === 'לקוח לא ידוע')) {
+                        SmartLog.warn("Customer data is partial. Fetching full profile.", { customerId: customerId });
+                        try {
+                            const customerRef = doc(db, "customers", customerId);
+                            const customerSnap = await getDoc(customerRef);
+                            if (customerSnap.exists()) {
+                                currentCustomerData = { id: customerSnap.id, ...customerSnap.data() }; // Get the full, correct data
+                                SmartLog.info("Full customer profile fetched.", currentCustomerData);
+                            } else {
+                                currentCustomerData = customerInOrder; // Fallback
+                            }
+                        } catch (e) {
+                            SmartLog.error(e, "Failed to fetch full customer profile");
+                            currentCustomerData = customerInOrder; // Fallback
+                        }
+                    } else if (customerInOrder && customerId) {
+                        currentCustomerData = customerInOrder; // Data seems fine
+                    } else {
+                        SmartLog.error(new Error("No customer object or ID found on order"), { orderId: currentFirestoreDocId });
+                        // [CRITICAL FIX] Provide a fallback object to prevent crash
+                        currentCustomerData = { id: null, name: "לקוח לא מזוהה" }; 
                     }
+                    // --- END CUSTOMER LOGIC ---
+
+                    // --- [FIX v36.1] Fetch projects *after* customer is set ---
+                    if (currentCustomerData && currentCustomerData.id && customerProjects.length === 0) { // Only fetch once
+                        try {
+                            const projectsQuery = query(
+                                collection(db, "orders"), 
+                                where("customer.id", "==", currentCustomerData.id),
+                                orderBy("createdAt", "desc"),
+                                limit(20) // Get last 20 orders
+                            );
+                            const projectsSnap = await getDocs(projectsQuery);
+                            const projectSet = new Set();
+                            projectsSnap.forEach(doc => { 
+                                if (doc.data().projectName) projectSet.add(doc.data().projectName); 
+                            });
+                            customerProjects = Array.from(projectSet);
+                            SmartLog.info("Fetched customer projects", { projects: customerProjects });
+                        } catch (e) {
+                             SmartLog.error(e, "Failed to fetch project history");
+                        }
+                    }
+                    // --- END PROJECT LOGIC ---
+
+                    // --- [FIX v36.1] Welcome modal logic ---
+                    const messagesColRef = collection(db, "orders", currentFirestoreDocId, "messages");
+                    const messagesQuery = query(messagesColRef, limit(1));
+                    const messagesSnapshot = await getDocs(messagesQuery);
+                    
+                    if (messagesSnapshot.empty && currentCustomerData && currentCustomerData.id) { // Only show if customer is valid
+                        const customerName = currentCustomerData.name || 'לקוח יקר';
+                        document.getElementById('welcome-customer-name').innerText = customerName;
+                        document.getElementById('welcome-modal').showModal();
+                        feather.replace(); 
+                    }
+                    // --- End Welcome Modal Logic ---
                     
                     renderOrderData(newOrderData); 
                     
@@ -1020,7 +1010,7 @@ ${orderData.notes || "--- אין תוכן ---"}
             window.open(url, '_blank');
         }
         
-        // [NEW v35] File Upload Logic (Switched to Apps Script)
+        // [NEW v36] File Upload Logic (Switched to Apps Script)
         async function handleFileUpload(event) {
             if (WEB_APP_URL === "YOUR_APPS_SCRIPT_WEB_APP_URL_HERE") {
                 alert("שגיאת תצורה: יש להגדיר את כתובת ה-Web App בקוד תחילה.");
@@ -1078,6 +1068,12 @@ ${orderData.notes || "--- אין תוכן ---"}
                     SmartLog.info("File uploaded to Drive and link sent", { url: result.url, name: result.name });
                     showToast("הקובץ נשלח בהצלחה!", "success");
                     uploadStatusEl.classList.add('hidden');
+                    
+                    // 5. [NEW v36] Open WhatsApp share link
+                    if (result.waUrl) {
+                        window.open(result.waUrl, '_blank');
+                    }
+                    
                 } else {
                     throw new Error(result.error || "שגיאה לא ידועה בשרת");
                 }
