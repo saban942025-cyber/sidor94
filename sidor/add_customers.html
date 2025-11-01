@@ -10,16 +10,15 @@
       Changelog:
       - [CRITICAL FIX v3.1]:
         - תיקון שגיאת `serverTimestamp() is not currently supported inside arrays`.
-        - הוחלף `serverTimestamp()` ב-`new Date()` בתוך מערך `auditLog`.
+        - הוחלף `serverTimestamp()` בתוך `auditLog` ב-`new Date()`.
       - [DESIGN v3.1]:
-        - עיצוב מחדש של תבנית ה-WhatsApp (פונקציה `shareToWhatsApp`)
-          למראה קליל יותר עם אימוג'ים, במקום קווים כבדים.
-      - [DESIGN v3.1]:
-        - הוספת רקעים עדינים (תכלת וירקרק) לשלבי הטופס 
-          כדי לשפר את העיצוב ה"טפל".
+        - עיצוב מחדש של תבנית ה-WhatsApp (ב-`shareToWhatsApp`)
+          למראה נקי וקליל יותר, עם אימוג'ים 
+          (במקום הקווים הכבדים).
+        - הוספת רקע צבעוני עדין (תכלת/ירקרק) לשלבי הטופס.
       - [v3.0]:
-        - שילוב מלא של העלאת קבצים ל-Google Drive.
-        - אתחול Firebase מלא.
+        - שילוב העלאת קבצים ל-Google Drive + שיתוף WhatsApp.
+        - הוספת אתחול Firebase מלא.
       - [v2.2]:
         - תיקון לוגיקת יצירת לקוח לשימוש ב-Auto-ID.
       - [v2.1]:
@@ -68,13 +67,6 @@
             background-color: #374151; /* gray-700 */
             border-color: #4b5563; /* gray-600 */
         }
-        /* [NEW v3.1] Dark mode step backgrounds */
-        html.dark #step-1-customer {
-             background-color: #2b3646; /* Lighter gray-800 */
-        }
-        html.dark #step-2-order {
-             background-color: #2f3d3d; /* Lighter green-desaturated */
-        }
         html.dark .form-input {
             background-color: #4b5563; /* gray-600 */
             border-color: #5e6875; /* gray-500 */
@@ -83,6 +75,10 @@
         html.dark .form-input::placeholder {
             color: #9ca3af; /* gray-400 */
         }
+        /* [NEW v3.1] Step background dark */
+        html.dark #step-1-customer { background-color: #374151; }
+        html.dark #step-2-order { background-color: #374151; }
+        
         html.dark .tag-badge {
             background-color: #1d4ed8; /* blue-700 */
             color: #eff6ff; /* blue-50 */
@@ -96,6 +92,20 @@
         }
         html.dark .btn-secondary:hover {
             background-color: #5e6875; /* gray-500 */
+        }
+        
+        /* [NEW v3.1] Step background light */
+        #step-1-customer {
+            background-color: #f0f9ff; /* blue-50 */
+            border-radius: 1rem;
+            padding: 1.5rem;
+            transition: background-color 0.3s;
+        }
+        #step-2-order {
+            background-color: #f0fdf4; /* green-50 */
+            border-radius: 1rem;
+            padding: 1.5rem;
+            transition: background-color 0.3s;
         }
         
         /* Stepper */
@@ -231,11 +241,10 @@
         </div>
 
         <!-- Form Card -->
-        <div class="form-card bg-white dark:bg-gray-700 shadow-2xl rounded-2xl border border-gray-200 dark:border-gray-600">
+        <div class="form-card bg-white dark:bg-gray-700 shadow-2xl rounded-2xl p-6 sm:p-10 border border-gray-200 dark:border-gray-600">
 
             <!-- Step 1: Customer Details -->
-            <!-- [NEW v3.1] Added subtle background color -->
-            <div id="step-1-customer" class="p-6 sm:p-10 bg-blue-50 dark:bg-gray-800 rounded-2xl">
+            <div id="step-1-customer">
                 <h2 class="text-3xl font-semibold mb-6 text-blue-600 dark:text-blue-400">שלב 1: פרטי לקוח</h2>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
                     <!-- Customer Number -->
@@ -283,9 +292,8 @@
             </div>
 
             <!-- Step 2: Order Details -->
-            <!-- [NEW v3.1] Added subtle background color -->
-            <div id="step-2-order" style="display: none;" class="p-6 sm:p-10 bg-green-50 dark:bg-gray-800 rounded-2xl">
-                <h2 class="text-3xl font-semibold mb-6 text-green-700 dark:text-green-400">שלב 2: פרטי הזמנה</h2>
+            <div id="step-2-order" style="display: none;">
+                <h2 class="text-3xl font-semibold mb-6 text-green-600 dark:text-green-400">שלב 2: פרטי הזמנה</h2>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
                     
                     <!-- Projects -->
@@ -587,7 +595,7 @@
             }, 3000);
         }
 
-        // --- [NEW v3.1] Modified WhatsApp Share (Lighter Design) ---
+        // --- [NEW v3.1] Modified WhatsApp Share ---
         /**
          * Generates a WhatsApp share URL.
          * @param {object} orderData - The order data object.
@@ -601,25 +609,23 @@
             
             // Create attachment text if URL exists
             const attachmentText = attachmentUrl 
-                ? `\n📎 *קובץ מצורף:*\n${attachmentUrl}` 
+                ? `\n\n📎 *קובץ מצורף:*\n${attachmentUrl}` 
                 : '';
 
             const template = `
-*✅ הזמנה חדשה (מטופס CRM)*
+*✅ הזמנה חדשה (טופס הקמה)*
+👤 *לקוח:* ${newCustomerData.name} (#${newCustomerData.customerNumber})
+📞 *טלפון:* ${newCustomerData.phone}
+🙍‍♂️ *איש קשר:* ${customerContact}
 
-👤 *פרטי לקוח:*
-• *שם:* ${newCustomerData.name}
-• *מס' לקוח:* ${newCustomerData.customerNumber}
-• *טלפון:* ${newCustomerData.phone}
-• *איש קשר:* ${customerContact}
+🚚 *פרטי אספקה:*
+*סוג:* ${orderData.deliveryType || 'לא צוין'}
+*מיקום:* ${newCustomerData.defaultAddress}
+*תאריך:* ${orderData.orderDate}
 
-🚚 *פרטי הזמנה:*
-• *פרויקט:* ${orderData.projectName.join(', ') || 'לא צוין'}
-• *סוג הובלה:* ${orderData.deliveryType || 'לא צוין'}
-• *מיקום:* ${newCustomerData.defaultAddress}
-• *תאריך:* ${orderData.orderDate}
+*פרויקט:* ${orderData.projectName.join(', ') || 'כללי'}
 
-📦 *תוכן:*
+📋 *תוכן ההזמנה:*
 ${orderData.notes || "--- אין תוכן ---"}
 ${attachmentText}
             `;
@@ -635,19 +641,26 @@ ${attachmentText}
             btn.disabled = true;
             btn.innerHTML = '<div class="loader" style="width:20px; height:20px; border-width: 2px; margin: 0 auto;"></div>';
 
+            if (initializationError) {
+                 showToast("שגיאת חיבור לשרת. רענן את הדף.", "error");
+                 btn.disabled = false;
+                 btn.innerHTML = '<i data-feather="check-circle" class="inline-block w-5 h-5"></i> שמור הכל ושלח ל-WhatsApp';
+                 feather.replace();
+                 return;
+            }
+
             try {
                 // --- Step 1: Create or Find Customer ---
                 // Using Auto-ID as discussed (v2.2 logic)
                 const customerRef = doc(collection(db, "customers"));
                 
-                // Add audit log for creation
+                // [FIX v3.1] Replaced serverTimestamp with new Date() for array
                 const customerData = {
                     ...newCustomerData,
                     createdAt: serverTimestamp(),
                     auditLog: [{
                         action: "Created (via CRM Form)",
-                        // [CRITICAL FIX v3.1] Replaced serverTimestamp() with new Date()
-                        timestamp: new Date() 
+                        timestamp: new Date() // [FIX v3.1]
                     }]
                 };
                 
