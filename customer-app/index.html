@@ -3,21 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>מעקב הזמנה - v35 (Drive Upload)</title>
+    <title>מעקב הזמנה - v36 (WA Share)</title>
     <!-- 
-      DeliveryMaster Customer App v35 (Drive Upload)
+      DeliveryMaster Customer App v36 (WhatsApp Share)
       
       Changelog:
-      - [CRITICAL CHANGE v35]:
+      - [CRITICAL CHANGE v36]:
+        - עודכנה כתובת ה-WEB_APP_URL לזו שסופקה.
+        - `handleFileUpload` שודרגה:
+          - כעת מקבלת `waUrl` (לינק לוואטסאפ) מהשרת.
+          - פותחת אוטומטית את הלינק לוואטסאפ בחלון חדש.
+          - שולחת את הלינק המקורי של ה-Drive לצ'אט כרגיל.
+      - [v35]:
         - הוסר החיבור ל-Firebase Storage.
-        - הוחלפה פונקציית `handleFileUpload` כך שתבצע Base64
-          ותשלח את הקובץ ל-Apps Script Web App ייעודי (דורש הגדרה).
-        - הוסר ייבוא (import) של `firebase-storage.js`.
-      - [FIX v34.8]:
+        - הוחלפה פונקציית `handleFileUpload` לשימוש ב-Apps Script.
+      - [v34.8]:
         - תיקון קריסה בעת טעינת הזמנה ללא לקוח.
-      - [NEW v34.7]:
+      - [v34.7]:
         - טופס הזמנה חכם (שליפת פרויקטים).
-      - [NEW v34.6]:
+      - [v34.6]:
         - ברכה דינאמית (בוקר/צהריים/ערב).
         - תיבת צ'אט מוגדלת.
     -->
@@ -437,9 +441,9 @@
         let currentFirestoreDocId = null; // [NEW] Store the real doc ID
         let customerProjects = []; // [NEW v34.7]
         
-        // [NEW v35] Google Apps Script Web App URL
-        // !!! יש להדביק כאן את ה-URL שקיבלת לאחר פריסת ה-Apps Script
-        const WEB_APP_URL = "YOUR_APPS_SCRIPT_WEB_APP_URL_HERE"; 
+        // [NEW v36] Google Apps Script Web App URL
+        // הוחלפה הכתובת לזו שסיפקת
+        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzwWherCt8LsMCmd9dQ__1RdN4OXb3BBcwYezJG0qVkFKbxowefqBLWbXHTft1QlXhprg/exec"; 
 
         // --- Icons ---
         const driverIcon = L.icon({
@@ -1020,7 +1024,7 @@ ${orderData.notes || "--- אין תוכן ---"}
             window.open(url, '_blank');
         }
         
-        // [NEW v35] File Upload Logic (Switched to Apps Script)
+        // [NEW v36] File Upload Logic (Switched to Apps Script)
         async function handleFileUpload(event) {
             if (WEB_APP_URL === "YOUR_APPS_SCRIPT_WEB_APP_URL_HERE") {
                 alert("שגיאת תצורה: יש להגדיר את כתובת ה-Web App בקוד תחילה.");
@@ -1078,6 +1082,12 @@ ${orderData.notes || "--- אין תוכן ---"}
                     SmartLog.info("File uploaded to Drive and link sent", { url: result.url, name: result.name });
                     showToast("הקובץ נשלח בהצלחה!", "success");
                     uploadStatusEl.classList.add('hidden');
+                    
+                    // 5. [NEW v36] Open WhatsApp share link
+                    if (result.waUrl) {
+                        window.open(result.waUrl, '_blank');
+                    }
+                    
                 } else {
                     throw new Error(result.error || "שגיאה לא ידועה בשרת");
                 }
