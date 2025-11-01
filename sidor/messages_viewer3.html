@@ -3,17 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>מרכז הודעות (v3.1 - CRM Fix)</title>
+    <title>מרכז הודעות (v4.0 - CRM Pro)</title>
     <!-- 
-      DeliveryMaster Admin - מרכז הודעות v3.1 (CRM Fix)
+      DeliveryMaster Admin - מרכז הודעות v4.0 (CRM Pro)
       
       Changelog:
-      - [CRITICAL FIX v3.1]:
-        - תיקון באג "הצללת משתנים" ב-`listenForConversations`.
-        - הלולאה `for (const doc of snapshot.docs)` שונתה ל-`for (const messageDoc of snapshot.docs)`.
-        - זה מנע קריסה של `TypeError: doc is not a function`
-          ומנע את השגיאה הנלווית `No customerId provided`.
-      - [v3.0] שדרוג ל-3 עמודות: רשימת שיחות, צ'אט, וכרטיס לקוח.
+      - [CRITICAL FIX v4.0]:
+        - תיקון באג `TypeError: doc is not a function` ב-`listenForConversations`.
+          המשתנה `doc` בלולאה הוחלף ב-`messageDoc` כדי למנוע התנגשות.
+      - [NEW v4.0] שדרוג ל-3 עמודות: רשימת שיחות, צ'אט, וכרטיס לקוח.
+      - [NEW v4.0] הוספת `<aside id="customer-profile-panel">`.
+      - [NEW v4.0] לחיצה על שם הלקוח ב-`#chat-header` פותחת/סוגרת את כרטיס הלקוח.
+      - [NEW v4.0] פונקציה חדשה `loadCustomerProfile(customerId)`:
+        - שולפת את מסמך הלקוח מ-`customers` ומציגה פרטים אישיים.
+        - שולפת את כל ההזמנות של הלקוח מ-`orders` (לפי `customer.id`).
+        - מציגה היסטוריית הזמנות.
+        - מציגה רשימת פרויקטים ייחודית.
+      - [NEW v4.0] הוספת חיווי הקלדה (`typing-indicator`).
+      - [FIX v4.0] התאמות UI למובייל (כרטיס הלקוח מחליק מעל הצ'אט).
       - [v2.0] בסיס קוד דמוי WhatsApp Web.
     -->
     
@@ -44,10 +51,10 @@
             height: 100vh;
         }
         
-        /* [NEW v3.0] Layout: 3 Columns */
+        /* [NEW v4.0] Layout: 3 Columns */
         .chat-app-layout {
             display: grid;
-            grid-template-columns: 350px 1fr; /* Default: 2 columns */
+            grid-template-columns: 350px 1fr 0px; /* Profile panel is 0px by default */
             height: 100vh;
             overflow: hidden;
             transition: grid-template-columns 0.3s ease;
@@ -71,26 +78,14 @@
             border-left: 1px solid var(--border-color);
         }
 
-        /* [NEW v3.0] Customer Profile Panel */
+        /* [NEW v4.0] Customer Profile Panel */
         #customer-profile-panel {
             background-color: #ffffff;
             border-left: 1px solid var(--border-color);
             display: flex;
             flex-direction: column;
             overflow-y: auto;
-            /* Hide by default */
-            position: absolute;
-            right: 0;
-            top: 0;
-            height: 100%;
-            width: 300px;
-            z-index: 25;
-            transform: translateX(-100%); /* RTL: move left */
-            transition: transform 0.3s ease;
-        }
-        .chat-app-layout.profile-open #customer-profile-panel {
-            position: relative; /* Make part of grid flow */
-            transform: translateX(0);
+            width: 300px; /* Fixed width */
         }
         .profile-section {
             border-bottom: 1px solid var(--border-color);
@@ -103,7 +98,7 @@
             color: var(--text-light);
             font-weight: 500;
         }
-        .profile-detail span {
+        .profile-detail span, .profile-detail a {
             color: var(--text-dark);
             font-weight: 500;
         }
@@ -184,6 +179,13 @@
             margin-top: 0.25rem;
         }
         
+        /* [NEW v4.0] Typing Indicator */
+        #typing-indicator {
+            font-style: italic;
+            color: var(--text-light);
+            font-size: 0.875rem;
+        }
+        
         #chat-input-bar {
             border-top: 1px solid var(--border-color);
         }
@@ -258,7 +260,7 @@
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         
         /* Mobile View */
-        @media (max-width: 768px) {
+        @media (max-width: 1024px) { /* Changed breakpoint */
             .chat-app-layout {
                 grid-template-columns: 1fr;
             }
@@ -287,9 +289,24 @@
                 z-index: 40; /* Above chat window */
                 width: 300px;
                 transform: translateX(-100%); /* RTL: מוסתר משמאל */
+                position: fixed; /* [FIX v4.0] Make it overlay */
+                left: 0; /* [FIX v4.0] Stick to left */
+                top: 0;
+                height: 100%;
             }
             .chat-app-layout.profile-open #customer-profile-panel {
                 transform: translateX(0);
+            }
+            /* [NEW v4.0] Overlay for mobile profile */
+            #profile-overlay-mobile {
+                position: fixed;
+                inset: 0;
+                background-color: rgba(0,0,0,0.5);
+                z-index: 35;
+                display: none;
+            }
+            .chat-app-layout.profile-open #profile-overlay-mobile {
+                display: block;
             }
         }
     </style>
@@ -323,6 +340,9 @@
     
     <!-- Toast Container -->
     <div id="toast-container" class="fixed bottom-5 right-5 z-[5000]"></div>
+    
+    <!-- [NEW v4.0] Mobile Overlay for Profile -->
+    <div id="profile-overlay-mobile" class="md:hidden" onclick="toggleProfilePanel()"></div>
 
     <!-- Main Layout -->
     <div id="main-layout" class="chat-app-layout">
@@ -373,6 +393,8 @@
                     <div>
                         <h3 class="font-bold text-lg" id="chat-header-name"></h3>
                         <p class="text-sm text-gray-600" id="chat-header-order-id"></p>
+                        <!-- [NEW v4.0] Typing Indicator -->
+                        <p id="typing-indicator" class="text-sm text-blue-500 hidden">...מקליד</p>
                     </div>
                 </header>
                 
@@ -396,7 +418,7 @@
             </div>
         </main>
         
-        <!-- 3. [NEW v3.0] Customer Profile Panel -->
+        <!-- 3. [NEW v4.0] Customer Profile Panel -->
         <aside id="customer-profile-panel">
             <header class="p-4 flex-shrink-0 flex items-center justify-between border-b border-gray-200">
                 <h2 class="text-xl font-bold text-gray-800">כרטיס לקוח</h2>
@@ -452,7 +474,7 @@
 
     <!-- 
       ==========================================================
-      ===               תחילת סקריפט (v3.1)                  ===
+      ===               תחילת סקריפט (v4.0)                  ===
       ==========================================================
     -->
     <script type="module">
