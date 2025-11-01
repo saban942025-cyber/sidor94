@@ -1,0 +1,1023 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>מרכז הודעות (v3.0 - CRM)</title>
+    <!-- 
+      DeliveryMaster Admin - מרכז הודעות v3.0 (CRM UI)
+      
+      Changelog:
+      - [NEW v3.0] שדרוג ל-3 עמודות: רשימת שיחות, צ'אט, וכרטיס לקוח.
+      - [NEW v3.0] הוספת `<aside id="customer-profile-panel">`.
+      - [NEW v3.0] לחיצה על שם הלקוח ב-`#chat-header` פותחת/סוגרת את כרטיס הלקוח.
+      - [NEW v3.0] פונקציה חדשה `loadCustomerProfile(customerId)`:
+        - שולפת את מסמך הלקוח מ-`customers` ומציגה פרטים אישיים.
+        - שולפת את כל ההזמנות של הלקוח מ-`orders` (לפי `customer.id`).
+        - מציגה היסטוריית הזמנות.
+        - מציגה רשימת פרויקטים ייחודית.
+      - [FIX v3.0] התאמות UI למובייל (כרטיס הלקוח מחליק מעל הצ'אט).
+      - [v2.0] בסיס קוד דמוי WhatsApp Web.
+    -->
+    
+    <!-- TailwindCSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Icons (Feather & Font Awesome) -->
+    <script src="https://unpkg.com/feather-icons"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Google Font: Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --primary-color: #3b82f6; /* blue-500 */
+            --bg-light: #f3f4f6; /* gray-100 */
+            --bg-app-light: #f9fafb; /* gray-50 */
+            --border-color: #e5e7eb; /* gray-200 */
+            --text-dark: #1f2937; /* gray-800 */
+            --text-light: #6b7280; /* gray-500 */
+        }
+        body {
+            font-family: 'Inter', 'Arial', sans-serif;
+            background-color: var(--bg-light);
+            color: var(--text-dark);
+            overflow: hidden;
+            height: 100vh;
+        }
+        
+        /* [NEW v3.0] Layout: 3 Columns */
+        .chat-app-layout {
+            display: grid;
+            grid-template-columns: 350px 1fr; /* Default: 2 columns */
+            height: 100vh;
+            overflow: hidden;
+            transition: grid-template-columns 0.3s ease;
+        }
+        /* State when profile is open */
+        .chat-app-layout.profile-open {
+            grid-template-columns: 350px 1fr 300px;
+        }
+
+        #conversation-list {
+            background-color: var(--bg-app-light);
+            border-left: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+        #chat-window {
+            background-color: white;
+            display: flex;
+            flex-direction: column;
+            border-left: 1px solid var(--border-color);
+        }
+
+        /* [NEW v3.0] Customer Profile Panel */
+        #customer-profile-panel {
+            background-color: #ffffff;
+            border-left: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            /* Hide by default */
+            position: absolute;
+            right: 0;
+            top: 0;
+            height: 100%;
+            width: 300px;
+            z-index: 25;
+            transform: translateX(-100%); /* RTL: move left */
+            transition: transform 0.3s ease;
+        }
+        .chat-app-layout.profile-open #customer-profile-panel {
+            position: relative; /* Make part of grid flow */
+            transform: translateX(0);
+        }
+        .profile-section {
+            border-bottom: 1px solid var(--border-color);
+            padding: 1rem;
+        }
+        .profile-detail {
+            font-size: 0.875rem;
+        }
+        .profile-detail strong {
+            color: var(--text-light);
+            font-weight: 500;
+        }
+        .profile-detail span {
+            color: var(--text-dark);
+            font-weight: 500;
+        }
+        .profile-project-tag {
+            background-color: var(--bg-light);
+            color: var(--text-light);
+            font-size: 0.75rem;
+            font-weight: 500;
+            padding: 2px 8px;
+            border-radius: 99px;
+        }
+        .profile-order-item {
+            font-size: 0.875rem;
+        }
+
+
+        /* Conversation List Item */
+        .conv-item {
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .conv-item:hover {
+            background-color: #ffffff;
+        }
+        .conv-item.active {
+            background-color: #ffffff;
+            border-right: 4px solid var(--primary-color);
+        }
+        .conv-unread-badge {
+            background-color: var(--primary-color);
+            color: white;
+            font-size: 0.75rem;
+            font-weight: 700;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        /* Chat Window */
+        #chat-header {
+            border-bottom: 1px solid var(--border-color);
+            cursor: pointer;
+        }
+        #chat-header:hover {
+            background-color: var(--bg-app-light);
+        }
+        #chat-history {
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" fill="%23f3f4f6" /><path d="M100 0 L100 400 M200 0 L200 400 M300 0 L300 400 M0 100 L400 100 M0 200 L400 200 M0 300 L400 300" stroke="%23e5e7eb" stroke-width="1" /></svg>');
+            background-repeat: repeat;
+        }
+        .chat-bubble {
+            max-width: 70%;
+            padding: 0.75rem 1rem;
+            border-radius: 1rem;
+            margin-bottom: 0.5rem;
+            word-wrap: break-word;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+        .chat-bubble-admin { /* הודעה יוצאת (מנהל) */
+            background-color: #dbeafe; /* blue-100 */
+            color: #1e3a8a; /* blue-800 */
+            border-bottom-right-radius: 0.25rem;
+            align-self: flex-end;
+        }
+        .chat-bubble-customer { /* הודעה נכנסת (לקוח) */
+            background-color: white;
+            color: var(--text-dark);
+            border-bottom-left-radius: 0.25rem;
+            align-self: flex-start;
+        }
+        .chat-timestamp {
+            font-size: 0.7rem;
+            color: var(--text-light);
+            margin-top: 0.25rem;
+        }
+        
+        #chat-input-bar {
+            border-top: 1px solid var(--border-color);
+        }
+
+        /* Modal Dialog */
+        .modal-overlay { 
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0; 
+            background: rgba(0,0,0,0.5); z-index: 1000; 
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-overlay.hidden { display: none; }
+        .modal-overlay:not(.hidden) { display: flex; }
+
+        .modal-content { 
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            width: 90%;
+            max-width: 600px;
+            z-index: 1001; 
+        }
+        
+        /* "מלשינון" */
+        #quick-reply-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--border-color);
+        }
+        .quick-reply-btn {
+            background-color: #e0f2fe; /* sky-100 */
+            color: #0c4a6e; /* sky-800 */
+            padding: 0.25rem 0.75rem;
+            border-radius: 99px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .quick-reply-btn:hover {
+            background-color: #bae6fd; /* sky-200 */
+        }
+        .quick-reply-category {
+            font-weight: 600;
+            color: var(--text-light);
+            width: 100%;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: -0.25rem;
+        }
+
+        /* Loader */
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid var(--primary-color);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 4rem auto;
+        }
+        .loader-small {
+            width: 20px; height: 20px;
+            border-width: 2px;
+            margin: 0.5rem auto;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        /* Mobile View */
+        @media (max-width: 768px) {
+            .chat-app-layout {
+                grid-template-columns: 1fr;
+            }
+            .chat-app-layout.profile-open {
+                grid-template-columns: 1fr;
+            }
+            #conversation-list {
+                height: 100%;
+                z-index: 20;
+            }
+            #chat-window {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                z-index: 30;
+                transform: translateX(-100%); /* RTL: מוסתר משמאל */
+                transition: transform 0.3s ease;
+            }
+            #chat-window.active {
+                transform: translateX(0);
+            }
+            /* Profile Panel on Mobile */
+            #customer-profile-panel {
+                z-index: 40; /* Above chat window */
+                width: 300px;
+                transform: translateX(-100%); /* RTL: מוסתר משמאל */
+            }
+            .chat-app-layout.profile-open #customer-profile-panel {
+                transform: translateX(0);
+            }
+        }
+    </style>
+</head>
+<body class="antialiased">
+
+    <!-- Modal: שלח תשובה/התראה ללקוח -->
+    <div id="reply-modal" class="modal-overlay hidden" onclick="closeReplyModal()">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div class="p-6">
+                <h3 class="text-lg font-semibold mb-4">שלח תשובה / התראה</h3>
+                <p class="text-sm text-gray-600 mb-2">עבור: <strong id="reply-modal-customer-name"></strong></p>
+                <p class="text-sm text-gray-600 mb-4">הזמנה: <strong id="reply-modal-order-id"></strong></p>
+                
+                <textarea id="reply-message-text" rows="4" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="הקלד את תוכן ההודעה כאן..."></textarea>
+                
+                <input type="hidden" id="reply-modal-doc-id">
+                
+                <!-- [NEW] "מלשינון" - תשובות מהירות -->
+                <div id="quick-reply-container">
+                    <span class="quick-reply-category">טוען תשובות...</span>
+                </div>
+
+                <div class="flex justify-end gap-3 mt-4">
+                    <button onclick="closeReplyModal()" class="py-2 px-4 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300">ביטול</button>
+                    <button onclick="sendAdminReply()" class="py-2 px-4 bg-blue-500 text-white rounded-md hover:bg-blue-600">שלח התראה</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Toast Container -->
+    <div id="toast-container" class="fixed bottom-5 right-5 z-[5000]"></div>
+
+    <!-- Main Layout -->
+    <div id="main-layout" class="chat-app-layout">
+        
+        <!-- 1. Conversation List (Sidebar) -->
+        <aside id="conversation-list">
+            <!-- Header -->
+            <header class="p-4 border-b border-gray-200 flex-shrink-0">
+                <h1 class="text-2xl font-bold text-gray-800">שיחות</h1>
+                <div class="relative mt-2">
+                    <input type="text" id="search-conversations" placeholder="חפש שיחה..." class="w-full p-2 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <i data-feather="search" class="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400"></i>
+                </div>
+            </header>
+            
+            <!-- List -->
+            <div id="conv-list-container" class="flex-1 overflow-y-auto">
+                <div id="conv-loading" class="text-center text-gray-500 py-10">
+                    <div class="loader"></div>
+                    <span class="block mt-2">טוען שיחות...</span>
+                </div>
+                <!-- Conversation items will be injected here -->
+            </div>
+        </aside>
+        
+        <!-- 2. Chat Window -->
+        <main id="chat-window">
+            <!-- Default "Empty" State -->
+            <div id="chat-empty-state" class="flex flex-col items-center justify-center h-full text-center p-4">
+                <i data-feather="message-circle" class="w-24 h-24 text-gray-300"></i>
+                <h2 class="text-2xl font-semibold mt-4">בחר שיחה</h2>
+                <p class="text-gray-500 mt-2">בחר שיחה מהרשימה בצד ימין כדי להתחיל.</p>
+                <a href="index_admin.html" class="mt-4 text-sm text-blue-500 hover:underline">
+                    &rarr; חזרה לדשבורד הראשי
+                </a>
+            </div>
+            
+            <!-- Active Chat State (Hidden by default) -->
+            <div id="chat-active-state" class="hidden flex-1 flex flex-col">
+                <!-- Chat Header -->
+                <header id="chat-header" class="p-4 flex-shrink-0 flex items-center gap-4" onclick="toggleProfilePanel()">
+                    <button id="mobile-back-btn" class="md:hidden" onclick="event.stopPropagation(); closeActiveChat()">
+                        <i data-feather="arrow-right"></i>
+                    </button>
+                    <div class="w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold text-xl flex-shrink-0">
+                        <span id="chat-header-initials"></span>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-lg" id="chat-header-name"></h3>
+                        <p class="text-sm text-gray-600" id="chat-header-order-id"></p>
+                    </div>
+                </header>
+                
+                <!-- Chat History -->
+                <div id="chat-history" class="flex-1 overflow-y-auto p-4 space-y-2 flex flex-col">
+                    <!-- Bubbles injected here -->
+                </div>
+                
+                <!-- Chat Input -->
+                <footer id="chat-input-bar" class="p-4 bg-gray-50 flex-shrink-0">
+                    <div class="flex gap-2">
+                        <button id="quick-reply-toggle" class="bg-gray-200 text-gray-700 p-3 rounded-lg shadow-sm hover:bg-gray-300">
+                            <i class="fas fa-bolt"></i>
+                        </button>
+                        <input type="text" id="chat-input" class="flex-grow p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="הקלד תשובה...">
+                        <button id="chat-send-btn" class="bg-blue-600 text-white p-3 rounded-lg shadow hover:bg-blue-700">
+                            <i data-feather="send"></i>
+                        </button>
+                    </div>
+                </footer>
+            </div>
+        </main>
+        
+        <!-- 3. [NEW v3.0] Customer Profile Panel -->
+        <aside id="customer-profile-panel">
+            <header class="p-4 flex-shrink-0 flex items-center justify-between border-b border-gray-200">
+                <h2 class="text-xl font-bold text-gray-800">כרטיס לקוח</h2>
+                <button onclick="toggleProfilePanel()" class="text-gray-500 hover:text-gray-700">
+                    <i data-feather="x" class="w-6 h-6"></i>
+                </button>
+            </header>
+            
+            <!-- Profile Content -->
+            <div id="profile-content-loading" class="text-center p-10">
+                <div class="loader loader-small"></div>
+                <p class="text-sm text-gray-500">טוען פרטי לקוח...</p>
+            </div>
+            
+            <div id="profile-content" class="hidden">
+                <!-- Section 1: Customer Details -->
+                <div class="profile-section space-y-2">
+                    <div class="text-center mb-4">
+                        <div class="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold text-3xl mx-auto">
+                            <span id="profile-initials"></span>
+                        </div>
+                        <h3 class="font-bold text-lg mt-2" id="profile-name"></h3>
+                    </div>
+                    <div class="profile-detail">
+                        <strong>מס' לקוח:</strong> <span id="profile-customer-number"></span>
+                    </div>
+                    <div class="profile-detail">
+                        <strong>טלפון:</strong> <a href="#" id="profile-phone" class="text-blue-500 hover:underline"></a>
+                    </div>
+                    <div class="profile-detail">
+                        <strong>כתובת:</strong> <span id="profile-address"></span>
+                    </div>
+                </div>
+                
+                <!-- Section 2: Projects -->
+                <div class="profile-section">
+                    <h4 class="font-semibold text-gray-700 mb-2">פרויקטים</h4>
+                    <div id="profile-projects-list" class="flex flex-wrap gap-2">
+                        <!-- Project tags injected here -->
+                    </div>
+                </div>
+                
+                <!-- Section 3: Order History -->
+                <div class="profile-section">
+                    <h4 class="font-semibold text-gray-700 mb-2">היסטוריית הזמנות (5 אחרונות)</h4>
+                    <div id="profile-orders-list" class="space-y-2">
+                        <!-- Order items injected here -->
+                    </div>
+                </div>
+            </div>
+        </aside>
+    </div>
+
+    <!-- 
+      ==========================================================
+      ===               תחילת סקריפט (v3.0)                  ===
+      ==========================================================
+    -->
+    <script type="module">
+        // --- Inlined Firebase SDK Imports ---
+        import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+        import { 
+            getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot, 
+            collection, query, where, Timestamp, runTransaction, getDocs, orderBy, 
+            serverTimestamp, limit, writeBatch, collectionGroup
+        } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { setLogLevel } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+
+        // --- Global Variables ---
+        let db, auth;
+        let messagesUnsubscribe = null;
+        let chatUnsubscribe = null;
+        let currentUserId = null;
+        let activeConversations = new Map(); // [orderId, { customerName, customerId, lastMessage, timestamp, unreadCount }]
+        let activeOrderId = null; // The currently open chat
+        let activeCustomerId = null; // [NEW]
+        
+        // --- "מלשינון" (כמו קודם) ---
+        const quickReplyCategories = {
+            "אישור הזמנה": [
+                "הזמנתך אושרה ומטופלת.",
+                "קיבלנו, תודה! ההזמנה בטיפול.",
+                "ההזמנה אושרה. נעדכן כשהנהג בדרך."
+            ],
+            "בירור פרטים": [
+                "אנא שלח כתובת מדויקת למשלוח.",
+                "מה מספר הטלפון של איש הקשר בשטח?",
+                "לאיזו שעה תרצה לתאם את האספקה?",
+                "אנא פרט כמויות מדויקות.",
+                "האם דרוש מנוף לפריקה?"
+            ],
+            "בדרך/נהג": [
+                "הנהג בדרך אליך.",
+                "הנהג יגיע בקרוב.",
+                "שלחנו לך לינק למעקב אחר הנהג.",
+                "הנהג אוסף כעת את הסחורה מהמחסן."
+            ],
+            "דחייה / בעיה": [
+                "לא נוכל לספק בתאריך המבוקש. אנא בחר תאריך חלופי.",
+                "הפריט אזל מהמלאי. נעדכן כשיחזור.",
+                "חיוב האשראי נכשל. אנא צור קשר עם המשרד.",
+                "אנא צור קשר טלפוני עם המשרד להשלמת ההזמנה."
+            ],
+            "כללי": [
+                "קיבלנו, תודה.",
+                "בטיפול.",
+                "תודה על פנייתך.",
+                "יום טוב!"
+            ]
+        };
+
+
+        // --- Firebase Config & Auth ---
+        const fallbackConfig = {
+          apiKey: "AIzaSyDq0oVwS6zbEfsgrYBRkeBq80dDUKMedzo", 
+          authDomain: "saban94-78949.firebaseapp.com", 
+          projectId: "saban94-78949",
+          storageBucket: "saban94-78949.firebasestorage.app", 
+          messagingSenderId: "41553157903", 
+          appId: "1:41553157903:web:cc33d252cff023be97a87a", 
+          measurementId: "G-XV6RZDESSB"
+        };
+        
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : JSON.stringify(fallbackConfig));
+        
+        try {
+            const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+            db = getFirestore(app);
+            auth = getAuth(app);
+            setLogLevel('Debug');
+            console.log("Firebase Initialized (Project: saban94-78949).");
+            
+            onAuthStateChanged(auth, async (user) => {
+                if (user) {
+                    currentUserId = user.uid;
+                    SmartLog.info("Admin user signed in", "Auth.SignIn");
+                    listenForConversations();
+                } else {
+                    console.log("No user. Trying auth...");
+                    try {
+                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                            await signInWithCustomToken(auth, __initial_auth_token);
+                        } else {
+                            await signInAnonymously(auth);
+                        }
+                    } catch (error) {
+                        SmartLog.error(error, "Auth.SignInFailed");
+                    }
+                }
+            });
+
+        } catch (e) {
+            SmartLog.error(e, "App.Init");
+            showToast('שגיאת התחברות חמורה ל-Firebase', 'error');
+        }
+
+        // --- SmartLog & Toast ---
+        const SmartLog = {
+            info: (msg, cat, ctx) => console.log(`[INFO|${cat}]`, msg, ctx || ''),
+            warn: (msg, cat, ctx) => console.warn(`[WARN|${cat}]`, msg, ctx || ''),
+            error: (err, cat, ctx) => console.error(`[ERROR|${cat}]`, err, ctx || ''),
+        };
+        
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            if (!container) return;
+            // (קוד מלא של showToast כפי שהיה בקובץ הקודם...)
+        }
+
+        // --- Conversation Logic ---
+
+        function listenForConversations() {
+            if (messagesUnsubscribe) messagesUnsubscribe();
+            
+            const list = document.getElementById('conv-list-container');
+            
+            const q = query(
+                collectionGroup(db, 'messages'),
+                orderBy('timestamp', 'desc')
+            );
+            
+            messagesUnsubscribe = onSnapshot(q, async (snapshot) => {
+                const loadingEl = document.getElementById('conv-loading');
+                if (loadingEl) loadingEl.style.display = 'none';
+                
+                const convMap = new Map();
+                const orderDataCache = new Map(); 
+
+                for (const doc of snapshot.docs) {
+                    const message = doc.data();
+                    const orderId = doc.ref.parent.parent.id;
+                    let customerId = message.senderId; // Assuming senderId is customerId
+
+                    if (!convMap.has(orderId)) {
+                        if (!orderDataCache.has(orderId)) {
+                            try {
+                                const orderRef = doc(db, 'orders', orderId);
+                                const orderSnap = await getDoc(orderRef);
+                                if (orderSnap.exists()) {
+                                    orderDataCache.set(orderId, orderSnap.data());
+                                } else {
+                                    orderDataCache.set(orderId, null);
+                                }
+                            } catch (e) {
+                                SmartLog.error(e, "Listen.GetOrder", { orderId });
+                                orderDataCache.set(orderId, null);
+                            }
+                        }
+                        
+                        const order = orderDataCache.get(orderId);
+                        
+                        // [FIX v3.0] Get customerId from order object if not on message
+                        if (!customerId && order && order.customer && order.customer.id) {
+                            customerId = order.customer.id;
+                        }
+
+                        convMap.set(orderId, {
+                            orderId: orderId,
+                            customerId: customerId, // [NEW] Store customerId
+                            customerName: order?.customer?.name || message.senderName || 'לקוח לא ידוע',
+                            orderShortId: order?.order_id || orderId.slice(0,6),
+                            lastMessage: message.text,
+                            timestamp: message.timestamp,
+                            unreadCount: 0
+                        });
+                    }
+                    
+                    // Count unread
+                    if (message.type === 'message_to_admin' && !message.readByViewer) {
+                        const conv = convMap.get(orderId);
+                        if (conv) {
+                            conv.unreadCount = (conv.unreadCount || 0) + 1;
+                        }
+                    }
+                }
+                
+                activeConversations = convMap;
+                renderConversationList();
+                // [REMOVED v3.0] No total badge, unread count is per-conversation
+
+            }, (error) => {
+                SmartLog.error(error, "Data.Messages.ListenFailed", { msg: "Check Firestore indexes for 'messages' collection group" });
+                console.error("Error listening to messages: ", error);
+                if (list) list.innerHTML = '<p class="p-4 text-red-500">שגיאה בטעינת שיחות.</p>';
+            });
+        }
+        
+        function renderConversationList() {
+            const list = document.getElementById('conv-list-container');
+            const search = document.getElementById('search-conversations').value.toLowerCase();
+            
+            list.innerHTML = '';
+            
+            const conversations = Array.from(activeConversations.values())
+                .filter(conv => 
+                    conv.customerName.toLowerCase().includes(search) ||
+                    conv.orderShortId.toLowerCase().includes(search) ||
+                    conv.lastMessage.toLowerCase().includes(search)
+                )
+                .sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+
+            if (conversations.length === 0) {
+                list.innerHTML = '<p class="text-gray-500 text-center p-4">לא נמצאו שיחות.</p>';
+                return;
+            }
+            
+            conversations.forEach(conv => {
+                list.appendChild(createConversationCard(conv));
+            });
+            feather.replace();
+        }
+        
+        function createConversationCard(conv) {
+            const card = document.createElement('div');
+            card.className = `conv-item p-4 flex gap-3 ${conv.orderId === activeOrderId ? 'active' : ''}`;
+            card.onclick = () => openChat(conv.orderId, conv.customerId, conv.customerName, conv.orderShortId);
+            
+            const initials = conv.customerName.split(' ').map(n => n[0]).join('').slice(0, 2);
+            const time = conv.timestamp ? new Date(conv.timestamp.seconds * 1000).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' }) : '';
+
+            card.innerHTML = `
+                <div class="w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold text-xl flex-shrink-0">
+                    ${initials}
+                </div>
+                <div class="flex-1 overflow-hidden">
+                    <div class="flex justify-between items-center">
+                        <h3 class="font-bold truncate">${conv.customerName}</h3>
+                        <span class="text-xs text-gray-500 flex-shrink-0">${time}</span>
+                    </div>
+                    <div class="flex justify-between items-center mt-1">
+                        <p class="text-sm text-gray-600 truncate">${conv.lastMessage}</p>
+                        ${conv.unreadCount > 0 ? `<span class="conv-unread-badge">${conv.unreadCount}</span>` : ''}
+                    </div>
+                </div>
+            `;
+            return card;
+        }
+
+        async function openChat(orderId, customerId, customerName, orderShortId) {
+            SmartLog.info("Opening chat", "Chat.Open", { orderId, customerId });
+            activeOrderId = orderId;
+            activeCustomerId = customerId; // [NEW] Store active customer
+            
+            // Highlight in list
+            renderConversationList(); 
+            
+            // Show chat window
+            document.getElementById('chat-empty-state').style.display = 'none';
+            document.getElementById('chat-active-state').style.display = 'flex';
+            document.getElementById('chat-window').classList.add('active'); // For mobile
+
+            // Populate header
+            const initials = customerName.split(' ').map(n => n[0]).join('').slice(0, 2);
+            document.getElementById('chat-header-initials').innerText = initials;
+            document.getElementById('chat-header-name').innerText = customerName;
+            document.getElementById('chat-header-order-id').innerText = `הזמנה #${orderShortId}`;
+
+            // Set up reply button
+            const sendBtn = document.getElementById('chat-send-btn');
+            sendBtn.onclick = () => sendAdminReply(orderId); // Set context for reply
+            
+            const quickReplyBtn = document.getElementById('quick-reply-toggle');
+            quickReplyBtn.onclick = () => showSendReplyModal(null, orderId, null, customerName); // Open "מלשינון"
+
+            // Load history
+            const chatHistoryEl = document.getElementById('chat-history');
+            chatHistoryEl.innerHTML = '<div class="loader"></div>';
+            
+            if (chatUnsubscribe) chatUnsubscribe(); // Unsubscribe from previous chat
+            
+            const q = query(
+                collection(db, "orders", orderId, "messages"),
+                orderBy("timestamp", "asc")
+            );
+            
+            chatUnsubscribe = onSnapshot(q, (snapshot) => {
+                chatHistoryEl.innerHTML = '';
+                if (snapshot.empty) {
+                    chatHistoryEl.innerHTML = '<p class="text-center text-gray-500 p-10">אין הודעות בשיחה זו.</p>';
+                    return;
+                }
+                
+                let messagesToMarkAsRead = [];
+                snapshot.forEach(doc => {
+                    const msg = doc.data();
+                    if (msg.type === 'message_to_admin' && !msg.readByViewer) {
+                        messagesToMarkAsRead.push(doc.id);
+                    }
+                    chatHistoryEl.appendChild(createMessageBubble(msg));
+                });
+                
+                chatHistoryEl.scrollTop = chatHistoryEl.scrollHeight; // Scroll to bottom
+                
+                // Mark as read
+                if (messagesToMarkAsRead.length > 0) {
+                    markMessagesAsRead(orderId, messagesToMarkAsRead);
+                }
+            });
+
+            // [NEW v3.0] Load customer profile
+            loadCustomerProfile(customerId);
+        }
+        
+        function createMessageBubble(msg) {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'flex flex-col';
+            let bubbleClass = '';
+            let senderName = '';
+            
+            if (msg.type === 'message_to_admin') {
+                bubbleClass = 'chat-bubble chat-bubble-customer';
+                senderName = msg.senderName || 'לקוח';
+                wrapper.classList.add('items-start'); // שמאל
+            } else { // 'notification_to_customer'
+                bubbleClass = 'chat-bubble chat-bubble-admin';
+                senderName = msg.senderName || 'מנהל';
+                wrapper.classList.add('items-end'); // ימין
+            }
+            
+            const time = msg.timestamp ? new Date(msg.timestamp.seconds * 1000).toLocaleString('he-IL', { hour: '2-digit', minute: '2-digit' }) : '...';
+            
+            // Check for link
+            let msgText = msg.text || '';
+            const urlRegex = /(https?:\/\/[^\s]+)/g;
+            if (urlRegex.test(msgText)) {
+                msgText = msgText.replace(urlRegex, (url) => `<a href="${url}" target="_blank" rel="noopener noreferrer">${url.includes('drive.google') ? 'פתח קובץ מצורף' : 'פתח קישור'}</a>`);
+            }
+
+            wrapper.innerHTML = `
+                <div class="${bubbleClass}">
+                    <strong class="block font-semibold">${senderName}</strong>
+                    <p class="mt-1">${msgText}</p>
+                    <span class="chat-timestamp text-right mt-2">${time}</span>
+                </div>
+            `;
+            return wrapper;
+        }
+
+        async function sendAdminReply(orderId) {
+            const orderDocId = orderId || document.getElementById('reply-modal-doc-id').value;
+            const originalMessageId = document.getElementById('reply-modal-msg-id').value; // Might be null
+            
+            // Get text from modal OR main input
+            const modalText = document.getElementById('reply-message-text').value.trim();
+            const mainInputText = document.getElementById('chat-input').value.trim();
+            const messageText = modalText || mainInputText;
+            
+            if (!orderDocId || !messageText) {
+                showToast('שגיאה: חסרים נתונים לשליחה', 'error');
+                return;
+            }
+            
+            const batch = writeBatch(db);
+            
+            // Mark original message as read (if replying from modal)
+            if (originalMessageId) {
+                const msgRef = doc(db, 'orders', orderDocId, 'messages', originalMessageId);
+                batch.update(msgRef, { readByViewer: true });
+            }
+            
+            // Add new reply
+            const newAlertRef = doc(collection(db, 'orders', orderDocId, 'messages'));
+            batch.set(newAlertRef, {
+                text: messageText,
+                type: "notification_to_customer",
+                senderName: "שירות לקוחות",
+                timestamp: serverTimestamp(),
+                readByViewer: true
+            });
+            
+            SmartLog.info(`Sending reply to ${orderDocId}`, "CRUD.Message.Reply", { text: messageText });
+
+            try {
+                await batch.commit();
+                showToast('התראה נשלחה ללקוח', 'success');
+                closeReplyModal();
+                document.getElementById('chat-input').value = ''; // Clear main input
+            } catch (error) {
+                SmartLog.error(error, "CRUD.Message.ReplyFailed");
+                showToast('שגיאה בשליחת התראה', 'error');
+            }
+        }
+        window.sendAdminReply = sendAdminReply; // Expose
+        
+        async function markMessagesAsRead(orderId, messageIds) {
+            SmartLog.info(`Marking ${messageIds.length} messages as read`, "Chat.MarkRead", { orderId });
+            const batch = writeBatch(db);
+            messageIds.forEach(msgId => {
+                const msgRef = doc(db, 'orders', orderId, 'messages', msgId);
+                batch.update(msgRef, { readByViewer: true });
+            });
+            try {
+                await batch.commit();
+            } catch (error) {
+                SmartLog.error(error, "Chat.MarkReadFailed", { orderId });
+            }
+        }
+        window.markMessagesAsRead = markMessagesAsRead; // For modal button
+
+        // --- [NEW v3.0] Profile Panel Functions ---
+        
+        function toggleProfilePanel() {
+            document.getElementById('main-layout').classList.toggle('profile-open');
+        }
+        window.toggleProfilePanel = toggleProfilePanel;
+
+        async function loadCustomerProfile(customerId) {
+            const loadingEl = document.getElementById('profile-content-loading');
+            const contentEl = document.getElementById('profile-content');
+            loadingEl.style.display = 'block';
+            contentEl.style.display = 'none';
+            
+            if (!customerId) {
+                SmartLog.warn("No customerId provided, cannot load profile", "Profile");
+                loadingEl.innerHTML = '<p class="p-4 text-red-500">לא זוהה מזהה לקוח.</p>';
+                return;
+            }
+
+            try {
+                // 1. Fetch Customer Details
+                const customerRef = doc(db, "customers", customerId);
+                const customerSnap = await getDoc(customerRef);
+                
+                if (!customerSnap.exists()) {
+                    throw new Error("Customer document not found");
+                }
+                const customer = customerSnap.data();
+                
+                document.getElementById('profile-initials').innerText = customer.name.split(' ').map(n => n[0]).join('').slice(0, 2);
+                document.getElementById('profile-name').innerText = customer.name;
+                document.getElementById('profile-customer-number').innerText = customer.customerNumber || 'N/A';
+                document.getElementById('profile-phone').innerText = customer.phone || 'N/A';
+                document.getElementById('profile-phone').href = `tel:${customer.phone || ''}`;
+                document.getElementById('profile-address').innerText = customer.defaultAddress || 'N/A';
+                
+                // 2. Fetch Order History & Projects
+                const ordersQuery = query(
+                    collection(db, "orders"),
+                    where("customer.id", "==", customerId),
+                    orderBy("createdAt", "desc"),
+                    limit(10) // Get last 10 orders
+                );
+                
+                const ordersSnap = await getDocs(ordersQuery);
+                const projects = new Set();
+                const ordersList = document.getElementById('profile-orders-list');
+                ordersList.innerHTML = '';
+                
+                if (ordersSnap.empty) {
+                     ordersList.innerHTML = '<p class="text-sm text-gray-500">אין היסטוריית הזמנות.</p>';
+                }
+
+                ordersSnap.forEach(orderDoc => {
+                    const order = orderDoc.data();
+                    if (order.projectName) {
+                        projects.add(order.projectName);
+                    }
+                    
+                    const orderEl = document.createElement('div');
+                    orderEl.className = 'profile-order-item p-2 rounded hover:bg-gray-100';
+                    const orderDate = order.orderDate || (order.createdAt?.toDate() ? order.createdAt.toDate().toLocaleDateString('he-IL') : '');
+                    orderEl.innerHTML = `
+                        <span class="font-semibold">${order.order_id || orderDoc.id.slice(0,6)}</span>
+                        <span class->(${orderDate})</span>
+                        <span class="block text-xs text-gray-500">${order.status} - ${order.notes.slice(0, 20)}...</span>
+                    `;
+                    ordersList.appendChild(orderEl);
+                });
+                
+                // 3. Render Projects
+                const projectsList = document.getElementById('profile-projects-list');
+                projectsList.innerHTML = '';
+                if (projects.size === 0) {
+                    projectsList.innerHTML = '<span class="text-sm text-gray-500">אין פרויקטים רשומים.</span>';
+                }
+                projects.forEach(proj => {
+                    projectsList.innerHTML += `<span class="profile-project-tag">${proj}</span>`;
+                });
+
+                // Show content
+                loadingEl.style.display = 'none';
+                contentEl.style.display = 'block';
+                
+            } catch (error) {
+                SmartLog.error(error, "Profile.LoadFailed", { customerId });
+                loadingEl.innerHTML = '<p class="p-4 text-red-500">שגיאה בטעינת כרטיס לקוח.</p>';
+            }
+        }
+
+
+        // --- Modal & Mobile UI ---
+        function showSendReplyModal(event, orderId, messageId, customerName) {
+            if (event) event.stopPropagation();
+            
+            const modal = document.getElementById('reply-modal');
+            if (!modal) return;
+            
+            const orderDocId = orderId || activeOrderId;
+            
+            modal.querySelector('#reply-modal-order-id').innerText = orderDocId.slice(0, 6) || 'לא ידוע';
+            modal.querySelector('#reply-modal-customer-name').innerText = customerName || 'לקוח';
+            modal.querySelector('#reply-modal-doc-id').value = orderDocId; 
+            modal.querySelector('#reply-modal-msg-id').value = messageId || ''; // May be null if from chat header
+            modal.querySelector('#reply-message-text').value = '';
+            
+            populateQuickReplies();
+            modal.classList.remove('hidden');
+        }
+        window.showSendReplyModal = showSendReplyModal;
+
+        function closeReplyModal() {
+            const modal = document.getElementById('reply-modal');
+            if (modal) modal.classList.add('hidden');
+        }
+        window.closeReplyModal = closeReplyModal;
+
+        function closeActiveChat() {
+            document.getElementById('chat-window').classList.remove('active');
+            activeOrderId = null;
+            activeCustomerId = null;
+            if (chatUnsubscribe) chatUnsubscribe();
+            chatUnsubscribe = null;
+            renderConversationList(); // To remove highlight
+            toggleProfilePanel(); // Close profile panel if open
+        }
+        
+        // [NEW] Populate quick replies
+        function populateQuickReplies() {
+            const container = document.getElementById('quick-reply-container');
+            container.innerHTML = ''; // Clear
+            
+            for (const [category, replies] of Object.entries(quickReplyCategories)) {
+                const catEl = document.createElement('span');
+                catEl.className = 'quick-reply-category';
+                catEl.innerText = category;
+                container.appendChild(catEl);
+                
+                replies.forEach(reply => {
+                    const btn = document.createElement('button');
+                    btn.className = 'quick-reply-btn';
+                    btn.innerText = reply;
+                    btn.onclick = () => {
+                        const textarea = document.getElementById('reply-message-text');
+                        textarea.value = reply;
+                        textarea.focus();
+                    };
+                    container.appendChild(btn);
+                });
+            }
+        }
+
+        // --- Init ---
+        document.addEventListener('DOMContentLoaded', () => {
+            feather.replace();
+            document.getElementById('search-conversations').addEventListener('keyup', renderConversationList);
+        });
+    </script>
+</body>
+</html>
+
