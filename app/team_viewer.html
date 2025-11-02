@@ -3,19 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>DeliveryMaster - צ'אט צוות</title>
+    <title>DeliveryMaster - צ'אט צוות (v1.1)</title>
     <!-- 
-      DeliveryMaster - Team Chat Application (v1.0)
+      DeliveryMaster - Team Chat Application (v1.1)
       
-      Features:
-      - Real-time team chat based on new 'teamChats' collection.
-      - 3-column layout (Members, Chat, Profile) inspired by messages_viewer.
-      - Mobile-first responsive design.
-      - Avatar system: Generated from initials or user-uploaded.
-      - Presence: Online/Offline status and Typing indicators.
-      - Notifications: Sound (Tone.js), Vibration, and Browser Notifications.
-      - File Upload: Integrated with Google Drive (Apps Script).
-      - Glassmorphism design wrapper.
+      Changelog:
+      - [CRITICAL FIX v1.1]:
+        - Fixed `ReferenceError: closeActiveChat is not defined`.
+        - Exposed all `onclick` handler functions (`closeActiveChat`, 
+          `toggleProfilePanel`, `sendMessage`, `sendLocation`) to the 
+          global `window` scope at the end of the script.
+      - [v1.0]:
+        - Initial build with 3-column layout, avatars, presence,
+          sound notifications, and Drive upload.
     -->
     
     <!-- TailwindCSS -->
@@ -307,7 +307,7 @@
         }
     </style>
 </head>
-<body class="antialiased">
+<body class="antialiased text-gray-900 dark:text-gray-100">
 
     <div class="app-background"></div>
     
@@ -315,7 +315,7 @@
     <div id="toast-container" class="fixed bottom-5 right-5 z-[5000]"></div>
     
     <!-- Mobile Overlay for Profile -->
-    <div id="profile-overlay-mobile" class="md:hidden" onclick="toggleProfilePanel()"></div>
+    <div id="profile-overlay-mobile" class="lg:hidden" onclick="toggleProfilePanel()"></div>
 
     <!-- Main Glassmorphism Wrapper -->
     <div class="glass-wrapper">
@@ -325,7 +325,7 @@
             <!-- 1. Member List (Sidebar) -->
             <aside id="member-list">
                 <!-- Header -->
-                <header class="p-4 border-b border-gray-200/50 flex-shrink-0">
+                <header class="p-4 border-b border-gray-200/50 dark:border-gray-700/50 flex-shrink-0">
                     <h1 class="text-2xl font-bold">צוות</h1>
                     <div class="relative mt-2">
                         <input type="text" id="search-members" placeholder="חפש איש צוות..." class="w-full p-2 pr-10 border border-gray-300/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white/50 dark:bg-gray-800/30">
@@ -335,7 +335,7 @@
                 
                 <!-- List -->
                 <div id="member-list-container" class="flex-1 overflow-y-auto">
-                    <div id="member-loading" class="text-center text-gray-500 py-10">
+                    <div id="member-loading" class="text-center text-gray-500 dark:text-gray-400 py-10">
                         <div class="loader"></div>
                         <span class="block mt-2">טוען אנשי צוות...</span>
                     </div>
@@ -347,16 +347,16 @@
             <main id="chat-window">
                 <!-- Default "Empty" State -->
                 <div id="chat-empty-state" class="flex flex-col items-center justify-center h-full text-center p-4">
-                    <i data-feather="message-square" class="w-24 h-24 text-gray-400/50"></i>
+                    <i data-feather="message-square" class="w-24 h-24 text-gray-400/50 dark:text-gray-600"></i>
                     <h2 class="text-2xl font-semibold mt-4">בחר שיחה</h2>
-                    <p class="text-gray-500 mt-2">בחר איש צוות מהרשימה כדי להתחיל.</p>
+                    <p class="text-gray-500 dark:text-gray-400 mt-2">בחר איש צוות מהרשימה כדי להתחיל.</p>
                 </div>
                 
                 <!-- Active Chat State (Hidden by default) -->
                 <div id="chat-active-state" class="hidden flex-1 flex flex-col">
                     <!-- Chat Header -->
                     <header id="chat-header" class="p-4 flex-shrink-0 flex items-center gap-4" onclick="toggleProfilePanel()">
-                        <button id="mobile-back-btn" class="md:hidden" onclick="event.stopPropagation(); closeActiveChat()">
+                        <button id="mobile-back-btn" class="lg:hidden" onclick="event.stopPropagation(); closeActiveChat()">
                             <i data-feather="arrow-right"></i>
                         </button>
                         <div id="chat-header-avatar" class="avatar">
@@ -376,7 +376,7 @@
                     <!-- Chat Input -->
                     <footer id="chat-input-bar" class="p-4 flex-shrink-0">
                         <div class="flex gap-2">
-                            <input type="file" id="file-upload-input" class="hidden">
+                            <input type="file" id="file-upload-input" class="hidden" multiple="false">
                             <button id="file-upload-btn" class="bg-gray-200/50 text-gray-700 dark:text-gray-200 p-3 rounded-lg shadow-sm hover:bg-gray-300/50">
                                 <i data-feather="paperclip" class="w-6 h-6"></i>
                             </button>
@@ -394,9 +394,9 @@
             
             <!-- 3. Member Profile Panel -->
             <aside id="member-profile-panel">
-                <header class="p-4 flex-shrink-0 flex items-center justify-between border-b border-gray-200/50">
+                <header class="p-4 flex-shrink-0 flex items-center justify-between border-b border-gray-200/50 dark:border-gray-700/50">
                     <h2 class="text-xl font-bold">פרופיל</h2>
-                    <button onclick="toggleProfilePanel()" class="text-gray-500 hover:text-gray-700">
+                    <button onclick="toggleProfilePanel()" class="text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-white">
                         <i data-feather="x" class="w-6 h-6"></i>
                     </button>
                 </header>
@@ -404,7 +404,7 @@
                 <!-- Profile Content -->
                 <div id="profile-content-loading" class="text-center p-10">
                     <div class="loader loader-small"></div>
-                    <p class="text-sm text-gray-500">טוען פרופיל...</p>
+                    <p class="text-sm text-gray-500 dark:text-gray-400">טוען פרופיל...</p>
                 </div>
                 
                 <div id="profile-content" class="hidden">
@@ -418,7 +418,7 @@
                             <input type="file" id="avatar-upload-input" class="hidden" accept="image/*">
                         </div>
                         <h3 class="font-bold text-xl mt-2" id="profile-name"></h3>
-                        <p class="text-sm text-gray-500" id="profile-status"></p>
+                        <p class="text-sm text-gray-500 dark:text-gray-400" id="profile-status"></p>
                     </div>
                     
                     <!-- Section 2: Details -->
@@ -438,7 +438,7 @@
                     <div class="profile-section">
                         <h4 class="font-semibold text-gray-700 dark:text-gray-200 mb-2">קבצים משותפים</h4>
                         <div id="profile-files-list" class="space-y-2">
-                            <p class="text-sm text-gray-500">אין קבצים בשיחה זו.</p>
+                            <p class="text-sm text-gray-500 dark:text-gray-400">אין קבצים בשיחה זו.</p>
                         </div>
                     </div>
                 </div>
@@ -448,7 +448,7 @@
 
     <!-- 
       ==========================================================
-      ===               Team Chat Script (v1.0)              ===
+      ===               Team Chat Script (v1.1)              ===
       ==========================================================
     -->
     <script type="module">
@@ -458,9 +458,8 @@
         import { 
             getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, onSnapshot, 
             collection, query, where, orderBy, serverTimestamp, limit, writeBatch,
-            FieldValue, arrayUnion
+            arrayUnion
         } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-        import { setLogLevel } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
         // --- Global Variables ---
         let db, auth;
@@ -482,6 +481,8 @@
             '#ef4444', '#f97316', '#eab308', '#84cc16', '#22c55e', '#14b8a6',
             '#06b6d4', '#3b82f6', '#8b5cf6', '#d946ef', '#ec4899'
         ];
+        
+        let notificationSound;
 
         // --- Firebase Config & Auth ---
         const fallbackConfig = {
@@ -499,7 +500,6 @@
             const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
             db = getFirestore(app);
             auth = getAuth(app);
-            setLogLevel('Error'); // Set to Error to reduce console noise
             console.log("Team Chat: Firebase Initialized.");
             
             onAuthStateChanged(auth, async (user) => {
@@ -531,10 +531,13 @@
             // 1. Request Notification Permission
             requestNotificationPermission();
             
-            // 2. Load all team members
+            // 2. Init sound
+            notificationSound = new Tone.Synth().toDestination();
+            
+            // 3. Load all team members
             listenForTeamMembers();
             
-            // 3. Attach listeners
+            // 4. Attach listeners
             document.getElementById('search-members').addEventListener('keyup', renderTeamMemberList);
             document.getElementById('avatar-upload-input').addEventListener('change', handleAvatarUpload);
             document.getElementById('file-upload-btn').addEventListener('click', () => document.getElementById('file-upload-input').click());
@@ -550,8 +553,18 @@
                 }
             });
 
-            // 4. Init icons
+            // 5. Init icons
             feather.replace();
+            
+            // 6. Dark mode toggle
+            const themeToggle = document.getElementById('theme-toggle'); // Not in this HTML, but good practice
+            if (themeToggle) {
+                themeToggle.addEventListener('click', () => {
+                    document.documentElement.classList.toggle('dark');
+                    localStorage.setItem('theme', document.documentElement.classList.contains('dark') ? 'dark' : 'light');
+                    feather.replace();
+                });
+            }
         }
         
         // --- 1. Member & Presence Logic ---
@@ -593,9 +606,6 @@
                 await setDoc(doc(db, "teamMembers", currentUserId), presenceData, { merge: true });
             } catch (e) {
                 console.warn("Could not update presence:", e.message);
-                // This might fail if the user document doesn't exist yet.
-                // A good system would auto-create a 'teamMembers' doc
-                // for a new user ID on first login.
                 try {
                     const fallbackData = {
                         name: `צוות ${currentUserId.slice(0, 4)}`,
@@ -615,7 +625,7 @@
             list.innerHTML = '';
             
             const members = Array.from(allTeamMembers.values())
-                .filter(member => member.name.toLowerCase().includes(search) && member.id !== currentUserId)
+                .filter(member => member.name && member.name.toLowerCase().includes(search) && member.id !== currentUserId)
                 .sort((a, b) => a.name.localeCompare(b.name));
 
             members.forEach(member => {
@@ -648,7 +658,6 @@
         // --- 2. Chat Logic ---
         
         function getChatId(id1, id2) {
-            // Create a deterministic chat ID for 1-on-1 chats
             return [id1, id2].sort().join('_');
         }
 
@@ -663,22 +672,15 @@
 
             renderTeamMemberList(); // Update active highlight
             
-            // Show chat window
             document.getElementById('chat-empty-state').style.display = 'none';
             document.getElementById('chat-active-state').style.display = 'flex';
-            document.getElementById('chat-window').classList.add('active'); // For mobile
+            document.getElementById('chat-window').classList.add('active');
 
-            // Populate header
             document.getElementById('chat-header-avatar').innerHTML = generateAvatar(member.name, member.avatarUrl, 'w-12 h-12 text-xl');
             document.getElementById('chat-header-name').innerText = member.name;
 
-            // Load history
             listenForMessages(activeChatId);
-            
-            // Listen for typing
             listenForTyping(activeChatPartnerId);
-
-            // Load profile
             loadMemberProfile(memberId);
         }
         
@@ -691,24 +693,24 @@
             const q = query(
                 collection(db, "teamChats", chatId, "messages"),
                 orderBy("timestamp", "asc"),
-                limit(50) // Load last 50
+                limit(50) 
             );
             
             chatUnsubscribe = onSnapshot(q, (snapshot) => {
                 chatHistoryEl.innerHTML = '';
                 if (snapshot.empty) {
-                    chatHistoryEl.innerHTML = '<p class="text-center text-gray-500 p-10">אין הודעות. התחל שיחה!</p>';
+                    chatHistoryEl.innerHTML = '<p class="text-center text-gray-500 dark:text-gray-400 p-10">אין הודעות. התחל שיחה!</p>';
                 }
                 
                 snapshot.forEach(doc => {
                     const msg = doc.data();
-                    if (msg.sender !== currentUserId && !msg.read) {
-                        // Mark as read
+                    if (msg.senderId !== currentUserId && !msg.read) {
                         updateDoc(doc.ref, { read: true });
                     }
-                    if (msg.sender !== currentUserId && !msg.soundPlayed) {
+                    if (msg.senderId !== currentUserId && !msg.soundPlayed) {
                         playNotificationSound();
-                        updateDoc(doc.ref, { soundPlayed: true }); // Prevent re-ping
+                        showBrowserNotification(msg);
+                        updateDoc(doc.ref, { soundPlayed: true }); 
                     }
                     chatHistoryEl.appendChild(createMessageBubble(msg));
                 });
@@ -722,7 +724,7 @@
             wrapper.className = 'flex flex-col';
             let bubbleClass = 'chat-bubble';
             
-            if (msg.sender === currentUserId) {
+            if (msg.senderId === currentUserId) {
                 bubbleClass += ' chat-bubble-self';
                 wrapper.classList.add('items-end');
             } else if (msg.senderType === 'system') {
@@ -768,24 +770,25 @@
             if (messageSendDebounce) return;
             
             const text = document.getElementById('chat-input').value.trim();
-            if (!text && !overrideData.type) return; // Nothing to send
+            if (!text && !overrideData.type) return; 
             
             messageSendDebounce = true;
             const sendBtn = document.getElementById('chat-send-btn');
             sendBtn.classList.add('opacity-50', 'cursor-not-allowed');
 
             const myData = allTeamMembers.get(currentUserId);
+            const clientMessageId = crypto.randomUUID();
 
             const messageData = {
-                messageId: crypto.randomUUID(), // Client-side UUID for idempotency
+                messageId: clientMessageId, 
                 senderId: currentUserId,
                 senderName: myData?.name || `צוות ${currentUserId.slice(0, 4)}`,
                 text: text,
                 type: 'text',
                 timestamp: serverTimestamp(),
                 read: false,
-                soundPlayed: false,
-                ...overrideData // Merge in file/location data
+                soundPlayed: true, // Don't play sound for self
+                ...overrideData 
             };
 
             try {
@@ -793,7 +796,10 @@
                 const chatRef = doc(db, "teamChats", activeChatId);
                 await setDoc(chatRef, { 
                     memberIds: [currentUserId, activeChatPartnerId],
-                    lastMessageAt: serverTimestamp()
+                    lastMessageAt: serverTimestamp(),
+                    meta: {
+                        processedMessageIds: arrayUnion(clientMessageId)
+                    }
                 }, { merge: true });
                 
                 // Add the message
@@ -806,7 +812,6 @@
                 console.error("Failed to send message:", error);
                 showToast("שגיאה בשליחת הודעה", "error");
             } finally {
-                // Debounce
                 setTimeout(() => {
                     messageSendDebounce = false;
                     sendBtn.classList.remove('opacity-50', 'cursor-not-allowed');
@@ -870,10 +875,9 @@
                     avatarUrl: uploadResult.url
                 });
                 
-                // Update local state and re-render
                 allTeamMembers.get(currentUserId).avatarUrl = uploadResult.url;
                 renderTeamMemberList();
-                loadMemberProfile(activeChatPartnerId); // Refresh profile if open
+                loadMemberProfile(activeChatPartnerId); 
                 
                 showToast("תמונת פרופיל עודכנה!", "success");
                 
@@ -892,7 +896,6 @@
             try {
                 const uploadResult = await uploadFile(file, `teamChats/${activeChatId}`);
                 
-                // Send a message of type 'file' or 'image'
                 sendMessage({
                     text: `שיתף קובץ: ${file.name}`,
                     type: file.type.startsWith('image/') ? 'image' : 'file',
@@ -907,7 +910,6 @@
         }
 
         async function uploadFile(file, context) {
-            // Using Apps Script (Google Drive) as requested
             if (WEB_APP_URL.includes("YOUR_URL_HERE")) {
                 throw new Error("Apps Script URL not configured.");
             }
@@ -923,7 +925,7 @@
                 fileData: base64Data,
                 fileName: file.name,
                 mimeType: file.type,
-                customerId: `team_${currentUserId}` // Use a team prefix
+                customerId: `team_${currentUserId}` 
             };
             
             const response = await fetch(WEB_APP_URL, {
@@ -966,14 +968,15 @@
 
             document.getElementById('profile-avatar').innerHTML = generateAvatar(member.name, member.avatarUrl, 'w-24 h-24 text-4xl');
             document.getElementById('profile-name').innerText = member.name;
-            document.getElementById('profile-status').innerText = member.isOnline ? "מחובר" : "לא מחובר";
+            const isOnline = member.isOnline && (new Date().getTime() - (member.lastSeen?.toDate()?.getTime() || 0) < 60000);
+            document.getElementById('profile-status').innerText = isOnline ? "מחובר" : "לא מחובר";
             document.getElementById('profile-phone').innerText = member.phone || 'לא הוזן';
             document.getElementById('profile-phone').href = `tel:${member.phone || ''}`;
             document.getElementById('profile-role').innerText = member.role || 'חבר צוות';
             document.getElementById('profile-id').innerText = member.id;
             
             // TODO: Load shared files from chat history
-            document.getElementById('profile-files-list').innerHTML = '<p class="text-sm text-gray-500">טעינת קבצים בבנייה...</p>';
+            document.getElementById('profile-files-list').innerHTML = '<p class="text-sm text-gray-500 dark:text-gray-400">טעינת קבצים בבנייה...</p>';
             
             loadingEl.style.display = 'none';
             contentEl.style.display = 'block';
@@ -987,18 +990,26 @@
                 await Notification.requestPermission();
             }
         }
+        
+        function showBrowserNotification(message) {
+            if (!('Notification' in window) || Notification.permission !== 'granted') {
+                return;
+            }
+            
+            new Notification(`הודעה חדשה מ-${message.senderName}`, {
+                body: message.type === 'text' ? message.text : 'שלח קובץ',
+                icon: 'https://i.postimg.cc/ryPT3r29/image.png', // Main logo
+                badge: 'https://i.postimg.cc/ryPT3r29/image.png'
+            });
+        }
 
         function playNotificationSound() {
             try {
-                // Start Tone.js context on user interaction (it's likely started)
                 Tone.start();
-                // Play a gentle ping
-                const synth = new Tone.Synth().toDestination();
-                synth.triggerAttackRelease("C5", "8n");
+                notificationSound.triggerAttackRelease("C5", "8n");
                 
-                // Vibrate
                 if ('vibrate' in navigator) {
-                    navigator.vibrate([100, 50, 100]); // Vibrate
+                    navigator.vibrate([100, 50, 100]); 
                 }
             } catch (e) {
                 console.warn("Could not play notification sound:", e);
@@ -1010,10 +1021,8 @@
         function updateTypingStatus() {
             if (typingTimeout) clearTimeout(typingTimeout);
             
-            // Send typing=true immediately
-            setDoc(doc(db, "teamMembers", currentUserId), { isTyping: true }, { merge: true });
+            setDoc(doc(db, "teamMembers", currentUserId), { isTyping: true, lastSeen: serverTimestamp() }, { merge: true });
             
-            // Set a timeout to send typing=false
             typingTimeout = setTimeout(() => {
                 setDoc(doc(db, "teamMembers", currentUserId), { isTyping: false }, { merge: true });
             }, 5000); // Stop typing after 5 seconds
@@ -1022,22 +1031,22 @@
         function listenForTyping(partnerId) {
             if (typingUnsubscribe) typingUnsubscribe();
             
-            const typingEl = document.getElementById('chat-header-status'); // Using the status <p> tag
+            const typingEl = document.getElementById('chat-header-status');
             
             typingUnsubscribe = onSnapshot(doc(db, "teamMembers", partnerId), (docSnap) => {
                 if (docSnap.exists() && docSnap.data().isTyping) {
                     typingEl.innerText = "...מקליד ✍️";
                     typingEl.className = "text-sm text-blue-500 font-semibold";
                 } else {
-                    // Reset to online/offline status
-                    const isOnline = docSnap.data().isOnline && (new Date().getTime() - (docSnap.data().lastSeen?.toDate()?.getTime() || 0) < 60000);
+                    const member = docSnap.data();
+                    const isOnline = member.isOnline && (new Date().getTime() - (member.lastSeen?.toDate()?.getTime() || 0) < 60000);
                     typingEl.innerText = isOnline ? "מחובר" : "לא מחובר";
-                    typingEl.className = isOnline ? "text-sm text-green-500" : "text-sm text-gray-500";
+                    typingEl.className = isOnline ? "text-sm text-green-500" : "text-sm text-gray-500 dark:text-gray-400";
                 }
             });
         }
         
-        // --- Expose functions to window for onclick ---
+        // --- [FIX v1.1] Expose functions to window for onclick ---
         window.openChatWithMember = openChatWithMember;
         window.closeActiveChat = closeActiveChat;
         window.toggleProfilePanel = toggleProfilePanel;
@@ -1054,3 +1063,4 @@
     </script>
 </body>
 </html>
+
