@@ -829,7 +829,7 @@
             const displayId = order.orderNumber || `#${order.id.slice(-6)}`;
             const orderDateForDisplay = order.orderDate ? new Date(order.orderDate).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '...';
             const orderTimeForDisplay = order.orderTime || '...';
-            const customerNumber = order.customer?.customerNumber || order.customer?.customer_id || 'סטטוס';
+            const customerNumber = order.customer?.customerNumber || order.customer?.customer_id || 'מתוכנן ליציאה';
             
             el.innerHTML = `
                 <div class="order-card-header-center">
@@ -907,7 +907,7 @@
                 const customerName = order.customer?.name || '...';
                 const displayId = order.orderNumber || `#${order.id.slice(-6)}`;
                  const typeInfo = orderTypeDetails[order.deliveryType] || orderTypeDetails['default'];
-                const popupContent = `<h4>${typeInfo.icon} הזמנה ${displayId}</h4><p>${customerName}</p><p>${order.address || '...'}</p><p>סטטוס: ${order.status}</p>${order.driver?.name ? `<p>נהג: ${order.driver.name}</p>` : ''}<p id="popup-dist-${order.id}" class="font-semibold text-blue-600"></p>`;
+                const popupContent = `<h4>${typeInfo.icon} הזמנה ${displayId}</h4><p>${customerName}</p><p>${order.address || '...'}</p><p>מתוכנן ליציאה: ${order.status}</p>${order.driver?.name ? `<p>נהג: ${order.driver.name}</p>` : ''}<p id="popup-dist-${order.id}" class="font-semibold text-blue-600"></p>`;
                 if (viewerOrderMarkers[order.id]) {
                     viewerOrderMarkers[order.id].setLatLng(latLng).setPopupContent(popupContent);
                 } else {
@@ -1073,8 +1073,8 @@
             const createdTime = order.createdAt?.toDate ? order.createdAt.toDate().toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' }) : '';
             const orderDate = order.orderDate ? new Date(order.orderDate).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit' }) : '';
             // --- [EDIT] v50.12: Add Customer Number and Order Time ---
-            const customerNumber = order.customer?.customerNumber || order.customer?.customer_id || 'סטטוס';
-            const orderTime = order.orderTime || 'סטטוס';
+            const customerNumber = order.customer?.customerNumber || order.customer?.customer_id || 'מתוכנן ליציאה';
+            const orderTime = order.orderTime || 'מתוכנן ליציאה';
             
             return `<div class="enhanced-order-card ${typeInfo.className}">
                         <div class="order-card-header">
@@ -1094,7 +1094,7 @@
                             <span>${orderTypeDetails[order.deliveryType]?.icon || '📦'} ${order.deliveryType || 'לא צוין'}</span>
                             <span><i data-feather="hash" class="w-4 h-4 inline-block ml-1"></i>${customerNumber}</span>
                             ${showTime && orderDate ? `<span><i data-feather="calendar" class="w-4 h-4 inline-block ml-1"></i>${orderDate}</span>` : ''}
-                            ${showTime && orderTime !== 'סטטוס' ? `<span><i data-feather="clock" class="w-4 h-4 inline-block ml-1"></i>${orderTime}</span>` : ''}
+                            ${showTime && orderTime !== 'מתוכנן ליציאה' ? `<span><i data-feather="clock" class="w-4 h-4 inline-block ml-1"></i>${orderTime}</span>` : ''}
                             ${order.driver?.name ? `<span><i data-feather="user" class="w-4 h-4 inline-block ml-1"></i>${order.driver.name}</span>` : ''}
                         </div>
                     </div>`;
