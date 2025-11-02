@@ -3,20 +3,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>מרכז הודעות (v4.2 - Fix)</title>
+    <title>מרכז הודעות (v4.3 - CRM Pro)</title>
     <!-- 
-      DeliveryMaster Admin - מרכז הודעות v4.2 (Button Fix)
+      DeliveryMaster Admin - מרכז הודעות v4.3 (CRM Pro + Bot Features)
       
       Changelog:
-      - [CRITICAL FIX v4.2]:
-        - הוספת `event.stopPropagation()` לכפתור החזור במובייל.
-        - זה פותר את הבאג שבו הכפתור לא היה לחיץ (הלחיצה "זלגה" לכותרת).
+      - [CRITICAL FIX v4.3]:
+        - תיקון באג "חץ חזור" במובייל: `closeActiveChat` סוגר עכשיו
+          גם את הצ'אט וגם את פאנל הפרופיל (`profile-open`).
+      - [NEW v4.3] עיצוב "חי":
+        - הוספת רקע טקסטורה תכלת לחלון הצ'אט.
+        - הוספת "וי קריאה" (Read Receipts) להודעות מנהל (עם סטטוס).
+      - [NEW v4.3] הכנה לבוט:
+        - הוספת מאזין `onSnapshot` ל-doc של ההזמנה
+          כדי לבדוק `customerIsTyping` ולהציג חיווי הקלדה.
+        - הוספת סימולציית "מענה אוטומטי" ראשוני מצד הבוט ב-`openChat`.
+      - [NEW v4.3] כלים למנהל:
+        - הוספת כפתור "צור הזמנה חדשה ללקוח זה" לכרטיס הלקוח.
       - [FIX v4.1]:
         - תיקון באג `TypeError: doc is not a function` ב-`listenForConversations`.
       - [NEW v4.0]:
         - שדרוג ל-3 עמודות: רשימת שיחות, צ'אט, וכרטיס לקוח.
-        - פונקציה `loadCustomerProfile(customerId)`.
-        - הוספת חיווי הקלדה (`typing-indicator`).
     -->
     
     <!-- TailwindCSS -->
@@ -37,7 +44,18 @@
             --border-color: #e5e7eb; /* gray-200 */
             --text-dark: #1f2937; /* gray-800 */
             --text-light: #6b7280; /* gray-500 */
+            /* [NEW v4.3] Chat background color */
+            --chat-bg-color: #e5ddd5; /* WhatsApp-like bg */
         }
+        html.dark {
+             --bg-light: #1f2937;
+             --bg-app-light: #374151;
+             --border-color: #4b5563;
+             --text-dark: #f3f4f6;
+             --text-light: #9ca3af;
+             --chat-bg-color: #0d1418; /* Dark WhatsApp bg */
+        }
+
         body {
             font-family: 'Inter', 'Arial', sans-serif;
             background-color: var(--bg-light);
@@ -46,15 +64,13 @@
             height: 100vh;
         }
         
-        /* [NEW v4.0] Layout: 3 Columns */
         .chat-app-layout {
             display: grid;
-            grid-template-columns: 350px 1fr 0px; /* Profile panel is 0px by default */
+            grid-template-columns: 350px 1fr 0px; 
             height: 100vh;
             overflow: hidden;
             transition: grid-template-columns 0.3s ease;
         }
-        /* State when profile is open */
         .chat-app-layout.profile-open {
             grid-template-columns: 350px 1fr 300px;
         }
@@ -72,31 +88,23 @@
             flex-direction: column;
             border-left: 1px solid var(--border-color);
         }
+        html.dark #chat-window { background-color: #111b21; }
 
-        /* [NEW v4.0] Customer Profile Panel */
         #customer-profile-panel {
             background-color: #ffffff;
+            html.dark & { background-color: var(--bg-app-light); }
             border-left: 1px solid var(--border-color);
             display: flex;
             flex-direction: column;
             overflow-y: auto;
-            width: 300px; /* Fixed width */
+            width: 300px;
         }
         .profile-section {
             border-bottom: 1px solid var(--border-color);
             padding: 1rem;
         }
-        .profile-detail {
-            font-size: 0.875rem;
-        }
-        .profile-detail strong {
-            color: var(--text-light);
-            font-weight: 500;
-        }
-        .profile-detail span, .profile-detail a {
-            color: var(--text-dark);
-            font-weight: 500;
-        }
+        .profile-detail strong { color: var(--text-light); font-weight: 500; }
+        .profile-detail span, .profile-detail a { color: var(--text-dark); font-weight: 500; }
         .profile-project-tag {
             background-color: var(--bg-light);
             color: var(--text-light);
@@ -105,23 +113,18 @@
             padding: 2px 8px;
             border-radius: 99px;
         }
-        .profile-order-item {
-            font-size: 0.875rem;
-        }
-
+        .profile-order-item { font-size: 0.875rem; }
+        html.dark .profile-order-item:hover { background-color: #374151; }
 
         /* Conversation List Item */
-        .conv-item {
-            cursor: pointer;
-            transition: background-color 0.2s;
-        }
-        .conv-item:hover {
-            background-color: #ffffff;
-        }
+        .conv-item { cursor: pointer; transition: background-color 0.2s; }
+        .conv-item:hover { background-color: #ffffff; }
+        html.dark .conv-item:hover { background-color: #2a3942; }
         .conv-item.active {
             background-color: #ffffff;
             border-right: 4px solid var(--primary-color);
         }
+        html.dark .conv-item.active { background-color: #2a3942; }
         .conv-unread-badge {
             background-color: var(--primary-color);
             color: white;
@@ -140,49 +143,95 @@
         #chat-header {
             border-bottom: 1px solid var(--border-color);
             cursor: pointer;
-        }
-        #chat-header:hover {
             background-color: var(--bg-app-light);
         }
+        #chat-header:hover { background-color: #ffffff; }
+        html.dark #chat-header:hover { background-color: #2a3942; }
+
+        /* [NEW v4.3] Chat background */
         #chat-history {
-            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" fill="%23f3f4f6" /><path d="M100 0 L100 400 M200 0 L200 400 M300 0 L300 400 M0 100 L400 100 M0 200 L400 200 M0 300 L400 300" stroke="%23e5e7eb" stroke-width="1" /></svg>');
-            background-repeat: repeat;
+            background-color: var(--chat-bg-color);
+            opacity: 0.9;
+            background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAFAAAABQAgMAAAB2v0G3AAAACVBMVEUAAADy8vL19fX8aK8LAAAAA3RSTlMAAQIDB+hP6wAAACtJREFUeAFjCIfgEAGNkQEIwAhCDQh4wAYIeMAYMKAJg/GgMQPCGgYGAAAzbA82e/YEEwAAAABJRU5ErkJggg==');
+            background-blend-mode: multiply;
         }
+        
         .chat-bubble {
             max-width: 70%;
-            padding: 0.75rem 1rem;
-            border-radius: 1rem;
+            padding: 0.5rem 1rem;
+            border-radius: 0.75rem;
             margin-bottom: 0.5rem;
             word-wrap: break-word;
             box-shadow: 0 1px 2px rgba(0,0,0,0.05);
         }
         .chat-bubble-admin { /* הודעה יוצאת (מנהל) */
-            background-color: #dbeafe; /* blue-100 */
-            color: #1e3a8a; /* blue-800 */
+            background-color: #dcf8c6; /* WhatsApp green */
+            color: var(--text-dark);
             border-bottom-right-radius: 0.25rem;
             align-self: flex-end;
         }
+        html.dark .chat-bubble-admin {
+            background-color: #005c4b; /* WhatsApp dark green */
+            color: #e9edef;
+        }
+        
         .chat-bubble-customer { /* הודעה נכנסת (לקוח) */
             background-color: white;
             color: var(--text-dark);
             border-bottom-left-radius: 0.25rem;
             align-self: flex-start;
         }
+        html.dark .chat-bubble-customer {
+             background-color: #202c33;
+             color: #e9edef;
+        }
+        
+        .chat-bubble-bot { /* [NEW v4.3] */
+            background-color: #f1f5f9; /* gray-100 */
+            color: var(--text-light);
+            border-bottom-left-radius: 0.25rem;
+            align-self: flex-start;
+            font-style: italic;
+        }
+        html.dark .chat-bubble-bot {
+             background-color: #202c33;
+             color: #a0aec0;
+        }
+
         .chat-timestamp {
             font-size: 0.7rem;
             color: var(--text-light);
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
             margin-top: 0.25rem;
+            direction: ltr; /* Timestamps should be LTR */
+        }
+        /* [NEW v4.3] Read Receipts */
+        .read-receipt {
+            font-size: 1rem; /* Adjust size */
+            color: var(--text-light);
+        }
+        .read-receipt.read {
+            color: #53bdeb; /* Blue ticks */
+        }
+        html.dark .chat-bubble-admin .chat-timestamp, html.dark .chat-bubble-admin .read-receipt {
+            color: #a0aec0;
+        }
+        html.dark .chat-bubble-admin .read-receipt.read {
+            color: #53bdeb;
         }
         
-        /* [NEW v4.0] Typing Indicator */
         #typing-indicator {
             font-style: italic;
-            color: var(--text-light);
+            color: var(--primary-color);
             font-size: 0.875rem;
+            font-weight: 500;
         }
         
         #chat-input-bar {
             border-top: 1px solid var(--border-color);
+            background-color: var(--bg-app-light);
         }
 
         /* Modal Dialog */
@@ -204,6 +253,9 @@
             max-width: 600px;
             z-index: 1001; 
         }
+        html.dark .modal-content {
+            background-color: #202c33;
+        }
         
         /* "מלשינון" */
         #quick-reply-container {
@@ -224,9 +276,13 @@
             cursor: pointer;
             transition: background-color 0.2s;
         }
-        .quick-reply-btn:hover {
-            background-color: #bae6fd; /* sky-200 */
+        .quick-reply-btn:hover { background-color: #bae6fd; }
+        html.dark .quick-reply-btn {
+            background-color: #374151;
+            color: #e5e7eb;
         }
+        html.dark .quick-reply-btn:hover { background-color: #4b5563; }
+        
         .quick-reply-category {
             font-weight: 600;
             color: var(--text-light);
@@ -346,7 +402,7 @@
         <aside id="conversation-list">
             <!-- Header -->
             <header class="p-4 border-b border-gray-200 flex-shrink-0">
-                <h1 class="text-2xl font-bold text-gray-800">שיחות</h1>
+                <h1 class="text-2xl font-bold">שיחות</h1>
                 <div class="relative mt-2">
                     <input type="text" id="search-conversations" placeholder="חפש שיחה..." class="w-full p-2 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
                     <i data-feather="search" class="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400"></i>
@@ -389,8 +445,8 @@
                     <div>
                         <h3 class="font-bold text-lg" id="chat-header-name"></h3>
                         <p class="text-sm text-gray-600" id="chat-header-order-id"></p>
-                        <!-- [NEW v4.0] Typing Indicator -->
-                        <p id="typing-indicator" class="text-sm text-blue-500 hidden">...מקליד</p>
+                        <!-- [NEW v4.3] Typing Indicator -->
+                        <p id="typing-indicator" class="text-sm text-blue-500 hidden">...מקליד ✍️</p>
                     </div>
                 </header>
                 
@@ -447,6 +503,13 @@
                     <div class="profile-detail">
                         <strong>כתובת:</strong> <span id="profile-address"></span>
                     </div>
+                    <!-- [NEW v4.3] Manager Tool -->
+                    <div class="mt-4">
+                        <button id="new-order-for-customer-btn" class="w-full py-2 px-4 bg-blue-500 text-white text-sm font-semibold rounded-lg shadow hover:bg-blue-600 flex items-center justify-center gap-2">
+                            <i data-feather="plus-circle" class="w-4 h-4"></i>
+                            צור הזמנה חדשה ללקוח
+                        </button>
+                    </div>
                 </div>
                 
                 <!-- Section 2: Projects -->
@@ -470,7 +533,7 @@
 
     <!-- 
       ==========================================================
-      ===               תחילת סקריפט (v4.2)                  ===
+      ===               תחילת סקריפט (v4.3)                  ===
       ==========================================================
     -->
     <script type="module">
@@ -488,6 +551,7 @@
         let db, auth;
         let messagesUnsubscribe = null;
         let chatUnsubscribe = null;
+        let typingUnsubscribe = null; // [NEW v4.3]
         let currentUserId = null;
         let activeConversations = new Map(); // [orderId, { customerName, customerId, lastMessage, timestamp, unreadCount }]
         let activeOrderId = null; // The currently open chat
@@ -708,7 +772,7 @@
                         <span class="text-xs text-gray-500 flex-shrink-0">${time}</span>
                     </div>
                     <div class="flex justify-between items-center mt-1">
-                        <p class="text-sm text-gray-600 truncate">${conv.lastMessage}</p>
+                        <p class="text-sm text-gray-600 truncate">${conv.lastMessage || '...'}</p>
                         ${conv.unreadCount > 0 ? `<span class="conv-unread-badge">${conv.unreadCount}</span>` : ''}
                     </div>
                 </div>
@@ -747,7 +811,23 @@
             chatHistoryEl.innerHTML = '<div class="loader"></div>';
             
             if (chatUnsubscribe) chatUnsubscribe(); // Unsubscribe from previous chat
+            if (typingUnsubscribe) typingUnsubscribe(); // [NEW v4.3]
             
+            // [NEW v4.3] Listen for typing indicator
+            const orderRef = doc(db, "orders", orderId);
+            typingUnsubscribe = onSnapshot(orderRef, (docSnap) => {
+                if (docSnap.exists()) {
+                    const orderData = docSnap.data();
+                    const typingEl = document.getElementById('typing-indicator');
+                    if (orderData.customerIsTyping) {
+                        typingEl.classList.remove('hidden');
+                    } else {
+                        typingEl.classList.add('hidden');
+                    }
+                }
+            });
+
+            // Listen for messages
             const q = query(
                 collection(db, "orders", orderId, "messages"),
                 orderBy("timestamp", "asc")
@@ -755,6 +835,17 @@
             
             chatUnsubscribe = onSnapshot(q, (snapshot) => {
                 chatHistoryEl.innerHTML = '';
+                
+                // [NEW v4.3] Bot auto-reply simulation
+                if (snapshot.docs.length === 1 && snapshot.docs[0].data().type === 'message_to_admin') {
+                     const botMsg = {
+                        sender: "bot",
+                        text: `שלום ${customerName.split(' ')[0]}, זוהי מערכת אוטומטית. קיבלנו את פנייתך ומנהל יטפל בה בהקדם.`,
+                        timestamp: Timestamp.now()
+                     };
+                     chatHistoryEl.appendChild(createMessageBubble(botMsg));
+                }
+
                 if (snapshot.empty) {
                     chatHistoryEl.innerHTML = '<p class="text-center text-gray-500 p-10">אין הודעות בשיחה זו.</p>';
                     return;
@@ -791,10 +882,14 @@
                 bubbleClass = 'chat-bubble chat-bubble-customer';
                 senderName = msg.senderName || 'לקוח';
                 wrapper.classList.add('items-start'); // שמאל
-            } else { // 'notification_to_customer'
+            } else if (msg.type === 'notification_to_customer') {
                 bubbleClass = 'chat-bubble chat-bubble-admin';
                 senderName = msg.senderName || 'מנהל';
                 wrapper.classList.add('items-end'); // ימין
+            } else if (msg.sender === 'bot') { // [NEW v4.3]
+                bubbleClass = 'chat-bubble chat-bubble-bot';
+                senderName = '🤖 בוט שירות';
+                wrapper.classList.add('items-start');
             }
             
             const time = msg.timestamp ? new Date(msg.timestamp.seconds * 1000).toLocaleString('he-IL', { hour: '2-digit', minute: '2-digit' }) : '...';
@@ -805,22 +900,34 @@
             if (urlRegex.test(msgText)) {
                 msgText = msgText.replace(urlRegex, (url) => `<a href="${url}" target="_blank" rel="noopener noreferrer">${url.includes('drive.google') ? 'פתח קובץ מצורף' : 'פתח קישור'}</a>`);
             }
+            
+            // [NEW v4.3] Read Receipt Logic
+            let receiptHtml = '';
+            if (msg.type === 'notification_to_customer') {
+                const icon = msg.status === 'read' ? 'check-check' : 'check';
+                const color = msg.status === 'read' ? 'text-blue-500' : 'text-gray-400';
+                receiptHtml = `<i data-feather="${icon}" class="read-receipt ${msg.status === 'read' ? 'read' : ''} w-4 h-4" style="color: ${msg.status === 'read' ? '#53bdeb' : 'var(--text-light)'};"></i>`;
+            }
 
             wrapper.innerHTML = `
                 <div class="${bubbleClass}">
                     <strong class="block font-semibold">${senderName}</strong>
                     <p class="mt-1">${msgText}</p>
-                    <span class="chat-timestamp text-right mt-2">${time}</span>
+                    <span class="chat-timestamp text-right mt-2">
+                        ${time}
+                        ${receiptHtml}
+                    </span>
                 </div>
             `;
+            // Must call replace *after* innerHTML
+            setTimeout(() => feather.replace({ width: '1rem', height: '1rem' }), 0);
             return wrapper;
         }
 
-        async function sendAdminReply(orderId) {
+        async function sendAdminReply(orderId, senderType = 'agent') {
             const orderDocId = orderId || document.getElementById('reply-modal-doc-id').value;
             const originalMessageId = document.getElementById('reply-modal-msg-id').value; // Might be null
             
-            // Get text from modal OR main input
             const modalText = document.getElementById('reply-message-text').value.trim();
             const mainInputText = document.getElementById('chat-input').value.trim();
             const messageText = modalText || mainInputText;
@@ -832,19 +939,19 @@
             
             const batch = writeBatch(db);
             
-            // Mark original message as read (if replying from modal)
             if (originalMessageId) {
                 const msgRef = doc(db, 'orders', orderDocId, 'messages', originalMessageId);
                 batch.update(msgRef, { readByViewer: true });
             }
             
-            // Add new reply
             const newAlertRef = doc(collection(db, 'orders', orderDocId, 'messages'));
             batch.set(newAlertRef, {
                 text: messageText,
                 type: "notification_to_customer",
-                senderName: "שירות לקוחות",
+                sender: senderType, // 'agent' or 'bot'
+                senderName: senderType === 'bot' ? '🤖 בוט שירות' : 'שירות לקוחות',
                 timestamp: serverTimestamp(),
+                status: 'sent', // [NEW v4.3]
                 readByViewer: true
             });
             
@@ -854,13 +961,13 @@
                 await batch.commit();
                 showToast('התראה נשלחה ללקוח', 'success');
                 closeReplyModal();
-                document.getElementById('chat-input').value = ''; // Clear main input
+                document.getElementById('chat-input').value = '';
             } catch (error) {
                 SmartLog.error(error, "CRUD.Message.ReplyFailed");
                 showToast('שגיאה בשליחת התראה', 'error');
             }
         }
-        window.sendAdminReply = sendAdminReply; // Expose
+        window.sendAdminReply = sendAdminReply;
         
         async function markMessagesAsRead(orderId, messageIds) {
             SmartLog.info(`Marking ${messageIds.length} messages as read`, "Chat.MarkRead", { orderId });
@@ -913,6 +1020,13 @@
                 document.getElementById('profile-phone').href = `tel:${customer.phone || ''}`;
                 document.getElementById('profile-address').innerText = customer.defaultAddress || 'N/A';
                 
+                // [NEW v4.3] Wire up new order button
+                const newOrderBtn = document.getElementById('new-order-for-customer-btn');
+                newOrderBtn.onclick = () => {
+                    const url = `add_customers.html?customerId=${customerId}`;
+                    window.open(url, '_blank');
+                };
+
                 // 2. Fetch Order History & Projects
                 const ordersQuery = query(
                     collection(db, "orders"),
@@ -942,7 +1056,7 @@
                     }
                     
                     const orderEl = document.createElement('div');
-                    orderEl.className = 'profile-order-item p-2 rounded hover:bg-gray-100';
+                    orderEl.className = 'profile-order-item p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700';
                     const orderDate = order.orderDate || (order.createdAt?.toDate() ? order.createdAt.toDate().toLocaleDateString('he-IL') : '');
                     orderEl.innerHTML = `
                         <span class="font-semibold">${order.order_id || orderDoc.id.slice(0,6)}</span>
@@ -1001,16 +1115,21 @@
 
         function closeActiveChat() {
             document.getElementById('chat-window').classList.remove('active');
+            
+            // [FIX v4.2] Close profile panel if it's open when closing chat
+            if (document.getElementById('main-layout').classList.contains('profile-open')) {
+                toggleProfilePanel();
+            }
+            
             activeOrderId = null;
             activeCustomerId = null;
             if (chatUnsubscribe) chatUnsubscribe();
+            if (typingUnsubscribe) typingUnsubscribe(); // [NEW v4.3]
             chatUnsubscribe = null;
+            typingUnsubscribe = null;
             renderConversationList(); // To remove highlight
-            if (document.getElementById('main-layout').classList.contains('profile-open')) {
-                toggleProfilePanel(); // Close profile panel if open
-            }
         }
-        window.closeActiveChat = closeActiveChat; // [FIX v4.0] Expose to global
+        window.closeActiveChat = closeActiveChat;
         
         // [NEW] Populate quick replies
         function populateQuickReplies() {
@@ -1041,6 +1160,13 @@
         document.addEventListener('DOMContentLoaded', () => {
             feather.replace();
             document.getElementById('search-conversations').addEventListener('keyup', renderConversationList);
+            
+            // [NEW v4.3] Dark mode init
+            if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
         });
     </script>
 </body>
