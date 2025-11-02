@@ -1,0 +1,1056 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>DeliveryMaster - צ'אט צוות</title>
+    <!-- 
+      DeliveryMaster - Team Chat Application (v1.0)
+      
+      Features:
+      - Real-time team chat based on new 'teamChats' collection.
+      - 3-column layout (Members, Chat, Profile) inspired by messages_viewer.
+      - Mobile-first responsive design.
+      - Avatar system: Generated from initials or user-uploaded.
+      - Presence: Online/Offline status and Typing indicators.
+      - Notifications: Sound (Tone.js), Vibration, and Browser Notifications.
+      - File Upload: Integrated with Google Drive (Apps Script).
+      - Glassmorphism design wrapper.
+    -->
+    
+    <!-- TailwindCSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Icons (Feather & Font Awesome) -->
+    <script src="https://unpkg.com/feather-icons"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Tone.js for sound -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.min.js"></script>
+    
+    <!-- Google Fonts: Rubik & Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --primary-color: #3b82f6; /* blue-500 */
+            --bg-glass-light: rgba(255, 255, 255, 0.6);
+            --bg-glass-dark: rgba(55, 65, 81, 0.6);
+            --border-color-light: rgba(255, 255, 255, 0.4);
+            --border-color-dark: rgba(255, 255, 255, 0.1);
+            --chat-bg-light: #f3f4f6;
+            --chat-bg-dark: #1f2937;
+            --bubble-self-light: #dcf8c6;
+            --bubble-self-dark: #005c4b;
+            --bubble-other-light: #ffffff;
+            --bubble-other-dark: #202c33;
+        }
+        
+        /* Font setup */
+        body {
+            font-family: 'Inter', 'Rubik', sans-serif;
+            background-color: #f3f4f6;
+        }
+        
+        /* Main background */
+        .app-background {
+            position: fixed;
+            inset: 0;
+            background-image: linear-gradient(120deg, #a1c4fd 0%, #c2e9fb 100%);
+            z-index: -1;
+        }
+        
+        /* Glassmorphism Wrapper */
+        .glass-wrapper {
+            background: var(--bg-glass-light);
+            backdrop-filter: blur(24px) saturate(180%);
+            -webkit-backdrop-filter: blur(24px) saturate(180%);
+            border: 1px solid var(--border-color-light);
+            border-radius: 1.5rem; /* 2xl */
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.1);
+            overflow: hidden; /* Crucial for rounded corners */
+            height: calc(100vh - 4rem);
+            margin: 2rem;
+        }
+        
+        /* 3-Column Layout */
+        .chat-app-layout {
+            display: grid;
+            grid-template-columns: 350px 1fr 0px; /* Profile panel is 0px by default */
+            height: 100%;
+            overflow: hidden;
+            transition: grid-template-columns 0.3s ease;
+        }
+        .chat-app-layout.profile-open {
+            grid-template-columns: 350px 1fr 300px;
+        }
+
+        #member-list {
+            background-color: rgba(255, 255, 255, 0.5);
+            border-left: 1px solid var(--border-color-light);
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+        #chat-window {
+            background-color: transparent;
+            display: flex;
+            flex-direction: column;
+            border-left: 1px solid var(--border-color-light);
+        }
+        #member-profile-panel {
+            background-color: rgba(255, 255, 255, 0.7);
+            border-left: 1px solid var(--border-color-light);
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            width: 300px;
+        }
+        
+        /* Dark Mode overrides */
+        html.dark .glass-wrapper {
+            background: var(--bg-glass-dark);
+            border: 1px solid var(--border-color-dark);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
+        }
+        html.dark #member-list {
+            background-color: rgba(31, 41, 55, 0.5); /* gray-800/50 */
+            border-left-color: var(--border-color-dark);
+        }
+        html.dark #chat-window {
+            border-left-color: var(--border-color-dark);
+        }
+        html.dark #member-profile-panel {
+            background-color: rgba(31, 41, 55, 0.7);
+            border-left-color: var(--border-color-dark);
+        }
+
+        /* Member List Item */
+        .member-item {
+            cursor: pointer;
+            transition: background-color 0.2s;
+            border-bottom: 1px solid var(--border-color-light);
+        }
+        html.dark .member-item { border-bottom-color: var(--border-color-dark); }
+        .member-item:hover { background-color: rgba(255, 255, 255, 0.4); }
+        html.dark .member-item:hover { background-color: rgba(75, 85, 99, 0.4); }
+        .member-item.active {
+            background-color: rgba(255, 255, 255, 0.7);
+            border-right: 4px solid var(--primary-color);
+        }
+        html.dark .member-item.active { background-color: rgba(75, 85, 99, 0.7); }
+        
+        /* Avatar */
+        .avatar {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            color: white;
+            position: relative;
+            flex-shrink: 0;
+        }
+        .avatar-img {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+        .avatar-online-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background-color: #22c55e; /* green-500 */
+            border: 2px solid white;
+            position: absolute;
+            bottom: 0;
+            left: 0; /* RTL-friendly */
+        }
+        html.dark .avatar-online-dot { border-color: #374151; }
+        .avatar-offline-dot { background-color: #6b7280; }
+
+        /* Chat Window */
+        #chat-header {
+            border-bottom: 1px solid var(--border-color-light);
+            cursor: pointer;
+            background-color: rgba(255, 255, 255, 0.2);
+        }
+        html.dark #chat-header { border-bottom-color: var(--border-color-dark); }
+        
+        #chat-history {
+            background-color: var(--chat-bg-light);
+        }
+        html.dark #chat-history { background-color: var(--chat-bg-dark); }
+
+        .chat-bubble {
+            max-width: 70%;
+            padding: 0.5rem 1rem;
+            border-radius: 0.75rem;
+            margin-bottom: 0.5rem;
+            word-wrap: break-word;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+        .chat-bubble-self {
+            background-color: var(--bubble-self-light);
+            border-bottom-right-radius: 0.25rem;
+            align-self: flex-end;
+        }
+        html.dark .chat-bubble-self {
+            background-color: var(--bubble-self-dark);
+            color: #e9edef;
+        }
+        .chat-bubble-other {
+            background-color: var(--bubble-other-light);
+            border-bottom-left-radius: 0.25rem;
+            align-self: flex-start;
+        }
+        html.dark .chat-bubble-other {
+             background-color: var(--bubble-other-dark);
+             color: #e9edef;
+        }
+        .chat-bubble-system {
+            background-color: rgba(209, 213, 219, 0.7);
+            color: var(--text-light);
+            align-self: center;
+            font-size: 0.75rem;
+            font-style: italic;
+        }
+        html.dark .chat-bubble-system {
+            background-color: rgba(55, 65, 81, 0.7);
+            color: #9ca3af;
+        }
+
+        .chat-timestamp {
+            font-size: 0.7rem;
+            color: var(--text-light);
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            margin-top: 0.25rem;
+            direction: ltr; 
+        }
+        html.dark .chat-bubble-self .chat-timestamp { color: #a0aec0; }
+        
+        #typing-indicator {
+            font-style: italic;
+            color: var(--primary-color);
+            font-weight: 500;
+        }
+        
+        #chat-input-bar {
+            border-top: 1px solid var(--border-color-light);
+            background-color: rgba(255, 255, 255, 0.2);
+        }
+        html.dark #chat-input-bar { border-top-color: var(--border-color-dark); }
+        
+        /* Mobile View */
+        @media (max-width: 1024px) {
+            .glass-wrapper {
+                margin: 0;
+                height: 100vh;
+                width: 100vw;
+                border-radius: 0;
+            }
+            .chat-app-layout {
+                grid-template-columns: 1fr;
+            }
+            .chat-app-layout.profile-open {
+                grid-template-columns: 1fr;
+            }
+            #member-list {
+                height: 100%;
+                z-index: 20;
+            }
+            #chat-window {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                z-index: 30;
+                transform: translateX(-100%); /* RTL: מוסתר משמאל */
+                transition: transform 0.3s ease;
+                background-color: var(--chat-bg-light);
+            }
+            html.dark #chat-window { background-color: var(--chat-bg-dark); }
+            #chat-window.active {
+                transform: translateX(0);
+            }
+            /* Profile Panel on Mobile */
+            #member-profile-panel {
+                z-index: 40; /* Above chat window */
+                width: 300px;
+                transform: translateX(-100%); /* RTL: מוסתר משמאל */
+                position: fixed;
+                left: 0;
+                top: 0;
+                height: 100%;
+                background-color: var(--bg-glass-light);
+            }
+            html.dark #member-profile-panel { background-color: var(--bg-glass-dark); }
+            .chat-app-layout.profile-open #member-profile-panel {
+                transform: translateX(0);
+            }
+            #profile-overlay-mobile {
+                position: fixed;
+                inset: 0;
+                background-color: rgba(0,0,0,0.5);
+                z-index: 35;
+                display: none;
+            }
+            .chat-app-layout.profile-open #profile-overlay-mobile {
+                display: block;
+            }
+        }
+    </style>
+</head>
+<body class="antialiased">
+
+    <div class="app-background"></div>
+    
+    <!-- Toast Container -->
+    <div id="toast-container" class="fixed bottom-5 right-5 z-[5000]"></div>
+    
+    <!-- Mobile Overlay for Profile -->
+    <div id="profile-overlay-mobile" class="md:hidden" onclick="toggleProfilePanel()"></div>
+
+    <!-- Main Glassmorphism Wrapper -->
+    <div class="glass-wrapper">
+        <!-- Main Layout -->
+        <div id="main-layout" class="chat-app-layout">
+            
+            <!-- 1. Member List (Sidebar) -->
+            <aside id="member-list">
+                <!-- Header -->
+                <header class="p-4 border-b border-gray-200/50 flex-shrink-0">
+                    <h1 class="text-2xl font-bold">צוות</h1>
+                    <div class="relative mt-2">
+                        <input type="text" id="search-members" placeholder="חפש איש צוות..." class="w-full p-2 pr-10 border border-gray-300/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white/50 dark:bg-gray-800/30">
+                        <i data-feather="search" class="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400"></i>
+                    </div>
+                </header>
+                
+                <!-- List -->
+                <div id="member-list-container" class="flex-1 overflow-y-auto">
+                    <div id="member-loading" class="text-center text-gray-500 py-10">
+                        <div class="loader"></div>
+                        <span class="block mt-2">טוען אנשי צוות...</span>
+                    </div>
+                    <!-- Member items will be injected here -->
+                </div>
+            </aside>
+            
+            <!-- 2. Chat Window -->
+            <main id="chat-window">
+                <!-- Default "Empty" State -->
+                <div id="chat-empty-state" class="flex flex-col items-center justify-center h-full text-center p-4">
+                    <i data-feather="message-square" class="w-24 h-24 text-gray-400/50"></i>
+                    <h2 class="text-2xl font-semibold mt-4">בחר שיחה</h2>
+                    <p class="text-gray-500 mt-2">בחר איש צוות מהרשימה כדי להתחיל.</p>
+                </div>
+                
+                <!-- Active Chat State (Hidden by default) -->
+                <div id="chat-active-state" class="hidden flex-1 flex flex-col">
+                    <!-- Chat Header -->
+                    <header id="chat-header" class="p-4 flex-shrink-0 flex items-center gap-4" onclick="toggleProfilePanel()">
+                        <button id="mobile-back-btn" class="md:hidden" onclick="event.stopPropagation(); closeActiveChat()">
+                            <i data-feather="arrow-right"></i>
+                        </button>
+                        <div id="chat-header-avatar" class="avatar">
+                            <!-- Avatar injected here -->
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-lg" id="chat-header-name"></h3>
+                            <p class="text-sm" id="chat-header-status"></p>
+                        </div>
+                    </header>
+                    
+                    <!-- Chat History -->
+                    <div id="chat-history" class="flex-1 overflow-y-auto p-4 space-y-2 flex flex-col">
+                        <!-- Bubbles injected here -->
+                    </div>
+                    
+                    <!-- Chat Input -->
+                    <footer id="chat-input-bar" class="p-4 flex-shrink-0">
+                        <div class="flex gap-2">
+                            <input type="file" id="file-upload-input" class="hidden">
+                            <button id="file-upload-btn" class="bg-gray-200/50 text-gray-700 dark:text-gray-200 p-3 rounded-lg shadow-sm hover:bg-gray-300/50">
+                                <i data-feather="paperclip" class="w-6 h-6"></i>
+                            </button>
+                            <button id="location-share-btn" class="bg-gray-200/50 text-gray-700 dark:text-gray-200 p-3 rounded-lg shadow-sm hover:bg-gray-300/50">
+                                <i data-feather="map-pin" class="w-6 h-6"></i>
+                            </button>
+                            <input type="text" id="chat-input" class="flex-grow p-3 border border-gray-300/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white/50 dark:bg-gray-800/30" placeholder="הקלד הודעה...">
+                            <button id="chat-send-btn" class="bg-blue-600 text-white p-3 rounded-lg shadow hover:bg-blue-700">
+                                <i data-feather="send" class="w-6 h-6"></i>
+                            </button>
+                        </div>
+                    </footer>
+                </div>
+            </main>
+            
+            <!-- 3. Member Profile Panel -->
+            <aside id="member-profile-panel">
+                <header class="p-4 flex-shrink-0 flex items-center justify-between border-b border-gray-200/50">
+                    <h2 class="text-xl font-bold">פרופיל</h2>
+                    <button onclick="toggleProfilePanel()" class="text-gray-500 hover:text-gray-700">
+                        <i data-feather="x" class="w-6 h-6"></i>
+                    </button>
+                </header>
+                
+                <!-- Profile Content -->
+                <div id="profile-content-loading" class="text-center p-10">
+                    <div class="loader loader-small"></div>
+                    <p class="text-sm text-gray-500">טוען פרופיל...</p>
+                </div>
+                
+                <div id="profile-content" class="hidden">
+                    <!-- Section 1: Avatar & Name -->
+                    <div class="profile-section flex flex-col items-center space-y-2">
+                        <div id="profile-avatar" class="avatar w-24 h-24 text-4xl relative group">
+                            <!-- Avatar injected here -->
+                            <label for="avatar-upload-input" class="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                                <i data-feather="camera" class="w-8 h-8"></i>
+                            </label>
+                            <input type="file" id="avatar-upload-input" class="hidden" accept="image/*">
+                        </div>
+                        <h3 class="font-bold text-xl mt-2" id="profile-name"></h3>
+                        <p class="text-sm text-gray-500" id="profile-status"></p>
+                    </div>
+                    
+                    <!-- Section 2: Details -->
+                    <div class="profile-section space-y-2">
+                        <div class="profile-detail">
+                            <strong>טלפון:</strong> <a href="#" id="profile-phone" class="text-blue-500 hover:underline"></a>
+                        </div>
+                        <div class="profile-detail">
+                            <strong>תפקיד:</strong> <span id="profile-role"></span>
+                        </div>
+                        <div class="profile-detail">
+                            <strong>מזהה:</strong> <span id="profile-id" class="text-xs font-mono"></span>
+                        </div>
+                    </div>
+                    
+                    <!-- Section 3: Files (example) -->
+                    <div class="profile-section">
+                        <h4 class="font-semibold text-gray-700 dark:text-gray-200 mb-2">קבצים משותפים</h4>
+                        <div id="profile-files-list" class="space-y-2">
+                            <p class="text-sm text-gray-500">אין קבצים בשיחה זו.</p>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+        </div>
+    </div>
+
+    <!-- 
+      ==========================================================
+      ===               Team Chat Script (v1.0)              ===
+      ==========================================================
+    -->
+    <script type="module">
+        // --- Firebase SDK Imports ---
+        import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+        import { 
+            getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, onSnapshot, 
+            collection, query, where, orderBy, serverTimestamp, limit, writeBatch,
+            FieldValue, arrayUnion
+        } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { setLogLevel } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+
+        // --- Global Variables ---
+        let db, auth;
+        let currentUserId = null;
+        let allTeamMembers = new Map(); // Map for easy lookup
+        let activeChatId = null;
+        let activeChatPartnerId = null;
+        let membersUnsubscribe = null;
+        let chatUnsubscribe = null;
+        let typingUnsubscribe = null;
+        let typingTimeout = null;
+        let messageSendDebounce = false;
+
+        // [CONTEXT] This URL is from the user's previous context
+        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzwWherCt8LsMCmd9dQ__1RdN4OXb3BBcwYezJG0qVkFKbxowefqBLWbXHTft1QlXhprg/exec";
+        
+        // Avatar Colors
+        const avatarColors = [
+            '#ef4444', '#f97316', '#eab308', '#84cc16', '#22c55e', '#14b8a6',
+            '#06b6d4', '#3b82f6', '#8b5cf6', '#d946ef', '#ec4899'
+        ];
+
+        // --- Firebase Config & Auth ---
+        const fallbackConfig = {
+          apiKey: "AIzaSyDq0oVwS6zbEfsgrYBRkeBq80dDUKMedzo", 
+          authDomain: "saban94-78949.firebaseapp.com", 
+          projectId: "saban94-78949",
+          storageBucket: "saban94-78949.firebasestorage.app", 
+          messagingSenderId: "41553157903", 
+          appId: "1:41553157903:web:cc33d252cff023be97a87a", 
+        };
+        
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : JSON.stringify(fallbackConfig));
+        
+        try {
+            const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+            db = getFirestore(app);
+            auth = getAuth(app);
+            setLogLevel('Error'); // Set to Error to reduce console noise
+            console.log("Team Chat: Firebase Initialized.");
+            
+            onAuthStateChanged(auth, async (user) => {
+                if (user) {
+                    currentUserId = user.uid;
+                    console.log("Team Chat: User Signed In:", currentUserId);
+                    initializeApplication();
+                } else {
+                    console.log("Team Chat: No user. Trying auth...");
+                    try {
+                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                            await signInWithCustomToken(auth, __initial_auth_token);
+                        } else {
+                            await signInAnonymously(auth);
+                        }
+                    } catch (error) {
+                        console.error("Team Chat: Auth Error:", error);
+                    }
+                }
+            });
+
+        } catch (e) {
+            console.error("Team Chat: Firebase Init Failed:", e);
+            showToast('שגיאת התחברות חמורה ל-Firebase', 'error');
+        }
+
+        // --- Main Application Init ---
+        function initializeApplication() {
+            // 1. Request Notification Permission
+            requestNotificationPermission();
+            
+            // 2. Load all team members
+            listenForTeamMembers();
+            
+            // 3. Attach listeners
+            document.getElementById('search-members').addEventListener('keyup', renderTeamMemberList);
+            document.getElementById('avatar-upload-input').addEventListener('change', handleAvatarUpload);
+            document.getElementById('file-upload-btn').addEventListener('click', () => document.getElementById('file-upload-input').click());
+            document.getElementById('file-upload-input').addEventListener('change', handleFileUpload);
+            document.getElementById('location-share-btn').addEventListener('click', sendLocation);
+            document.getElementById('chat-send-btn').addEventListener('click', sendMessage);
+            document.getElementById('chat-input').addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                } else {
+                    updateTypingStatus();
+                }
+            });
+
+            // 4. Init icons
+            feather.replace();
+        }
+        
+        // --- 1. Member & Presence Logic ---
+
+        function listenForTeamMembers() {
+            if (membersUnsubscribe) membersUnsubscribe();
+            
+            const q = query(collection(db, "teamMembers"), orderBy("name"));
+            membersUnsubscribe = onSnapshot(q, (snapshot) => {
+                document.getElementById('member-loading').style.display = 'none';
+                
+                snapshot.forEach(doc => {
+                    allTeamMembers.set(doc.id, { id: doc.id, ...doc.data() });
+                });
+                
+                // Update self presence
+                updateSelfPresence(true);
+                document.addEventListener('visibilitychange', () => {
+                    if (document.visibilityState === 'visible') {
+                        updateSelfPresence(true);
+                    } else {
+                        updateSelfPresence(false);
+                    }
+                });
+
+                renderTeamMemberList();
+            }, (error) => {
+                console.error("Failed to listen for team members:", error);
+            });
+        }
+        
+        async function updateSelfPresence(isOnline) {
+            if (!currentUserId) return;
+            try {
+                const presenceData = {
+                    isOnline: isOnline,
+                    lastSeen: serverTimestamp()
+                };
+                await setDoc(doc(db, "teamMembers", currentUserId), presenceData, { merge: true });
+            } catch (e) {
+                console.warn("Could not update presence:", e.message);
+                // This might fail if the user document doesn't exist yet.
+                // A good system would auto-create a 'teamMembers' doc
+                // for a new user ID on first login.
+                try {
+                    const fallbackData = {
+                        name: `צוות ${currentUserId.slice(0, 4)}`,
+                        role: "חבר צוות",
+                        ...presenceData
+                    };
+                    await setDoc(doc(db, "teamMembers", currentUserId), fallbackData);
+                } catch (e2) {
+                     console.error("Failed to create fallback user doc:", e2);
+                }
+            }
+        }
+
+        function renderTeamMemberList() {
+            const list = document.getElementById('member-list-container');
+            const search = document.getElementById('search-members').value.toLowerCase();
+            list.innerHTML = '';
+            
+            const members = Array.from(allTeamMembers.values())
+                .filter(member => member.name.toLowerCase().includes(search) && member.id !== currentUserId)
+                .sort((a, b) => a.name.localeCompare(b.name));
+
+            members.forEach(member => {
+                list.appendChild(createMemberCard(member));
+            });
+            feather.replace();
+        }
+        
+        function createMemberCard(member) {
+            const card = document.createElement('div');
+            const chatId = getChatId(currentUserId, member.id);
+            card.className = `member-item p-4 flex gap-3 ${chatId === activeChatId ? 'active' : ''}`;
+            card.onclick = () => openChatWithMember(member.id);
+            
+            const isOnline = member.isOnline && (new Date().getTime() - (member.lastSeen?.toDate()?.getTime() || 0) < 60000);
+
+            card.innerHTML = `
+                ${generateAvatar(member.name, member.avatarUrl, 'w-12 h-12 text-xl')}
+                <div class="flex-1 overflow-hidden">
+                    <div class="flex justify-between items-center">
+                        <h3 class="font-bold truncate">${member.name}</h3>
+                        <span class="status-dot ${isOnline ? 'avatar-online-dot' : 'avatar-offline-dot'}"></span>
+                    </div>
+                    <p class="text-sm text-gray-600 dark:text-gray-400 truncate">${member.role || 'חבר צוות'}</p>
+                </div>
+            `;
+            return card;
+        }
+
+        // --- 2. Chat Logic ---
+        
+        function getChatId(id1, id2) {
+            // Create a deterministic chat ID for 1-on-1 chats
+            return [id1, id2].sort().join('_');
+        }
+
+        function openChatWithMember(memberId) {
+            const member = allTeamMembers.get(memberId);
+            if (!member) return;
+            
+            activeChatId = getChatId(currentUserId, memberId);
+            activeChatPartnerId = memberId;
+            
+            console.log(`Opening chat ${activeChatId} with ${member.name}`);
+
+            renderTeamMemberList(); // Update active highlight
+            
+            // Show chat window
+            document.getElementById('chat-empty-state').style.display = 'none';
+            document.getElementById('chat-active-state').style.display = 'flex';
+            document.getElementById('chat-window').classList.add('active'); // For mobile
+
+            // Populate header
+            document.getElementById('chat-header-avatar').innerHTML = generateAvatar(member.name, member.avatarUrl, 'w-12 h-12 text-xl');
+            document.getElementById('chat-header-name').innerText = member.name;
+
+            // Load history
+            listenForMessages(activeChatId);
+            
+            // Listen for typing
+            listenForTyping(activeChatPartnerId);
+
+            // Load profile
+            loadMemberProfile(memberId);
+        }
+        
+        function listenForMessages(chatId) {
+            if (chatUnsubscribe) chatUnsubscribe();
+            
+            const chatHistoryEl = document.getElementById('chat-history');
+            chatHistoryEl.innerHTML = '<div class="loader"></div>';
+            
+            const q = query(
+                collection(db, "teamChats", chatId, "messages"),
+                orderBy("timestamp", "asc"),
+                limit(50) // Load last 50
+            );
+            
+            chatUnsubscribe = onSnapshot(q, (snapshot) => {
+                chatHistoryEl.innerHTML = '';
+                if (snapshot.empty) {
+                    chatHistoryEl.innerHTML = '<p class="text-center text-gray-500 p-10">אין הודעות. התחל שיחה!</p>';
+                }
+                
+                snapshot.forEach(doc => {
+                    const msg = doc.data();
+                    if (msg.sender !== currentUserId && !msg.read) {
+                        // Mark as read
+                        updateDoc(doc.ref, { read: true });
+                    }
+                    if (msg.sender !== currentUserId && !msg.soundPlayed) {
+                        playNotificationSound();
+                        updateDoc(doc.ref, { soundPlayed: true }); // Prevent re-ping
+                    }
+                    chatHistoryEl.appendChild(createMessageBubble(msg));
+                });
+                
+                chatHistoryEl.scrollTop = chatHistoryEl.scrollHeight;
+            });
+        }
+        
+        function createMessageBubble(msg) {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'flex flex-col';
+            let bubbleClass = 'chat-bubble';
+            
+            if (msg.sender === currentUserId) {
+                bubbleClass += ' chat-bubble-self';
+                wrapper.classList.add('items-end');
+            } else if (msg.senderType === 'system') {
+                bubbleClass += ' chat-bubble-system';
+                wrapper.classList.add('items-center');
+            } else {
+                bubbleClass += ' chat-bubble-other';
+                wrapper.classList.add('items-start');
+            }
+            
+            const time = msg.timestamp ? new Date(msg.timestamp.seconds * 1000).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' }) : '...';
+            
+            let msgText = '';
+            if (msg.type === 'text') {
+                msgText = msg.text.replace(/\n/g, '<br>');
+            } else if (msg.type === 'image') {
+                msgText = `<img src="${msg.url}" alt="תמונה מצורפת" class="rounded-lg max-w-xs" />`;
+            } else if (msg.type === 'file') {
+                msgText = `<a href="${msg.url}" target="_blank" class="flex items-center gap-2 p-2 bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300">
+                             <i data-feather="file" class="w-5 h-5"></i>
+                             <span>${msg.fileName || 'פתח קובץ'}</span>
+                           </a>`;
+            } else if (msg.type === 'location') {
+                 msgText = `<a href="${msg.url}" target="_blank" class="flex items-center gap-2 p-2 bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300">
+                             <i data-feather="map-pin" class="w-5 h-5"></i>
+                             <span>פתח מיקום במפות</span>
+                           </a>`;
+            }
+
+            wrapper.innerHTML = `
+                <div class="${bubbleClass}">
+                    <p>${msgText}</p>
+                    <span class="chat-timestamp text-right mt-2">
+                        ${time}
+                    </span>
+                </div>
+            `;
+            feather.replace();
+            return wrapper;
+        }
+
+        async function sendMessage(overrideData = {}) {
+            if (messageSendDebounce) return;
+            
+            const text = document.getElementById('chat-input').value.trim();
+            if (!text && !overrideData.type) return; // Nothing to send
+            
+            messageSendDebounce = true;
+            const sendBtn = document.getElementById('chat-send-btn');
+            sendBtn.classList.add('opacity-50', 'cursor-not-allowed');
+
+            const myData = allTeamMembers.get(currentUserId);
+
+            const messageData = {
+                messageId: crypto.randomUUID(), // Client-side UUID for idempotency
+                senderId: currentUserId,
+                senderName: myData?.name || `צוות ${currentUserId.slice(0, 4)}`,
+                text: text,
+                type: 'text',
+                timestamp: serverTimestamp(),
+                read: false,
+                soundPlayed: false,
+                ...overrideData // Merge in file/location data
+            };
+
+            try {
+                // Ensure chat doc exists
+                const chatRef = doc(db, "teamChats", activeChatId);
+                await setDoc(chatRef, { 
+                    memberIds: [currentUserId, activeChatPartnerId],
+                    lastMessageAt: serverTimestamp()
+                }, { merge: true });
+                
+                // Add the message
+                const messagesColRef = collection(db, 'teamChats', activeChatId, 'messages');
+                await addDoc(messagesColRef, messageData);
+                
+                document.getElementById('chat-input').value = ''; // Clear input
+                
+            } catch (error) {
+                console.error("Failed to send message:", error);
+                showToast("שגיאה בשליחת הודעה", "error");
+            } finally {
+                // Debounce
+                setTimeout(() => {
+                    messageSendDebounce = false;
+                    sendBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                }, 300);
+            }
+        }
+        
+        async function sendLocation() {
+            if (!navigator.geolocation) {
+                showToast("מיקום לא נתמך בדפדפן זה.", "error");
+                return;
+            }
+            showToast("מאתר מיקום...", "info");
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const { latitude, longitude } = position.coords;
+                    const locationUrl = `https://www.google.com/maps?q=${latitude},${longitude}`;
+                    sendMessage({
+                        text: `מיקום ששותף: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
+                        type: 'location',
+                        url: locationUrl
+                    });
+                },
+                (error) => {
+                    showToast("לא ניתן היה לקבל מיקום.", "error");
+                }
+            );
+        }
+
+        // --- 3. Avatar & File Logic ---
+        
+        function getHashedColor(name) {
+            let hash = 0;
+            for (let i = 0; i < name.length; i++) {
+                hash = name.charCodeAt(i) + ((hash << 5) - hash);
+            }
+            return avatarColors[Math.abs(hash) % avatarColors.length];
+        }
+
+        function generateAvatar(name, avatarUrl, sizeClasses = 'w-12 h-12 text-xl') {
+            if (avatarUrl) {
+                return `<img src="${avatarUrl}" alt="${name}" class="avatar-img ${sizeClasses}">`;
+            }
+            const initials = name.split(' ').map(n => n[0]).join('').slice(0, 2);
+            const color = getHashedColor(name);
+            return `<div class="avatar ${sizeClasses}" style="background-color: ${color};">
+                        ${initials}
+                    </div>`;
+        }
+
+        async function handleAvatarUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            showToast("מעלה תמונה...", "info");
+            
+            try {
+                const uploadResult = await uploadFile(file, `avatars/${currentUserId}`);
+                
+                await updateDoc(doc(db, "teamMembers", currentUserId), {
+                    avatarUrl: uploadResult.url
+                });
+                
+                // Update local state and re-render
+                allTeamMembers.get(currentUserId).avatarUrl = uploadResult.url;
+                renderTeamMemberList();
+                loadMemberProfile(activeChatPartnerId); // Refresh profile if open
+                
+                showToast("תמונת פרופיל עודכנה!", "success");
+                
+            } catch (error) {
+                console.error("Failed to upload avatar:", error);
+                showToast("שגיאה בהעלאת תמונה.", "error");
+            }
+        }
+        
+        async function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            showToast(`מעלה קובץ: ${file.name}`, "info");
+
+            try {
+                const uploadResult = await uploadFile(file, `teamChats/${activeChatId}`);
+                
+                // Send a message of type 'file' or 'image'
+                sendMessage({
+                    text: `שיתף קובץ: ${file.name}`,
+                    type: file.type.startsWith('image/') ? 'image' : 'file',
+                    url: uploadResult.url,
+                    fileName: file.name
+                });
+                
+            } catch (error) {
+                console.error("Failed to upload file:", error);
+                showToast("שגיאה בהעלאת קובץ.", "error");
+            }
+        }
+
+        async function uploadFile(file, context) {
+            // Using Apps Script (Google Drive) as requested
+            if (WEB_APP_URL.includes("YOUR_URL_HERE")) {
+                throw new Error("Apps Script URL not configured.");
+            }
+
+            const base64Data = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result.split(',')[1]);
+                reader.onerror = error => reject(error);
+                reader.readAsDataURL(file);
+            });
+
+            const payload = {
+                fileData: base64Data,
+                fileName: file.name,
+                mimeType: file.type,
+                customerId: `team_${currentUserId}` // Use a team prefix
+            };
+            
+            const response = await fetch(WEB_APP_URL, {
+                method: 'POST',
+                mode: 'cors',
+                body: JSON.stringify(payload),
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+            });
+
+            if (!response.ok) {
+                throw new Error(`Server error: ${response.statusText}`);
+            }
+
+            const result = await response.json();
+            
+            if (result.success && result.url) {
+                return result; // { success, url, waUrl, name }
+            } else {
+                throw new Error(result.error || "Unknown server error");
+            }
+        }
+
+        // --- 4. Profile Panel Logic ---
+        
+        function toggleProfilePanel() {
+            document.getElementById('main-layout').classList.toggle('profile-open');
+        }
+
+        function loadMemberProfile(memberId) {
+            const loadingEl = document.getElementById('profile-content-loading');
+            const contentEl = document.getElementById('profile-content');
+            loadingEl.style.display = 'block';
+            contentEl.style.display = 'none';
+
+            const member = allTeamMembers.get(memberId);
+            if (!member) {
+                loadingEl.innerHTML = '<p class="p-4 text-red-500">לא ניתן לטעון פרופיל.</p>';
+                return;
+            }
+
+            document.getElementById('profile-avatar').innerHTML = generateAvatar(member.name, member.avatarUrl, 'w-24 h-24 text-4xl');
+            document.getElementById('profile-name').innerText = member.name;
+            document.getElementById('profile-status').innerText = member.isOnline ? "מחובר" : "לא מחובר";
+            document.getElementById('profile-phone').innerText = member.phone || 'לא הוזן';
+            document.getElementById('profile-phone').href = `tel:${member.phone || ''}`;
+            document.getElementById('profile-role').innerText = member.role || 'חבר צוות';
+            document.getElementById('profile-id').innerText = member.id;
+            
+            // TODO: Load shared files from chat history
+            document.getElementById('profile-files-list').innerHTML = '<p class="text-sm text-gray-500">טעינת קבצים בבנייה...</p>';
+            
+            loadingEl.style.display = 'none';
+            contentEl.style.display = 'block';
+        }
+
+        // --- 5. Notification & Sound Logic ---
+        
+        async function requestNotificationPermission() {
+            if (!('Notification' in window)) return;
+            if (Notification.permission === 'default') {
+                await Notification.requestPermission();
+            }
+        }
+
+        function playNotificationSound() {
+            try {
+                // Start Tone.js context on user interaction (it's likely started)
+                Tone.start();
+                // Play a gentle ping
+                const synth = new Tone.Synth().toDestination();
+                synth.triggerAttackRelease("C5", "8n");
+                
+                // Vibrate
+                if ('vibrate' in navigator) {
+                    navigator.vibrate([100, 50, 100]); // Vibrate
+                }
+            } catch (e) {
+                console.warn("Could not play notification sound:", e);
+            }
+        }
+        
+        // --- 6. Typing Indicator Logic ---
+        
+        function updateTypingStatus() {
+            if (typingTimeout) clearTimeout(typingTimeout);
+            
+            // Send typing=true immediately
+            setDoc(doc(db, "teamMembers", currentUserId), { isTyping: true }, { merge: true });
+            
+            // Set a timeout to send typing=false
+            typingTimeout = setTimeout(() => {
+                setDoc(doc(db, "teamMembers", currentUserId), { isTyping: false }, { merge: true });
+            }, 5000); // Stop typing after 5 seconds
+        }
+        
+        function listenForTyping(partnerId) {
+            if (typingUnsubscribe) typingUnsubscribe();
+            
+            const typingEl = document.getElementById('chat-header-status'); // Using the status <p> tag
+            
+            typingUnsubscribe = onSnapshot(doc(db, "teamMembers", partnerId), (docSnap) => {
+                if (docSnap.exists() && docSnap.data().isTyping) {
+                    typingEl.innerText = "...מקליד ✍️";
+                    typingEl.className = "text-sm text-blue-500 font-semibold";
+                } else {
+                    // Reset to online/offline status
+                    const isOnline = docSnap.data().isOnline && (new Date().getTime() - (docSnap.data().lastSeen?.toDate()?.getTime() || 0) < 60000);
+                    typingEl.innerText = isOnline ? "מחובר" : "לא מחובר";
+                    typingEl.className = isOnline ? "text-sm text-green-500" : "text-sm text-gray-500";
+                }
+            });
+        }
+        
+        // --- Expose functions to window for onclick ---
+        window.openChatWithMember = openChatWithMember;
+        window.closeActiveChat = closeActiveChat;
+        window.toggleProfilePanel = toggleProfilePanel;
+        window.sendMessage = sendMessage;
+        window.sendLocation = sendLocation;
+
+        // --- Init ---
+        document.addEventListener('DOMContentLoaded', () => {
+            // Dark mode init
+            if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                document.documentElement.classList.add('dark');
+            }
+        });
+    </script>
+</body>
+</html>
