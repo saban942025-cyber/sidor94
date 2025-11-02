@@ -3,26 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>הקמת הזמנה (v3.1 - Fix & Design)</title>
+    <title>הקמת הזמנה (v3.1 - Fix & Style)</title>
     <!-- 
-      DeliveryMaster CRM Form v3.1 (Fix & Design)
+      DeliveryMaster CRM Form v3.1 (Fix & Style)
       
       Changelog:
       - [CRITICAL FIX v3.1]:
-        - תיקון שגיאת `serverTimestamp() is not currently supported inside arrays`.
+        - תיקון השגיאה "serverTimestamp() is not currently supported inside arrays".
         - הוחלף `serverTimestamp()` בתוך `auditLog` ב-`new Date()`.
-      - [DESIGN v3.1]:
-        - עיצוב מחדש של תבנית ה-WhatsApp (ב-`shareToWhatsApp`)
-          למראה נקי וקליל יותר, עם אימוג'ים 
-          (במקום הקווים הכבדים).
-        - הוספת רקע צבעוני עדין (תכלת/ירקרק) לשלבי הטופס.
+      - [STYLE v3.1]:
+        - שינוי עיצוב טופס: רקע צבעוני עדין לכל שלב (תכלת/ירקרק).
+        - שינוי עיצוב שדות: גופן גדול יותר, רקע אטום.
+        - שינוי עיצוב WhatsApp: תבנית חדשה וקלילה עם אימוג'ים 👤 🚚 📦.
       - [v3.0]:
-        - שילוב העלאת קבצים ל-Google Drive + שיתוף WhatsApp.
+        - שילוב העלאת קבצים ל-Google Drive.
+        - הוספת פונקציית `handleFileUpload`.
+        - שדרוג `submitFullOrder` לטפל בקבצים.
         - הוספת אתחול Firebase מלא.
-      - [v2.2]:
-        - תיקון לוגיקת יצירת לקוח לשימוש ב-Auto-ID.
-      - [v2.1]:
-        - עיצוב CRM מודרני, 2 שלבים, מצב כהה/בהיר, ניהול פרויקטים.
     -->
 
     <!-- TailwindCSS -->
@@ -42,6 +39,10 @@
             --line-inactive: #e5e7eb;  /* gray-200 */
             --line-active: #dbeafe;    /* blue-100 */
             --line-complete: #dcfce7;  /* green-100 */
+            
+            /* [NEW v3.1] Step background colors */
+            --step-1-bg: #f0f9ff; /* sky-50 */
+            --step-2-bg: #f0fdf4; /* green-50 */
         }
         
         html, body {
@@ -75,10 +76,6 @@
         html.dark .form-input::placeholder {
             color: #9ca3af; /* gray-400 */
         }
-        /* [NEW v3.1] Step background dark */
-        html.dark #step-1-customer { background-color: #374151; }
-        html.dark #step-2-order { background-color: #374151; }
-        
         html.dark .tag-badge {
             background-color: #1d4ed8; /* blue-700 */
             color: #eff6ff; /* blue-50 */
@@ -93,20 +90,10 @@
         html.dark .btn-secondary:hover {
             background-color: #5e6875; /* gray-500 */
         }
-        
-        /* [NEW v3.1] Step background light */
-        #step-1-customer {
-            background-color: #f0f9ff; /* blue-50 */
-            border-radius: 1rem;
-            padding: 1.5rem;
-            transition: background-color 0.3s;
-        }
-        #step-2-order {
-            background-color: #f0fdf4; /* green-50 */
-            border-radius: 1rem;
-            padding: 1.5rem;
-            transition: background-color 0.3s;
-        }
+        /* [NEW v3.1] Dark mode step backgrounds */
+        html.dark #step-1-customer { background-color: #1e3a8a; } /* blue-800 */
+        html.dark #step-2-order { background-color: #064e3b; } /* green-900 */
+
         
         /* Stepper */
         .stepper-line {
@@ -147,6 +134,35 @@
         .step.active .stepper-line { background-color: var(--line-active); }
         .step.active .stepper-dot { background-color: var(--step-active); color: white; border-color: var(--line-active); transform: scale(1.1); }
         .step.active .stepper-label { color: var(--step-active); font-weight: 700; }
+        
+        /* [NEW v3.1] Step Content Backgrounds */
+        .step-content {
+            padding: 2rem;
+            border-radius: 1rem;
+            transition: background-color 0.3s;
+        }
+        #step-1-customer {
+            background-color: var(--step-1-bg);
+        }
+        #step-2-order {
+            background-color: var(--step-2-bg);
+        }
+        
+        /* [NEW v3.1] Upgraded Inputs */
+        .form-input {
+            background-color: #ffffff;
+            border: 2px solid #e5e7eb; /* gray-200 */
+            border-radius: 0.5rem; /* 8px */
+            padding: 0.75rem 1rem; /* 12px 16px */
+            font-size: 1rem; /* 16px */
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+        .form-input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
+        }
         
         /* Project Tags */
         .tag-badge {
@@ -199,6 +215,17 @@
         .toast.error { background-color: #dc2626; } /* red-600 */
         .toast.info { background-color: #3b82f6; } /* blue-500 */
         
+        /* Loader */
+        .loader {
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid var(--primary-color);
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
     </style>
 </head>
 <body class="flex items-center justify-center min-h-screen p-4">
@@ -241,45 +268,45 @@
         </div>
 
         <!-- Form Card -->
-        <div class="form-card bg-white dark:bg-gray-700 shadow-2xl rounded-2xl p-6 sm:p-10 border border-gray-200 dark:border-gray-600">
+        <div class="form-card bg-white dark:bg-gray-700 shadow-2xl rounded-2xl p-2 sm:p-4 border border-gray-200 dark:border-gray-600">
 
             <!-- Step 1: Customer Details -->
-            <div id="step-1-customer">
+            <div id="step-1-customer" class="step-content">
                 <h2 class="text-3xl font-semibold mb-6 text-blue-600 dark:text-blue-400">שלב 1: פרטי לקוח</h2>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
                     <!-- Customer Number -->
                     <div>
                         <label for="customer-number" class="block text-lg font-medium mb-2">מספר לקוח (חובה)</label>
-                        <input type="text" id="customer-number" class="form-input w-full p-4 text-xl border-2 border-gray-200 rounded-lg shadow-inner focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-600 dark:border-gray-500" placeholder="לדוגמה: 601524">
+                        <input type="text" id="customer-number" class="form-input w-full" placeholder="לדוגמה: 601524">
                     </div>
                     <!-- Customer Name -->
                     <div>
                         <label for="customer-name" class="block text-lg font-medium mb-2">שם לקוח (חובה)</label>
-                        <input type="text" id="customer-name" class="form-input w-full p-4 text-xl border-2 border-gray-200 rounded-lg shadow-inner focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-600 dark:border-gray-500" placeholder="שם מלא של הלקוח/חברה">
+                        <input type="text" id="customer-name" class="form-input w-full" placeholder="שם מלא של הלקוח/חברה">
                     </div>
                     <!-- Phone -->
                     <div>
                         <label for="customer-phone" class="block text-lg font-medium mb-2">טלפון ראשי</label>
-                        <input type="tel" id="customer-phone" class="form-input w-full p-4 text-xl border-2 border-gray-200 rounded-lg shadow-inner focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-600 dark:border-gray-500" placeholder="05X-XXXXXXX">
+                        <input type="tel" id="customer-phone" class="form-input w-full" placeholder="05X-XXXXXXX">
                     </div>
                     <!-- Contact Person -->
                     <div>
                         <label for="customer-contact" class="block text-lg font-medium mb-2">איש קשר (רשות)</label>
-                        <input type="text" id="customer-contact" class="form-input w-full p-4 text-xl border-2 border-gray-200 rounded-lg shadow-inner focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-600 dark:border-gray-500" placeholder="שם איש קשר בשטח">
+                        <input type="text" id="customer-contact" class="form-input w-full" placeholder="שם איש קשר בשטח">
                     </div>
                     <!-- Address: Street -->
                     <div class="md:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-5">
                         <div>
                             <label for="customer-street" class="block text-lg font-medium mb-2">רחוב</label>
-                            <input type="text" id="customer-street" class="form-input w-full p-4 text-xl border-2 border-gray-200 rounded-lg shadow-inner focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-600 dark:border-gray-500" placeholder="החשמונאים">
+                            <input type="text" id="customer-street" class="form-input w-full" placeholder="החשמונאים">
                         </div>
                         <div>
                             <label for="customer-street-num" class="block text-lg font-medium mb-2">מספר</label>
-                            <input type="text" id="customer-street-num" class="form-input w-full p-4 text-xl border-2 border-gray-200 rounded-lg shadow-inner focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-600 dark:border-gray-500" placeholder="90">
+                            <input type="text" id="customer-street-num" class="form-input w-full" placeholder="90">
                         </div>
                         <div>
                             <label for="customer-city" class="block text-lg font-medium mb-2">עיר</label>
-                            <input type="text" id="customer-city" class="form-input w-full p-4 text-xl border-2 border-gray-200 rounded-lg shadow-inner focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-600 dark:border-gray-500" placeholder="תל אביב">
+                            <input type="text" id="customer-city" class="form-input w-full" placeholder="תל אביב">
                         </div>
                     </div>
                 </div>
@@ -292,7 +319,7 @@
             </div>
 
             <!-- Step 2: Order Details -->
-            <div id="step-2-order" style="display: none;">
+            <div id="step-2-order" class="step-content" style="display: none;">
                 <h2 class="text-3xl font-semibold mb-6 text-green-600 dark:text-green-400">שלב 2: פרטי הזמנה</h2>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
                     
@@ -300,7 +327,7 @@
                     <div class="md:col-span-2">
                         <label class="block text-lg font-medium mb-2">ניהול פרויקטים</label>
                         <div class="flex gap-2">
-                            <input type="text" id="project-input" class="form-input w-full p-4 text-xl border-2 border-gray-200 rounded-lg shadow-inner focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-600 dark:border-gray-500" placeholder="הקלד שם פרויקט ולחץ +">
+                            <input type="text" id="project-input" class="form-input w-full" placeholder="הקלד שם פרויקט ולחץ +">
                             <button id="btn-add-project" type="button" class="btn-primary p-4 bg-blue-600 text-white rounded-lg shadow-md hover:bg-blue-700">
                                 <i data-feather="plus" class="w-6 h-6"></i>
                             </button>
@@ -313,7 +340,7 @@
                     <!-- Transport Type -->
                     <div>
                         <label for="order-transport-type" class="block text-lg font-medium mb-2">סוג הובלה</label>
-                        <select id="order-transport-type" class="form-input w-full p-4 text-xl border-2 border-gray-200 rounded-lg shadow-inner focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-600 dark:border-gray-500">
+                        <select id="order-transport-type" class="form-input w-full">
                             <option value="">-- בחר סוג --</option>
                             <option value="משאית">משאית</option>
                             <option value="טריילר">טריילר</option>
@@ -329,13 +356,13 @@
                     <!-- Order Number -->
                     <div>
                         <label for="order-number" class="block text-lg font-medium mb-2">מספר הזמנה (רשות)</label>
-                        <input type="text" id="order-number" class="form-input w-full p-4 text-xl border-2 border-gray-200 rounded-lg shadow-inner focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-600 dark:border-gray-500" placeholder="השאר ריק לאוטומטי">
+                        <input type="text" id="order-number" class="form-input w-full" placeholder="השאר ריק לאוטומטי">
                     </div>
 
                     <!-- Order Content -->
                     <div class="md:col-span-2">
                         <label for="order-content" class="block text-lg font-medium mb-2">תוכן ההזמנה</label>
-                        <textarea id="order-content" rows="4" class="form-input w-full p-4 text-xl border-2 border-gray-200 rounded-lg shadow-inner focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-600 dark:border-gray-500" placeholder="לדוגמה: 10 בלוק 20, 5 מלט..."></textarea>
+                        <textarea id="order-content" rows="4" class="form-input w-full" placeholder="לדוגמה: 10 בלוק 20, 5 מלט..."></textarea>
                     </div>
 
                     <!-- [NEW v3.0] File Upload Section -->
@@ -366,7 +393,7 @@
     <script type="module">
         // [FIX v3.0] הוספת אתחול Firebase מלא
         import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
         import { 
             getFirestore, collection, doc, onSnapshot, query, orderBy, addDoc, updateDoc, 
             serverTimestamp, deleteDoc, arrayUnion, where, getDocs, getDoc, limit, setDoc 
@@ -374,9 +401,13 @@
 
         // --- Inlined Config Logic ---
         const firebaseConfig = {
-          apiKey: "AIzaSyDq0oVwS6zbEfsgrYBRkeBq80dDUKMedzo", authDomain: "saban94-78949.firebaseapp.com", projectId: "saban94-78949",
+          apiKey: "AIzaSyDq0oVwS6zbEfsgrYBRkeBq80dDUKMedzo", 
+          authDomain: "saban94-78949.firebaseapp.com", 
+          projectId: "saban94-78949",
           storageBucket: "saban94-78949.firebasestorage.app", // [FIX v34.9] Corrected bucket name
-          messagingSenderId: "41553157903", appId: "1:41553157903:web:cc33d252cff023be97a87a", measurementId: "G-XV6RZDESSB"
+          messagingSenderId: "41553157903", 
+          appId: "1:41553157903:web:cc33d252cff023be97a87a", 
+          measurementId: "G-XV6RZDESSB"
         };
         let app, auth, db; 
         let initializationError = null;
@@ -384,9 +415,16 @@
             app = getApps().length ? getApp() : initializeApp(firebaseConfig);
             auth = getAuth(app); 
             db = getFirestore(app);
+            
             // Sign in anonymously
-            await signInAnonymously(auth);
-            console.log("Firebase Initialized and Signed In Anonymously.");
+            onAuthStateChanged(auth, (user) => {
+                if (user) {
+                    console.log("Firebase Initialized and Signed In Anonymously.");
+                } else {
+                    signInAnonymously(auth).catch(err => console.error("Anonymous sign-in failed", err));
+                }
+            });
+
         } catch (error) { 
             console.error("CRITICAL: Firebase init failed!", error); 
             initializationError = error; 
@@ -400,7 +438,7 @@
         const SmartLog = {
             info: (msg, ctx) => console.log("[INFO]", msg, ctx || ''),
             warn: (msg, ctx) => console.warn("[WARN]", msg, ctx || ''),
-            error: (err, ctx) => console.error("[ERROR]", err, ctx || '')
+            error: (err, cat, ctx) => console.error(`[ERROR|${cat}]`, err, ctx || ''),
         };
 
         // --- State ---
@@ -613,19 +651,21 @@
                 : '';
 
             const template = `
-*✅ הזמנה חדשה (טופס הקמה)*
-👤 *לקוח:* ${newCustomerData.name} (#${newCustomerData.customerNumber})
-📞 *טלפון:* ${newCustomerData.phone}
-🙍‍♂️ *איש קשר:* ${customerContact}
+*✅ הזמנה חדשה (מטופס CRM)*
+
+👤 *פרטי לקוח:*
+*שם:* ${newCustomerData.name}
+*מס' לקוח:* ${newCustomerData.customerNumber}
+*טלפון:* ${newCustomerData.phone}
+*איש קשר:* ${customerContact}
 
 🚚 *פרטי אספקה:*
-*סוג:* ${orderData.deliveryType || 'לא צוין'}
+*פרויקט:* ${orderData.projectName.join(', ') || 'לא צוין'}
+*סוג הובלה:* ${orderData.deliveryType || 'לא צוין'}
 *מיקום:* ${newCustomerData.defaultAddress}
 *תאריך:* ${orderData.orderDate}
 
-*פרויקט:* ${orderData.projectName.join(', ') || 'כללי'}
-
-📋 *תוכן ההזמנה:*
+📦 *תוכן ההזמנה:*
 ${orderData.notes || "--- אין תוכן ---"}
 ${attachmentText}
             `;
@@ -637,24 +677,18 @@ ${attachmentText}
         
         // --- Main Submit Logic ---
         document.getElementById('btn-submit-full').addEventListener('click', async (e) => {
-            const btn = e.target;
+            const btn = e.target.closest('button'); // Ensure we get the button
             btn.disabled = true;
-            btn.innerHTML = '<div class="loader" style="width:20px; height:20px; border-width: 2px; margin: 0 auto;"></div>';
-
-            if (initializationError) {
-                 showToast("שגיאת חיבור לשרת. רענן את הדף.", "error");
-                 btn.disabled = false;
-                 btn.innerHTML = '<i data-feather="check-circle" class="inline-block w-5 h-5"></i> שמור הכל ושלח ל-WhatsApp';
-                 feather.replace();
-                 return;
-            }
+            btn.innerHTML = '<div class="loader"></div>';
 
             try {
+                if (!db) throw new Error("Firebase DB not initialized.");
+                
                 // --- Step 1: Create or Find Customer ---
                 // Using Auto-ID as discussed (v2.2 logic)
                 const customerRef = doc(collection(db, "customers"));
                 
-                // [FIX v3.1] Replaced serverTimestamp with new Date() for array
+                // [FIX v3.1] Use `new Date()` inside arrays
                 const customerData = {
                     ...newCustomerData,
                     createdAt: serverTimestamp(),
