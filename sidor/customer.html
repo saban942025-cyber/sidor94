@@ -3,24 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>מעקב הזמנה - v36.2 (Logic Fix)</title>
+    <title>מעקב הזמנה - v37 (WhatsApp UI)</title>
     <!-- 
-      DeliveryMaster Customer App v36.2 (Logic Fix)
+      DeliveryMaster Customer App v37 (WhatsApp UI + Bot)
       
       Changelog:
-      - [CRITICAL FIX v36.2]:
-        - ארגון מחדש של `startTracking` ו-`onSnapshot`.
-        - `startTracking` מאתר כעת רק את ה-docId ומצמיד את המאזין.
-        - *כל* הלוגיקה של בדיקת הלקוח (כולל שליפה מ-`customers`),
-          שליפת פרויקטים, והגדרת fallback ("לקוח לא מזוהה")
-          עברה *לתוך* הקולבק של `onSnapshot`.
-        - זה פותר סופית את ה-Race Condition ואת קריסת `null.name`.
-      - [v36.1]:
-        - ניסיון תיקון Race Condition שהזיז את המאזין לסוף.
-      - [v36]:
-        - שדרוג העלאת קבצים לפתיחת WhatsApp אוטומטית.
-      - [v35]:
-        - הסרת Firebase Storage לטובת Apps Script (Google Drive).
+      - [NEW v37] שדרוג UI מלא למבנה אפליקציה:
+        - הוספת סרגל ניווט תחתון (מעקב, צ'אט, הזמנה חדשה).
+        - פיצול המסך ל-2 תצוגות: #view-tracker ו- #view-chat.
+        - `showView()` מנהל את המעבר בין התצוגות.
+      - [NEW v37] מצב צ'אט במסך מלא:
+        - תצוגת `#view-chat` מציגה ממשק צ'אט ייעודי.
+        - תיבת הצ'אט (`chat-history`) ממלאת את המסך.
+      - [NEW v37] צ'אט-בוט (ברכת פתיחה):
+        - `listenToMessages` בודק אם השיחה ריקה.
+        - אם כן, מוסיף אוטומטית הודעת "בוט" ראשונית ללקוח.
+      - [FIX v36.2] תיקון Race Condition ב-`startTracking`.
     -->
 
     <!-- PWA Manifest -->
@@ -47,7 +45,18 @@
         body {
             font-family: 'Rubik', sans-serif;
             background-color: #f4f7f6;
+            /* [NEW v37] Allow content to scroll behind bottom nav */
+            padding-bottom: 80px; 
         }
+        
+        /* [NEW v37] Full-screen views */
+        .app-view {
+            display: none; /* Hidden by default */
+        }
+        .app-view.active {
+            display: block; /* Shown when active */
+        }
+        
         #map {
             height: 300px;
             width: 100%;
@@ -94,6 +103,15 @@
             border-bottom-left-radius: 0.25rem;
             align-self: flex-start;
         }
+        /* [NEW v37] Bot message */
+        .chat-bubble-bot {
+            background-color: #f1f5f9; /* gray-100 */
+            color: #475569; /* gray-600 */
+            border: 1px solid #e2e8f0; /* gray-200 */
+            border-bottom-left-radius: 0.25rem;
+            align-self: flex-start;
+            font-style: italic;
+        }
         .chat-bubble-customer { /* הודעה מהלקוח */
             background-color: #2563eb; /* blue-600 */
             color: white;
@@ -109,7 +127,6 @@
              color: #dbeafe; /* blue-100 */
         }
         
-        /* [NEW] קישור בתוך בועת צ'אט */
         .chat-bubble a {
             font-weight: 600;
             text-decoration: underline;
@@ -122,6 +139,75 @@
             background: rgba(0, 0, 0, 0.5);
             backdrop-filter: blur(2px);
         }
+        
+        /* [NEW v37] Bottom Navigation */
+        #bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 70px;
+            background-color: white;
+            border-top: 1px solid #e5e7eb;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            z-index: 1000;
+        }
+        .nav-button {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            flex-grow: 1;
+            color: #6b7280; /* gray-500 */
+            background-color: transparent;
+            border: none;
+            padding: 0.5rem 0;
+            font-size: 0.75rem;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+        .nav-button svg {
+            width: 24px;
+            height: 24px;
+            margin-bottom: 4px;
+        }
+        .nav-button.active {
+            color: #3b82f6; /* blue-500 */
+        }
+        
+        /* [NEW v37] Full-screen chat layout */
+        #view-chat {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 70px; /* Leave space for bottom nav */
+            display: flex;
+            flex-direction: column;
+            background-color: #f4f7f6;
+        }
+        #chat-header-bar {
+            flex-shrink: 0;
+            background-color: white;
+            border-bottom: 1px solid #e5e7eb;
+            padding: 1rem;
+            text-align: center;
+        }
+        #chat-history {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 1rem;
+        }
+        #chat-input-bar {
+            flex-shrink: 0;
+            background-color: white;
+            padding: 0.75rem;
+            border-top: 1px solid #e5e7eb;
+        }
+        
     </style>
 </head>
 <body class="bg-gray-100">
@@ -244,33 +330,30 @@
 
     <div class="container mx-auto max-w-lg p-4">
         
+        <!-- [NEW v37] Header (עבור שתי התצוגות) -->
         <header class="text-center my-6 flex flex-col items-center">
-            <!-- כפתור הזמנה חדשה -->
-            <button onclick="openNewOrderModal()" class="absolute top-4 left-4 bg-blue-600 text-white p-3 rounded-full shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
-                <i data-feather="plus"></i>
-            </button>
-            
             <img src="https://i.postimg.cc/ryPT3r29/image.png" alt="Company Logo" class="w-20 h-20 mx-auto mb-4 rounded-lg shadow-sm">
-            <h1 class="text-3xl font-bold text-gray-800">מעקב משלוח</h1>
+            <h1 id="main-header" class="text-3xl font-bold text-gray-800">מעקב משלוח</h1>
             <p id="order-id-display" class="text-gray-600">טוען פרטי הזמנה...</p>
         </header>
 
-        <main class="bg-white p-6 rounded-lg shadow-lg space-y-6">
-            
-            <!-- Loader -->
-            <div id="loader" class="text-center py-10">
-                <div class="loader"></div>
-                <p class="text-gray-600">מאתר את ההזמנה שלך...</p>
-            </div>
+        <!-- Loader -->
+        <div id="loader" class="text-center py-10">
+            <div class="loader"></div>
+            <p class="text-gray-600">מאתר את ההזמנה שלך...</p>
+        </div>
 
-            <!-- Error Message -->
-            <div id="error-message" class="hidden text-center py-10">
-                <i data-feather="alert-triangle" class="w-12 h-12 mx-auto text-red-500"></i>
-                <p class="text-red-600 mt-4" id="error-text">שגיאה בטעינת הנתונים.</p>
-            </div>
+        <!-- Error Message -->
+        <div id="error-message" class="hidden text-center py-10">
+            <i data-feather="alert-triangle" class="w-12 h-12 mx-auto text-red-500"></i>
+            <p class="text-red-600 mt-4" id="error-text">שגיאה בטעינת הנתונים.</p>
+        </div>
 
-            <!-- Order Details -->
-            <div id="order-content" class="hidden space-y-6">
+        <!-- [NEW v37] Main Content Area -->
+        <div id="main-content-area" class="hidden">
+        
+            <!-- [NEW v37] View 1: Tracker -->
+            <main id="view-tracker" class="app-view active bg-white p-6 rounded-lg shadow-lg space-y-6">
                 <div>
                     <!-- [NEW v34.6] Dynamic Greeting -->
                     <h2 id="dynamic-greeting" class="text-2xl font-bold text-gray-800 mb-2"></h2>
@@ -323,19 +406,20 @@
                     <h3 class="font-semibold mb-2 text-lg">הערות למשלוח</h3>
                     <p id="order-notes" class="text-gray-700 bg-gray-50 p-3 rounded-md"></p>
                 </div>
+            </main>
+            
+            <!-- [NEW v37] View 2: Chat (Full Screen) -->
+            <main id="view-chat" class="app-view">
+                <!-- Chat History -->
+                <div id="chat-history" class="h-80 bg-gray-100 rounded-lg p-3 overflow-y-auto flex flex-col space-y-2 border">
+                    <!-- הודעות צ'אט יופיעו כאן -->
+                    <p class="text-gray-500 text-sm text-center">טוען היסטוריית הודעות...</p>
+                </div>
                 
-                <!-- פיצ'ר צ'אט חדש -->
-                <div id="chat-section">
-                    <h3 class="font-semibold mb-3 text-lg">תקשורת עם המנהל</h3>
-                    <!-- [NEW v34.6] Upgraded chatbox height -->
-                    <div id="chat-history" class="h-80 bg-gray-100 rounded-lg p-3 overflow-y-auto flex flex-col space-y-2 border">
-                        <!-- הודעות צ'אט יופיעו כאן -->
-                        <p class="text-gray-500 text-sm text-center">טוען היסטוריית הודעות...</p>
-                    </div>
-                    
-                    <!-- [NEW] כפתורי שליחה -->
-                    <div class="mt-3 flex gap-2">
-                        <!-- [NEW] כפתור העלאת קובץ -->
+                <!-- Chat Input Bar -->
+                <div id="chat-input-bar" class="mt-3">
+                    <div class="flex gap-2">
+                        <!-- File Upload Button -->
                         <input type="file" id="file-upload" accept="image/*,application/pdf" class="hidden">
                         <button onclick="document.getElementById('file-upload').click()" class="bg-gray-300 text-gray-700 p-3 rounded-lg shadow hover:bg-gray-400">
                             <i data-feather="paperclip"></i>
@@ -348,7 +432,7 @@
                         </button>
                     </div>
                     
-                    <!-- [NEW] סטטוס העלאה -->
+                    <!-- Upload Status -->
                     <div id="upload-status" class="text-sm text-gray-600 text-center mt-2 hidden">
                         <div class="loader" style="width: 20px; height: 20px; border-width: 2px; display: inline-block; margin-left: 8px;"></div>
                         מעלה קובץ...
@@ -359,10 +443,9 @@
                         שלח מיקום מדויק
                     </button>
                 </div>
-
-            </div>
-
-        </main>
+            </main>
+            
+        </div> <!-- End of main-content-area -->
 
         <footer class="text-center mt-6 text-gray-500 text-sm">
             <p>&copy; 2024 DeliveryMaster</p>
@@ -372,32 +455,43 @@
     
     <!-- [NEW] Toast Container -->
     <div id="toast-container" class="fixed top-4 right-4 z-[5000]"></div>
+    
+    <!-- [NEW v37] Bottom Navigation Bar -->
+    <nav id="bottom-nav">
+        <button id="nav-tracker" class="nav-button active" onclick="showView('tracker')">
+            <i data-feather="truck"></i>
+            <span>מעקב</span>
+        </button>
+        <button id="nav-chat" class="nav-button" onclick="showView('chat')">
+            <i data-feather="message-circle"></i>
+            <span>צ'אט</span>
+        </button>
+        <button id="nav-new-order" class="nav-button" onclick="openNewOrderModal()">
+            <i data-feather="plus-circle"></i>
+            <span>הזמנה חדשה</span>
+        </button>
+    </nav>
 
 
     <!-- Firebase SDKs -->
     <script type="module">
-        // --- [FIX v50.13] Using HTTPS URLs ---
+        // --- Inlined Firebase SDK Imports ---
         import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
-        // [FIX v34.2] Added 'limit'
         import { getFirestore, collection, doc, onSnapshot, query, orderBy, addDoc, updateDoc, serverTimestamp, deleteDoc, arrayUnion, where, getDocs, getDoc, limit } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         
-        // [REMOVED v35] Firebase Storage import
-        // import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-storage.js";
-
         // --- Inlined Config Logic ---
         const firebaseConfig = {
           apiKey: "AIzaSyDq0oVwS6zbEfsgrYBRkeBq80dDUKMedzo", authDomain: "saban94-78949.firebaseapp.com", projectId: "saban94-78949",
           storageBucket: "saban94-78949.firebasestorage.app", // [FIX v34.9] Corrected bucket name
           messagingSenderId: "41553157903", appId: "1:41553157903:web:cc33d252cff023be97a87a", measurementId: "G-XV6RZDESSB"
         };
-        let app, auth, db; // [REMOVED v35] Removed 'storage'
+        let app, auth, db; 
         let initializationError = null;
         try {
             app = getApps().length ? getApp() : initializeApp(firebaseConfig);
             auth = getAuth(app); 
             db = getFirestore(app);
-            // [REMOVED v35] Removed storage init
         } catch (error) { console.error("CRITICAL: Firebase init failed!", error); initializationError = error; }
 
         const MAX_AUTH_RETRIES = 3; const RETRY_DELAY_MS = 3000;
@@ -435,12 +529,11 @@
         let messagesListenerUnsubscribe = null;
         let currentOrderId = null;
         let currentCustomerData = null; 
-        let currentFirestoreDocId = null; // [NEW] Store the real doc ID
-        let customerProjects = []; // [NEW v34.7]
+        let currentFirestoreDocId = null; 
+        let customerProjects = []; 
         
         // [NEW v36] Google Apps Script Web App URL
-        // הוחלפה הכתובת לזו שסיפקת
-        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzwWherCt8LsMCmd9dQ__1RdN4OXb3BBcwYezJG0qVkFKbxowefqBLWbXHTft1QlXhprg/exec"; 
+        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycby7qKICvRYStFkcDPLtGhGPaNqyYt-G8dZqBJfGm7vpmOG6Kf_n3f29V8oyUW9PjBUj7A/exec"; 
 
         // --- Icons ---
         const driverIcon = L.icon({
@@ -458,18 +551,42 @@
         function showLoader(show) { document.getElementById('loader').style.display = show ? 'block' : 'none'; }
         function showError(message) {
             showLoader(false);
-            document.getElementById('order-content').style.display = 'none';
+            document.getElementById('main-content-area').style.display = 'none';
             document.getElementById('error-message').style.display = 'block';
             document.getElementById('error-text').innerText = message || 'אירעה שגיאה.';
         }
         function showContent() {
             showLoader(false);
             document.getElementById('error-message').style.display = 'none';
-            document.getElementById('order-content').classList.remove('hidden');
-            document.getElementById('order-content').classList.add('space-y-6');
+            document.getElementById('main-content-area').style.display = 'block'; // [FIX v37] Show main area
             feather.replace();
         }
         
+        // [NEW v37] View Management
+        function showView(viewName) {
+            // Hide all views
+            document.getElementById('view-tracker').classList.remove('active');
+            document.getElementById('view-chat').classList.remove('active');
+            
+            // Deactivate all buttons
+            document.getElementById('nav-tracker').classList.remove('active');
+            document.getElementById('nav-chat').classList.remove('active');
+            
+            // Show the selected view
+            if (viewName === 'tracker') {
+                document.getElementById('view-tracker').classList.add('active');
+                document.getElementById('nav-tracker').classList.add('active');
+                document.getElementById('main-header').innerText = 'מעקב משלוח';
+                // Refresh map layout
+                if (map) setTimeout(() => map.invalidateSize(), 10);
+            } else if (viewName === 'chat') {
+                document.getElementById('view-chat').classList.add('active');
+                document.getElementById('nav-chat').classList.add('active');
+                document.getElementById('main-header').innerText = 'שיחה עם המשרד';
+            }
+        }
+        window.showView = showView; // Expose to global
+
         // --- Map Functions ---
         function initializeMap(orderLatLng) {
             try {
@@ -790,41 +907,72 @@
 
             messagesListenerUnsubscribe = onSnapshot(q, (snapshot) => {
                 chatHistoryEl.innerHTML = '';
-                if (snapshot.empty) {
-                    chatHistoryEl.innerHTML = '<p class="text-gray-500 text-sm text-center">אין הודעות. התחל שיחה!</p>';
-                    return;
+                
+                // [NEW v37] Bot Welcome Message
+                if (snapshot.empty && currentCustomerData && currentCustomerData.id) {
+                    const firstName = (currentCustomerData.name || 'לקוח').split(' ')[0];
+                    const botMsg = {
+                        sender: "bot",
+                        text: `שלום ${firstName}, זוהי מערכת אוטומטית. קיבלנו את פנייתך ומנהל יטפל בה בהקדם. כאן תוכל לשלוח הודעות, קבצים, או מיקום.`,
+                        timestamp: Timestamp.now()
+                    };
+                    chatHistoryEl.appendChild(createMessageBubble(botMsg));
                 }
                 
-                snapshot.forEach(doc => {
-                    const msg = doc.data();
-                    const bubble = document.createElement('div');
-                    const time = msg.timestamp ? new Date(msg.timestamp.seconds * 1000).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' }) : '';
-                    
-                    // [NEW] Check for link
-                    let msgText = msg.text || '';
-                    const urlRegex = /(https?:\/\/[^\s]+)/g;
-                    if (urlRegex.test(msgText)) {
-                        msgText = msgText.replace(urlRegex, (url) => `<a href="${url}" target="_blank" rel="noopener noreferrer">${url.includes('firebasestorage') || url.includes('drive.google') ? 'פתח קובץ מצורף' : 'פתח קישור'}</a>`);
-                    }
-
-                    if (msg.type === 'notification_to_customer') {
-                        bubble.className = 'chat-bubble chat-bubble-admin';
-                        bubble.innerHTML = `<strong class="block">${msg.senderName || 'מנהל'}</strong>
-                                            <p>${msgText}</p>
-                                            <span class="chat-timestamp text-right">${time}</span>`;
-                    } else if (msg.type === 'message_to_admin') {
-                        bubble.className = 'chat-bubble chat-bubble-customer';
-                        bubble.innerHTML = `<strong class="block">${msg.senderName || 'אני'}</strong>
-                                            <p>${msgText}</p>
-                                            <span class="chat-timestamp text-right">${time}</span>`;
-                    }
-                    chatHistoryEl.appendChild(bubble);
-                });
+                if (snapshot.empty) {
+                    // (ההודעה למעלה כבר מכסה את זה)
+                } else {
+                    snapshot.forEach(doc => {
+                        chatHistoryEl.appendChild(createMessageBubble(doc.data()));
+                    });
+                }
+                
                 chatHistoryEl.scrollTop = chatHistoryEl.scrollHeight;
             }, (error) => {
                 SmartLog.error(error, { context: "Failed to listen to messages" });
                 chatHistoryEl.innerHTML = '<p class="text-red-500 text-sm text-center">שגיאה בטעינת הודעות</p>';
             });
+        }
+        
+        // [NEW v37]
+        function createMessageBubble(msg) {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'flex flex-col';
+            let bubbleClass = '';
+            let senderName = '';
+            
+            if (msg.type === 'message_to_admin') {
+                bubbleClass = 'chat-bubble chat-bubble-customer';
+                senderName = msg.senderName || 'אני';
+                wrapper.classList.add('items-end'); // [FIX v37] Customer messages on right
+            } else if (msg.type === 'notification_to_customer') {
+                bubbleClass = 'chat-bubble chat-bubble-admin';
+                senderName = msg.senderName || 'מנהל';
+                wrapper.classList.add('items-start');
+            } else if (msg.sender === 'bot') { 
+                bubbleClass = 'chat-bubble chat-bubble-bot';
+                senderName = '🤖 בוט שירות';
+                wrapper.classList.add('items-start');
+            } else {
+                 return wrapper; // Don't render unknown types
+            }
+            
+            const time = msg.timestamp ? new Date(msg.timestamp.seconds * 1000).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' }) : '';
+            
+            let msgText = msg.text || '';
+            const urlRegex = /(https?:\/\/[^\s]+)/g;
+            if (urlRegex.test(msgText)) {
+                msgText = msgText.replace(urlRegex, (url) => `<a href="${url}" target="_blank" rel="noopener noreferrer">${url.includes('drive.google') ? 'פתח קובץ מצורף' : 'פתח קישור'}</a>`);
+            }
+
+            wrapper.innerHTML = `
+                <div class="${bubbleClass}">
+                    <strong class="block font-semibold">${senderName}</strong>
+                    <p class="mt-1">${msgText}</p>
+                    <span class="chat-timestamp text-right mt-2">${time}</span>
+                </div>
+            `;
+            return wrapper;
         }
         
         async function sendCustomerMessage(messageText) {
@@ -838,6 +986,7 @@
             const messageData = {
                 text: text,
                 senderName: currentCustomerData.name || 'לקוח',
+                senderId: currentCustomerData.id, // [NEW v37]
                 timestamp: serverTimestamp(),
                 type: 'message_to_admin',
                 readByViewer: false
