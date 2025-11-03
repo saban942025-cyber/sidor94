@@ -2,279 +2,162 @@
 <html lang="he" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>DeliveryMaster - דף כניסה</title>
-    <!-- 
-      DeliveryMaster - דף כניסה ראשי (v1.1)
-      - [NEW] הוספת כרטיס "אפליקציית צוות (צפייה)"
-      - [NEW] קישור לנתיב `../viewer-app/index2.html`
-      - v1.0 - בסיס
-    -->
-    
-    <!-- TailwindCSS -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>פורטל כניסה | Sidor</title>
+    <!-- טעינת Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- Icons (Feather) -->
-    <script src="https://unpkg.com/feather-icons"></script>
-    
-    <!-- Google Font: Rubik (להרגשה ישראלית מודרנית) -->
-    <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700&display=swap" rel="stylesheet">
+    <!-- טעינת אייקונים של Lucide -->
+    <script src="https://unpkg.com/lucide-react@latest/dist/umd/lucide.js"></script>
+    <!-- טעינת פונט Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
     <style>
+        /* הגדרת פונט בסיס */
         body {
-            font-family: 'Rubik', sans-serif;
-            background-color: #f3f4f6; /* gray-100 */
-        }
-        
-        /* רקע עדין */
-        body::before {
-            content: '';
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background-image: radial-gradient(circle at top right, #bfdbfe 0%, #f3f4f6 50%);
-            opacity: 0.5;
-            z-index: -1;
-        }
-        
-        .app-card {
-            background-color: white;
-            border-radius: 1.5rem; /* 24px */
-            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.03);
-            border: 1px solid #e5e7eb; /* gray-200 */
-            transition: all 0.3s ease;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
-        
-        .app-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 20px 30px -10px rgba(59, 130, 246, 0.15);
-        }
-        
-        .app-card-content {
-            padding: 1.5rem; /* 24px */
-            flex-grow: 1;
-        }
-        
-        .app-card-title {
-            font-size: 1.25rem; /* 20px */
-            font-weight: 700;
-            color: #1f2937; /* gray-800 */
-        }
-        
-        .app-card-description {
-            font-size: 0.95rem; /* 15px */
-            color: #4b5563; /* gray-600 */
-            line-height: 1.6;
-        }
-        
-        .app-card-footer {
-            padding: 1rem 1.5rem;
-            background-color: #f9fafb; /* gray-50 */
-            border-top: 1px solid #e5e7eb;
-        }
-        
-        .app-card-button {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            width: 100%;
-            padding: 0.75rem 1rem;
-            font-weight: 600;
-            font-size: 1rem;
-            border-radius: 0.75rem; /* 12px */
-            background-color: #3b82f6; /* blue-500 */
-            color: white;
-            box-shadow: 0 4px 10px -2px rgba(59, 130, 246, 0.3);
-            transition: all 0.2s ease;
-        }
-        
-        .app-card-button:hover {
-            background-color: #2563eb; /* blue-600 */
-            box-shadow: 0 7px 15px -4px rgba(59, 130, 246, 0.4);
-            transform: translateY(-2px);
-        }
-        
-        /* הלוגו המעוצב שביקשת */
-        .logo-frame {
-            padding: 0.75rem; /* 12px */
-            background: white;
-            border-radius: 1.5rem; /* 24px */
-            box-shadow: 0 10px 20px -5px rgba(0, 0, 0, 0.07);
-            display: inline-block;
-            margin-bottom: 2rem; /* 32px */
-            border: 1px solid white;
-        }
-        
-        .logo-frame img {
-            width: 80px;
-            height: 80px;
-            border-radius: 1rem; /* 16px */
+            font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
         }
 
+        /* * עיצוב העטיפה (Wrapper)
+         * במובייל: תופס מסך מלא.
+         * במחשב שולחני: הופך ל"כרטיס" מרכזי עם אפקט זכוכית.
+        */
+
+        /* עיצוב בסיס (מובייל) */
+        body {
+            background-color: #030712; /* bg-gray-950 */
+        }
+
+        #app-wrapper {
+            width: 100%;
+            height: 100vh;
+            background-color: #030712; /* bg-gray-950 */
+            transition: all 0.3s ease-in-out;
+        }
+
+        /* עיצוב מחשב שולחני (md ומעלה) */
+        @media (min-width: 768px) {
+            body {
+                /* רקע גרדיאנט יוקרתי לדסקטופ */
+                background-image: linear-gradient(to top right, #1f2937, #111827);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                height: 100vh;
+                overflow: hidden;
+            }
+
+            #app-wrapper {
+                /* הגדרת גודל "מכשיר מובייל" מדומיין */
+                max-width: 420px; /* רוחב נפוץ של מכשיר */
+                height: 90vh; /* גובה */
+                min-height: 700px;
+                max-height: 850px;
+                
+                /* אפקט העטיפה */
+                border-radius: 2.5rem; /* מעגל פינות חזק */
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.4);
+                
+                /* אפקט זכוכית (Glassmorphism) */
+                background-color: rgba(3, 7, 18, 0.8); /* bg-gray-950/80 */
+                backdrop-filter: blur(20px);
+                
+                overflow: hidden; /* חותך את התוכן לפינות המעוגלות */
+            }
+        }
     </style>
 </head>
-<body class="flex items-center justify-center min-h-screen p-4 sm:p-6">
+<body class="antialiased">
 
-    <div class="w-full max-w-5xl mx-auto">
+    <!-- עטיפת האפליקציה הראשית -->
+    <div id="app-wrapper">
         
-        <!-- כותרת ולוגו -->
-        <header class="text-center">
-            <div class="logo-frame">
-                <img src="https://i.postimg.cc/ryPT3r29/image.png" alt="DeliveryMaster Logo">
-            </div>
-            <h1 class="text-5xl font-bold text-gray-900">DeliveryMaster</h1>
-            <p class="text-xl text-gray-600 mt-3">מרכז הגישה שלך לניהול משלוחים</p>
-        </header>
+        <!--
+          מבנה פנימי של האפליקציה (Flex)
+          גורם לכך שהתוכן המרכזי יתפוס את כל הגובה
+          והכותרת התחתונה תידבק לתחתית.
+        -->
+        <div class="flex flex-col h-full text-white overflow-y-auto">
 
-        <!-- רשת האפליקציות -->
-        <main class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8 mt-12">
-            
-            <!-- 1. ניהול ראשי -->
-            <div class="app-card">
-                <div class="app-card-content">
-                    <h2 class="app-card-title mb-2">
-                        💡 ניהול ראשי (דשבורד)
-                    </h2>
-                    <p class="app-card-description">
-                        צפייה חיה במפה, מעקב אחר נהגים, רשימת הזמנות פעילות, יצירת הזמנות והיסטוריה. זהו מרכז הבקרה הראשי שלך.
-                    </p>
+            <!-- כותרת עליונה -->
+            <header class="p-6 pt-10 text-center">
+                <div class="flex justify-center items-center space-x-3 rtl:space-x-reverse">
+                    <!-- לוגו האפליקציה -->
+                    <div class="p-2 bg-indigo-600 rounded-lg">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M16.883 17.065C17.523 16.29 17.9 15.34 17.9 14.3C17.9 12.39 16.31 10.8 14.4 10.8C12.49 10.8 10.9 12.39 10.9 14.3C10.9 16.21 12.49 17.8 14.4 17.8C15.16 17.8 15.86 17.58 16.45 17.2L19 19.75L19.75 19L17.065 16.315C17.02 16.36 16.97 16.405 16.925 16.45H16.883V17.065ZM14.4 16.4C13.29 16.4 12.4 15.46 12.4 14.3C12.4 13.19 13.29 12.2 14.4 12.2C15.51 12.2 16.4 13.19 16.4 14.3C16.4 15.46 15.51 16.4 14.4 16.4Z" fill="white"/>
+                            <path d="M12.31 4.25L5.75 8.75L4.25 7.69L10.81 3.19C11.56 2.68 12.44 2.68 13.19 3.19L19.75 7.69L18.25 8.75L12.31 4.25Z" fill="white" fill-opacity="0.6"/>
+                            <path d="M19.75 11.25V7.69L18.25 8.75V11.25L13.19 14.81C12.44 15.32 11.56 15.32 10.81 14.81L4.25 11.25V7.69L5.75 8.75V11.25L10.81 14.81C11.56 15.32 12.44 15.32 13.19 14.81L19.75 11.25Z" fill="white" fill-opacity="0.6"/>
+                        </svg>
+                    </div>
+                    <h1 class="text-2xl font-bold text-white">Sidor Portal</h1>
                 </div>
-                <div class="app-card-footer">
-                    <a href="index_admin.html" class="app-card-button">
-                        <i data-feather="map" class="w-5 h-5 ml-2"></i>
-                        כניסה לדשבורד
-                    </a>
-                </div>
-            </div>
+            </header>
 
-            <!-- 2. מרכז הודעות (CRM) -->
-            <div class="app-card">
-                <div class="app-card-content">
-                    <h2 class="app-card-title mb-2">
-                        💡 מרכז הודעות (CRM)
-                    </h2>
-                    <p class="app-card-description">
-                        ממשק דמוי WhatsApp לניהול כל השיחות עם הלקוחות. כולל "מלשינון", כרטיס לקוח חכם וטעינת היסטוריה.
-                    </p>
+            <!-- תוכן מרכזי (גולל) -->
+            <main class="flex-grow p-6 pt-8">
+                <div class="text-center">
+                    <h2 class="text-3xl font-bold text-white">ברוכים הבאים</h2>
+                    <p class="mt-2 text-lg text-gray-400">אנא בחר את נתיב הכניסה שלך</p>
                 </div>
-                <div class="app-card-footer">
-                    <a href="messages_viewer.html" class="app-card-button">
-                        <i data-feather="message-square" class="w-5 h-5 ml-2"></i>
-                        כניסה להודעות
-                    </a>
-                </div>
-            </div>
-            
-            <!-- 3. [NEW] אפליקציית צוות (צפייה) -->
-            <div class="app-card">
-                <div class="app-card-content">
-                    <h2 class="app-card-title mb-2">
-                        💡 אפליקציית צוות (צפייה)
-                    </h2>
-                    <p class="app-card-description">
-                        ממשק צפייה חי לצוות הארגון. מאפשר מעקב בזמן אמת אחר נהגים, הזמנות פעילות, והתראות.
-                    </p>
-                </div>
-                <div class="app-card-footer">
-                    <!-- 
-                      הנתיב מניח ש'sidor' ו-'viewer-app' הן תיקיות אחיות
-                      תחת ה-root של השרת.
-                    -->
-                    <a href="../viewer-app/index2.html" class="app-card-button">
-                        <i data-feather="users" class="w-5 h-5 ml-2"></i>
-                        כניסה לצוות
-                    </a>
-                </div>
-            </div>
 
-            <!-- 4. הקמה מהירה (CRM Form) -->
-            <div class="app-card">
-                <div class="app-card-content">
-                    <h2 class="app-card-title mb-2">
-                        💡 הקמת לקוח + הזמנה
-                    </h2>
-                    <p class="app-card-description">
-                        טופס חכם (ב-2 שלבים) להקמה מהירה של לקוח חדש, יצירת הזמנה ראשונה עבורו, וצירוף מסמכים ישירות ל-Drive.
-                    </p>
-                </div>
-                <div class="app-card-footer">
-                    <a href="add_customers.html" class="app-card-button">
-                        <i data-feather="user-plus" class="w-5 h-5 ml-2"></i>
-                        פתח טופס הקמה
+                <!-- אזור בחירה -->
+                <div class="mt-12 grid grid-cols-1 gap-6">
+                    
+                    <!-- כרטיס 1: כניסת מנהל -->
+                    <a href="./index_admin.html" 
+                       class="group block p-6 bg-gray-900/70 border border-gray-700/50 rounded-2xl transition-all duration-300 hover:bg-gray-800/80 hover:scale-[1.03] hover:shadow-xl">
+                        <div class="flex items-center space-x-4 rtl:space-x-reverse">
+                            <!-- אייקון מנהל -->
+                            <div class="p-3 bg-indigo-600 rounded-lg">
+                                <i data-lucide="shield-check" class="w-6 h-6 text-white"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-xl font-semibold text-white">כניסת מנהל</h3>
+                                <p class="text-gray-400 text-sm mt-1">ניהול הזמנות, לקוחות וצוות</p>
+                            </div>
+                            <div class="flex-grow text-left">
+                                <i data-lucide="arrow-left" class="w-5 h-5 text-gray-600 group-hover:text-indigo-400 transition-colors rtl:hidden"></i>
+                                <i data-lucide="arrow-right" class="w-5 h-5 text-gray-600 group-hover:text-indigo-400 transition-colors ltr:hidden"></i>
+                            </div>
+                        </div>
                     </a>
-                </div>
-            </div>
 
-            <!-- 5. אפליקציית ספק (PWA) -->
-            <div class="app-card">
-                <div class="app-card-content">
-                    <h2 class="app-card-title mb-2">
-                        💡 התקנת אפליקציה
-                    </h2>
-                    <p class="app-card-description">
-                        דף ייעודי להתקנת אפליקציית הניהול על המכשיר שלך. מבקש הרשאות מיקום והתראות לחווית מובייל מלאה.
-                    </p>
-                </div>
-                <div class="app-card-footer">
-                    <a href="supplier_app.html" class="app-card-button">
-                        <i data-feather="download-cloud" class="w-5 h-5 ml-2"></i>
-                        התקן אפליקציה
+                    <!-- כרטיס 2: כניסת לקוח -->
+                    <a href="./customer.html" 
+                       class="group block p-6 bg-gray-900/70 border border-gray-700/50 rounded-2xl transition-all duration-300 hover:bg-gray-800/80 hover:scale-[1.03] hover:shadow-xl">
+                        <div class="flex items-center space-x-4 rtl:space-x-reverse">
+                            <!-- אייקון לקוח -->
+                            <div class="p-3 bg-cyan-600 rounded-lg">
+                                <i data-lucide="send" class="w-6 h-6 text-white"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-xl font-semibold text-white">כניסת לקוח</h3>
+                                <p class="text-gray-400 text-sm mt-1">פתיחת הזמנה חדשה ומעקב</p>
+                            </div>
+                            <div class="flex-grow text-left">
+                                <i data-lucide="arrow-left" class="w-5 h-5 text-gray-600 group-hover:text-cyan-400 transition-colors rtl:hidden"></i>
+                                <i data-lucide="arrow-right" class="w-5 h-5 text-gray-600 group-hover:text-cyan-400 transition-colors ltr:hidden"></i>
+                            </div>
+                        </div>
                     </a>
-                </div>
-            </div>
 
-            <!-- 6. מערכת לוגים -->
-            <div class="app-card">
-                <div class="app-card-content">
-                    <h2 class="app-card-title mb-2">
-                        💡 מערכת לוגים
-                    </h2>
-                    <p class="app-card-description">
-                        דף טכני מתקדם לצפייה בלוגים של המערכת. כולל סינון לפי רמות (שגיאות, מידע) ותרגום הודעות לעברית.
-                    </p>
                 </div>
-                <div class="app-card-footer">
-                    <a href="log_viewer.html" class="app-card-button">
-                        <i data-feather="file-text" class="w-5 h-5 ml-2"></i>
-                        פתח לוגים
-                    </a>
-                </div>
-            </div>
+            </main>
 
-            <!-- 7. קישור לדוגמה ללקוח (מושבת) -->
-            <div class="app-card opacity-60">
-                <div class="app-card-content">
-                    <h2 class="app-card-title mb-2">
-                        💡 מעקב לקוח (דוגמה)
-                    </h2>
-                    <p class="app-card-description">
-                        זוהי תצוגת הלקוח. אין כניסה ישירה לדף זה; יש לשלוח ללקוח לינק ייעודי מתוך הדשבורד (דרך "העתק לינק").
-                    </p>
-                </div>
-                <div class="app-card-footer">
-                    <a href="customer.html" class="app-card-button bg-gray-400 cursor-not-allowed" onclick="return false;">
-                        <i data-feather="eye" class="w-5 h-5 ml-2"></i>
-                        תצוגת לקוח
-                    </a>
-                </div>
-            </div>
+            <!-- כותרת תחתונה -->
+            <footer class="p-6 text-center text-gray-600 text-xs">
+                &copy; 2025 Sidor Systems. כל הזכויות שמורות.
+            </footer>
 
-        </main>
-        
-        <footer class="text-center mt-12 text-gray-500">
-            © 2024 DeliveryMaster
-        </footer>
+        </div>
     </div>
 
+    <!-- הפעלת האייקונים -->
     <script>
-        feather.replace();
+        lucide.createIcons();
     </script>
-
 </body>
 </html>
-
