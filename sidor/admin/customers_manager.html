@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>מנהל ראשי - DeliveryMaster</title>
+    <title>ניהול לקוחות - DeliveryMaster</title>
     
-    <!-- קישור לקובץ העיצוב -->
-    <link rel="stylesheet" href="index.style.css">
+    <!-- קישור לקובץ העיצוב הייעודי -->
+    <link rel="stylesheet" href="customers_manager.css">
     
     <!-- Icons (Feather) -->
     <script src="https://unpkg.com/feather-icons"></script>
@@ -14,11 +14,10 @@
     <!-- Google Font: Rubik & Inter -->
     <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
 
-    <!-- Preload critical CSS -->
+    <!-- סגנון טעינה ראשוני למניעת הבהוב -->
     <style>
         body {
             font-family: 'Inter', 'Rubik', sans-serif;
-            background-color: #f3f4f6;
             margin: 0;
             overflow: hidden;
         }
@@ -32,7 +31,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            height: 100vh;
+            height: 100%;
         }
         .loader {
             border: 4px solid #f3f3f3;
@@ -43,51 +42,56 @@
             animation: spin 1s linear infinite;
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .hidden { display: none; }
     </style>
 </head>
 <body>
     
-    <!-- Background Gradient -->
+    <!-- רקע גרדיאנט קבוע -->
     <div class="app-background"></div>
 
-    <!-- Toast Container -->
+    <!-- מארז התראות (Toast) -->
     <div id="toast-container"></div>
 
-    <!-- Modals -->
-    <div id="modal-overlay" class_alias="modal-overlay" class="hidden" onclick="closeAllModals()"></div>
+    <!-- שכבת רקע למודאלים -->
+    <div id="modal-overlay" class="modal-overlay hidden" onclick="closeAllModals()"></div>
     
-    <div id="edit-customer-modal" class_alias="modal-content" class="hidden">
-        <!-- Content injected by JS -->
+    <!-- מודאלים (תוכן מוזרק ע"י JS) -->
+    <div id="history-modal" class="modal-content hidden">
+        <!-- תוכן היסטוריית הזמנות יוזרק לכאן -->
     </div>
-    <div id="history-modal" class_alias="modal-content" class="hidden">
-        <!-- Content injected by JS -->
+    <div id="new-order-modal" class="modal-content hidden">
+        <!-- תוכן יצירת הזמנה חדשה יוזרק לכאן -->
     </div>
-    <div id="new-order-modal" class_alias="modal-content" class="hidden">
-        <!-- Content injected by JS -->
+    
+    <!-- [חדש] מודאל אישור (מחליף confirm) -->
+    <div id="confirm-modal" class="modal-content hidden">
+        <!-- תוכן אישור מחיקה יוזרק לכאן -->
     </div>
 
-    <!-- Main Glassmorphism Wrapper -->
+
+    <!-- מארז Glassmorphism ראשי -->
     <div class="glass-wrapper">
-        <!-- Left Navigation -->
+        <!-- ניווט צד ימין -->
         <nav id="navbar">
             <div class="nav-header">
-                <i data-feather="truck" class="w-8 h-8 text-blue-400"></i>
+                <i data-feather="truck" style="width: 32px; height: 32px; color: #3b82f6;"></i>
                 <span class="nav-title">DeliveryMaster</span>
             </div>
             <div class="nav-links">
-                <a href="#" id="dashboardBtn" class="nav-link active">
+                <a href="#" id="dashboardBtn" class="nav-link">
                     <i data-feather="map"></i><span>דשבורד</span>
                 </a>
-                <a href="#" id="clientsBtn" class="nav-link">
+                <a href="#" id="clientsBtn" class="nav-link active">
                     <i data-feather="users"></i><span>ניהול לקוחות</span>
                 </a>
                 <a href="#" id="historyBtn" class="nav-link">
                     <i data-feather="archive"></i><span>היסטוריית הזמנות</span>
                 </a>
-                <a href="#" id="messagesBtn" class="nav-link">
+                <a href="../messages_viewer.html" target="_blank" id="messagesBtn" class="nav-link">
                     <i data-feather="message-square"></i><span>מרכז הודעות</span>
                 </a>
-                <a href="#" id="logsBtn" class="nav-link">
+                <a href="../log_viewer.html" target="_blank" id="logsBtn" class="nav-link">
                     <i data-feather="file-text"></i><span>לוגים</span>
                 </a>
             </div>
@@ -98,21 +102,21 @@
             </div>
         </nav>
 
-        <!-- Center Content Area -->
+        <!-- אזור תוכן מרכזי -->
         <main id="main-content">
             <header class="main-header">
                 <h1 id="main-title" class="text-2xl font-bold">ניהול לקוחות</h1>
                 <div class="search-bar">
-                    <input type="text" id="search-input" class="form-input" placeholder="חפש לקוח...">
+                    <input type="text" id="search-input" class="form-input" placeholder="חפש לקוח (שם, טלפון, מס' לקוח)...">
                     <i data-feather="search" class="search-icon"></i>
                 </div>
             </header>
             <div id="content-area" class="content-area">
-                <!-- Loader -->
+                <!-- טוען ראשי -->
                 <div id="main-loader" class="loader-container">
                     <div class="loader"></div>
                 </div>
-                <!-- Customer table will be injected here -->
+                <!-- טבלת לקוחות (מוסתרת בטעינה) -->
                 <div class="table-container hidden">
                     <table class="data-grid">
                         <thead>
@@ -126,31 +130,41 @@
                             </tr>
                         </thead>
                         <tbody id="customer-table-body">
-                            <!-- Rows injected by JS -->
+                            <!-- שורות יוזרקו לכאן ע"י JS -->
                         </tbody>
                     </table>
                 </div>
             </div>
         </main>
 
-        <!-- Right Details Panel -->
+        <!-- פאנל פרטים צדדי (לעריכה) -->
         <aside id="details-panel" class="hidden">
             <button class="close-panel-btn" onclick="closeDetailsPanel()">
                 <i data-feather="x"></i>
             </button>
             <div id="details-content">
-                <!-- Content injected by JS -->
+                <!-- תוכן עריכת לקוח יוזרק לכאן -->
             </div>
         </aside>
     </div>
 
     <!-- Firebase SDKs -->
-    <script type="module" src="index.logic.js"></script>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getAuth } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+        import { getFirestore } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        // הלוגיקה הראשית תטען את שאר הפונקציות
+    </script>
+    
+    <!-- קישור לקובץ הלוגיקה הייעודי -->
+    <script type="module" src="customers_manager.js"></script>
+    
     <script>
-        // Load Feather icons
+        // הפעלת אייקונים
         document.addEventListener('DOMContentLoaded', () => {
             feather.replace();
         });
     </script>
 </body>
 </html>
+
