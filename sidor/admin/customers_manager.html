@@ -3,130 +3,117 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>ניהול לקוחות והזמנות</title>
+    <title>מנהל ראשי - DeliveryMaster</title>
     
     <!-- קישור לקובץ העיצוב -->
-    <link rel="stylesheet" href="customers_manager.css">
+    <link rel="stylesheet" href="index.style.css">
     
     <!-- Icons (Feather) -->
     <script src="https://unpkg.com/feather-icons"></script>
     
     <!-- Google Font: Rubik & Inter -->
     <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
-</head>
-<body class="bg-gradient">
 
-    <!-- [NEW] Toast Container -->
+    <!-- Preload critical CSS -->
+    <style>
+        body {
+            font-family: 'Inter', 'Rubik', sans-serif;
+            background-color: #f3f4f6;
+            margin: 0;
+            overflow: hidden;
+        }
+        .app-background {
+            position: fixed;
+            inset: 0;
+            background-image: linear-gradient(120deg, #a1c4fd 0%, #c2e9fb 100%);
+            z-index: -1;
+        }
+        .loader-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+        }
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3b82f6;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    
+    <!-- Background Gradient -->
+    <div class="app-background"></div>
+
+    <!-- Toast Container -->
     <div id="toast-container"></div>
 
-    <!-- [NEW] Modal Overlay -->
-    <div id="modal-overlay" class="modal-overlay hidden" onclick="closeAllModals()"></div>
+    <!-- Modals -->
+    <div id="modal-overlay" class_alias="modal-overlay" class="hidden" onclick="closeAllModals()"></div>
     
-    <!-- [NEW] Edit Customer Modal -->
-    <div id="edit-customer-modal" class_alias="modal" class="modal-content hidden">
-        <form id="edit-customer-form" class="modal-form">
-            <h3 id="edit-modal-title" class="modal-title">עריכת פרטי לקוח</h3>
-            <input type="hidden" id="edit-customer-id">
-            <div class="form-grid">
-                <div>
-                    <label for="edit-customer-number">מספר לקוח</label>
-                    <input type="text" id="edit-customer-number" class="form-input">
-                </div>
-                <div>
-                    <label for="edit-customer-name">שם לקוח</label>
-                    <input type="text" id="edit-customer-name" class="form-input" required>
-                </div>
-                <div>
-                    <label for="edit-customer-phone">טלפון</label>
-                    <input type="tel" id="edit-customer-phone" class="form-input">
-                </div>
-                <div>
-                    <label for="edit-customer-status">סטטוס</label>
-                    <select id="edit-customer-status" class="form-input">
-                        <option value="active">פעיל</option>
-                        <option value="pending">ממתין</option>
-                        <option value="blocked">חסום</option>
-                    </select>
-                </div>
-            </div>
-            <div class="modal-actions">
-                <button type="button" class="btn btn-secondary" onclick="closeAllModals()">ביטול</button>
-                <button type="submit" class="btn btn-primary">שמור שינויים</button>
-            </div>
-        </form>
+    <div id="edit-customer-modal" class_alias="modal-content" class="hidden">
+        <!-- Content injected by JS -->
     </div>
-    
-    <!-- [NEW] View History Modal -->
-    <div id="history-modal" class="modal-content hidden">
-        <div class="modal-form">
-            <h3 id="history-modal-title" class="modal-title">היסטוריית הזמנות</h3>
-            <div id="history-modal-content" class="modal-body">
-                <p>טוען היסטוריה...</p>
-                <!-- History items will be injected here -->
-            </div>
-            <div class="modal-actions">
-                <button type="button" class="btn btn-secondary" onclick="closeAllModals()">סגור</button>
-            </div>
-        </div>
+    <div id="history-modal" class_alias="modal-content" class="hidden">
+        <!-- Content injected by JS -->
     </div>
-    
-    <!-- [NEW] New Order Modal -->
-    <div id="new-order-modal" class="modal-content hidden">
-        <form id="new-order-form" class="modal-form">
-            <h3 id="new-order-modal-title" class="modal-title">יצירת הזמנה חדשה</h3>
-            <input type="hidden" id="new-order-customer-id">
-            <div>
-                <label for="new-order-notes">תוכן ההזמנה</label>
-                <textarea id="new-order-notes" class="form-input" rows="4" placeholder="לדוגמה: 10 בלוק 20, 5 מלט..."></textarea>
-            </div>
-            <div class="modal-actions">
-                <button type="button" class="btn btn-secondary" onclick="closeAllModals()">ביטול</button>
-                <button type="submit" class="btn btn-primary">צור הזמנה</button>
-            </div>
-        </form>
-    </div>
-    
-    <!-- [NEW] Delete Confirmation Modal -->
-    <div id="delete-confirm-modal" class="modal-content hidden">
-        <div class="modal-form">
-            <h3 class="modal-title">אישור מחיקה</h3>
-            <p id="delete-confirm-text" class="mb-4">האם אתה בטוח שברצונך למחוק לקוח זה? פעולה זו אינה הפיכה.</p>
-            <input type="hidden" id="delete-customer-id">
-            <div class="modal-actions">
-                <button type="button" class="btn btn-secondary" onclick="closeAllModals()">ביטול</button>
-                <button type="button" id="delete-confirm-btn" class="btn btn-danger">מחק</button>
-            </div>
-        </div>
+    <div id="new-order-modal" class_alias="modal-content" class="hidden">
+        <!-- Content injected by JS -->
     </div>
 
-
-    <!-- Glassmorphism Wrapper -->
+    <!-- Main Glassmorphism Wrapper -->
     <div class="glass-wrapper">
-        <header class="app-header">
-            <h1 class="text-2xl font-bold">ניהול לקוחות והזמנות</h1>
-            <a href="../index_admin.html" class="back-link" title="חזרה לדשבורד הראשי">
-                <i data-feather="arrow-left-circle"></i>
-                <span>חזרה</span>
-            </a>
-        </header>
-
-        <!-- Main Content -->
-        <main class="app-content">
-            <!-- Navigation & Search -->
-            <nav class="app-nav">
-                <div class="nav-tabs">
-                    <button id="nav-customers-btn" class="nav-tab active" onclick="showView('customers')">לקוחות</button>
-                    <button id="nav-orders-btn" class="nav-tab" onclick="showView('orders')">כל ההזמנות</button>
+        <!-- Left Navigation -->
+        <nav id="navbar">
+            <div class="nav-header">
+                <i data-feather="truck" class="w-8 h-8 text-blue-400"></i>
+                <span class="nav-title">DeliveryMaster</span>
+            </div>
+            <div class="nav-links">
+                <a href="#" id="dashboardBtn" class="nav-link active">
+                    <i data-feather="map"></i><span>דשבורד</span>
+                </a>
+                <a href="#" id="clientsBtn" class="nav-link">
+                    <i data-feather="users"></i><span>ניהול לקוחות</span>
+                </a>
+                <a href="#" id="historyBtn" class="nav-link">
+                    <i data-feather="archive"></i><span>היסטוריית הזמנות</span>
+                </a>
+                <a href="#" id="messagesBtn" class="nav-link">
+                    <i data-feather="message-square"></i><span>מרכז הודעות</span>
+                </a>
+                <a href="#" id="logsBtn" class="nav-link">
+                    <i data-feather="file-text"></i><span>לוגים</span>
+                </a>
+            </div>
+            <div class="nav-footer">
+                <div id="auth-status" class="auth-status">
+                    מתחבר...
                 </div>
+            </div>
+        </nav>
+
+        <!-- Center Content Area -->
+        <main id="main-content">
+            <header class="main-header">
+                <h1 id="main-title" class="text-2xl font-bold">ניהול לקוחות</h1>
                 <div class="search-bar">
-                    <input type="text" id="search-input" class="form-input" placeholder="חפש לקוח או הזמנה...">
+                    <input type="text" id="search-input" class="form-input" placeholder="חפש לקוח...">
                     <i data-feather="search" class="search-icon"></i>
                 </div>
-            </nav>
-
-            <!-- Customers View -->
-            <div id="view-customers" class="data-view active">
-                <div class="table-container">
+            </header>
+            <div id="content-area" class="content-area">
+                <!-- Loader -->
+                <div id="main-loader" class="loader-container">
+                    <div class="loader"></div>
+                </div>
+                <!-- Customer table will be injected here -->
+                <div class="table-container hidden">
                     <table class="data-grid">
                         <thead>
                             <tr>
@@ -139,50 +126,26 @@
                             </tr>
                         </thead>
                         <tbody id="customer-table-body">
-                            <!-- Loader Row -->
-                            <tr>
-                                <td colspan="6" class="text-center p-8">
-                                    <div class="loader"></div>
-                                    <p class="text-gray-500">טוען לקוחות...</p>
-                                </td>
-                            </tr>
-                            <!-- Customer rows will be injected here -->
+                            <!-- Rows injected by JS -->
                         </tbody>
                     </table>
                 </div>
             </div>
-            
-            <!-- All Orders View -->
-            <div id="view-orders" class="data-view hidden">
-                <div class="table-container">
-                    <table class="data-grid">
-                        <thead>
-                            <tr>
-                                <th>מס' הזמנה</th>
-                                <th>שם לקוח</th>
-                                <th>תוכן</th>
-                                <th>סטטוס</th>
-                                <th>תאריך יצירה</th>
-                            </tr>
-                        </thead>
-                        <tbody id="order-table-body">
-                            <tr>
-                                <td colspan="5" class="text-center p-8">
-                                    <div class="loader"></div>
-                                    <p class="text-gray-500">טוען הזמנות...</p>
-                                </td>
-                            </tr>
-                            <!-- Order rows will be injected here -->
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
         </main>
+
+        <!-- Right Details Panel -->
+        <aside id="details-panel" class="hidden">
+            <button class="close-panel-btn" onclick="closeDetailsPanel()">
+                <i data-feather="x"></i>
+            </button>
+            <div id="details-content">
+                <!-- Content injected by JS -->
+            </div>
+        </aside>
     </div>
 
     <!-- Firebase SDKs -->
-    <script type="module" src="customers_manager.js"></script>
+    <script type="module" src="index.logic.js"></script>
     <script>
         // Load Feather icons
         document.addEventListener('DOMContentLoaded', () => {
