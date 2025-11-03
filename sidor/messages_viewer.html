@@ -3,22 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>מרכז הודעות (v4.3 - Bot Flow)</title>
+    <title>מרכז הודעות (v5.0 - Glassmorphism)</title>
     <!-- 
-      DeliveryMaster Admin - מרכז הודעות v4.3 (Bot Flow)
+      DeliveryMaster Admin - מרכז הודעות v5.0 (Glassmorphism + Bot)
       
       Changelog:
-      - [NEW v4.3] הוספת לוגיקת "זרימת בוט/נציג" (מבוסס על התוכנית):
-        - המערכת מניחה שקיים שדה `assignedAgent` על מסמך ה-Order.
-        - `null` = בוט, `agentId` = נציג אנושי.
-      - [NEW v4.3] הוספת לשוניות סינון: "דורש טיפול" (ברירת מחדל) ו"כל השיחות".
-      - [NEW v4.3] `renderConversationList` מסנן כעת שיחות לפי הלשונית הפעילה.
-      - [NEW v4.3] `sendAdminReply` כעת משייך אוטומטית את השיחה לנציג השולח
-        (מפעיל `escalateToHuman` לפני שליחה).
-      - [NEW v4.3] כרטיס הלקוח מציג כעת את הנציג המשויך.
-      - [FIX v4.2] תיקון כפתור "חזור" במובייל (`event.stopPropagation()`).
-      - [FIX v4.1] תיקון באג `TypeError: doc is not a function`.
-      - [NEW v4.0] בסיס CRM עם 3 עמודות.
+      - [NEW v5.0] Glassmorphism UI:
+        - הוספת עטיפת "זכוכית" (glassmorphism) לכל האפליקציה.
+        - עדכון רקעים וגופנים (Inter/Rubik) לעיצוב מודרני.
+      - [NEW v5.0] Bot/Agent Flow:
+        - הוספת כפתור "השתלט על השיחה" (Force Takeover) בכרטיס הלקוח.
+        - הטמעת פונקציית `escalateToHuman` שמשייכת שיחה למנהל.
+        - `sendAdminReply` מוודא שהשיחה משויכת למנהל לפני שליחה.
+        - עדכון חיווי "משויך ל:" בכרטיס הלקוח (בוט / בטיפולך).
+      - [NEW v5.0] חווית צ'אט:
+        - הוספת "וי קריאה" (✔️) להודעות נכנסות ויוצאות.
+        - חיווי הקלדה "...מקליד ✍️" מופעל על ידי `order.customerIsTyping`.
+      - [FIX v4.x] תיקון באגים קריטיים (doc is not function, mobile back button).
     -->
     
     <!-- TailwindCSS -->
@@ -28,40 +29,68 @@
     <script src="https://unpkg.com/feather-icons"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
-    <!-- Google Font: Inter -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <!-- Google Font: Rubik & Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
 
     <style>
         :root {
             --primary-color: #3b82f6; /* blue-500 */
             --bg-light: #f3f4f6; /* gray-100 */
-            --bg-app-light: #f9fafb; /* gray-50 */
-            --border-color: #e5e7eb; /* gray-200 */
+            --bg-app-light: rgba(249, 250, 251, 0.7); /* gray-50 w/ opacity */
+            --border-color: rgba(229, 231, 235, 0.7); /* gray-200 w/ opacity */
             --text-dark: #1f2937; /* gray-800 */
             --text-light: #6b7280; /* gray-500 */
             --chat-bg-color: #e5ddd5; 
         }
         html.dark {
              --bg-light: #1f2937;
-             --bg-app-light: #374151;
-             --border-color: #4b5563;
+             --bg-app-light: rgba(55, 65, 81, 0.7); /* gray-700 w/ opacity */
+             --border-color: rgba(75, 85, 99, 0.7); /* gray-600 w/ opacity */
              --text-dark: #f3f4f6;
              --text-light: #9ca3af;
              --chat-bg-color: #0d1418;
         }
 
         body {
-            font-family: 'Inter', 'Arial', sans-serif;
+            font-family: 'Inter', 'Rubik', sans-serif;
             background-color: var(--bg-light);
             color: var(--text-dark);
             overflow: hidden;
             height: 100vh;
+            /* [NEW v5.0] Background gradient */
+            background-image: linear-gradient(120deg, #a1c4fd 0%, #c2e9fb 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem; /* Padding for the glass wrapper */
         }
         
+        /* [NEW v5.0] Glassmorphism Wrapper */
+        .glass-wrapper {
+            width: 100%;
+            height: 100%;
+            max-width: 1600px; /* Max width for desktop */
+            height: calc(100vh - 2rem);
+            background: var(--bg-glass-light);
+            backdrop-filter: blur(24px) saturate(180%);
+            -webkit-backdrop-filter: blur(24px) saturate(180%);
+            border: 1px solid var(--border-color-light);
+            border-radius: 1.5rem; /* 2xl */
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.1);
+            overflow: hidden; /* Crucial for rounded corners */
+        }
+        html.dark .glass-wrapper {
+            background: var(--bg-glass-dark);
+            border: 1px solid var(--border-color-dark);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
+        }
+
+        
+        /* [NEW v4.0] Layout: 3 Columns */
         .chat-app-layout {
             display: grid;
             grid-template-columns: 350px 1fr 0px; 
-            height: 100vh;
+            height: 100%;
             overflow: hidden;
             transition: grid-template-columns 0.3s ease;
         }
@@ -77,15 +106,15 @@
             overflow-y: auto;
         }
         #chat-window {
-            background-color: white;
+            background-color: transparent; /*[FIX v5.0]*/
             display: flex;
             flex-direction: column;
             border-left: 1px solid var(--border-color);
         }
-        html.dark #chat-window { background-color: #111b21; }
+        html.dark #chat-window { background-color: transparent; }
 
         #customer-profile-panel {
-            background-color: #ffffff;
+            background-color: rgba(255, 255, 255, 0.8);
             html.dark & { background-color: var(--bg-app-light); }
             border-left: 1px solid var(--border-color);
             display: flex;
@@ -127,9 +156,10 @@
             cursor: pointer;
             text-align: center;
             transition: all 0.2s;
+            border: 1px solid transparent;
         }
         .tab-button:hover {
-            background-color: #ffffff;
+            background-color: rgba(255, 255, 255, 0.7);
             html.dark & { background-color: #4b5563; }
         }
         .tab-button.active {
@@ -140,10 +170,10 @@
 
         /* Conversation List Item */
         .conv-item { cursor: pointer; transition: background-color 0.2s; }
-        .conv-item:hover { background-color: #ffffff; }
+        .conv-item:hover { background-color: rgba(255, 255, 255, 0.7); }
         html.dark .conv-item:hover { background-color: #2a3942; }
         .conv-item.active {
-            background-color: #ffffff;
+            background-color: rgba(255, 255, 255, 0.9);
             border-right: 4px solid var(--primary-color);
         }
         html.dark .conv-item.active { background-color: #2a3942; }
@@ -167,7 +197,7 @@
             cursor: pointer;
             background-color: var(--bg-app-light);
         }
-        #chat-header:hover { background-color: #ffffff; }
+        #chat-header:hover { background-color: rgba(255, 255, 255, 0.9); }
         html.dark #chat-header:hover { background-color: #2a3942; }
 
         #chat-history {
@@ -229,8 +259,9 @@
             direction: ltr; 
         }
         .read-receipt {
-            font-size: 1rem; 
+            font-size: 0.9rem;
             color: var(--text-light);
+            line-height: 1;
         }
         .read-receipt.read {
             color: #53bdeb; /* Blue ticks */
@@ -332,6 +363,13 @@
         
         /* Mobile View */
         @media (max-width: 1024px) { /* Changed breakpoint */
+            body { padding: 0; }
+            .glass-wrapper {
+                margin: 0;
+                height: 100vh;
+                width: 100vw;
+                border-radius: 0;
+            }
             .chat-app-layout {
                 grid-template-columns: 1fr;
             }
@@ -414,180 +452,187 @@
     
     <!-- [NEW v4.0] Mobile Overlay for Profile -->
     <div id="profile-overlay-mobile" class="md:hidden" onclick="toggleProfilePanel()"></div>
-
-    <!-- Main Layout -->
-    <div id="main-layout" class="chat-app-layout">
-        
-        <!-- 1. Conversation List (Sidebar) -->
-        <aside id="conversation-list">
-            <!-- Header -->
-            <header class="p-4 border-b border-gray-200 flex-shrink-0">
-                <h1 class="text-2xl font-bold">שיחות</h1>
-                <div class="relative mt-2">
-                    <input type="text" id="search-conversations" placeholder="חפש שיחה..." class="w-full p-2 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <i data-feather="search" class="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400"></i>
-                </div>
-            </header>
+    
+    <!-- [NEW v5.0] Main Glassmorphism Wrapper -->
+    <div class="glass-wrapper">
+        <!-- Main Layout -->
+        <div id="main-layout" class="chat-app-layout">
             
-            <!-- [NEW v4.3] Filter Tabs -->
-            <div class="filter-tabs flex-shrink-0">
-                <button class="tab-button active" onclick="setConversationFilter('pending')">דורש טיפול</button>
-                <button class="tab-button" onclick="setConversationFilter('all')">כל השיחות</button>
-            </div>
-            
-            <!-- List -->
-            <div id="conv-list-container" class="flex-1 overflow-y-auto">
-                <div id="conv-loading" class="text-center text-gray-500 py-10">
-                    <div class="loader"></div>
-                    <span class="block mt-2">טוען שיחות...</span>
-                </div>
-                <!-- Conversation items will be injected here -->
-            </div>
-        </aside>
-        
-        <!-- 2. Chat Window -->
-        <main id="chat-window">
-            <!-- Default "Empty" State -->
-            <div id="chat-empty-state" class="flex flex-col items-center justify-center h-full text-center p-4">
-                <i data-feather="message-circle" class="w-24 h-24 text-gray-300"></i>
-                <h2 class="text-2xl font-semibold mt-4">בחר שיחה</h2>
-                <p class="text-gray-500 mt-2">בחר שיחה מהרשימה בצד ימין כדי להתחיל.</p>
-                <a href="index_admin.html" class="mt-4 text-sm text-blue-500 hover:underline">
-                    &rarr; חזרה לדשבורד הראשי
-                </a>
-            </div>
-            
-            <!-- Active Chat State (Hidden by default) -->
-            <div id="chat-active-state" class="hidden flex-1 flex flex-col">
-                <!-- Chat Header -->
-                <header id="chat-header" class="p-4 flex-shrink-0 flex items-center gap-4" onclick="toggleProfilePanel()">
-                    <!-- [FIX v4.2] Added stopPropagation to fix mobile click -->
-                    <button id="mobile-back-btn" class="md:hidden" onclick="event.stopPropagation(); closeActiveChat()">
-                        <i data-feather="arrow-right"></i>
-                    </button>
-                    <div class="w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold text-xl flex-shrink-0">
-                        <span id="chat-header-initials"></span>
-                    </div>
-                    <div>
-                        <h3 class="font-bold text-lg" id="chat-header-name"></h3>
-                        <p class="text-sm text-gray-600" id="chat-header-order-id"></p>
-                        <!-- [NEW v4.3] Typing Indicator -->
-                        <p id="typing-indicator" class="text-sm text-blue-500 hidden">...מקליד ✍️</p>
+            <!-- 1. Conversation List (Sidebar) -->
+            <aside id="conversation-list">
+                <!-- Header -->
+                <header class="p-4 border-b border-gray-200 flex-shrink-0">
+                    <h1 class="text-2xl font-bold">שיחות</h1>
+                    <div class="relative mt-2">
+                        <input type="text" id="search-conversations" placeholder="חפש שיחה..." class="w-full p-2 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <i data-feather="search" class="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400"></i>
                     </div>
                 </header>
                 
-                <!-- Chat History -->
-                <div id="chat-history" class="flex-1 overflow-y-auto p-4 space-y-2 flex flex-col">
-                    <!-- Bubbles injected here -->
+                <!-- [NEW v4.3] Filter Tabs -->
+                <div class="filter-tabs flex-shrink-0">
+                    <button class="tab-button active" onclick="setConversationFilter('pending')">דורש טיפול</button>
+                    <button class="tab-button" onclick="setConversationFilter('all')">כל השיחות</button>
                 </div>
                 
-                <!-- Chat Input -->
-                <footer id="chat-input-bar" class="p-4 bg-gray-50 flex-shrink-0">
-                    <div class="flex gap-2">
-                        <button id="quick-reply-toggle" class="bg-gray-200 text-gray-700 p-3 rounded-lg shadow-sm hover:bg-gray-300">
-                            <i class="fas fa-bolt"></i>
-                        </button>
-                        <input type="text" id="chat-input" class="flex-grow p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="הקלד תשובה...">
-                        <button id="chat-send-btn" class="bg-blue-600 text-white p-3 rounded-lg shadow hover:bg-blue-700">
-                            <i data-feather="send"></i>
-                        </button>
+                <!-- List -->
+                <div id="conv-list-container" class="flex-1 overflow-y-auto">
+                    <div id="conv-loading" class="text-center text-gray-500 py-10">
+                        <div class="loader"></div>
+                        <span class="block mt-2">טוען שיחות...</span>
                     </div>
-                </footer>
-            </div>
-        </main>
-        
-        <!-- 3. [NEW v4.0] Customer Profile Panel -->
-        <aside id="customer-profile-panel">
-            <header class="p-4 flex-shrink-0 flex items-center justify-between border-b border-gray-200">
-                <h2 class="text-xl font-bold text-gray-800">כרטיס לקוח</h2>
-                <button onclick="toggleProfilePanel()" class="text-gray-500 hover:text-gray-700">
-                    <i data-feather="x" class="w-6 h-6"></i>
-                </button>
-            </header>
+                    <!-- Conversation items will be injected here -->
+                </div>
+            </aside>
             
-            <!-- Profile Content -->
-            <div id="profile-content-loading" class="text-center p-10">
-                <div class="loader loader-small"></div>
-                <p class="text-sm text-gray-500">טוען פרטי לקוח...</p>
-            </div>
-            
-            <div id="profile-content" class="hidden">
-                <!-- Section 1: Customer Details -->
-                <div class="profile-section space-y-2">
-                    <div class="text-center mb-4">
-                        <div class="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold text-3xl mx-auto">
-                            <span id="profile-initials"></span>
+            <!-- 2. Chat Window -->
+            <main id="chat-window">
+                <!-- Default "Empty" State -->
+                <div id="chat-empty-state" class="flex flex-col items-center justify-center h-full text-center p-4">
+                    <i data-feather="message-circle" class="w-24 h-24 text-gray-300"></i>
+                    <h2 class="text-2xl font-semibold mt-4">בחר שיחה</h2>
+                    <p class="text-gray-500 mt-2">בחר שיחה מהרשימה בצד ימין כדי להתחיל.</p>
+                    <a href="index_admin.html" class="mt-4 text-sm text-blue-500 hover:underline">
+                        &rarr; חזרה לדשבורד הראשי
+                    </a>
+                </div>
+                
+                <!-- Active Chat State (Hidden by default) -->
+                <div id="chat-active-state" class="hidden flex-1 flex flex-col">
+                    <!-- Chat Header -->
+                    <header id="chat-header" class="p-4 flex-shrink-0 flex items-center gap-4" onclick="toggleProfilePanel()">
+                        <!-- [FIX v4.2] Added stopPropagation to fix mobile click -->
+                        <button id="mobile-back-btn" class="md:hidden" onclick="event.stopPropagation(); closeActiveChat()">
+                            <i data-feather="arrow-right"></i>
+                        </button>
+                        <div class="w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold text-xl flex-shrink-0">
+                            <span id="chat-header-initials"></span>
                         </div>
-                        <h3 class="font-bold text-lg mt-2" id="profile-name"></h3>
-                    </div>
-                    <div class="profile-detail">
-                        <strong>מס' לקוח:</strong> <span id="profile-customer-number"></span>
-                    </div>
-                    <div class="profile-detail">
-                        <strong>טלפון:</strong> <a href="#" id="profile-phone" class="text-blue-500 hover:underline"></a>
-                    </div>
-                    <div class="profile-detail">
-                        <strong>כתובת:</strong> <span id="profile-address"></span>
-                    </div>
-                    <!-- [NEW v4.3] Assigned Agent -->
-                    <div class="profile-detail">
-                        <strong>משויך ל:</strong> <span id="profile-agent" class="font-semibold text-green-600"></span>
+                        <div>
+                            <h3 class="font-bold text-lg" id="chat-header-name"></h3>
+                            <p class="text-sm text-gray-600" id="chat-header-order-id"></p>
+                            <!-- [NEW v4.3] Typing Indicator -->
+                            <p id="typing-indicator" class="text-sm text-blue-500 hidden">...מקליד ✍️</p>
+                        </div>
+                    </header>
+                    
+                    <!-- Chat History -->
+                    <div id="chat-history" class="flex-1 overflow-y-auto p-4 space-y-2 flex flex-col">
+                        <!-- Bubbles injected here -->
                     </div>
                     
-                    <!-- [NEW v4.3] Manager Tool -->
-                    <div class="mt-4">
-                        <button id="new-order-for-customer-btn" class="w-full py-2 px-4 bg-blue-500 text-white text-sm font-semibold rounded-lg shadow hover:bg-blue-600 flex items-center justify-center gap-2">
-                            <i data-feather="plus-circle" class="w-4 h-4"></i>
-                            צור הזמנה חדשה ללקוח
-                        </button>
-                    </div>
+                    <!-- Chat Input -->
+                    <footer id="chat-input-bar" class="p-4 bg-gray-50 flex-shrink-0">
+                        <div class="flex gap-2">
+                            <button id="quick-reply-toggle" class="bg-gray-200 text-gray-700 p-3 rounded-lg shadow-sm hover:bg-gray-300">
+                                <i class="fas fa-bolt"></i>
+                            </button>
+                            <input type="text" id="chat-input" class="flex-grow p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="הקלד תשובה...">
+                            <button id="chat-send-btn" class="bg-blue-600 text-white p-3 rounded-lg shadow hover:bg-blue-700">
+                                <i data-feather="send"></i>
+                            </button>
+                        </div>
+                    </footer>
+                </div>
+            </main>
+            
+            <!-- 3. [NEW v4.0] Customer Profile Panel -->
+            <aside id="customer-profile-panel">
+                <header class="p-4 flex-shrink-0 flex items-center justify-between border-b border-gray-200">
+                    <h2 class="text-xl font-bold text-gray-800">כרטיס לקוח</h2>
+                    <button onclick="toggleProfilePanel()" class="text-gray-500 hover:text-gray-700">
+                        <i data-feather="x" class="w-6 h-6"></i>
+                    </button>
+                </header>
+                
+                <!-- Profile Content -->
+                <div id="profile-content-loading" class="text-center p-10">
+                    <div class="loader loader-small"></div>
+                    <p class="text-sm text-gray-500">טוען פרטי לקוח...</p>
                 </div>
                 
-                <!-- Section 2: Projects -->
-                <div class="profile-section">
-                    <h4 class="font-semibold text-gray-700 mb-2">פרויקטים</h4>
-                    <div id="profile-projects-list" class="flex flex-wrap gap-2">
-                        <!-- Project tags injected here -->
+                <div id="profile-content" class="hidden">
+                    <!-- Section 1: Customer Details -->
+                    <div class="profile-section space-y-2">
+                        <div class="text-center mb-4">
+                            <div class="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold text-3xl mx-auto">
+                                <span id="profile-initials"></span>
+                            </div>
+                            <h3 class="font-bold text-lg mt-2" id="profile-name"></h3>
+                        </div>
+                        <div class="profile-detail">
+                            <strong>מס' לקוח:</strong> <span id="profile-customer-number"></span>
+                        </div>
+                        <div class="profile-detail">
+                            <strong>טלפון:</strong> <a href="#" id="profile-phone" class="text-blue-500 hover:underline"></a>
+                        </div>
+                        <div class="profile-detail">
+                            <strong>כתובת:</strong> <span id="profile-address"></span>
+                        </div>
+                        <!-- [NEW v4.3] Assigned Agent -->
+                        <div class="profile-detail">
+                            <strong>משויך ל:</strong> <span id="profile-agent" class="font-semibold text-green-600"></span>
+                        </div>
+                        
+                        <!-- [NEW v4.3] Manager Tools -->
+                        <div class="mt-4 space-y-2">
+                            <button id="force-takeover-btn" class="w-full py-2 px-4 bg-green-500 text-white text-sm font-semibold rounded-lg shadow hover:bg-green-600 flex items-center justify-center gap-2">
+                                <i data-feather="zap" class="w-4 h-4"></i>
+                                השתלט על השיחה
+                            </button>
+                            <button id="new-order-for-customer-btn" class="w-full py-2 px-4 bg-blue-500 text-white text-sm font-semibold rounded-lg shadow hover:bg-blue-600 flex items-center justify-center gap-2">
+                                <i data-feather="plus-circle" class="w-4 h-4"></i>
+                                צור הזמנה חדשה ללקוח
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Section 2: Projects -->
+                    <div class="profile-section">
+                        <h4 class="font-semibold text-gray-700 mb-2">פרויקטים</h4>
+                        <div id="profile-projects-list" class="flex flex-wrap gap-2">
+                            <!-- Project tags injected here -->
+                        </div>
+                    </div>
+                    
+                    <!-- Section 3: Order History -->
+                    <div class="profile-section">
+                        <h4 class="font-semibold text-gray-700 mb-2">היסטוריית הזמנות (5 אחרונות)</h4>
+                        <div id="profile-orders-list" class="space-y-2">
+                            <!-- Order items injected here -->
+                        </div>
                     </div>
                 </div>
-                
-                <!-- Section 3: Order History -->
-                <div class="profile-section">
-                    <h4 class="font-semibold text-gray-700 mb-2">היסטוריית הזמנות (5 אחרונות)</h4>
-                    <div id="profile-orders-list" class="space-y-2">
-                        <!-- Order items injected here -->
-                    </div>
-                </div>
-            </div>
-        </aside>
+            </aside>
+        </div>
     </div>
 
     <!-- 
       ==========================================================
-      ===               תחילת סקריפט (v4.3)                  ===
+      ===               תחילת סקריפט (v5.0)                  ===
       ==========================================================
     -->
     <script type="module">
         // --- Inlined Firebase SDK Imports ---
-        import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+        import { initializeApp, getApps, getApp } from "https.firebasestorage.googleapis.com/v0/b/saban94-78949.appspot.com/o/firebase%2Ffirebase-app.js?alt=media&token=af580718-d04b-449e-a0e2-63f5d56b0606";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https.firebasestorage.googleapis.com/v0/b/saban94-78949.appspot.com/o/firebase%2Ffirebase-auth.js?alt=media&token=0f723631-4ac3-47a6-b51c-f3c05151f153";
         import { 
             getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot, 
             collection, query, where, Timestamp, runTransaction, getDocs, orderBy, 
             serverTimestamp, limit, writeBatch, collectionGroup
-        } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-        import { setLogLevel } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        } from "https.firebasestorage.googleapis.com/v0/b/saban94-78949.appspot.com/o/firebase%2Ffirebase-firestore.js?alt=media&token=c1964257-ec13-448c-9bfa-517865f9a76d";
+        import { setLogLevel } from "https.firebasestorage.googleapis.com/v0/b/saban94-78949.appspot.com/o/firebase%2Ffirebase-firestore.js?alt=media&token=c1964257-ec13-448c-9bfa-517865f9a76d";
 
         // --- Global Variables ---
         let db, auth;
         let messagesUnsubscribe = null;
         let chatUnsubscribe = null;
-        let typingUnsubscribe = null; // [NEW v4.3]
+        let typingUnsubscribe = null; 
         let currentUserId = null;
-        let activeConversations = new Map(); // [orderId, { data... }]
+        let activeConversations = new Map(); 
         let activeOrderId = null; 
         let activeCustomerId = null;
-        let currentConversationFilter = 'pending'; // [NEW v4.3]
+        let currentConversationFilter = 'pending'; 
         
         // --- "מלשינון" (כמו קודם) ---
         const quickReplyCategories = {
@@ -709,6 +754,7 @@
                     if (!convMap.has(orderId)) {
                         if (!orderDataCache.has(orderId)) {
                             try {
+                                // [FIX v4.1] `doc` (function) is no longer shadowed
                                 const orderRef = doc(db, 'orders', orderId); 
                                 const orderSnap = await getDoc(orderRef);
                                 if (orderSnap.exists()) {
@@ -777,7 +823,8 @@
                     if (currentConversationFilter === 'pending') {
                         // "דורש טיפול":
                         // 1. יש הודעות שלא נקראו (unreadCount > 0)
-                        // 2. והשיחה משויכת לבוט (assignedAgent == null) או אלי (assignedAgent == currentUserId)
+                        // 2. והשיחה משויכת לבוט (assignedAgent == null)
+                        // 3. או שהיא משויכת אלי (assignedAgent == currentUserId) ויש הודעות שלא נקראו
                         return conv.unreadCount > 0 && (conv.assignedAgent === null || conv.assignedAgent === currentUserId);
                     }
                     // "כל השיחות"
@@ -935,11 +982,14 @@
                 msgText = msgText.replace(urlRegex, (url) => `<a href="${url}" target="_blank" rel="noopener noreferrer">${url.includes('drive.google') ? 'פתח קובץ מצורף' : 'פתח קישור'}</a>`);
             }
             
+            // [NEW v4.2] Emoji Read Receipt Logic
             let receiptHtml = '';
             if (msg.type === 'notification_to_customer') {
-                const icon = msg.status === 'read' ? 'check-check' : 'check';
-                const color = msg.status === 'read' ? '#53bdeb' : 'var(--text-light)';
-                receiptHtml = `<i data-feather="${icon}" class="read-receipt ${msg.status === 'read' ? 'read' : ''} w-4 h-4" style="color: ${color};"></i>`;
+                if (msg.status === 'read') {
+                    receiptHtml = `<span class="read-receipt read" title="נקרא">✔️✔️</span>`;
+                } else {
+                    receiptHtml = `<span class="read-receipt" title="נשלח">✔️</span>`;
+                }
             }
 
             wrapper.innerHTML = `
@@ -952,7 +1002,6 @@
                     </span>
                 </div>
             `;
-            setTimeout(() => feather.replace({ width: '1rem', height: '1rem' }), 0);
             return wrapper;
         }
         
@@ -1076,6 +1125,14 @@
                     const url = `add_customers.html?customerId=${customerId}`;
                     window.open(url, '_blank');
                 };
+                
+                // [NEW v4.3] Wire up force takeover button
+                const takeoverBtn = document.getElementById('force-takeover-btn');
+                takeoverBtn.onclick = async () => {
+                    await escalateToHuman(activeOrderId);
+                    showToast('השיחה שויכה אליך.', 'success');
+                    loadCustomerProfile(customerId); // Refresh profile
+                };
 
                 // 2. Fetch Order History & Projects
                 const ordersQuery = query(
@@ -1098,6 +1155,7 @@
                 ordersSnap.forEach(orderDoc => {
                     const order = orderDoc.data();
                     if (order.projectName) {
+                        // A project might be an array or a string, handle both
                         if (Array.isArray(order.projectName)) {
                             order.projectName.forEach(p => projects.add(p));
                         } else {
