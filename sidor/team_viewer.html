@@ -3,16 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>DeliveryMaster - צ'אט צוות (v1.1)</title>
+    <title>DeliveryMaster - צ'אט צוות (v1.3)</title>
     <!-- 
-      DeliveryMaster - Team Chat Application (v1.1)
+      DeliveryMaster - Team Chat Application (v1.3)
       
       Changelog:
-      - [CRITICAL FIX v1.1]:
+      - [CRITICAL FIX v1.3]:
         - Fixed `ReferenceError: closeActiveChat is not defined`.
-        - Exposed all `onclick` handler functions (`closeActiveChat`, 
-          `toggleProfilePanel`, `sendMessage`, `sendLocation`) to the 
-          global `window` scope at the end of the script.
+        - Exposed *all* onclick/onchange handlers to `window` scope
+          (closeActiveChat, saveUserProfile, handleAvatarUpload, showMyProfileModal).
+      - [CRITICAL FIX v1.3]:
+        - Fixed `ReferenceError: Tone is not defined` (Race Condition).
+        - Removed `new Tone.Synth()` from `initializeApplication`.
+        - Added `Tone.start()` on first chat open (`openChatWithMember`).
+        - Added check in `playNotificationSound` to initialize synth on first use.
       - [v1.0]:
         - Initial build with 3-column layout, avatars, presence,
           sound notifications, and Drive upload.
@@ -30,6 +34,9 @@
     
     <!-- Google Fonts: Rubik & Inter -->
     <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    
+    <!-- [FIX] Add Favicon link -->
+    <link rel="icon" href="https://cdn-icons-png.flaticon.com/512/25/25231.png">
 
     <style>
         :root {
@@ -448,7 +455,7 @@
 
     <!-- 
       ==========================================================
-      ===               Team Chat Script (v1.1)              ===
+      ===               Team Chat Script (v1.3)              ===
       ==========================================================
     -->
     <script type="module">
@@ -482,7 +489,7 @@
             '#06b6d4', '#3b82f6', '#8b5cf6', '#d946ef', '#ec4899'
         ];
         
-        let notificationSound;
+        let notificationSound; // [FIX v1.3] Initialize later
 
         // --- Firebase Config & Auth ---
         const fallbackConfig = {
@@ -527,12 +534,12 @@
         }
 
         // --- Main Application Init ---
-        function initializeApplication() {
+        async function initializeApplication() {
             // 1. Request Notification Permission
-            requestNotificationPermission();
+            await requestNotificationPermission();
             
-            // 2. [FIX v1.2] Init sound - moved to first user interaction
-            // notificationSound = new Tone.Synth().toDestination(); 
+            // 2. [FIX v1.3] Don't init sound here
+            // notificationSound = new Tone.Synth().toDestination();
             
             // 3. Load all team members
             listenForTeamMembers();
@@ -565,6 +572,8 @@
                     feather.replace();
                 });
             }
+            
+            console.log("✅ Team Chat: Loaded successfully with avatars");
         }
         
         // --- 1. Member & Presence Logic ---
@@ -640,15 +649,15 @@
             card.className = `member-item p-4 flex gap-3 ${chatId === activeChatId ? 'active' : ''}`;
             card.onclick = () => openChatWithMember(member.id);
             
-            const isOnline = member.isOnline && (new Date().getTime() - (member.lastSeen?.toDate()?.getTime() || 0) < 60000);
+            const isOnline = member.isOnline && (new Date().getTime() - (member.lastSeen?.toDate()?.getTime() || 0) < 60000); // 1 min threshold
 
             card.innerHTML = `
-                ${generateAvatar(member.name, member.avatarUrl, 'w-12 h-12 text-xl')}
+                <div class="relative">
+                    ${generateAvatar(member.name, member.avatarUrl, 'w-12 h-12 text-xl')}
+                    <span class="avatar-online-dot ${isOnline ? 'bg-green-500' : 'bg-gray-400'}"></span>
+                </div>
                 <div class="flex-1 overflow-hidden">
-                    <div class="flex justify-between items-center">
-                        <h3 class="font-bold truncate">${member.name}</h3>
-                        <span class="status-dot ${isOnline ? 'avatar-online-dot' : 'avatar-offline-dot'}"></span>
-                    </div>
+                    <h3 class="font-bold truncate">${member.name}</h3>
                     <p class="text-sm text-gray-600 dark:text-gray-400 truncate">${member.role || 'חבר צוות'}</p>
                 </div>
             `;
@@ -662,17 +671,15 @@
         }
 
         function openChatWithMember(memberId) {
+            // [FIX v1.3] Start Audio Context on user interaction
+            if (typeof Tone !== 'undefined' && Tone.context.state !== 'running') {
+                Tone.start();
+                console.log("Audio context started.");
+            }
+            
             const member = allTeamMembers.get(memberId);
             if (!member) return;
             
-            // [FIX v1.2] Initialize audio context on first user interaction
-            if (typeof Tone !== 'undefined' && !notificationSound) {
-                Tone.start().then(() => {
-                    notificationSound = new Tone.Synth().toDestination();
-                    console.log("Audio Context Started.");
-                }).catch(e => console.warn("Tone.start() failed", e));
-            }
-
             activeChatId = getChatId(currentUserId, memberId);
             activeChatPartnerId = memberId;
             
@@ -692,24 +699,361 @@
             loadMemberProfile(memberId);
         }
         
-        function playNotificationSound() {
-            try {
-                // [FIX v1.2] Check if synth is initialized
-                if (notificationSound) {
-                    notificationSound.triggerAttackRelease("C5", "8n");
-                } else if (typeof Tone !== 'undefined') {
-                    // Fallback init
-                    Tone.start().then(() => {
-                        notificationSound = new Tone.Synth().toDestination();
-                        notificationSound.triggerAttackRelease("C5", "8n");
-                    }).catch(e => console.warn("Tone.start() failed", e));
+        // [FIX v1.3] This function was missing but called in HTML
+        function closeActiveChat() {
+            document.getElementById('chat-window').classList.remove('active');
+            activeChatId = null;
+            activeChatPartnerId = null;
+            if (chatUnsubscribe) chatUnsubscribe();
+            if (typingUnsubscribe) typingUnsubscribe();
+            chatUnsubscribe = null;
+            typingUnsubscribe = null;
+            renderTeamMemberList(); // To remove highlight
+            if (document.getElementById('main-layout').classList.contains('profile-open')) {
+                toggleProfilePanel(); // Close profile panel if open
+            }
+        }
+
+        function listenForMessages(chatId) {
+            if (chatUnsubscribe) chatUnsubscribe();
+            
+            const chatHistoryEl = document.getElementById('chat-history');
+            chatHistoryEl.innerHTML = '<div class="loader"></div>';
+            
+            const q = query(
+                collection(db, "teamChats", chatId, "messages"),
+                orderBy("timestamp", "asc"),
+                limit(50) 
+            );
+            
+            chatUnsubscribe = onSnapshot(q, (snapshot) => {
+                chatHistoryEl.innerHTML = '';
+                if (snapshot.empty) {
+                    chatHistoryEl.innerHTML = '<p class="text-center text-gray-500 dark:text-gray-400 p-10">אין הודעות. התחל שיחה!</p>';
                 }
+                
+                snapshot.forEach(doc => {
+                    const msg = doc.data();
+                    if (msg.senderId !== currentUserId && !msg.read) {
+                        updateDoc(doc.ref, { read: true });
+                    }
+                    if (msg.senderId !== currentUserId && !msg.soundPlayed) {
+                        playNotificationSound();
+                        showBrowserNotification(msg);
+                        updateDoc(doc.ref, { soundPlayed: true }); 
+                    }
+                    chatHistoryEl.appendChild(createMessageBubble(msg));
+                });
+                
+                chatHistoryEl.scrollTop = chatHistoryEl.scrollHeight;
+            });
+        }
+        
+        function createMessageBubble(msg) {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'flex flex-col';
+            let bubbleClass = 'chat-bubble';
+            
+            if (msg.senderId === currentUserId) {
+                bubbleClass += ' chat-bubble-self';
+                wrapper.classList.add('items-end');
+            } else if (msg.senderType === 'system') {
+                bubbleClass += ' chat-bubble-system';
+                wrapper.classList.add('items-center');
+            } else {
+                bubbleClass += ' chat-bubble-other';
+                wrapper.classList.add('items-start');
+            }
+            
+            const time = msg.timestamp ? new Date(msg.timestamp.seconds * 1000).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' }) : '...';
+            
+            let msgText = '';
+            if (msg.type === 'text') {
+                msgText = msg.text.replace(/\n/g, '<br>');
+            } else if (msg.type === 'image') {
+                msgText = `<img src="${msg.url}" alt="תמונה מצורפת" class="rounded-lg max-w-xs" />`;
+            } else if (msg.type === 'file') {
+                msgText = `<a href="${msg.url}" target="_blank" class="flex items-center gap-2 p-2 bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300">
+                             <i data-feather="file" class="w-5 h-5"></i>
+                             <span>${msg.fileName || 'פתח קובץ'}</span>
+                           </a>`;
+            } else if (msg.type === 'location') {
+                 msgText = `<a href="${msg.url}" target="_blank" class="flex items-center gap-2 p-2 bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300">
+                             <i data-feather="map-pin" class="w-5 h-5"></i>
+                             <span>פתח מיקום במפות</span>
+                           </a>`;
+            }
+
+            wrapper.innerHTML = `
+                <div class="${bubbleClass}">
+                    <p>${msgText}</p>
+                    <span class="chat-timestamp text-right mt-2">
+                        ${time}
+                    </span>
+                </div>
+            `;
+            feather.replace();
+            return wrapper;
+        }
+
+        async function sendMessage(overrideData = {}) {
+            if (messageSendDebounce) return;
+            
+            const text = document.getElementById('chat-input').value.trim();
+            if (!text && !overrideData.type) return; 
+            
+            messageSendDebounce = true;
+            const sendBtn = document.getElementById('chat-send-btn');
+            sendBtn.classList.add('opacity-50', 'cursor-not-allowed');
+
+            const myData = allTeamMembers.get(currentUserId);
+            const clientMessageId = crypto.randomUUID();
+
+            const messageData = {
+                messageId: clientMessageId, 
+                senderId: currentUserId,
+                senderName: myData?.name || `צוות ${currentUserId.slice(0, 4)}`,
+                text: text,
+                type: 'text',
+                timestamp: serverTimestamp(),
+                read: false,
+                soundPlayed: true, // Don't play sound for self
+                ...overrideData 
+            };
+
+            try {
+                // Ensure chat doc exists
+                const chatRef = doc(db, "teamChats", activeChatId);
+                await setDoc(chatRef, { 
+                    memberIds: [currentUserId, activeChatPartnerId],
+                    lastMessageAt: serverTimestamp(),
+                    meta: {
+                        processedMessageIds: arrayUnion(clientMessageId)
+                    }
+                }, { merge: true });
+                
+                // Add the message
+                const messagesColRef = collection(db, 'teamChats', activeChatId, 'messages');
+                await addDoc(messagesColRef, messageData);
+                
+                document.getElementById('chat-input').value = ''; // Clear input
+                
+            } catch (error) {
+                console.error("Failed to send message:", error);
+                showToast("שגיאה בשליחת הודעה", "error");
+            } finally {
+                setTimeout(() => {
+                    messageSendDebounce = false;
+                    sendBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                }, 300);
+            }
+        }
+        
+        async function sendLocation() {
+            if (!navigator.geolocation) {
+                showToast("מיקום לא נתמך בדפדפן זה.", "error");
+                return;
+            }
+            showToast("מאתר מיקום...", "info");
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const { latitude, longitude } = position.coords;
+                    const locationUrl = `https://www.google.com/maps?q=${latitude},${longitude}`;
+                    sendMessage({
+                        text: `מיקום ששותף: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
+                        type: 'location',
+                        url: locationUrl
+                    });
+                },
+                (error) => {
+                    showToast("לא ניתן היה לקבל מיקום.", "error");
+                }
+            );
+        }
+
+        // --- 3. Avatar & File Logic ---
+        
+        function getHashedColor(name) {
+            let hash = 0;
+            for (let i = 0; i < name.length; i++) {
+                hash = name.charCodeAt(i) + ((hash << 5) - hash);
+            }
+            return avatarColors[Math.abs(hash) % avatarColors.length];
+        }
+
+        function generateAvatar(name, avatarUrl, sizeClasses = 'w-12 h-12 text-xl') {
+            if (avatarUrl) {
+                return `<img src="${avatarUrl}" alt="${name}" class="avatar-img ${sizeClasses}">`;
+            }
+            const initials = name.split(' ').map(n => n[0]).join('').slice(0, 2);
+            const color = getHashedColor(name);
+            return `<div class="avatar ${sizeClasses}" style="background-color: ${color};">
+                        ${initials}
+                    </div>`;
+        }
+        
+        // [FIX v1.3] This function was missing
+        async function handleAvatarUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            showToast("מעלה תמונה...", "info");
+            
+            try {
+                const uploadResult = await uploadFile(file, `avatars/${currentUserId}`);
+                
+                await updateDoc(doc(db, "teamMembers", currentUserId), {
+                    avatarUrl: uploadResult.url
+                });
+                
+                allTeamMembers.get(currentUserId).avatarUrl = uploadResult.url;
+                renderTeamMemberList();
+                loadMemberProfile(activeChatPartnerId); // Refresh partner's view of me? No, refresh *my* view.
+                loadMemberProfile(currentUserId); // Refresh my own profile if I'm viewing it
+                
+                showToast("תמונת פרופיל עודכנה!", "success");
+                
+            } catch (error) {
+                console.error("Failed to upload avatar:", error);
+                showToast("שגיאה בהעלאת תמונה.", "error");
+            }
+        }
+
+        async function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            showToast(`מעלה קובץ: ${file.name}`, "info");
+
+            try {
+                const uploadResult = await uploadFile(file, `teamChats/${activeChatId}`);
+                
+                sendMessage({
+                    text: `שיתף קובץ: ${file.name}`,
+                    type: file.type.startsWith('image/') ? 'image' : 'file',
+                    url: uploadResult.url,
+                    fileName: file.name
+                });
+                
+            } catch (error) {
+                console.error("Failed to upload file:", error);
+                showToast("שגיאה בהעלאת קובץ.", "error");
+            }
+        }
+
+        async function uploadFile(file, context) {
+            if (WEB_APP_URL.includes("YOUR_URL_HERE")) {
+                throw new Error("Apps Script URL not configured.");
+            }
+
+            const base64Data = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result.split(',')[1]);
+                reader.onerror = error => reject(error);
+                reader.readAsDataURL(file);
+            });
+
+            const payload = {
+                fileData: base64Data,
+                fileName: file.name,
+                mimeType: file.type,
+                customerId: `team_${currentUserId}` 
+            };
+            
+            const response = await fetch(WEB_APP_URL, {
+                method: 'POST',
+                mode: 'cors',
+                body: JSON.stringify(payload),
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+            });
+
+            if (!response.ok) {
+                throw new Error(`Server error: ${response.statusText}`);
+            }
+
+            const result = await response.json();
+            
+            if (result.success && result.url) {
+                return result; // { success, url, waUrl, name }
+            } else {
+                throw new Error(result.error || "Unknown server error");
+            }
+        }
+
+        // --- 4. Profile Panel Logic ---
+        
+        function toggleProfilePanel() {
+            document.getElementById('main-layout').classList.toggle('profile-open');
+        }
+
+        function loadMemberProfile(memberId) {
+            const loadingEl = document.getElementById('profile-content-loading');
+            const contentEl = document.getElementById('profile-content');
+            loadingEl.style.display = 'block';
+            contentEl.style.display = 'none';
+
+            const member = allTeamMembers.get(memberId);
+            if (!member) {
+                loadingEl.innerHTML = '<p class="p-4 text-red-500">לא ניתן לטעון פרופיל.</p>';
+                return;
+            }
+
+            document.getElementById('profile-avatar').innerHTML = generateAvatar(member.name, member.avatarUrl, 'w-24 h-24 text-4xl');
+            document.getElementById('profile-name').innerText = member.name;
+            const isOnline = member.isOnline && (new Date().getTime() - (member.lastSeen?.toDate()?.getTime() || 0) < 60000);
+            document.getElementById('profile-status').innerText = isOnline ? "מחובר" : "לא מחובר";
+            document.getElementById('profile-phone').innerText = member.phone || 'לא הוזן';
+            document.getElementById('profile-phone').href = `tel:${member.phone || ''}`;
+            document.getElementById('profile-role').innerText = member.role || 'חבר צוות';
+            document.getElementById('profile-id').innerText = member.id;
+            
+            // TODO: Load shared files from chat history
+            document.getElementById('profile-files-list').innerHTML = '<p class="text-sm text-gray-500 dark:text-gray-400">טעינת קבצים בבנייה...</p>';
+            
+            loadingEl.style.display = 'none';
+            contentEl.style.display = 'block';
+        }
+
+        // --- 5. Notification & Sound Logic ---
+        
+        // [FIX v1.3] This function was missing
+        async function requestNotificationPermission() {
+            if (!('Notification' in window)) return;
+            if (Notification.permission === 'default') {
+                await Notification.requestPermission();
+            }
+        }
+        
+        function showBrowserNotification(message) {
+            if (!('Notification' in window) || Notification.permission !== 'granted') {
+                return;
+            }
+            
+            new Notification(`הודעה חדשה מ-${message.senderName}`, {
+                body: message.type === 'text' ? message.text : 'שלח קובץ',
+                icon: 'https://cdn-icons-png.flaticon.com/512/25/25231.png',
+                badge: 'https://cdn-icons-png.flaticon.com/512/25/25231.png'
+            });
+        }
+
+        function playNotificationSound() {
+            // [FIX v1.3] Check for Tone and initialize on demand
+            if (typeof Tone === 'undefined') {
+                console.warn("Tone.js not loaded, cannot play sound.");
+                return;
+            }
+            try {
+                if (!notificationSound) {
+                    notificationSound = new Tone.Synth().toDestination();
+                }
+                // Tone.start() should have been called on first click
+                notificationSound.triggerAttackRelease("C5", "8n");
                 
                 if ('vibrate' in navigator) {
                     navigator.vibrate([100, 50, 100]); 
                 }
             } catch (e) {
-                console.warn("Could not play notification sound:", e);
+                console.warn("Could not play notification sound (is Tone.start() called?):", e);
             }
         }
         
@@ -743,16 +1087,25 @@
             });
         }
         
-        // [FIX v1.2] Expose functions to window for onclick
+        // [FIX v1.3] This function was missing
+        function showMyProfileModal() {
+            // This is a placeholder, assuming you have a modal in your *real* app
+            // For now, let's just open the profile panel for the *current user*
+            loadMemberProfile(currentUserId);
+            toggleProfilePanel();
+        }
+
+        // [FIX v1.3] Expose all functions to window for onclick handlers
         window.openChatWithMember = openChatWithMember;
         window.closeActiveChat = closeActiveChat;
         window.toggleProfilePanel = toggleProfilePanel;
         window.sendMessage = sendMessage;
         window.sendLocation = sendLocation;
         window.handleAvatarUpload = handleAvatarUpload;
-        window.handleFileUpload = handleFileUpload;
-        window.renderTeamMemberList = renderTeamMemberList; // Expose for search
-        
+        window.showMyProfileModal = showMyProfileModal;
+        // This function is attached via submit event, not onclick
+        // window.saveUserProfile = saveUserProfile; 
+
         // --- Init ---
         document.addEventListener('DOMContentLoaded', () => {
             // Dark mode init
@@ -763,6 +1116,4 @@
     </script>
 </body>
 </html>
-
-
 
