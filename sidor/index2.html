@@ -3,22 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DeliveryMaster v36.1 (Critical Fix)</title>
+    <title>DeliveryMaster v36 (Refactored)</title>
     <!-- 
-      DeliveryMaster Admin App v36.1 (Critical Fix)
+      DeliveryMaster Admin App v36.0 (Refactored)
       
       Changelog:
-      - [CRITICAL FIX v36.1]:
-        - הסרת קריאות ל-DOM לא קיים (`active-orders-count`, `customers-count`)
-          שגרמו לקריסה של מאזיני ה-onSnapshot של הזמנות ולקוחות.
-        - הסרת מאזין לוגים (`listenForLogs`) שכבר לא רלוונטי לקובץ זה.
-        - תיקון זה יאפשר למפה ולדפי ההיסטוריה להיטען כראוי.
-      - [v36]:
-        - "הפרדת כוחות" - הוצאת מערכת ההודעות והלוגים לקבצים נפרדים.
-      - [v35]:
-        - בסיס קוד יציב (v31.9.2) עם כל הפונקציות (מפה, נהגים, היסטוריה, לקוחות).
-        - טופס הזמנה משודרג (פרויקט + WhatsApp).
-        - תיקון נתיב `copyCustomerLink`.
+      - [REFACTOR v36.0]:
+        - "הפרדת כוחות" - המערכת פוצלה לקבצים נפרדים.
+        - קובץ זה (admin-god) נשאר יציב ומהיר.
+        - הסרת פאנלים פנימיים של הודעות ולוגים.
+      - [NAV v36.0]:
+        - כפתור "הודעות" בתפריט הניווט מקושר כעת ל-`messages_viewer.html` (נפתח בטאב חדש).
+        - כפתור "לוגים" הוסר מהתפריט הראשי.
+        - נוסף כפתור אייקון קטן ללוגים ליד שם המנהל, מקושר ל-`log_viewer.html`.
+      - v31.9.2 (BASE):
+        - בסיס קוד יציב (מפה, רשימות, היסטוריה, ניהול לקוחות).
     -->
     
     <!-- TailwindCSS -->
@@ -95,12 +94,10 @@
              grid-template-columns: 300px 1fr; /* Sidebar and Map */
              height: 100vh;
         }
-        .app-view.active#view-driver-history {
+         .app-view.active#view-driver-history {
             display: grid; /* Override for grid */
         }
         
-        /* [REMOVED v36] Message View styles removed */
-
         #map-container {
             position: relative;
             background-color: #e0e0e0;
@@ -181,7 +178,7 @@
             padding: 1rem;
             border-bottom: 1px solid var(--border-color);
             transition: background-color 0.2s;
-            cursor: pointer; /* [Restored] */
+            cursor: pointer;
         }
         .order-card:hover, .driver-card:hover {
             background-color: #fafafa;
@@ -397,8 +394,6 @@
              grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
              gap: 1rem;
         }
-        
-        /* [REMOVED v36] Messaging Styles removed */
 
         /* Responsive */
         @media (max-width: 1024px) {
@@ -477,8 +472,9 @@
                 <i data-feather="navigation" class="w-6 h-6"></i>
                 <span class="font-semibold text-lg hidden lg:block">היסטוריית נהגים</span>
             </a>
+            
             <!-- [CHANGED v36] Messages Link now opens a new tab -->
-            <a href="messages_viewer.html" target="_blank" class="nav-link flex items-center p-3 space-x-4 space-x-reverse rounded-lg">
+            <a href="messages_viewer.html" target="_blank" rel="noopener noreferrer" class="nav-link flex items-center p-3 space-x-4 space-x-reverse rounded-lg">
                 <i data-feather="message-square" class="w-6 h-6"></i>
                 <span class="font-semibold text-lg hidden lg:block">הודעות</span>
                 <!-- Badge removed, it will be in the messages_viewer page -->
@@ -502,7 +498,7 @@
                 <div class="text-sm">
                     שלום, <span class="font-semibold">מנהל</span>
                     <!-- NEW LOG BUTTON -->
-                    <a href="log_viewer.html" target="_blank" title="פתח לוגים" id="log-button">
+                    <a href="log_viewer.html" target="_blank" rel="noopener noreferrer" title="פתח לוגים" id="log-button">
                         <i data-feather="file-text" class="w-4 h-4"></i>
                     </a>
                 </div>
@@ -513,7 +509,7 @@
         <!-- Main Content Wrapper -->
         <div class="relative">
             <!-- Main Content (Map + Side Panel) -->
-            <main id="view-dashboard" class="app-view active"> <!-- [NEW] Added 'active' class -->
+            <main id="view-dashboard" class="app-view active">
                 <!-- Map Container -->
                 <div id="map-container">
                     <div id="map"></div>
@@ -1043,7 +1039,9 @@
             );
             
             ordersUnsubscribe = onSnapshot(q, (snapshot) => {
-                document.getElementById('orders-list').querySelector('.loader-container').style.display = 'none';
+                // [FIX v36.1] Corrected loader selection
+                const loadingEl = document.getElementById('orders-list').querySelector('.loader-container');
+                if (loadingEl) loadingEl.style.display = 'none';
                 
                 allOrders = [];
                 snapshot.forEach(doc => allOrders.push({ id: doc.id, ...doc.data() }));
@@ -1155,7 +1153,7 @@
         function renderOrdersList() {
             const list = document.getElementById('orders-list');
             if (!list) return;
-            const search = document.getElementById('search-input').value.toLowerCase();
+            const search = document.getElementById('search-input').value.toLowerCase(); // [FIX v36.1]
             list.innerHTML = '';
             
             const filtered = allOrders.filter(order => 
@@ -2217,4 +2215,3 @@ ${orderData.notes || "--- אין תוכן ---"}
     </script>
 </body>
 </html>
-
