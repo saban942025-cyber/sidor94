@@ -4,6 +4,8 @@
     --primary-dark: #2563eb; /* blue-600 */
     --danger-color: #ef4444; /* red-500 */
     --danger-dark: #dc2626; /* red-600 */
+    --success-color: #16a34a; /* green-600 */
+    --warning-color: #f97316; /* orange-500 */
     --bg-light: #f3f4f6; /* gray-100 */
     --bg-white: #ffffff;
     --border-color: rgba(229, 231, 235, 0.7); /* gray-200 w/ opacity */
@@ -30,7 +32,7 @@ html.dark {
 
 body {
     font-family: 'Inter', 'Rubik', sans-serif;
-    background-color: var(--bg-light);
+    background-color: #f3f4f6;
     color: var(--text-dark);
     overflow: hidden;
     height: 100vh;
@@ -61,7 +63,7 @@ body {
     transition: grid-template-columns 0.3s ease;
 }
 .glass-wrapper.details-open {
-    grid-template-columns: 260px 1fr 400px; /* פאנל פרטים רחב יותר */
+    grid-template-columns: 260px 1fr 350px;
 }
 
 /* --- Left Navigation --- */
@@ -152,29 +154,59 @@ html.dark .nav-link:hover {
     transform: translateY(-50%);
     color: var(--text-light);
 }
+
+/* [תיקון פריסה]
+   אזור התוכן כעת יחזיק את כל ה"תצוגות" (מפה, טבלת לקוחות, טבלת הזמנות)
+   אחת על השניה, וה-JS יציג את הרלוונטית
+*/
 .content-area {
     flex-grow: 1;
+    overflow-y: auto;
     padding: 1.5rem;
-    display: flex; /* [CHANGED] */
-    flex-direction: column; /* [CHANGED] */
-    gap: 1.5rem; /* [CHANGED] */
-    overflow: hidden; /* [CHANGED] */
-    position: relative; /* [NEW] for loader */
+    position: relative; /* מאפשר מיקום אבסולוטי של ילדים */
 }
-.loader-container {
-    /* [CHANGED] Loader now overlays content area */
+.content-view {
+    /* גורם לכל התצוגות (מפה, טבלאות) לשבת אחת על השניה */
     position: absolute;
-    inset: 0;
-    background-color: rgba(255, 255, 255, 0.8);
-    backdrop-filter: blur(2px);
+    top: 1.5rem; /* p-6 */
+    right: 1.5rem; /* p-6 */
+    bottom: 1.5rem; /* p-6 */
+    left: 1.5rem; /* p-6 */
+    display: none; /* מוסתר כברירת מחדל */
+    height: calc(100% - 3rem); /* התאמה ל-padding של content-area */
+    overflow: hidden; /* שונה - מניעת גלילה כפולה */
+    border-radius: 0.75rem; /* עיגול פינות */
+}
+.content-view.active {
+    display: block; /* הצגת התצוגה הפעילה */
+}
+
+/* --- מפה --- */
+#map-container {
+    height: 100%; /* מתיחה לגובה מלא */
+    width: 100%;
+    border-radius: 0.75rem;
+    overflow: hidden; /* הסתרת פינות המפה */
+    background-color: var(--bg-light);
+}
+#map {
+    height: 100%;
+    width: 100%;
+}
+
+
+/* --- Loader --- */
+.loader-container {
     display: flex;
     align-items: center;
     justify-content: center;
     height: 100%;
+    width: 100%;
+    position: absolute;
+    top: 0;
+    left: 0;
+    background: var(--bg-glass);
     z-index: 10;
-}
-.loader-container.hidden { /* [NEW] */
-    display: none;
 }
 .loader {
     border: 4px solid var(--bg-light);
@@ -186,53 +218,22 @@ html.dark .nav-link:hover {
 }
 @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-
-/* --- [NEW] Map Container --- */
-#map-container {
-    flex-shrink: 0;
-    height: 40%; /* 40% of the content area */
-    width: 100%;
-    border-radius: 0.75rem;
-    border: 1px solid var(--border-color);
-    background-color: #eee; /* Placeholder */
-    position: relative;
-    overflow: hidden;
-}
-#map {
-     height: 100%;
-     width: 100%;
-     border-radius: 0.75rem;
-}
-/* [NEW] Leaflet Popup Style */
-.leaflet-popup-content-wrapper {
-    border-radius: 0.5rem;
-}
-.leaflet-popup-content {
-    font-family: 'Inter', 'Rubik', sans-serif;
-}
-.leaflet-popup-content h4 {
-    font-weight: 600;
-    margin: 0 0 0.5rem;
-    color: var(--text-dark);
-}
-.leaflet-popup-content p {
-    margin: 0.25rem 0;
-    color: var(--text-light);
-}
-
 /* --- Data Grid / Table --- */
 .table-container {
     width: 100%;
-    overflow: auto; /* [CHANGED] */
+    overflow: hidden; /* הגלילה מנוהלת על ידי table-container-inner */
     border: 1px solid var(--border-color);
     border-radius: 0.75rem;
-    background-color: rgba(255, 255, 255, 0.7);
-    flex-grow: 1; /* [CHANGED] */
-    display: flex; /* [CHANGED] */
-    flex-direction: column; /* [CHANGED] */
+    background-color: var(--bg-glass);
+    height: 100%; /* מתיחה לגובה מלא של content-view */
+    display: flex; /* פלקס פנימי לטבלה */
+    flex-direction: column;
 }
-html.dark .table-container { background-color: rgba(55, 65, 81, 0.7); }
-
+.table-container-inner {
+    /* עטיפה פנימית לגלילה של הטבלה עצמה */
+    flex-grow: 1;
+    overflow-y: auto;
+}
 .data-grid {
     width: 100%;
     border-collapse: collapse;
@@ -240,15 +241,16 @@ html.dark .table-container { background-color: rgba(55, 65, 81, 0.7); }
 }
 .data-grid thead {
     background-color: rgba(249, 250, 251, 0.7);
-    position: sticky; /* [NEW] */
-    top: 0; /* [NEW] */
-    z-index: 1;
+    html.dark & { background-color: rgba(75, 85, 99, 0.7); }
+    position: sticky; /* הדבקת כותרת הטבלה */
+    top: 0;
+    z-index: 5;
 }
-html.dark .data-grid thead { background-color: rgba(75, 85, 99, 0.7); }
 .data-grid th, .data-grid td {
     padding: 1rem 1.25rem;
     text-align: right;
     border-bottom: 1px solid var(--border-color);
+    white-space: nowrap;
 }
 .data-grid th {
     font-size: 0.75rem;
@@ -262,20 +264,44 @@ html.dark .data-grid thead { background-color: rgba(75, 85, 99, 0.7); }
 }
 .data-grid tbody tr:hover {
     background-color: rgba(249, 250, 251, 0.9);
+    html.dark & { background-color: rgba(75, 85, 99, 0.9); }
 }
-/* [NEW] Clickable row style */
-.data-grid tbody tr.clickable:hover {
+/* [חדש] עיצוב שורות לחיצות (עבור טבלת הזמנות) */
+.data-grid tbody tr.clickable {
     cursor: pointer;
-    background-color: #eff6ff; /* blue-50 */
 }
-html.dark .data-grid tbody tr.clickable:hover {
-    background-color: #374151; /* gray-700 */
+.data-grid tbody tr.clickable:hover {
+    background-color: rgba(239, 246, 255, 0.9); /* blue-50 */
+    html.dark & { background-color: rgba(30, 41, 59, 0.9); } /* blue-950 */
 }
-html.dark .data-grid tbody tr:hover { background-color: rgba(75, 85, 99, 0.9); }
+.data-grid tbody tr.selected {
+    background-color: rgba(219, 234, 254, 1); /* blue-100 */
+    html.dark & { background-color: rgba(30, 58, 138, 1); } /* blue-900 */
+}
+
+/* [חדש] סטטוסים בטבלה */
+.status-badge {
+    padding: 0.2rem 0.6rem;
+    border-radius: 99px;
+    font-weight: 600;
+    font-size: 0.75rem;
+    display: inline-block;
+}
+.status-חדש { background-color: var(--primary-color); color: white; }
+.status-בטיפול { background-color: var(--warning-color); color: white; }
+.status-שויך { background-color: #a855f7; color: white; } /* purple-500 */
+.status-בדרך { background-color: #2dd4bf; color: black; } /* teal-400 */
+.status-מתכונן-ליציאה { background-color: var(--warning-color); color: white; }
+.status-הושלם { background-color: var(--success-color); color: white; }
+.status-בוטל { background-color: var(--danger-color); color: white; }
+.status-פעיל { color: var(--success-color); }
+.status-חסום { color: var(--danger-color); }
+.status-ממתין { color: var(--warning-color); }
+
 
 .action-buttons {
     display: flex;
-    gap: 0.5rem;
+    gap: 0.25rem; /* הקטנת רווח */
 }
 .action-btn {
     padding: 0.5rem;
@@ -288,22 +314,33 @@ html.dark .data-grid tbody tr:hover { background-color: rgba(75, 85, 99, 0.9); }
 }
 .action-btn:hover {
     background-color: var(--bg-light);
+    html.dark & { background-color: var(--bg-white); }
     color: var(--primary-color);
     transform: scale(1.1);
 }
-html.dark .action-btn:hover { background-color: var(--bg-white); }
 .action-btn.danger:hover {
     color: var(--danger-color);
 }
+.action-btn.success:hover {
+    color: var(--success-color);
+}
+.action-btn.warning:hover {
+    color: var(--warning-color);
+}
+
 
 /* --- Right Details Panel --- */
 #details-panel {
     border-right: 1px solid var(--border-color);
+    padding: 0; /* הוסר padding בסיסי, יתווסף פנימית */
     overflow-y: auto;
     position: relative;
-    background: rgba(255, 255, 255, 0.5);
+    background-color: rgba(255, 255, 255, 0.5);
+    html.dark & { background-color: rgba(31, 41, 55, 0.5); }
 }
-html.dark #details-panel { background-color: rgba(31, 41, 55, 0.5); }
+.details-panel-content {
+    padding: 1.5rem; /* Padding פנימי */
+}
 
 .close-panel-btn {
     position: absolute;
@@ -316,39 +353,16 @@ html.dark #details-panel { background-color: rgba(31, 41, 55, 0.5); }
     padding: 0.5rem;
     border-radius: 50%;
     transition: all 0.2s;
+    z-index: 10;
 }
 .close-panel-btn:hover {
     background-color: var(--bg-light);
+    html.dark & { background-color: var(--bg-white); }
     color: var(--text-dark);
 }
-html.dark .close-panel-btn:hover { background-color: var(--bg-white); }
-/* תוכן הפאנל מקבל ריפוד מה-JS */
-#details-content .p-6 {
-    padding: 1.5rem;
-}
-#details-content .space-y-3 > * + * {
-    margin-top: 0.75rem;
-}
-#details-content .pt-4 {
-    padding-top: 1rem;
-}
-#details-content .border-t {
-    border-top: 1px solid var(--border-color);
-}
-#details-content .max-h-24 {
-    max-height: 6rem;
-}
-#details-content .overflow-y-auto {
-    overflow-y: auto;
-}
-#details-content ul {
-    list-style-type: disc;
-    padding-right: 1.5rem;
-}
-
 
 /* --- Forms & Inputs --- */
-.form-input {
+.form-input, .form-select, .form-textarea {
     width: 100%;
     padding: 0.75rem 1rem;
     border: 1px solid var(--border-color);
@@ -357,11 +371,32 @@ html.dark .close-panel-btn:hover { background-color: var(--bg-white); }
     color: var(--text-dark);
     transition: all 0.2s;
     box-sizing: border-box; /* Fix padding issues */
+    appearance: none;
 }
-.form-input:focus {
+.form-input:focus, .form-select:focus, .form-textarea:focus {
     outline: none;
     border-color: var(--primary-color);
     box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+}
+.form-select {
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+    background-position: left 0.5rem center;
+    background-repeat: no-repeat;
+    background-size: 1.5em 1.5em;
+    padding-right: 1rem; /* שמירה על padding זהה */
+    padding-left: 2.5rem; /* פינוי מקום לחץ */
+}
+html.dark .form-input, html.dark .form-select, html.dark .form-textarea {
+    background-color: #4b5563; /* gray-600 */
+    border-color: #6b7280; /* gray-500 */
+    color: var(--text-dark);
+}
+.form-label {
+    display: block;
+    text-sm;
+    font-weight: 500;
+    margin-bottom: 0.25rem;
+    color: var(--text-dark);
 }
 
 /* --- Modals --- */
@@ -375,22 +410,28 @@ html.dark .close-panel-btn:hover { background-color: var(--bg-white); }
     align-items: center;
     justify-content: center;
     padding: 1rem;
+    transition: opacity 0.2s ease;
 }
 .modal-overlay.hidden {
     display: none;
+    opacity: 0;
 }
 .modal-content {
     background-color: var(--bg-white);
+    html.dark & { background-color: var(--bg-white); }
     border-radius: 1rem;
     box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
     width: 100%;
     max-width: 600px;
     z-index: 50;
     overflow: hidden;
-    display: block; /* JS יטפל בהסתרה */
+    transform: scale(0.95);
+    opacity: 0;
+    transition: all 0.2s ease;
 }
-.modal-content.hidden {
-    display: none;
+.modal-overlay:not(.hidden) .modal-content {
+    transform: scale(1);
+    opacity: 1;
 }
 .modal-form {
     display: flex;
@@ -407,9 +448,6 @@ html.dark .close-panel-btn:hover { background-color: var(--bg-white); }
     max-height: 60vh;
     overflow-y: auto;
 }
-.modal-body .space-y-3 > * + * {
-    margin-top: 0.75rem;
-}
 .form-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -418,38 +456,12 @@ html.dark .close-panel-btn:hover { background-color: var(--bg-white); }
 .modal-actions {
     padding: 1rem 1.5rem;
     background-color: rgba(249, 250, 251, 0.7);
+    html.dark & { background-color: rgba(55, 65, 81, 0.7); }
     border-top: 1px solid var(--border-color);
     display: flex;
     justify-content: flex-end;
     gap: 0.75rem;
 }
-html.dark .modal-actions { background-color: rgba(55, 65, 81, 0.7); }
-
-/* [חדש] עיצוב למודאל אישור */
-.confirm-body {
-    padding: 1.5rem;
-}
-.confirm-title {
-    font-size: 1.25rem;
-    font-weight: 600;
-    color: var(--text-dark);
-}
-.confirm-message {
-    font-size: 1rem;
-    color: var(--text-light);
-    margin-top: 0.5rem;
-    margin-bottom: 1.5rem;
-}
-.confirm-actions {
-    padding: 1rem 1.5rem;
-    background-color: rgba(249, 250, 251, 0.7);
-    border-top: 1px solid var(--border-color);
-    display: flex;
-    justify-content: flex-end;
-    gap: 0.75rem;
-}
-html.dark .confirm-actions { background-color: rgba(55, 65, 81, 0.7); }
-
 
 /* --- Buttons --- */
 .btn {
@@ -459,6 +471,9 @@ html.dark .confirm-actions { background-color: rgba(55, 65, 81, 0.7); }
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
 }
 .btn-primary {
     background-color: var(--primary-color);
@@ -474,6 +489,7 @@ html.dark .confirm-actions { background-color: rgba(55, 65, 81, 0.7); }
 }
 .btn-secondary:hover {
     background-color: var(--bg-light);
+    html.dark & { background-color: #4b5563; }
 }
 .btn-danger {
     background-color: var(--danger-color);
@@ -481,6 +497,10 @@ html.dark .confirm-actions { background-color: rgba(55, 65, 81, 0.7); }
 }
 .btn-danger:hover {
     background-color: var(--danger-dark);
+}
+.btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
 }
 
 /* --- Toast --- */
@@ -508,9 +528,9 @@ html.dark .confirm-actions { background-color: rgba(55, 65, 81, 0.7); }
     opacity: 1;
     transform: translateY(0);
 }
-.toast.success { background-color: #16a34a; }
+.toast.success { background-color: var(--success-color); }
 .toast.error { background-color: var(--danger-color); }
-.toast.info { background-color: #2563eb; }
+.toast.info { background-color: var(--primary-color); }
 
 /* --- Responsive --- */
 @media (max-width: 1024px) {
@@ -548,7 +568,7 @@ html.dark .confirm-actions { background-color: rgba(55, 65, 81, 0.7); }
         transform: translateX(100%); /* RTL-friendly */
         transition: transform 0.3s ease;
         box-shadow: -10px 0 20px rgba(0,0,0,0.1);
-        background: var(--bg-glass); /* [FIX] Add background for overlay */
+        background-color: var(--bg-glass); /* הוספת רקע במובייל */
     }
     .glass-wrapper.details-open #details-panel {
         transform: translateX(0);
@@ -565,12 +585,15 @@ html.dark .confirm-actions { background-color: rgba(55, 65, 81, 0.7); }
     
     .content-area {
         padding: 0.75rem;
-        gap: 0.75rem; /* [CHANGED] */
     }
-    /* [NEW] Map responsive */
-    #map-container {
-        height: 35%;
+    .content-view {
+        top: 0.75rem;
+        right: 0.75rem;
+        bottom: 0.75rem;
+        left: 0.75rem;
+        height: calc(100% - 1.5rem);
     }
+
     .data-grid {
         min-width: 600px;
     }
@@ -617,19 +640,6 @@ html.dark .confirm-actions { background-color: rgba(55, 65, 81, 0.7); }
     }
     .form-grid {
         grid-template-columns: 1fr;
-    }
-    
-    /* [NEW] Map responsive */
-    .content-area {
-        /* On mobile, stack map and table */
-        flex-direction: column;
-    }
-    #map-container {
-        height: 30vh; /* 30% of viewport height */
-    }
-    .table-container {
-        height: auto; /* Let it fill remaining space */
-        flex-grow: 1;
     }
 }
 
