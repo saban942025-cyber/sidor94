@@ -12,14 +12,16 @@ import { setLogLevel } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-
 let db, auth;
 let currentUserId = null;
 let allCustomers = [];
+let allOrders = []; // [חדש]
 let currentToastTimer = null;
 let appInitialized = false;
 let currentDeleteCallback = null; 
 
-// [חדש] משתני מפה
+// משתני מפה
 let map;
 let customerMarkers = {};
-let customerIcon;
+let orderMarkers = {}; // [חדש]
+let customerIcon, orderIcon, orderIconActive; // [שונה]
 const ISRAEL_CENTER = [32.0853, 34.7818];
 
 // --- Firebase Config (Placeholder) ---
@@ -72,9 +74,10 @@ function initApp() {
                 document.getElementById('auth-status').style.color = "#22c55e"; 
                 
                 if (!appInitialized) {
-                    initMap(); // [חדש] אתחול מפה
+                    initMap(); 
                     attachListeners();
                     loadCustomers(); 
+                    listenToOrders(); // [חדש] האזנה להזמנות
                     appInitialized = true;
                     console.log("✅ Customer Manager Loaded.");
                 }
@@ -101,7 +104,7 @@ function initApp() {
     }
 }
 
-// [חדש] אתחול מפה ואייקונים
+// אתחול מפה ואייקונים
 function initMap() {
     try {
         map = L.map('map').setView(ISRAEL_CENTER, 8);
@@ -110,15 +113,27 @@ function initMap() {
             attribution: '© OpenStreetMap'
         }).addTo(map);
 
-        // יצירת אייקון בסיסי ללקוח
+        // אייקון לקוח (כחול)
         customerIcon = L.icon({
             iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-blue.png',
-            iconSize: [25, 41],
-            iconAnchor: [12, 41],
-            popupAnchor: [1, -34],
-            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-            shadowSize: [41, 41]
+            iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34],
+            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png', shadowSize: [41, 41]
         });
+
+        // אייקון הזמנה (אפור)
+        orderIcon = L.icon({
+            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-grey.png',
+            iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34],
+            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png', shadowSize: [41, 41]
+        });
+        
+        // אייקון הזמנה פעילה/חדשה (ירוק)
+        orderIconActive = L.icon({
+            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png',
+            iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34],
+            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png', shadowSize: [41, 41]
+        });
+
         console.log("Map Initialized.");
     } catch(e) {
         console.error("Map initialization failed:", e);
@@ -128,46 +143,61 @@ function initMap() {
 
 
 function attachListeners() {
-    document.getElementById('search-input').addEventListener('input', debounce(searchCustomers, 300));
+    document.getElementById('search-input').addEventListener('input', debounce(performSearch, 300));
     
-    // [שונה] כפתור דשבורד מציג מפה
     document.getElementById('dashboardBtn').addEventListener('click', (e) => {
         e.preventDefault();
         showView('dashboard');
     });
     
-    // [שונה] כפתור ניהול מציג טבלה
     document.getElementById('clientsBtn').addEventListener('click', (e) => {
         e.preventDefault();
-        showView('table');
+        showView('customers');
     });
 
+    // [חדש] מאזין לכפתור הזמנות
+    document.getElementById('ordersBtn').addEventListener('click', (e) => {
+        e.preventDefault();
+        showView('orders');
+    });
+    
     document.getElementById('historyBtn').addEventListener('click', (e) => {
         e.preventDefault();
         showToast("בחר לקוח ספציפי להצגת היסטוריה", "info");
     });
 }
 
-// [חדש] פונקציית ניהול תצוגה
+// [שונה] פונקציית ניהול תצוגה
 function showView(viewName) {
     const mapContainer = document.getElementById('map-container');
-    const tableContainer = document.querySelector('.table-container');
+    const customerTable = document.getElementById('customer-table-container');
+    const ordersTable = document.getElementById('orders-table-container');
+    
     const dashboardBtn = document.getElementById('dashboardBtn');
     const clientsBtn = document.getElementById('clientsBtn');
+    const ordersBtn = document.getElementById('ordersBtn');
+
+    // הסתר הכל
+    mapContainer.classList.add('hidden');
+    customerTable.classList.add('hidden');
+    ordersTable.classList.add('hidden');
+    dashboardBtn.classList.remove('active');
+    clientsBtn.classList.remove('active');
+    ordersBtn.classList.remove('active');
     
     if (viewName === 'dashboard') {
         mapContainer.classList.remove('hidden');
-        tableContainer.classList.add('hidden');
         dashboardBtn.classList.add('active');
-        clientsBtn.classList.remove('active');
-        if(map) map.invalidateSize(); // חשוב לרענון המפה
-        document.getElementById('main-title').innerText = 'דשבורד לקוחות (מפה)';
-    } else { // 'table'
-        mapContainer.classList.add('hidden');
-        tableContainer.classList.remove('hidden');
-        dashboardBtn.classList.remove('active');
+        if(map) map.invalidateSize(); 
+        document.getElementById('main-title').innerText = 'דשבורד (מפה)';
+    } else if (viewName === 'customers') {
+        customerTable.classList.remove('hidden');
         clientsBtn.classList.add('active');
         document.getElementById('main-title').innerText = `ניהול לקוחות (${allCustomers.length})`;
+    } else if (viewName === 'orders') {
+        ordersTable.classList.remove('hidden');
+        ordersBtn.classList.add('active');
+        document.getElementById('main-title').innerText = `ניהול הזמנות (${allOrders.length})`;
     }
 }
 
@@ -176,12 +206,7 @@ function showView(viewName) {
 
 async function loadCustomers() {
     const loaderEl = document.getElementById('main-loader');
-    const mapContainer = document.getElementById('map-container');
-    const tableContainer = document.querySelector('.table-container');
-
-    loaderEl.classList.remove('hidden');
-    mapContainer.classList.add('hidden');
-    tableContainer.classList.add('hidden');
+    loaderEl.classList.remove('hidden'); // הצג טוען ראשי
 
     const q = query(collection(db, "customers"), orderBy("name"));
     
@@ -191,45 +216,74 @@ async function loadCustomers() {
             allCustomers.push({ id: doc.id, ...doc.data() });
         });
         
-        searchCustomers(); // סינון ורינדור
+        performSearch(); // בצע חיפוש (או הצג הכל)
         
         loaderEl.classList.add('hidden');
-        // הצגת התצוגה הפעילה כרגע (דשבורד או טבלה)
-        if (document.getElementById('dashboardBtn').classList.contains('active')) {
-            showView('dashboard');
-        } else {
-            showView('table');
-        }
+        // הצג את התצוגה הראשונית (דשבורד)
+        showView('dashboard');
         
     }, (error) => {
         console.error("Failed to load customers:", error);
         showToast("שגיאה בטעינת לקוחות", "error");
         document.getElementById('customer-table-body').innerHTML = `<tr><td colspan="6" class="text-center p-8 text-red-500">שגיאה בטעינת לקוחות.</td></tr>`;
         loaderEl.classList.add('hidden');
-        tableContainer.classList.remove('hidden'); // הצג טבלה במקרה שגיאה
+        showView('customers'); // הצג טבלת שגיאה
     });
 }
 
-function searchCustomers() {
+// [חדש] האזנה להזמנות
+function listenToOrders() {
+    // מביא את כל ההזמנות, ממוין לפי תאריך יצירה
+    const q = query(collection(db, "orders"), orderBy("createdAt", "desc"), limit(200));
+    
+    onSnapshot(q, (snapshot) => {
+        allOrders = [];
+        snapshot.forEach(doc => {
+            allOrders.push({ id: doc.id, ...doc.data() });
+        });
+        
+        performSearch(); // בצע חיפוש (או הצג הכל)
+        
+    }, (error) => {
+        console.error("Failed to load orders:", error);
+        showToast("שגיאה בטעינת הזמנות", "error");
+        document.getElementById('orders-table-body').innerHTML = `<tr><td colspan="6" class="text-center p-8 text-red-500">שגיאה בטעינת הזמנות.</td></tr>`;
+    });
+}
+
+
+// [שונה] פונקציית חיפוש מרכזית
+function performSearch() {
     const search = document.getElementById('search-input').value.toLowerCase();
     
-    const filtered = allCustomers.filter(c => 
+    // סינון לקוחות
+    const filteredCustomers = allCustomers.filter(c => 
         (c.name && c.name.toLowerCase().includes(search)) ||
         (c.customerNumber && c.customerNumber.includes(search)) ||
         (c.phone && c.phone.includes(search)) ||
         (c.defaultAddress && c.defaultAddress.toLowerCase().includes(search))
     );
     
-    renderCustomerTable(filtered);
-    renderCustomerMap(filtered); // [חדש] רנדור מפה
+    // סינון הזמנות
+    const filteredOrders = allOrders.filter(o => 
+        (o.order_id && o.order_id.toLowerCase().includes(search)) ||
+        (o.customer?.name && o.customer.name.toLowerCase().includes(search)) ||
+        (o.address && o.address.toLowerCase().includes(search)) ||
+        (o.status && o.status.toLowerCase().includes(search))
+    );
+    
+    renderCustomerTable(filteredCustomers);
+    renderOrdersTable(filteredOrders); // [חדש]
+    renderMap(filteredCustomers, filteredOrders); // [שונה]
 }
-window.searchCustomers = searchCustomers; 
+window.performSearch = performSearch; 
 
 // --- Rendering ---
 
 function renderCustomerTable(customersToRender) {
     const tbody = document.getElementById('customer-table-body');
-    // ... (אותו קוד כמו קודם) ...
+    if (!tbody) return;
+    
     if (customersToRender.length === 0) {
         tbody.innerHTML = '<tr><td colspan="6" class="text-center p-8 text-gray-500">לא נמצאו לקוחות.</td></tr>';
         return;
@@ -259,7 +313,7 @@ function renderCustomerTable(customersToRender) {
                     <button class="action-btn" title="יצירת הזמנה חדשה" onclick="openNewOrderModal('${customer.id}', '${customer.name}')">
                         <i data-feather="plus-circle" class="w-5 h-5"></i>
                     </button>
-                    <button class="action-btn danger" title="מחיקת לקוח" onclick="deleteCustomer('${customer.id}', '${customer.name}')">
+                    <button class="action-btn danger" title="מחיקת לקוח" onclick="deleteCustomerWrapper('${customer.id}', '${customer.name}')">
                          <i data-feather="trash-2" class="w-5 h-5"></i>
                     </button>
                 </td>
@@ -270,24 +324,78 @@ function renderCustomerTable(customersToRender) {
 }
 
 /**
- * @required renderCustomerMap()
- * [חדש] מרנדר את הלקוחות על המפה
+ * @required renderOrdersTable()
+ * [חדש] מרנדר את טבלת ההזמנות
  */
-function renderCustomerMap(customersToMap) {
+function renderOrdersTable(ordersToRender) {
+    const tbody = document.getElementById('orders-table-body');
+    if (!tbody) return;
+    
+    if (ordersToRender.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center p-8 text-gray-500">לא נמצאו הזמנות.</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = ordersToRender.map(order => {
+        const orderDate = order.orderDate || (order.createdAt?.toDate ? order.createdAt.toDate().toLocaleDateString('he-IL') : 'N/A');
+        const status = order.status || 'לא ידוע';
+        const orderId = order.order_id || order.id;
+        
+        // קביעת אם השורה לחיצה (רק אם יש מיקום)
+        const isClickable = order.latitude && order.longitude;
+        const clickEvent = isClickable ? `onclick="zoomToOrder('${order.id}', ${order.latitude}, ${order.longitude})"` : '';
+        const rowClass = isClickable ? 'clickable' : '';
+
+        return `
+            <tr class="${rowClass}" ${clickEvent} title="${isClickable ? 'לחץ לניווט למפה' : 'אין מיקום זמין'}">
+                <td class="font-mono">${orderId}</td>
+                <td class="font-semibold">${order.customer?.name || 'לא משויך'}</td>
+                <td>${order.address || 'אין כתובת'}</td>
+                <td>${status}</td>
+                <td>${orderDate}</td>
+                <td class="action-buttons">
+                    <button class="action-btn" title="ערוך הזמנה" onclick="editOrder('${order.id}')">
+                        <i data-feather="edit-2" class="w-5 h-5"></i>
+                    </button>
+                    <button class="action-btn" title="שכפל הזמנה" onclick="duplicateOrder('${order.id}')">
+                        <i data-feather="copy" class="w-5 h-5"></i>
+                    </button>
+                    <button class="action-btn" title="שתף לינק ללקוח" onclick="shareOrderLink('${order.id}')">
+                         <i data-feather="link" class="w-5 h-5"></i>
+                    </button>
+                    <button class="action-btn danger" title="מחק הזמנה" onclick="deleteOrderWrapper('${order.id}', '${orderId}')">
+                         <i data-feather="trash" class="w-5 h-5"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+    feather.replace();
+}
+
+
+/**
+ * @required renderMap()
+ * [שונה] מרנדר לקוחות והזמנות על המפה
+ */
+function renderMap(customersToMap, ordersToMap) {
     if (!map) return;
 
     // ניקוי מרקרים קיימים
     Object.values(customerMarkers).forEach(marker => marker.remove());
     customerMarkers = {};
+    Object.values(orderMarkers).forEach(marker => marker.remove());
+    orderMarkers = {};
     
     const bounds = L.latLngBounds();
     let mappedCount = 0;
 
+    // רנדור לקוחות
     customersToMap.forEach(customer => {
         if (customer.customLat && customer.customLon) {
             const latLng = [customer.customLat, customer.customLon];
             const popupContent = `
-                <h4>${customer.name}</h4>
+                <h4>(לקוח) ${customer.name}</h4>
                 <p>${customer.defaultAddress || 'אין כתובת'}</p>
                 <p>${customer.phone || 'אין טלפון'}</p>
             `;
@@ -302,11 +410,32 @@ function renderCustomerMap(customersToMap) {
         }
     });
 
-    // התאמת תצוגת המפה אם יש מרקרים
+    // רנדור הזמנות
+    ordersToMap.forEach(order => {
+        if (order.latitude && order.longitude) {
+            const latLng = [order.latitude, order.longitude];
+            const popupContent = `
+                <h4>(הזמנה) ${order.order_id || order.id}</h4>
+                <p>לקוח: ${order.customer?.name || 'N/A'}</p>
+                <p>${order.address || 'אין כתובת'}</p>
+                <p>סטטוס: ${order.status || 'N/A'}</p>
+            `;
+            
+            const icon = order.status === 'חדש' ? orderIconActive : orderIcon;
+            
+            const marker = L.marker(latLng, { icon: icon })
+                .addTo(map)
+                .bindPopup(popupContent);
+            
+            orderMarkers[order.id] = marker;
+            bounds.extend(latLng);
+            mappedCount++;
+        }
+    });
+
     if (mappedCount > 0) {
         map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
-    } else if (mappedCount === 0 && customersToMap.length > 0) {
-        // אם סונן ולא נמצאו לקוחות ממופים, החזר למרכז
+    } else if (mappedCount === 0 && (customersToMap.length > 0 || ordersToMap.length > 0)) {
         map.setView(ISRAEL_CENTER, 8);
     }
 }
@@ -315,7 +444,6 @@ function renderCustomerMap(customersToMap) {
 // --- UI Actions (Modals, Panels) ---
 
 function openModal(modalId, content = null) {
-    // ... (אותו קוד כמו קודם) ...
     const modal = document.getElementById(modalId);
     if (content) {
         modal.innerHTML = content;
@@ -325,7 +453,6 @@ function openModal(modalId, content = null) {
 }
 
 function closeAllModals() {
-    // ... (אותו קוד כמו קודם) ...
     document.querySelectorAll('.modal-content').forEach(modal => modal.classList.add('hidden'));
     document.getElementById('modal-overlay').classList.add('hidden');
     currentDeleteCallback = null; 
@@ -333,7 +460,6 @@ function closeAllModals() {
 window.closeAllModals = closeAllModals; 
 
 function openDetailsPanel(content) {
-    // ... (אותו קוד כמו קודם) ...
     document.getElementById('details-content').innerHTML = content;
     document.getElementById('details-panel').classList.remove('hidden');
     document.querySelector('.glass-wrapper').classList.add('details-open');
@@ -341,19 +467,19 @@ function openDetailsPanel(content) {
 }
 
 function closeDetailsPanel() {
-    // ... (אותו קוד כמו קודם) ...
     document.getElementById('details-panel').classList.add('hidden');
     document.querySelector('.glass-wrapper').classList.remove('details-open');
 }
 window.closeDetailsPanel = closeDetailsPanel; 
 
-/**
- * @required editCustomer()
- * [שודרג] נוסף שדה קואורדינטות
- */
 async function openCustomerEditor(customerId) {
+    // ... (אותו קוד כמו קודם) ...
     const customer = allCustomers.find(c => c.id === customerId);
-    // ... (אותו קוד ל-auditLogHtml כמו קודם) ...
+    if (!customer) {
+        showToast("שגיאה: לא נמצא לקוח", "error");
+        return;
+    }
+    
     let auditLogHtml = '<li>אין היסטוריית שינויים</li>';
     if (customer.auditLog && Array.isArray(customer.auditLog)) {
         auditLogHtml = customer.auditLog
@@ -371,7 +497,6 @@ async function openCustomerEditor(customerId) {
             }).join('');
     }
 
-    // [שונה] הוספת שדה קואורדינטות
     const content = `
         <div class="p-6">
             <h3 class="text-xl font-semibold mb-4">עריכת לקוח: ${customer.name}</h3>
@@ -394,7 +519,6 @@ async function openCustomerEditor(customerId) {
                     <input type="text" id="edit-customer-address" class="form-input" value="${customer.defaultAddress || ''}">
                 </div>
                 
-                <!-- [חדש] שדה קואורדינטות -->
                 <div>
                     <label class="block text-sm font-medium">קואורדינטות (lat, lon)</label>
                     <input type="text" id="edit-customer-coords" class="form-input" placeholder="לדוג': 32.123, 34.456" value="${(customer.customLat && customer.customLon) ? `${customer.customLat}, ${customer.customLon}` : ''}">
@@ -425,10 +549,6 @@ async function openCustomerEditor(customerId) {
 }
 window.openCustomerEditor = openCustomerEditor; 
 
-/**
- * @required showOrders()
- * פותח מודאל עם היסטוריית הזמנות
- */
 async function showCustomerOrders(customerId, customerName) {
     // ... (אותו קוד כמו קודם) ...
     if (!customerId) {
@@ -477,10 +597,6 @@ async function showCustomerOrders(customerId, customerName) {
 }
 window.showCustomerOrders = showCustomerOrders; 
 
-/**
- * @required createOrder() - UI part
- * פותח מודאל ליצירת הזמנה חדשה
- */
 function openNewOrderModal(customerId, customerName) {
     // ... (אותו קוד כמו קודם) ...
     const customer = allCustomers.find(c => c.id === customerId);
@@ -526,11 +642,8 @@ window.openNewOrderModal = openNewOrderModal;
 
 // --- CRUD Functions ---
 
-/**
- * @required saveCustomer()
- * [שודרג] שומר גם קואורדינטות
- */
 async function saveCustomer(event) {
+    // ... (אותו קוד כמו קודם, כולל טיפול בקואורדינטות) ...
     event.preventDefault();
     const customerId = document.getElementById('edit-customer-id').value;
     const btn = event.target.querySelector('button[type="submit"]');
@@ -543,7 +656,6 @@ async function saveCustomer(event) {
         return;
     }
 
-    // [שונה] איסוף נתונים כולל קואורדינטות
     const updatedData = {
         customerNumber: document.getElementById('edit-customer-number').value || null,
         name: document.getElementById('edit-customer-name').value,
@@ -552,7 +664,6 @@ async function saveCustomer(event) {
         status: document.getElementById('edit-customer-status').value,
     };
     
-    // [חדש] פיענוח קואורדינטות
     const coordsString = document.getElementById('edit-customer-coords').value.trim();
     let customLat = null;
     let customLon = null;
@@ -564,14 +675,13 @@ async function saveCustomer(event) {
         } else {
             showToast('קואורדינטות לא תקינות. יש להזין בפורמט lat, lon', 'error');
             btn.disabled = false;
-            return; // עצירת השמירה
+            return; 
         }
     }
     updatedData.customLat = customLat;
     updatedData.customLon = customLon;
 
 
-    // בדיקה אם בוצעו שינויים
     const changes = {};
     let hasChanges = false;
     for (const key in updatedData) {
@@ -580,7 +690,6 @@ async function saveCustomer(event) {
             hasChanges = true;
         }
     }
-    // בדיקה ספציפית לקואורדינטות (כי null != undefined)
     if ((updatedData.customLat || null) !== (originalCustomer.customLat || null) || 
         (updatedData.customLon || null) !== (originalCustomer.customLon || null)) {
         changes.customCoords = { from: `${originalCustomer.customLat}, ${originalCustomer.customLon}`, to: `${updatedData.customLat}, ${updatedData.customLon}`};
@@ -595,7 +704,6 @@ async function saveCustomer(event) {
         return;
     }
 
-    // שמירת הנתונים ב-Firestore
     try {
         const customerRef = doc(db, "customers", customerId);
         
@@ -613,7 +721,6 @@ async function saveCustomer(event) {
 
         showToast("פרטי לקוח עודכנו בהצלחה", "success");
         closeDetailsPanel();
-        // onSnapshot ירענן אוטומטית את המפה והטבלה
     } catch (e) {
         console.error("Failed to save customer:", e);
         showToast(`שגיאה בשמירת פרטי לקוח: ${e.message}`, "error");
@@ -623,10 +730,6 @@ async function saveCustomer(event) {
 }
 window.saveCustomer = saveCustomer; 
 
-/**
- * @required createOrder() - Logic part
- * יוצר מסמך הזמנה חדש
- */
 async function createOrderForCustomer(event) {
     // ... (אותו קוד כמו קודם) ...
     event.preventDefault();
@@ -661,6 +764,7 @@ async function createOrderForCustomer(event) {
         createdAt: serverTimestamp(),
         lastModified: serverTimestamp(),
         order_id: `AUTO-${Date.now().toString().slice(-6)}`
+        // [TODO] הוספת קואורדינטות מהלקוח אם קיימות, או מגוגל
     };
 
     try {
@@ -676,17 +780,13 @@ async function createOrderForCustomer(event) {
 }
 window.createOrderForCustomer = createOrderForCustomer; 
 
-/**
- * @required deleteCustomer()
- * [שודרג] שימוש במודאל אישור
- */
-async function deleteCustomer(customerId, customerName) {
+// [שונה] שם הפונקציה שונתה כדי למנוע התנגשות
+async function deleteCustomerWrapper(customerId, customerName) {
     const title = `מחיקת לקוח: ${customerName}`;
-    const message = `האם אתה בטוח שברצונך למחוק את הלקוח? פעולה זו אינה הפיכה. אם ללקוח יש הזמנות פעילות, הן עלולות להישאר "יתומות".`;
+    const message = `האם אתה בטוח שברצונך למחוק את הלקוח? פעולה זו אינה הפיכה.`;
     
     currentDeleteCallback = async () => {
         try {
-            // (אופציונלי) כאן אפשר להוסיף בדיקה נוספת להזמנות פעילות
             const customerRef = doc(db, "customers", customerId);
             await deleteDoc(customerRef);
             
@@ -700,10 +800,176 @@ async function deleteCustomer(customerId, customerName) {
     
     openConfirmModal(title, message);
 }
-window.deleteCustomer = deleteCustomer; 
+window.deleteCustomerWrapper = deleteCustomerWrapper; 
 
-// [חדש] פונקציית אישור גנרית
+// --- [חדש] פונקציות ניהול הזמנות ---
+
+/**
+ * @required zoomToOrder()
+ * [חדש] ממקד את המפה על הזמנה
+ */
+function zoomToOrder(orderId, lat, lon) {
+    if (!map) return;
+    
+    if (!lat || !lon) {
+        showToast('לא קיים מיקום עבור הזמנה זו', 'info');
+        return;
+    }
+    
+    showView('dashboard'); // עבור לתצוגת מפה
+    map.setView([lat, lon], 16); // זום קרוב
+    
+    // פתח פופאפ
+    if (orderMarkers[orderId]) {
+        orderMarkers[orderId].openPopup();
+    }
+}
+window.zoomToOrder = zoomToOrder;
+
+/**
+ * @required editOrder()
+ * [חדש] פותח מודאל עריכת הזמנה (כרגע פלייסהולדר)
+ */
+async function editOrder(orderId) {
+    const order = allOrders.find(o => o.id === orderId);
+    if (!order) {
+        showToast('שגיאה: הזמנה לא נמצאה', 'error');
+        return;
+    }
+    
+    // בעתיד, ניצור כאן טופס עריכה מלא. כרגע, נציג פרטים.
+    const content = `
+        <div class="modal-form">
+            <h3 class="modal-title">עריכת הזמנה (בבנייה)</h3>
+            <div class="modal-body space-y-3">
+                <p><strong>מס' הזמנה:</strong> ${order.order_id || order.id}</p>
+                <p><strong>לקוח:</strong> ${order.customer?.name || 'N/A'}</p>
+                <p><strong>כתובת:</strong> ${order.address || 'N/A'}</p>
+                <p><strong>סטטוס:</strong> ${order.status || 'N/A'}</p>
+                <div>
+                    <label>עדכן סטטוס:</label>
+                    <select class="form-input" onchange="updateOrderStatusDirectly(this.value, '${order.id}')">
+                        <option value="" ${!order.status ? 'selected' : ''}>בחר סטטוס</option>
+                        <option value="חדש" ${order.status === 'חדש' ? 'selected' : ''}>חדש</option>
+                        <option value="שויך" ${order.status === 'שויך' ? 'selected' : ''}>שויך</option>
+                        <option value="בדרך" ${order.status === 'בדרך' ? 'selected' : ''}>בדרך</option>
+                        <option value="הושלם" ${order.status === 'הושלם' ? 'selected' : ''}>הושלם</option>
+                        <option value="בוטל" ${order.status === 'בוטל' ? 'selected' : ''}>בוטל</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeAllModals()">סגור</button>
+            </div>
+        </div>
+    `;
+    openModal('edit-order-modal', content);
+}
+window.editOrder = editOrder;
+
+// [חדש] פונקציית עזר לעדכון סטטוס מהמודאל
+async function updateOrderStatusDirectly(newStatus, orderId) {
+    if (!newStatus) return;
+    try {
+        const orderRef = doc(db, "orders", orderId);
+        await updateDoc(orderRef, {
+            status: newStatus,
+            lastModified: serverTimestamp()
+        });
+        showToast(`סטטוס הזמנה ${orderId.slice(-4)} עודכן`, 'success');
+        closeAllModals(); // onSnapshot יטפל ברענון
+    } catch(e) {
+        showToast('שגיאה בעדכון סטטוס', 'error');
+        console.error(e);
+    }
+}
+window.updateOrderStatusDirectly = updateOrderStatusDirectly;
+
+/**
+ * @required duplicateOrder()
+ * [חדש] משכפל הזמנה
+ */
+async function duplicateOrder(orderId) {
+    const originalOrder = allOrders.find(o => o.id === orderId);
+    if (!originalOrder) {
+        showToast('שגיאה: הזמנה מקורית לא נמצאה', 'error');
+        return;
+    }
+    
+    // יצירת אובייקט הזמנה חדש
+    const newOrderData = {
+        ...originalOrder,
+        status: "חדש", // איפוס סטטוס
+        createdAt: serverTimestamp(),
+        lastModified: serverTimestamp(),
+        order_id: `AUTO-${Date.now().toString().slice(-6)}`,
+        notes: `(שוכפל מהזמנה ${originalOrder.order_id || originalOrder.id})\n${originalOrder.notes || ''}`
+    };
+    
+    // הסרת מזהה ו-ID ישנים
+    delete newOrderData.id; 
+    
+    try {
+        await addDoc(collection(db, "orders"), newOrderData);
+        showToast('הזמנה שוכפלה בהצלחה', 'success');
+        showView('orders'); // עבור לטבלת הזמנות
+    } catch (e) {
+        console.error("Failed to duplicate order:", e);
+        showToast('שגיאה בשכפול הזמנה', 'error');
+    }
+}
+window.duplicateOrder = duplicateOrder;
+
+/**
+ * @required deleteOrderWrapper()
+ * [חדש] קורא למודאל אישור לפני מחיקת הזמנה
+ */
+async function deleteOrderWrapper(orderId, orderNum) {
+    const title = `מחיקת הזמנה: ${orderNum}`;
+    const message = `האם אתה בטוח שברצונך למחוק את ההזמנה? פעולה זו אינה הפיכה.`;
+    
+    currentDeleteCallback = async () => {
+        try {
+            const orderRef = doc(db, "orders", orderId);
+            await deleteDoc(orderRef);
+            showToast(`הזמנה ${orderNum} נמחקה בהצלחה`, 'success');
+        } catch (e) {
+            console.error("Failed to delete order:", e);
+            showToast(`שגיאה במחיקת הזמנה: ${e.message}`, "error");
+        }
+    };
+    
+    openConfirmModal(title, message);
+}
+window.deleteOrderWrapper = deleteOrderWrapper;
+
+/**
+ * @required shareOrderLink()
+ * [חדש] יוצר ומעתיק לינק שיתוף
+ */
+async function shareOrderLink(orderId) {
+    const order = allOrders.find(o => o.id === orderId);
+    if (!order) {
+        showToast('שגיאה: הזמנה לא נמצאה', 'error');
+        return;
+    }
+    
+    const orderNum = order.order_id || order.id;
+    
+    // הנחה שהלינק הוא בנתיב יחסי
+    const link = `../customer.html?id=${orderNum}`;
+    const fullLink = new URL(link, window.location.href).href;
+    
+    copyToClipboard(fullLink);
+    showToast('לינק שיתוף הועתק ללוח', 'success');
+}
+window.shareOrderLink = shareOrderLink;
+
+
+// --- [חדש] פונקציות עזר ---
+
 function openConfirmModal(title, message) {
+    // ... (אותו קוד כמו קודם) ...
     const content = `
         <div class="confirm-body">
             <h3 class="confirm-title">${title}</h3>
@@ -711,20 +977,36 @@ function openConfirmModal(title, message) {
         </div>
         <div class="confirm-actions">
             <button type="button" class="btn btn-secondary" onclick="closeAllModals()">ביטול</button>
-            <button type="button" class="btn btn-danger" onclick="executeConfirm()">אשר מחיקה</button>
+            <button type="button" class="btn btn-danger" onclick="executeConfirm()">אשר</button>
         </div>
     `;
     openModal('confirm-modal', content);
 }
 
-// [חדש] פונקציה להרצת הקולבק השמור
 function executeConfirm() {
+    // ... (אותו קוד כמו קודם) ...
     if (typeof currentDeleteCallback === 'function') {
         currentDeleteCallback();
     }
     closeAllModals();
 }
 window.executeConfirm = executeConfirm; 
+
+function copyToClipboard(text) {
+    try {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed'; 
+        textarea.style.opacity = 0;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+    } catch (e) {
+        console.warn("Copy to clipboard failed, falling back to prompt");
+        window.prompt("העתק קישור:", text);
+    }
+}
 
 // --- Utility Functions ---
 
