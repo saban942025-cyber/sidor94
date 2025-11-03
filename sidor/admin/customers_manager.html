@@ -8,6 +8,10 @@
     <!-- קישור לקובץ העיצוב הייעודי -->
     <link rel="stylesheet" href="customers_manager.css">
     
+    <!-- [חדש] LeafletJS (Map) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
     <!-- Icons (Feather) -->
     <script src="https://unpkg.com/feather-icons"></script>
     
@@ -28,10 +32,15 @@
             z-index: -1;
         }
         .loader-container {
+            position: absolute;
+            inset: 0;
+            background-color: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(2px);
             display: flex;
             align-items: center;
             justify-content: center;
             height: 100%;
+            z-index: 10;
         }
         .loader {
             border: 4px solid #f3f3f3;
@@ -64,7 +73,7 @@
         <!-- תוכן יצירת הזמנה חדשה יוזרק לכאן -->
     </div>
     
-    <!-- [חדש] מודאל אישור (מחליף confirm) -->
+    <!-- מודאל אישור (מחליף confirm) -->
     <div id="confirm-modal" class="modal-content hidden">
         <!-- תוכן אישור מחיקה יוזרק לכאן -->
     </div>
@@ -79,11 +88,11 @@
                 <span class="nav-title">DeliveryMaster</span>
             </div>
             <div class="nav-links">
-                <a href="#" id="dashboardBtn" class="nav-link">
-                    <i data-feather="map"></i><span>דשבורד</span>
+                <a href="#" id="dashboardBtn" class="nav-link active"> <!-- [שונה] הפכנו את הדשבורד/מפה לפעיל -->
+                    <i data-feather="map"></i><span>דשבורד לקוחות</span>
                 </a>
-                <a href="#" id="clientsBtn" class="nav-link active">
-                    <i data-feather="users"></i><span>ניהול לקוחות</span>
+                <a href="#" id="clientsBtn" class="nav-link">
+                    <i data-feather="users"></i><span>ניהול (טבלה)</span>
                 </a>
                 <a href="#" id="historyBtn" class="nav-link">
                     <i data-feather="archive"></i><span>היסטוריית הזמנות</span>
@@ -105,17 +114,26 @@
         <!-- אזור תוכן מרכזי -->
         <main id="main-content">
             <header class="main-header">
-                <h1 id="main-title" class="text-2xl font-bold">ניהול לקוחות</h1>
+                <h1 id="main-title" class="text-2xl font-bold">דשבורד וניהול לקוחות</h1>
                 <div class="search-bar">
                     <input type="text" id="search-input" class="form-input" placeholder="חפש לקוח (שם, טלפון, מס' לקוח)...">
                     <i data-feather="search" class="search-icon"></i>
                 </div>
             </header>
+            
+            <!-- [שונה] אזור תוכן עם מפה וטבלה -->
             <div id="content-area" class="content-area">
-                <!-- טוען ראשי -->
+                
+                <!-- טוען ראשי (יוסתר כשהתוכן מוכן) -->
                 <div id="main-loader" class="loader-container">
                     <div class="loader"></div>
                 </div>
+                
+                <!-- [חדש] מארז מפה -->
+                <div id="map-container" class="hidden">
+                    <div id="map"></div>
+                </div>
+                
                 <!-- טבלת לקוחות (מוסתרת בטעינה) -->
                 <div class="table-container hidden">
                     <table class="data-grid">
