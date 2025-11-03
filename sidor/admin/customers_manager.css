@@ -30,7 +30,7 @@ html.dark {
 
 body {
     font-family: 'Inter', 'Rubik', sans-serif;
-    background-color: #f3f4f6;
+    background-color: var(--bg-light);
     color: var(--text-dark);
     overflow: hidden;
     height: 100vh;
@@ -61,7 +61,7 @@ body {
     transition: grid-template-columns 0.3s ease;
 }
 .glass-wrapper.details-open {
-    grid-template-columns: 260px 1fr 350px;
+    grid-template-columns: 260px 1fr 400px; /* פאנל פרטים רחב יותר */
 }
 
 /* --- Left Navigation --- */
@@ -180,8 +180,9 @@ html.dark .nav-link:hover {
     border: 1px solid var(--border-color);
     border-radius: 0.75rem;
     background-color: rgba(255, 255, 255, 0.7);
-    html.dark & { background-color: rgba(55, 65, 81, 0.7); }
 }
+html.dark .table-container { background-color: rgba(55, 65, 81, 0.7); }
+
 .data-grid {
     width: 100%;
     border-collapse: collapse;
@@ -189,8 +190,8 @@ html.dark .nav-link:hover {
 }
 .data-grid thead {
     background-color: rgba(249, 250, 251, 0.7);
-    html.dark & { background-color: rgba(75, 85, 99, 0.7); }
 }
+html.dark .data-grid thead { background-color: rgba(75, 85, 99, 0.7); }
 .data-grid th, .data-grid td {
     padding: 1rem 1.25rem;
     text-align: right;
@@ -208,8 +209,8 @@ html.dark .nav-link:hover {
 }
 .data-grid tbody tr:hover {
     background-color: rgba(249, 250, 251, 0.9);
-    html.dark & { background-color: rgba(75, 85, 99, 0.9); }
 }
+html.dark .data-grid tbody tr:hover { background-color: rgba(75, 85, 99, 0.9); }
 
 .action-buttons {
     display: flex;
@@ -226,10 +227,10 @@ html.dark .nav-link:hover {
 }
 .action-btn:hover {
     background-color: var(--bg-light);
-    html.dark & { background-color: var(--bg-white); }
     color: var(--primary-color);
     transform: scale(1.1);
 }
+html.dark .action-btn:hover { background-color: var(--bg-white); }
 .action-btn.danger:hover {
     color: var(--danger-color);
 }
@@ -237,10 +238,12 @@ html.dark .nav-link:hover {
 /* --- Right Details Panel --- */
 #details-panel {
     border-right: 1px solid var(--border-color);
-    padding: 1.5rem;
     overflow-y: auto;
     position: relative;
+    background: rgba(255, 255, 255, 0.5);
 }
+html.dark #details-panel { background-color: rgba(31, 41, 55, 0.5); }
+
 .close-panel-btn {
     position: absolute;
     top: 1.5rem;
@@ -255,9 +258,33 @@ html.dark .nav-link:hover {
 }
 .close-panel-btn:hover {
     background-color: var(--bg-light);
-    html.dark & { background-color: var(--bg-white); }
     color: var(--text-dark);
 }
+html.dark .close-panel-btn:hover { background-color: var(--bg-white); }
+/* תוכן הפאנל מקבל ריפוד מה-JS */
+#details-content .p-6 {
+    padding: 1.5rem;
+}
+#details-content .space-y-3 > * + * {
+    margin-top: 0.75rem;
+}
+#details-content .pt-4 {
+    padding-top: 1rem;
+}
+#details-content .border-t {
+    border-top: 1px solid var(--border-color);
+}
+#details-content .max-h-24 {
+    max-height: 6rem;
+}
+#details-content .overflow-y-auto {
+    overflow-y: auto;
+}
+#details-content ul {
+    list-style-type: disc;
+    padding-right: 1.5rem;
+}
+
 
 /* --- Forms & Inputs --- */
 .form-input {
@@ -299,6 +326,7 @@ html.dark .nav-link:hover {
     max-width: 600px;
     z-index: 50;
     overflow: hidden;
+    display: block; /* JS יטפל בהסתרה */
 }
 .modal-content.hidden {
     display: none;
@@ -318,6 +346,9 @@ html.dark .nav-link:hover {
     max-height: 60vh;
     overflow-y: auto;
 }
+.modal-body .space-y-3 > * + * {
+    margin-top: 0.75rem;
+}
 .form-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -326,12 +357,38 @@ html.dark .nav-link:hover {
 .modal-actions {
     padding: 1rem 1.5rem;
     background-color: rgba(249, 250, 251, 0.7);
-    html.dark & { background-color: rgba(55, 65, 81, 0.7); }
     border-top: 1px solid var(--border-color);
     display: flex;
     justify-content: flex-end;
     gap: 0.75rem;
 }
+html.dark .modal-actions { background-color: rgba(55, 65, 81, 0.7); }
+
+/* [חדש] עיצוב למודאל אישור */
+.confirm-body {
+    padding: 1.5rem;
+}
+.confirm-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--text-dark);
+}
+.confirm-message {
+    font-size: 1rem;
+    color: var(--text-light);
+    margin-top: 0.5rem;
+    margin-bottom: 1.5rem;
+}
+.confirm-actions {
+    padding: 1rem 1.5rem;
+    background-color: rgba(249, 250, 251, 0.7);
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+}
+html.dark .confirm-actions { background-color: rgba(55, 65, 81, 0.7); }
+
 
 /* --- Buttons --- */
 .btn {
@@ -430,6 +487,7 @@ html.dark .nav-link:hover {
         transform: translateX(100%); /* RTL-friendly */
         transition: transform 0.3s ease;
         box-shadow: -10px 0 20px rgba(0,0,0,0.1);
+        background: var(--bg-glass); /* [FIX] Add background for overlay */
     }
     .glass-wrapper.details-open #details-panel {
         transform: translateX(0);
