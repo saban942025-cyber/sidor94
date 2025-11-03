@@ -172,10 +172,11 @@ function attachListeners() {
         showView('orders');
     });
     
-    safeAttach('historyBtn', 'click', (e) => {
-        e.preventDefault();
-        showToast("בחר לקוח ספציפי להצגת היסטוריה", "info");
-    });
+    // [נמחק] הסרת מאזין לכפתור שלא קיים
+    // safeAttach('historyBtn', 'click', (e) => {
+    //     e.preventDefault();
+    //     showToast("בחר לקוח ספציפי להצגת היסטוריה", "info");
+    // });
 }
 
 // [שונה] פונקציית ניהול תצוגה
@@ -251,8 +252,11 @@ function listenToOrders() {
     
     const q = query(collection(db, "orders"), 
                     where("status", "in", activeStatuses), 
-                    orderBy("createdAt", "desc"), 
-                    limit(200));
+                    // [תיקון זמני] הסרת המיון כדי למנוע שגיאת אינדקס
+                    // orderBy("createdAt", "desc"), 
+                    // [הערה] כדי להחזיר את המיון, יש ליצור את האינדקס ש-Firebase ביקש בלוגים
+                    limit(200) // Limit עדיין בסדר
+                    );
     
     onSnapshot(q, (snapshot) => {
         allOrders = [];
@@ -1056,5 +1060,6 @@ window.showToast = showToast;
 
 // --- Global Exposure & Init ---
 document.addEventListener('DOMContentLoaded', initApp);
+
 
 
