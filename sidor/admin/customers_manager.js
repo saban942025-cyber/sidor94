@@ -245,8 +245,14 @@ async function loadCustomers() {
 
 // [חדש] האזנה להזמנות
 function listenToOrders() {
-    // מביא את כל ההזמנות, ממוין לפי תאריך יצירה
-    const q = query(collection(db, "orders"), orderBy("createdAt", "desc"), limit(200));
+    // [שונה] סינון ברירת מחדל: מביא רק הזמנות פעילות (לפי בקשת משתמש)
+    // סטטוסים פעילים (מה שהמשתמש רוצה לראות כברירת מחדל)
+    const activeStatuses = ["חדש", "בטיפול", "מתכונן ליציאה", "שויך", "בדרך"]; 
+    
+    const q = query(collection(db, "orders"), 
+                    where("status", "in", activeStatuses), 
+                    orderBy("createdAt", "desc"), 
+                    limit(200));
     
     onSnapshot(q, (snapshot) => {
         allOrders = [];
@@ -1050,4 +1056,5 @@ window.showToast = showToast;
 
 // --- Global Exposure & Init ---
 document.addEventListener('DOMContentLoaded', initApp);
+
 
