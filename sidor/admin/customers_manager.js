@@ -141,27 +141,38 @@ function initMap() {
     }
 }
 
-
+// [תיקון] הוספת בדיקות בטיחות לפונקציה
 function attachListeners() {
-    document.getElementById('search-input').addEventListener('input', debounce(performSearch, 300));
+    // פונקציית עזר לחיבור מאזינים בבטחה
+    const safeAttach = (id, event, handler) => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.addEventListener(event, handler);
+        } else {
+            // הדפסת אזהרה במקום קריסה
+            console.warn(`Element with id '${id}' not found. Listener not attached.`);
+        }
+    };
+
+    safeAttach('search-input', 'input', debounce(performSearch, 300));
     
-    document.getElementById('dashboardBtn').addEventListener('click', (e) => {
+    safeAttach('dashboardBtn', 'click', (e) => {
         e.preventDefault();
         showView('dashboard');
     });
     
-    document.getElementById('clientsBtn').addEventListener('click', (e) => {
+    safeAttach('clientsBtn', 'click', (e) => {
         e.preventDefault();
         showView('customers');
     });
 
-    // [חדש] מאזין לכפתור הזמנות
-    document.getElementById('ordersBtn').addEventListener('click', (e) => {
+    // [חדש] מאזין לכפתור הזמנות (כעת בטוח)
+    safeAttach('ordersBtn', 'click', (e) => {
         e.preventDefault();
         showView('orders');
     });
     
-    document.getElementById('historyBtn').addEventListener('click', (e) => {
+    safeAttach('historyBtn', 'click', (e) => {
         e.preventDefault();
         showToast("בחר לקוח ספציפי להצגת היסטוריה", "info");
     });
@@ -181,22 +192,23 @@ function showView(viewName) {
     mapContainer.classList.add('hidden');
     customerTable.classList.add('hidden');
     ordersTable.classList.add('hidden');
-    dashboardBtn.classList.remove('active');
-    clientsBtn.classList.remove('active');
-    ordersBtn.classList.remove('active');
+    // נקה 'active' מכל הכפתורים
+    if (dashboardBtn) dashboardBtn.classList.remove('active');
+    if (clientsBtn) clientsBtn.classList.remove('active');
+    if (ordersBtn) ordersBtn.classList.remove('active');
     
     if (viewName === 'dashboard') {
         mapContainer.classList.remove('hidden');
-        dashboardBtn.classList.add('active');
+        if (dashboardBtn) dashboardBtn.classList.add('active');
         if(map) map.invalidateSize(); 
         document.getElementById('main-title').innerText = 'דשבורד (מפה)';
     } else if (viewName === 'customers') {
         customerTable.classList.remove('hidden');
-        clientsBtn.classList.add('active');
+        if (clientsBtn) clientsBtn.classList.add('active');
         document.getElementById('main-title').innerText = `ניהול לקוחות (${allCustomers.length})`;
     } else if (viewName === 'orders') {
         ordersTable.classList.remove('hidden');
-        ordersBtn.classList.add('active');
+        if (ordersBtn) ordersBtn.classList.add('active');
         document.getElementById('main-title').innerText = `ניהול הזמנות (${allOrders.length})`;
     }
 }
