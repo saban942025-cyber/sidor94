@@ -17,6 +17,9 @@
     
     <!-- Google Font: Rubik -->
     <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700&display=swap" rel="stylesheet">
+
+    <!-- TailwindCSS (Inlined for simplicity in this example) -->
+    <script src="https://cdn.tailwindcss.com"></script>
     
     <!-- App Stylesheets -->
     <!-- Mobile styles load by default -->
@@ -45,9 +48,10 @@
         animation: spin 1s linear infinite;
       }
       @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+      .hidden { display: none; }
     </style>
 </head>
-<body>
+<body class="bg-gray-100 dark:bg-gray-900">
 
     <!-- Initial Page Loader -->
     <div id="initial-loader" class="initial-loader">
@@ -63,8 +67,8 @@
         <!-- 1. HEADER -->
         <header id="app-header">
             <div id="app-branding">
-                <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTcYS_xImwWt1fAYIK1UTXHtbCfmt5TOny5UQ&s" alt="לוגו זבולון עדירן">
-                <img src="https://i.postimg.cc/ryPT3r29/image.png" alt="לוגו ח.סבן">
+                <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTcYS_xImwWt1fAYIK1UTXHtbCfmt5TOny5UQ&s" alt="לוגו זבולון עדירן" class="h-10 object-contain rounded">
+                <img src="https://i.postimg.cc/ryPT3r29/image.png" alt="לוגו ח.סבן" class="h-10 object-contain rounded">
                 <h1 id="app-title">Zebulun Delivery Portal</h1>
             </div>
             <div id="app-controls">
@@ -113,39 +117,41 @@
 - מצורף קובץ..."></textarea>
                     
                     <div class="flex gap-4 mt-4">
-                        <button id="parse-paste-btn" class="btn btn-secondary">
+                        <button id="parse-paste-btn-desktop" class="btn btn-secondary">
                             <i data-feather="cpu"></i>
                             <span>נתח והצג תצוגה מקדימה</span>
                         </button>
                          <input type="file" id="file-upload-input" multiple hidden>
-                         <button id="file-upload-btn" class="btn btn-secondary">
+                         <button id="file-upload-btn-desktop" class="btn btn-secondary">
                              <i data-feather="paperclip"></i>
                              <span>צרף קבצים (0)</span>
                          </button>
                     </div>
 
-                    <div id="parsed-fields-preview" class="hidden">
+                    <div id="parsed-fields-preview-desktop" class="hidden mt-4">
                         <h3 class="text-lg font-semibold col-span-2">תצוגה מקדימה</h3>
-                        <div class="form-group">
-                            <label class="form-label">מזהה לקוח:</label>
-                            <input type="text" id="parsed-client-id" class="form-input" placeholder="למשל: 601524">
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">שם פרויקט:</label>
-                            <input type="text" id="parsed-project-name" class="form-input" placeholder="למשל: וינגייט 27">
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">איש קשר:</label>
-                            <input type="text" id="parsed-contact-name" class="form-input" placeholder="למשל: יוסי / עבד">
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">טלפון:</label>
-                            <input type="text" id="parsed-contact-phone" class="form-input" placeholder="למשל: 050-1234567">
+                        <div class="parsed-fields-grid">
+                            <div class="form-group">
+                                <label class="form-label">מזהה לקוח:</label>
+                                <input type="text" id="parsed-client-id-desktop" class="form-input" placeholder="למשל: 601524">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">שם פרויקט:</label>
+                                <input type="text" id="parsed-project-name-desktop" class="form-input" placeholder="למשל: וינגייט 27">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">איש קשר:</label>
+                                <input type="text" id="parsed-contact-name-desktop" class="form-input" placeholder="למשל: יוסי / עבד">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">טלפון:</label>
+                                <input type="text" id="parsed-contact-phone-desktop" class="form-input" placeholder="למשל: 050-1234567">
+                            </div>
                         </div>
                     </div>
-                    <div id="attachments-preview"></div>
+                    <div id="attachments-preview-desktop" class="mt-2"></div>
                     
-                    <button id="send-order-btn" class="btn btn-primary w-full mt-4">
+                    <button id="send-order-btn-desktop" class="btn btn-primary w-full mt-4">
                         <i data-feather="send"></i>
                         <span>שלח הזמנה</span>
                     </button>
@@ -200,8 +206,8 @@
         <!-- 1. HEADER -->
         <header id="app-header">
             <div id="app-branding">
-                <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTcYS_xImwWt1fAYIK1UTXHtbCfmt5TOny5UQ&s" alt="לוגו זבולון עדירן">
-                <img src="https://i.postimg.cc/ryPT3r29/image.png" alt="לוגו ח.סבן">
+                <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTcYS_xImwWt1fAYIK1UTXHtbCfmt5TOny5UQ&s" alt="לוגו זבולון עדירן" class="h-8 object-contain rounded">
+                <img src="https://i.postimg.cc/ryPT3r29/image.png" alt="לוגו ח.סבן" class="h-8 object-contain rounded">
             </div>
             <div id="app-controls">
                 <button id="theme-toggle-mobile" class="theme-toggle">
@@ -241,10 +247,28 @@
                         </button>
                     </div>
 
-                    <div id="parsed-fields-preview-mobile" class="hidden">
-                        <!-- שדות שפוענחו יופיעו כאן -->
+                    <div id="parsed-fields-preview-mobile" class="hidden mt-4">
+                        <h3 class="text-lg font-semibold col-span-2">תצוגה מקדימה</h3>
+                        <div class="parsed-fields-grid">
+                            <div class="form-group">
+                                <label class="form-label">מזהה לקוח:</label>
+                                <input type="text" id="parsed-client-id-mobile" class="form-input" placeholder="למשל: 601524">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">שם פרויקט:</label>
+                                <input type="text" id="parsed-project-name-mobile" class="form-input" placeholder="למשל: וינגייט 27">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">איש קשר:</label>
+                                <input type="text" id="parsed-contact-name-mobile" class="form-input" placeholder="למשל: יוסי / עבד">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">טלפון:</label>
+                                <input type="text" id="parsed-contact-phone-mobile" class="form-input" placeholder="למשל: 050-1234567">
+                            </div>
+                        </div>
                     </div>
-                    <div id="attachments-preview-mobile"></div>
+                    <div id="attachments-preview-mobile" class="mt-2"></div>
                     
                     <button id="send-order-btn-mobile" class="btn btn-primary w-full mt-4">
                         <i data-feather="send"></i>
@@ -265,7 +289,7 @@
             <div id="view-guide" class="app-view">
                 <h2 class="section-header">הדרכה</h2>
                 <div id="voice-guide-placeholder" class="p-4 bg-white rounded-lg border text-center">
-                    <i data-feather="play-circle" class="w-12 h-12 text-primary-500 mx-auto"></i>
+                    <i data-feather="play-circle" class="w-12 h-12 text-blue-500 mx-auto"></i>
                     <p class="font-semibold mt-2">"היי יוסי, ברוך הבא..."</p>
                     <button class="btn btn-secondary mt-4">צפה בסרטון הדגמה</button>
                 </div>
@@ -304,7 +328,9 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h2 id="project-popup-title">טוען...</h2>
-                <button id="project-popup-close-btn"><i data-feather="x"></i></button>
+                <button id="project-popup-close-btn" class="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700">
+                    <i data-feather="x"></i>
+                </button>
             </div>
             <div id="project-popup-body">
                 <form id="project-details-form">
@@ -344,6 +370,32 @@
     <audio id="ping-sound" src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg" preload="auto"></audio>
     <audio id="send-sound" src="https://actions.google.com/sounds/v1/device/notifications/notification_simple.ogg" preload="auto"></audio>
 
+    <!-- Firebase SDKs -->
+    <script type="module">
+        // --- Firebase Imports ---
+        import { initializeApp, getApp, getApps } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+        import { 
+            getFirestore, 
+            collection, 
+            doc, 
+            onSnapshot, 
+            addDoc, 
+            setDoc, 
+            serverTimestamp, 
+            writeBatch,
+            query,
+            where
+        } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        
+        // --- Pass SDKs to global script ---
+        window.firebaseSDK = {
+            initializeApp, getApp, getApps,
+            getAuth, signInAnonymously, onAuthStateChanged,
+            getFirestore, collection, doc, onSnapshot, addDoc, setDoc, serverTimestamp, writeBatch, query, where
+        };
+    </script>
+    
     <!-- App Logic -->
     <script type="module" src="app.logic.js"></script>
 
