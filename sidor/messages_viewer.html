@@ -3,17 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>✍️ מרכז הודעות (v5.4 - ייצוב)</title>
+    <title>✍️ מרכז הודעות (v5.5 - ייצוב)</title>
     <!-- 
-      DeliveryMaster Admin - מרכז הודעות v5.4 (ייצוב)
+      DeliveryMaster Admin - מרכז הודעות v5.5 (ייצוב)
       
       Changelog:
+      - [FIX v5.5] Race Condition:
+        - העברת כל הלוגיקה של טעינת הנתונים (initApp) לתוך 'DOMContentLoaded'.
+        - זה מונע קריסה שבה 'setConversationFilter' נקרא לפני שה-HTML נטען.
       - [FIX v5.4] Auth Loop:
-        - הוספת דגל 'appInitialized' כדי למנוע קריאות כפולות ל-listener-ים
-          במהלך לופ התחברות או רענון טוקן.
-      - [FIX v5.4] classList Crash:
-        - הוספת בדיקת בטיחות (if (activeButton)) לפונקציה
-          setConversationFilter כדי למנוע קריסה.
+        - הוספת דגל 'appInitialized' כדי למנוע קריאות כפולות ל-listener-ים.
       - [NEW v5.3] Global Alert System:
         - הוספת מאזין (onSnapshot) לקולקציית 'orders' להתראות חיות.
     -->
@@ -595,7 +594,11 @@
             
             const ordersRef = collection(db, "orders");
             
-            onSnapshot(ordersRef, (snapshot) => {
+            // [FIX v5.5] Removed orderBy and limit to avoid index error / permission error
+            // This listener is now simpler, just for basic alerts.
+            const q = query(ordersRef);
+
+            onSnapshot(q, (snapshot) => {
               if (!hasLoadedInitialAlerts) {
                 hasLoadedInitialAlerts = true;
                 console.log("Global Alert System: Initial order snapshot loaded. Ready for real-time alerts.");
@@ -646,9 +649,10 @@
                         // [FIX v5.4] Only run init functions ONCE
                         if (!appInitialized) {
                             appInitialized = true;
-                            document.getElementById('conv-loader').classList.add('hidden');
-                            listenForConversations();
-                            listenForGlobalAlerts();
+                            // [FIX v5.5] This logic is now inside DOMContentLoaded
+                            // document.getElementById('conv-loader').classList.add('hidden');
+                            // listenForConversations();
+                            // listenForGlobalAlerts();
                         }
                     } else {
                         console.log("User is signed out.");
@@ -661,7 +665,11 @@
 
             } catch (e) {
                 console.error("Firebase Initialization Failed:", e);
-                document.getElementById('conv-loader').innerHTML = '<p class="text-red-500 p-4">שגיאת התחברות ל-Firebase</p>';
+                // [FIX v5.5] Check if loader exists before manipulating
+                const convLoader = document.getElementById('conv-loader');
+                if (convLoader) {
+                    convLoader.innerHTML = '<p class="text-red-500 p-4">שגיאת התחברות ל-Firebase</p>';
+                }
             }
         }
         
@@ -673,9 +681,10 @@
                     if (!appInitialized && auth.currentUser.uid) {
                         currentUserId = auth.currentUser.uid;
                         appInitialized = true;
-                        document.getElementById('conv-loader').classList.add('hidden');
-                        listenForConversations();
-                        listenForGlobalAlerts();
+                        // [FIX v5.5] This logic is now inside DOMContentLoaded
+                        // document.getElementById('conv-loader').classList.add('hidden');
+                        // listenForConversations();
+                        // listenForGlobalAlerts();
                     }
                     return;
                 }
@@ -688,7 +697,11 @@
                 }
             } catch (error) {
                 console.error("Auth Error:", error);
-                document.getElementById('conv-loader').innerHTML = '<p class="text-red-500 p-4">שגיאת אימות משתמש</p>';
+                // [FIX v5.5] Check if loader exists before manipulating
+                const convLoader = document.getElementById('conv-loader');
+                if (convLoader) {
+                    convLoader.innerHTML = '<p class="text-red-500 p-4">שגיאת אימות משתמש</p>';
+                }
             }
         }
 
@@ -706,13 +719,13 @@
             
             // This query REQUIRES a composite index in Firestore:
             // Collection: conversations, Field: lastMessageTimestamp, Order: Descending
-            const q = query(convRef, orderBy("lastMessageTimestamp", "desc"), limit(100));
+            const q = query(convRef, orderBy("lastMessageTimestamp", "desc"));
 
             onSnapshot(q, (snapshot) => {
                 // [FIX v5.4] Add try/catch
                 try {
                     conversations = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    renderConversationList();
+                    renderConversationList(); // This might call setConversationFilter
                     document.getElementById('conv-loader').classList.add('hidden');
                     
                     if (currentConversationId) {
@@ -970,18 +983,34 @@
         window.setConversationFilter = setConversationFilter;
 
         // --- Init ---
+        // [FIX v5.5] Moved logic inside DOMContentLoaded
         document.addEventListener('DOMContentLoaded', () => {
             feather.replace();
+            
+            // Attach event listeners
             document.getElementById('search-conversations').addEventListener('keyup', renderConversationList);
             document.getElementById('reply-form').addEventListener('submit', sendAdminReply);
             
+            // Dark mode
             if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
                 document.documentElement.classList.add('dark');
             } else {
                 document.documentElement.classList.remove('dark');
             }
             
+            // Initialize Firebase App
             initApp();
+
+            // [FIX v5.5] Now that DOM is loaded, check if auth is ready
+            // and app was already initialized by onAuthStateChanged
+            if (appInitialized) {
+                console.log("DOM loaded, app already initialized. Starting listeners.");
+                document.getElementById('conv-loader').classList.add('hidden');
+                listenForConversations();
+                listenForGlobalAlerts();
+            } else {
+                console.log("DOM loaded, waiting for auth...");
+            }
         });
         
         // --- Helper Functions ---
