@@ -3,14 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>✍️ מרכז הודעות (v5.5 - ייצוב)</title>
+    <title>✍️ מרכז הודעות (v5.6 - ייצוב סופי)</title>
     <!-- 
-      DeliveryMaster Admin - מרכז הודעות v5.5 (ייצוב)
+      DeliveryMaster Admin - מרכז הודעות v5.6 (ייצוב סופי)
       
       Changelog:
+      - [FIX v5.6] Auth/DOM Race Condition:
+        - תיקון כשל לוגי שבו מאזיני הנתונים לא נקראו.
+        - הלוגיקה כעת מבטיחה שגם ה-DOM וגם ה-Auth מוכנים לפני טעינת נתונים.
+      - [FIX v5.6] Index Bypass:
+        - הסרת orderBy("lastMessageTimestamp") מהשאילתה ל-Firestore.
+        - הוספת מיון בצד הלקוח (JavaScript) כדי למנוע כשל אינדקס.
       - [FIX v5.5] Race Condition:
         - העברת כל הלוגיקה של טעינת הנתונים (initApp) לתוך 'DOMContentLoaded'.
-        - זה מונע קריסה שבה 'setConversationFilter' נקרא לפני שה-HTML נטען.
       - [FIX v5.4] Auth Loop:
         - הוספת דגל 'appInitialized' כדי למנוע קריאות כפולות ל-listener-ים.
       - [NEW v5.3] Global Alert System:
@@ -19,8 +24,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/feather-icons"></script>
     <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
-    <link rel="icon" type="image/png" href="https://cdn-icons-png.flaticon.com/512/281/281769.png">
-
+    
     <style>
         :root {
             --bg-glass: rgba(255, 255, 255, 0.6);
@@ -545,6 +549,7 @@
         let db, auth;
         let currentUserId = null;
         let appInitialized = false; // [NEW v5.4] Auth loop fix
+        let domLoaded = false; // [NEW v5.6] DOM ready flag
         
         let conversations = [];
         let currentConversationId = null;
@@ -640,33 +645,30 @@
                 auth = getAuth(app);
                 console.log("Firebase Initialized.");
 
-                // [FIX v5.2] Separated auth logic
-                // 1. Set up the listener *first*
+                // [FIX v5.6] Simplified Auth Logic
                 onAuthStateChanged(auth, (user) => {
                     if (user) {
                         currentUserId = user.uid;
                         console.log("Admin User Signed In:", currentUserId);
                         
-                        // [FIX v5.4] Only run init functions ONCE
-                        if (!appInitialized) {
-                            appInitialized = true;
-                            // [FIX v5.5] This logic is now inside DOMContentLoaded
-                            // document.getElementById('conv-loader').classList.add('hidden');
-                            // listenForConversations();
-                            // listenForGlobalAlerts();
+                        // [FIX v5.6] Start app only if DOM is *also* ready
+                        if (domLoaded && !appInitialized) {
+                            startAppListeners();
                         }
                     } else {
                         console.log("User is signed out.");
-                        // Handle sign-out logic if needed
+                        // Try to sign in if user is not found
+                        signInUser();
                     }
                 });
 
-                // 2. *Then* try to sign in
+                // [FIX v5.6] We call signInUser *outside* the listener to kickstart auth
+                // The listener will catch the result.
+                // This was moved from DOMContentLoaded to run immediately
                 signInUser();
 
             } catch (e) {
                 console.error("Firebase Initialization Failed:", e);
-                // [FIX v5.5] Check if loader exists before manipulating
                 const convLoader = document.getElementById('conv-loader');
                 if (convLoader) {
                     convLoader.innerHTML = '<p class="text-red-500 p-4">שגיאת התחברות ל-Firebase</p>';
@@ -677,16 +679,9 @@
         async function signInUser() {
             try {
                 if (auth.currentUser) {
-                    console.log("User already signed in.");
-                    // [FIX v5.4] Force trigger listener if user is already signed in
-                    if (!appInitialized && auth.currentUser.uid) {
-                        currentUserId = auth.currentUser.uid;
-                        appInitialized = true;
-                        // [FIX v5.5] This logic is now inside DOMContentLoaded
-                        // document.getElementById('conv-loader').classList.add('hidden');
-                        // listenForConversations();
-                        // listenForGlobalAlerts();
-                    }
+                    console.log("User already signed in. Triggering state check.");
+                    // Force trigger the listener if auth object is already populated
+                    onAuthStateChanged(auth, auth.currentUser); 
                     return;
                 }
                 
@@ -698,13 +693,23 @@
                 }
             } catch (error) {
                 console.error("Auth Error:", error);
-                // [FIX v5.5] Check if loader exists before manipulating
                 const convLoader = document.getElementById('conv-loader');
                 if (convLoader) {
                     convLoader.innerHTML = '<p class="text-red-500 p-4">שגיאת אימות משתמש</p>';
                 }
             }
         }
+        
+        // [NEW v5.6] Function to start data listeners
+        function startAppListeners() {
+            if (appInitialized) return; // Failsafe
+            appInitialized = true;
+            console.log("Auth & DOM ready. Starting app listeners...");
+            document.getElementById('conv-loader').classList.add('hidden');
+            listenForConversations();
+            listenForGlobalAlerts();
+        }
+
 
         // --- Data Listeners ---
         function listenForConversations() {
@@ -718,14 +723,21 @@
 
             const convRef = collection(db, "conversations");
             
-            // This query REQUIRES a composite index in Firestore:
-            // Collection: conversations, Field: lastMessageTimestamp, Order: Descending
-            const q = query(convRef, orderBy("lastMessageTimestamp", "desc"));
+            // [FIX v5.6] Removed orderBy to bypass index requirement.
+            // We will sort client-side.
+            const q = query(convRef);
 
             onSnapshot(q, (snapshot) => {
-                // [FIX v5.4] Add try/catch
                 try {
                     conversations = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    
+                    // [NEW v5.6] Client-side sorting
+                    conversations.sort((a, b) => {
+                        const timeA = a.lastMessageTimestamp?.toMillis() || 0;
+                        const timeB = b.lastMessageTimestamp?.toMillis() || 0;
+                        return timeB - timeA; // Descending
+                    });
+
                     renderConversationList(); // This might call setConversationFilter
                     document.getElementById('conv-loader').classList.add('hidden');
                     
@@ -741,7 +753,7 @@
                 
             }, (error) => {
                 console.error("Error listening to conversations:", error);
-                document.getElementById('conv-loader').innerHTML = `<p class="p-4 text-red-500">שגיאה בטעינת שיחות. ייתכן שחסר אינדקס במסד הנתונים. ${error.message}</p>`;
+                document.getElementById('conv-loader').innerHTML = `<p class="p-4 text-red-500">שגיאה בטעינת שיחות. ${error.message}</p>`;
             });
         }
         
@@ -984,8 +996,13 @@
         window.setConversationFilter = setConversationFilter;
 
         // --- Init ---
-        // [FIX v5.5] Moved logic inside DOMContentLoaded
+        // [FIX v5.6] Moved initApp() call to outside DOMContentLoaded
+        initApp();
+        
         document.addEventListener('DOMContentLoaded', () => {
+            console.log("DOM loaded.");
+            domLoaded = true; // [NEW v5.6] Set DOM flag
+            
             feather.replace();
             
             // Attach event listeners
@@ -998,17 +1015,10 @@
             } else {
                 document.documentElement.classList.remove('dark');
             }
-            
-            // Initialize Firebase App
-            initApp();
 
-            // [FIX v5.5] Now that DOM is loaded, check if auth is ready
-            // and app was already initialized by onAuthStateChanged
+            // [FIX v5.6] Check if auth is *already* ready
             if (appInitialized) {
-                console.log("DOM loaded, app already initialized. Starting listeners.");
-                document.getElementById('conv-loader').classList.add('hidden');
-                listenForConversations();
-                listenForGlobalAlerts();
+                startAppListeners();
             } else {
                 console.log("DOM loaded, waiting for auth...");
             }
