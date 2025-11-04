@@ -3,490 +3,146 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>✍️ מרכז הודעות (v5.1 - Glassmorphism)</title>
+    <title>✍️ מרכז הודעות (v5.0 - Glassmorphism)</title>
     <!-- 
-      DeliveryMaster Admin - מרכז הודעות v5.1 (Glassmorphism + Bot)
+      DeliveryMaster Admin - מרכז הודעות v5.0 (Glassmorphism + Bot)
       
       Changelog:
-      - [FIX v5.3] - תיקון נתיב קולקציה (מ-orders ל-conversations).
-      - [FIX v5.2] - תיקון טעינה תקועה ע"י הסרת מיון שרת זמנית.
-      - [FIX v5.1] - תיקון נתיבי ייבוא קריטיים של Firebase SDK.
-      - [NEW v5.0] Glassmorphism UI
-      - [NEW v5.0] Bot/Agent Flow
-      - [NEW v5.0] חווית צ'אט (וי קריאה, חיווי הקלדה)
+      - [NEW v5.0] Glassmorphism UI:
+        - הוספת עטיפת "זכוכית" (glassmorphism) לכל האפליקציה.
+        - עדכון רקעים וגופנים (Inter/Rubik) לעיצוב מודרני.
+      - [NEW v5.0] Bot/Agent Flow:
+        - הוספת כפתור "השתלט על השיחה" (Force Takeover) בכרטיס הלקוח.
+        - הטמעת פונקציית `escalateToHuman` שמשייכת שיחה למנהל.
+        - `sendAdminReply` מוודא שהשיחה משויכת למנהל לפני שליחה.
+        - עדכון חיווי "משויך ל:" בכרטיס הלקוח (בוט / בטיפולך).
+      - [NEW v5.0] חווית צ'אט:
+        - הוספת "וי קריאה" (✔️) להודעות נכנסות ויוצאות.
+        - חיווי הקלדה "...מקליד ✍️" מופעל על ידי `order.customerIsTyping`.
+      - [FIX v5.1] ייצוב טעינה ו-Auth Loop:
+        - הוספת דגל `appInitialized` למניעת קריאות כפולות ל-Firestore.
+        - הוספת בדיקות בטיחות לפונקציות `setConversationFilter`.
+        - תיקון נתיבי ייבוא (Import) של Firebase.
+        - תיקון שאילתת טעינה ראשונית (שימוש בקולקציית `conversations`).
+        - החזרת מיון + הוספת `limit` לשאילתה.
+      - [FIX v5.2] תיקון לוגיקת Auth:
+        - הפרדת תהליך ההתחברות (Sign-in) מהמאזין (onAuthStateChanged)
+        - מניעת "Chicken-and-egg" problem שגרם לטעינה אינסופית.
     -->
+    
+    <!-- Icons (Feather) & Fonts -->
+    <script src="https://unpkg.com/feather-icons"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
     
     <!-- TailwindCSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class', // הפעלת מצב כהה
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'Rubik', 'sans-serif'],
+                    },
+                    colors: {
+                        'brand-blue': '#3b82f6',
+                        'brand-dark': '#1f2937',
+                        'brand-light': '#f3f4f6',
+                    }
+                }
+            }
+        }
+    </script>
     
-    <!-- Icons (Feather) -->
-    <script src="https://unpkg.com/feather-icons"></script>
-    
-    <!-- Google Font: Rubik & Inter -->
-    <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
-
+    <!-- סגנון מותאם אישית (Glassmorphism) -->
     <style>
-        :root {
-            --primary-color: #3b82f6; /* blue-500 */
-            --primary-dark: #2563eb; /* blue-600 */
-            --bg-light: #f3f4f6; /* gray-100 */
-            --bg-white: #ffffff;
-            --border-color: rgba(229, 231, 235, 0.7); /* gray-200 w/ opacity */
-            --text-dark: #1f2937; /* gray-800 */
-            --text-light: #6b7280; /* gray-500 */
-            
-            /* Glassmorphism */
-            --bg-glass: rgba(255, 255, 255, 0.6);
-            --border-glass: rgba(255, 255, 255, 0.4);
-            --shadow-glass: 0 8px 32px 0 rgba(31, 38, 135, 0.1);
-        }
-
-        html.dark {
-            --bg-light: #1f2937;
-            --bg-white: #374151;
-            --border-color: rgba(75, 85, 99, 0.7);
-            --text-dark: #f3f4f6;
-            --text-light: #9ca3af;
-            --bg-glass: rgba(55, 65, 81, 0.6);
-            --border-glass: rgba(255, 255, 255, 0.1);
-            --shadow-glass: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
-        }
-
         body {
             font-family: 'Inter', 'Rubik', sans-serif;
-            background-color: #f3f4f6;
-            color: var(--text-dark);
+            background: linear-gradient(120deg, #a1c4fd 0%, #c2e9fb 100%);
             overflow: hidden;
-            height: 100vh;
-            margin: 0;
-            background-image: linear-gradient(120deg, #a1c4fd 0%, #c2e9fb 100%);
         }
         
         .glass-wrapper {
-            width: calc(100% - 4rem);
-            height: calc(100vh - 4rem);
-            margin: 2rem;
-            background: var(--bg-glass);
+            background: rgba(255, 255, 255, 0.6);
             backdrop-filter: blur(24px) saturate(180%);
             -webkit-backdrop-filter: blur(24px) saturate(180%);
-            border: 1px solid var(--border-glass);
+            border: 1px solid rgba(255, 255, 255, 0.4);
             border-radius: 1.5rem; /* 2xl */
-            box-shadow: var(--shadow-glass);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.1);
             overflow: hidden;
+            height: calc(100vh - 4rem);
+            margin: 2rem;
             display: grid;
-            grid-template-columns: 350px 1fr; /* Sidebar, Main Chat */
+            grid-template-columns: 350px 1fr;
+        }
+        
+        /* Dark Mode */
+        html.dark body {
+            background: linear-gradient(120deg, #0f172a 0%, #1e293b 100%);
         }
         html.dark .glass-wrapper {
-             background: var(--bg-glass);
-             border-color: var(--border-glass);
+            background: rgba(30, 41, 59, 0.6); /* slate-800 */
+            border-color: rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
         }
-
-        /* --- Sidebar (Conversation List) --- */
-        #conversation-list {
-            background-color: rgba(255, 255, 255, 0.5);
-            border-left: 1px solid var(--border-color);
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
+        html.dark .glass-sidebar {
+            background: rgba(55, 65, 81, 0.5); /* gray-700 */
+            border-left-color: rgba(255, 255, 255, 0.1);
         }
-        html.dark #conversation-list {
-            background-color: rgba(31, 41, 55, 0.5);
-            border-left-color: var(--border-glass);
+        html.dark .glass-chat-header {
+            background: rgba(55, 65, 81, 0.7); /* gray-700 */
+            border-bottom-color: rgba(255, 255, 255, 0.1);
         }
-
-        .header {
-            padding: 1.5rem;
-            flex-shrink: 0;
-            border-bottom: 1px solid var(--border-color);
+        html.dark .glass-chat-footer {
+            background: rgba(55, 65, 81, 0.7); /* gray-700 */
+            border-top-color: rgba(255, 255, 255, 0.1);
         }
-        .header-title {
-            font-size: 1.5rem;
-            font-weight: 700;
-            color: var(--text-dark);
+        html.dark .form-input, html.dark .btn-secondary {
+            background-color: #374151; /* gray-700 */
+            border-color: #4b5563; /* gray-600 */
+            color: #f3f4f6; /* gray-100 */
         }
-        .search-bar {
-            position: relative;
-            margin-top: 1rem;
+        html.dark .text-gray-800 { color: #f3f4f6; } /* gray-100 */
+        html.dark .text-gray-600 { color: #d1d5db; } /* gray-300 */
+        html.dark .text-gray-500 { color: #9ca3af; } /* gray-400 */
+        html.dark .text-gray-400 { color: #6b7280; } /* gray-500 */
+        html.dark .conv-card:hover {
+            background-color: rgba(75, 85, 99, 0.7); /* gray-600 */
         }
-        .search-input {
-            width: 100%;
-            padding: 0.75rem 1rem 0.75rem 2.5rem; /* Padding for icon */
-            border: 1px solid var(--border-color);
-            border-radius: 0.5rem;
-            background-color: var(--bg-white);
-            color: var(--text-dark);
-            transition: all 0.2s;
-            box-sizing: border-box;
+        html.dark .conv-card.active {
+            background-color: #3b82f6; /* blue-500 */
         }
-        html.dark .search-input {
-            background-color: #4b5563; /* gray-600 */
-            border-color: #6b7280; /* gray-500 */
-            color: var(--text-dark);
+        html.dark .chat-bubble-in {
+            background-color: #374151; /* gray-700 */
         }
-        .search-input:focus {
-            outline: none;
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+        html.dark .chat-bubble-out {
+            background-color: #2563eb; /* blue-600 */
         }
-        .search-icon {
-            position: absolute;
-            right: 0.75rem;
-            top: 50%;
-            transform: translateY(-50%);
-            color: var(--text-light);
-        }
-        
-        /* [NEW v4.3] Tab Buttons */
-        .tab-filter {
-            display: flex;
-            justify-content: space-around;
-            padding: 0.5rem;
-            border-bottom: 1px solid var(--border-color);
-            background-color: rgba(255, 255, 255, 0.2);
-            flex-shrink: 0;
-        }
-        html.dark .tab-filter {
-            background-color: rgba(31, 41, 55, 0.2);
-        }
-        .tab-button {
-            padding: 0.5rem 0.75rem;
-            border: none;
-            background: none;
-            border-radius: 0.5rem;
-            font-weight: 600;
-            color: var(--text-light);
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        .tab-button:hover {
-            background-color: rgba(255, 255, 255, 0.5);
-            color: var(--text-dark);
-        }
-        html.dark .tab-button:hover {
-            background-color: rgba(75, 85, 99, 0.5);
-        }
-        .tab-button.active {
-            background-color: var(--primary-color);
-            color: white;
-        }
-
-        #conversation-items {
-            flex-grow: 1;
-            overflow-y: auto;
-            padding: 0.75rem;
-        }
-        .conv-item {
-            display: flex;
-            align-items: flex-start;
-            padding: 1rem;
-            border-radius: 0.75rem;
-            cursor: pointer;
-            transition: background-color 0.2s;
-            border-bottom: 1px solid var(--border-color);
-        }
-        .conv-item:last-child {
-            border-bottom: none;
-        }
-        .conv-item:hover {
-            background-color: rgba(255, 255, 255, 0.7);
-        }
-        html.dark .conv-item:hover {
-            background-color: rgba(75, 85, 99, 0.7);
-        }
-        .conv-item.active {
-            background-color: rgba(255, 255, 255, 1);
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-        }
-        html.dark .conv-item.active {
-             background-color: rgba(75, 85, 99, 1);
-        }
-
-        .avatar {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            background-color: var(--primary-color);
-            color: white;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 600;
-            flex-shrink: 0;
-            margin-left: 0.75rem;
-        }
-        .avatar.unread {
-            background-color: #ef4444; /* red-500 */
-        }
-        .conv-details {
-            flex-grow: 1;
-            overflow: hidden;
-        }
-        .conv-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .conv-name {
-            font-weight: 600;
-            color: var(--text-dark);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        .conv-time {
-            font-size: 0.75rem;
-            color: var(--text-light);
-            flex-shrink: 0;
-        }
-        .conv-preview {
-            font-size: 0.875rem;
-            color: var(--text-light);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        .conv-preview strong { /* Unread preview */
-            color: var(--text-dark);
-            font-weight: 600;
-        }
-        .conv-agent { /* [NEW v5.0] */
-            font-size: 0.75rem;
-            font-weight: 500;
-            color: var(--primary-dark);
-        }
-        html.dark .conv-agent {
-            color: #93c5fd; /* blue-300 */
-        }
-
-        /* --- Main Chat Area --- */
-        #chat-area {
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
-
-        #chat-welcome {
-            flex-grow: 1;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            color: var(--text-light);
-            padding: 2rem;
-            text-align: center;
-        }
-        #chat-welcome svg {
-            width: 80px;
-            height: 80px;
-            stroke-width: 1.5;
-            margin-bottom: 1rem;
-        }
-        
-        #chat-header {
-            padding: 1.5rem;
-            border-bottom: 1px solid var(--border-color);
-            flex-shrink: 0;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        #chat-header-details {
-            overflow: hidden;
-        }
-        #chat-header-name {
-            font-size: 1.25rem;
-            font-weight: 700;
-            color: var(--text-dark);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        #chat-header-phone {
-            font-size: 0.875rem;
-            color: var(--text-light);
-        }
-        #chat-header-actions {
-            display: flex;
-            gap: 0.5rem;
-        }
-        .action-btn {
-            padding: 0.5rem;
-            border-radius: 0.5rem;
-            border: 1px solid var(--border-color);
-            background: var(--bg-white);
-            color: var(--text-light);
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        html.dark .action-btn {
-            background-color: var(--bg-white);
-            border-color: var(--border-color);
-        }
-        .action-btn:hover {
-            background-color: var(--bg-light);
-            color: var(--text-dark);
-        }
-        html.dark .action-btn:hover {
+        html.dark .btn-quick-reply:hover {
             background-color: #4b5563; /* gray-600 */
         }
-        .action-btn.takeover { /* [NEW v5.0] */
-            background-color: var(--primary-color);
-            color: white;
-            border-color: var(--primary-color);
-        }
-        .action-btn.takeover:hover {
-            background-color: var(--primary-dark);
-        }
-
-        #chat-messages {
-            flex-grow: 1;
-            overflow-y: auto;
+        
+        /* --- Sidebar --- */
+        .glass-sidebar {
+            background: rgba(255, 255, 255, 0.5);
+            border-left: 1px solid rgba(229, 231, 235, 0.7);
             padding: 1.5rem;
             display: flex;
             flex-direction: column;
+            overflow: hidden;
         }
         
-        .message-bubble {
-            max-width: 75%;
-            padding: 0.75rem 1rem;
-            border-radius: 1.25rem;
-            margin-bottom: 0.75rem;
-            position: relative;
+        /* --- Chat Area --- */
+        .glass-chat-header {
+            background: rgba(255, 255, 255, 0.7);
+            border-bottom: 1px solid rgba(229, 231, 235, 0.7);
         }
-        .message-in {
-            background-color: var(--bg-white);
-            color: var(--text-dark);
-            border-bottom-right-radius: 0.25rem;
-            align-self: flex-end;
-        }
-        html.dark .message-in {
-            background-color: var(--bg-white);
-        }
-        .message-out {
-            background-color: var(--primary-color);
-            color: white;
-            border-bottom-left-radius: 0.25rem;
-            align-self: flex-start;
-        }
-        .message-text {
-            white-space: pre-wrap;
-            word-wrap: break-word;
-        }
-        .message-time {
-            font-size: 0.75rem;
-            margin-top: 0.25rem;
-            opacity: 0.7;
-            display: flex;
-            align-items: center;
-        }
-        .message-in .message-time {
-            text-align: right;
-        }
-        .message-out .message-time {
-            text-align: left;
-        }
-        /* [NEW v5.0] Read Receipt */
-        .read-receipt {
-            font-family: sans-serif;
-            font-size: 1rem;
-            margin-right: 0.25rem;
-            line-height: 1;
-        }
-
-        /* [NEW v5.0] Typing Indicator */
-        .typing-indicator {
-            align-self: flex-end;
-            font-style: italic;
-            color: var(--text-light);
-            font-size: 0.875rem;
-            margin-bottom: 0.75rem;
-        }
-
-        #chat-input-area {
-            flex-shrink: 0;
-            padding: 1.5rem;
-            border-top: 1px solid var(--border-color);
-            background-color: rgba(255, 255, 255, 0.5);
-        }
-        html.dark #chat-input-area {
-            background-color: rgba(31, 41, 55, 0.5);
-        }
-        .chat-input-wrapper {
-            position: relative;
-        }
-        #reply-message-text {
-            width: 100%;
-            padding: 1rem 3rem 1rem 1rem;
-            border: 1px solid var(--border-color);
-            border-radius: 0.75rem;
-            background-color: var(--bg-white);
-            color: var(--text-dark);
-            resize: none;
-            box-sizing: border-box;
-            transition: all 0.2s;
-        }
-        html.dark #reply-message-text {
-            background-color: #4b5563; /* gray-600 */
-            border-color: #6b7280; /* gray-500 */
-            color: var(--text-dark);
-        }
-        #reply-message-text:focus {
-            outline: none;
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
-        }
-        #send-reply-btn {
-            position: absolute;
-            left: 0.75rem;
-            top: 50%;
-            transform: translateY(-50%);
-            padding: 0.5rem;
-            border-radius: 50%;
-            background-color: var(--primary-color);
-            color: white;
-            border: none;
-            cursor: pointer;
-            transition: background-color 0.2s;
-        }
-        #send-reply-btn:hover {
-            background-color: var(--primary-dark);
-        }
-        #send-reply-btn:disabled {
-            background-color: #9ca3af; /* gray-400 */
-            cursor: not-allowed;
+        .glass-chat-footer {
+            background: rgba(255, 255, 255, 0.7);
+            border-top: 1px solid rgba(229, 231, 235, 0.7);
         }
         
-        /* [NEW v4.2] Quick Replies */
-        #quick-replies {
-            padding-top: 0.75rem;
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.5rem;
-        }
-        .quick-reply-btn {
-            padding: 0.25rem 0.75rem;
-            font-size: 0.875rem;
-            background-color: var(--bg-white);
-            border: 1px solid var(--border-color);
-            border-radius: 99px;
-            color: var(--primary-color);
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        html.dark .quick-reply-btn {
-            background-color: var(--bg-white);
-            border-color: var(--border-color);
-        }
-        .quick-reply-btn:hover {
-            background-color: var(--bg-light);
-            border-color: var(--primary-color);
-        }
-        html.dark .quick-reply-btn:hover {
-            background-color: #4b5563; /* gray-600 */
-        }
-
-
-        /* Loader */
+        /* --- Loader --- */
         .loader-container {
             position: absolute;
             inset: 0;
@@ -495,11 +151,10 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            height: 100%;
             z-index: 10;
         }
         html.dark .loader-container {
-             background-color: rgba(31, 41, 55, 0.8);
+            background-color: rgba(30, 41, 59, 0.8);
         }
         .loader {
             border: 4px solid #f3f3f3;
@@ -511,619 +166,758 @@
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         .hidden { display: none; }
+        
+        /* --- Conversation Card --- */
+        .conv-card {
+            border-bottom: 1px solid rgba(229, 231, 235, 0.7);
+            transition: background-color 0.2s;
+        }
+        html.dark .conv-card {
+            border-bottom-color: rgba(75, 85, 99, 0.7);
+        }
+        .conv-card:hover {
+            background-color: rgba(243, 244, 246, 0.7); /* gray-100 */
+        }
+        .conv-card.active {
+            background-color: #dbeafe; /* blue-100 */
+            border-right: 4px solid #3b82f6;
+        }
+        html.dark .conv-card.active {
+            background-color: #3b82f6; /* blue-500 */
+            border-right-color: #93c5fd; /* blue-300 */
+        }
+        
+        /* --- Chat Bubbles --- */
+        .chat-bubble-in {
+            background-color: #ffffff;
+            border-radius: 20px 20px 20px 5px;
+        }
+        .chat-bubble-out {
+            background-color: #3b82f6; /* blue-500 */
+            color: white;
+            border-radius: 20px 20px 5px 20px;
+        }
+        
+        /* --- Form Inputs --- */
+        .form-input {
+            background-color: #ffffff;
+            border: 1px solid rgba(229, 231, 235, 0.7);
+            transition: all 0.2s;
+        }
+        .form-input:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+        }
+        
+        /* --- Buttons --- */
+        .btn {
+            transition: all 0.2s;
+        }
+        .btn-primary {
+            background-color: #3b82f6;
+            color: white;
+        }
+        .btn-primary:hover {
+            background-color: #2563eb; /* blue-600 */
+        }
+        .btn-secondary {
+            background-color: #ffffff;
+            border: 1px solid rgba(229, 231, 235, 0.7);
+            color: #374151; /* gray-700 */
+        }
+        .btn-secondary:hover {
+            background-color: #f9fafb; /* gray-50 */
+        }
+        .btn-danger {
+            background-color: #ef4444; /* red-500 */
+            color: white;
+        }
+        .btn-danger:hover {
+            background-color: #dc2626; /* red-600 */
+        }
+        .btn-quick-reply {
+            background-color: #e5e7eb; /* gray-200 */
+            color: #1f2937; /* gray-800 */
+            border: 1px solid rgba(209, 213, 219, 0.7);
+        }
+        .btn-quick-reply:hover {
+            background-color: #d1d5db; /* gray-300 */
+        }
+        
+        /* --- Tab Buttons --- */
+        .tab-button {
+            color: #6b7280; /* gray-500 */
+            border-bottom: 3px solid transparent;
+        }
+        html.dark .tab-button {
+            color: #9ca3af; /* gray-400 */
+        }
+        .tab-button.active {
+            color: #3b82f6;
+            border-bottom-color: #3b82f6;
+        }
+        html.dark .tab-button.active {
+            color: #60a5fa; /* blue-400 */
+            border-bottom-color: #60a5fa;
+        }
 
-        /* Responsive */
-        @media (max-width: 768px) {
+        /* --- Custom Scrollbar --- */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(156, 163, 175, 0.5); /* gray-400 */
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(107, 114, 128, 0.7); /* gray-500 */
+        }
+        html.dark ::-webkit-scrollbar-thumb {
+            background: rgba(107, 114, 128, 0.5); /* gray-500 */
+        }
+        html.dark ::-webkit-scrollbar-thumb:hover {
+            background: rgba(156, 163, 175, 0.7); /* gray-400 */
+        }
+        
+        /* --- Responsive --- */
+        @media (max-width: 1024px) {
+            body {
+                overflow: auto;
+            }
             .glass-wrapper {
                 margin: 0;
                 height: 100vh;
                 width: 100vw;
                 border-radius: 0;
-                grid-template-columns: 1fr; /* Stack columns */
+                grid-template-columns: 1fr;
             }
-            #conversation-list {
-                /* When a chat is active, hide the list */
-                display: none;
+            .glass-sidebar {
+                border-left: none;
+                height: 40vh;
             }
-            .chat-active #conversation-list {
-                display: flex;
-            }
-            .chat-active #chat-area {
-                display: none;
-            }
-            
-            /* On mobile, when a chat is selected, we hide the list and show the chat */
-            body.chat-selected #conversation-list {
-                display: none;
-            }
-            body.chat-selected #chat-area {
-                display: flex;
-            }
-
-            #chat-header {
-                padding: 1rem;
-            }
-            /* Add a back button to the chat header on mobile */
-            #back-to-list-btn {
-                display: block;
-                margin-left: 0.75rem;
-            }
-            #chat-header-details {
-                /* Show back button */
-                display: flex;
-                align-items: center;
+            .chat-area {
+                height: 60vh;
             }
         }
     </style>
 </head>
-<body class=""> <!-- 'chat-selected' class will be added by JS on mobile -->
+<body class="antialiased text-gray-800">
     
-    <!-- רקע גרדיאנט קבוע -->
-    <div class="app-background"></div>
-
-    <!-- מארז Glassmorphism ראשי -->
+    <!-- App Wrapper -->
     <div class="glass-wrapper">
-        <!-- רשימת שיחות (Sidebar) -->
-        <aside id="conversation-list">
-            <div class="header">
-                <h1 class="header-title">✍️ מרכז הודעות</h1>
-                <div class="search-bar">
-                    <input type="text" id="search-conversations" class="search-input" placeholder="חפש לפי שם, טלפון או תוכן...">
-                    <i data-feather="search" class="search-icon"></i>
+        
+        <!-- Sidebar (רשימת שיחות) -->
+        <div class="glass-sidebar">
+            <!-- Header -->
+            <div class="flex justify-between items-center mb-4 pb-4 border-b border-gray-300 dark:border-gray-600">
+                <div class="flex items-center">
+                    <i data-feather="message-square" class="text-brand-blue w-7 h-7"></i>
+                    <h1 class="text-2xl font-bold mr-3 text-gray-800">מרכז הודעות</h1>
                 </div>
+                <button onclick="toggleDarkMode()" class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-500 dark:text-gray-400">
+                    <i data-feather="moon" id="theme-icon-moon" class="hidden"></i>
+                    <i data-feather="sun" id="theme-icon-sun" class="hidden"></i>
+                </button>
             </div>
             
-            <!-- [NEW v4.3] פילטר טאבים -->
-            <div class="tab-filter">
-                 <button class="tab-button active" onclick="setConversationFilter('all')">הכל</button>
-                 <button class="tab-button" onclick="setConversationFilter('unread')">לא נקראו</button>
-                 <button class="tab-button" onclick="setConversationFilter('agent')">בטיפולך</button>
-                 <button class="tab-button" onclick="setConversationFilter('bot')">בטיפול בוט</button>
+            <!-- Search -->
+            <div class="mb-4">
+                <input type="text" id="search-conversations" placeholder="חיפוש שיחות..." class="w-full px-4 py-2 rounded-lg form-input">
             </div>
-
-            <div id="conversation-items">
+            
+            <!-- Tabs -->
+            <div class="flex mb-2 border-b border-gray-300 dark:border-gray-600">
+                <button class="tab-button flex-1 py-2 font-semibold active" onclick="setConversationFilter('all')">
+                    כל השיחות
+                </button>
+                <button class="tab-button flex-1 py-2 font-semibold" onclick="setConversationFilter('new')">
+                    חדשות
+                </button>
+                <button class="tab-button flex-1 py-2 font-semibold" onclick="setConversationFilter('mine')">
+                    בטיפולי
+                </button>
+            </div>
+            
+            <!-- Conversation List -->
+            <div id="conv-list-container" class="flex-1 overflow-y-auto relative">
                 <!-- Loader -->
                 <div id="conv-loader" class="loader-container">
                     <div class="loader"></div>
                 </div>
-                <!-- שיחות יטענו לכאן ע"י JS -->
-            </div>
-        </aside>
-
-        <!-- אזור צ'אט מרכזי -->
-        <main id="chat-area">
-            <!-- מצב פתיחה (Welcome) -->
-            <div id="chat-welcome" class="">
-                <i data-feather="message-square"></i>
-                <h2 class="text-xl font-semibold">ברוך הבא למרכז ההודעות</h2>
-                <p>בחר שיחה מהרשימה בצד ימין כדי להתחיל.</p>
-            </div>
-
-            <!-- אזור צ'אט פעיל (מוסתר כברירת מחדל) -->
-            <div id="chat-active" class="hidden" style="display: flex; flex-direction: column; height: 100%;">
-                <!-- כותרת הצ'אט -->
-                <header id="chat-header">
-                    <div id="chat-header-details">
-                        <!-- [NEW] כפתור חזרה למובייל -->
-                        <button id="back-to-list-btn" class="action-btn" style="display: none;" onclick="goBackToList()">
-                             <i data-feather="arrow-right"></i>
-                        </button>
-                        <div>
-                            <h2 id="chat-header-name">טוען...</h2>
-                            <p id="chat-header-phone"></p>
-                        </div>
-                    </div>
-                    <div id="chat-header-actions">
-                        <button id="escalate-btn" class="action-btn takeover" title="השתלט על השיחה" onclick="escalateToHuman()">
-                            <i data-feather="user-check"></i>
-                        </button>
-                        <button class="action-btn" title="סגור שיחה (ארכיון)" onclick="archiveConversation()">
-                            <i data-feather="archive"></i>
-                        </button>
-                    </div>
-                </header>
-
-                <!-- הודעות -->
-                <div id="chat-messages">
-                    <!-- Loader -->
-                    <div id="chat-loader" class="loader-container">
-                        <div class="loader"></div>
-                    </div>
-                    <!-- הודעות יטענו לכאן -->
+                <!-- List -->
+                <div id="conv-list">
+                    <!-- שיחות יוכנסו לכאן ע"י JS -->
                 </div>
-
-                <!-- אזור הקלדה -->
-                <footer id="chat-input-area">
-                    <!-- [NEW v4.2] Quick Replies -->
-                    <div id="quick-replies">
-                        <!-- כפתורים מהירים יטענו לכאן -->
-                    </div>
-                    
-                    <div class="chat-input-wrapper">
-                        <textarea id="reply-message-text" rows="3" placeholder="הקלד את תשובתך..." disabled></textarea>
-                        <button id="send-reply-btn" title="שלח" onclick="sendAdminReply()" disabled>
-                            <i data-feather="send"></i>
-                        </button>
-                    </div>
-                </footer>
             </div>
-        </main>
-    </div>
+        </div>
+        
+        <!-- Chat Area (אזור צ'אט) -->
+        <div id="chat-area" class="flex flex-col h-full bg-transparent" style="display: none;">
+            
+            <!-- Header -->
+            <div class="glass-chat-header p-4 flex justify-between items-center shadow-sm">
+                <div>
+                    <h2 id="chat-customer-name" class="text-xl font-bold text-gray-800">בחר שיחה</h2>
+                    <p id="chat-customer-details" class="text-sm text-gray-500">...
+                        <span id="chat-typing-indicator" class="hidden text-brand-blue font-semibold">מקליד ✍️...</span>
+                    </p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button id="takeover-btn" onclick="escalateToHuman()" class="btn btn-secondary text-sm py-1 px-3 hidden">
+                        <i data-feather="zap" class="w-4 h-4"></i>
+                        <span>השתלט על השיחה</span>
+                    </button>
+                    <a id="customer-link" href="#" target="_blank" class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-500" title="פתח כרטיס לקוח">
+                        <i data-feather="user" class="w-5 h-5"></i>
+                    </a>
+                </div>
+            </div>
+            
+            <!-- Messages -->
+            <div id="messages-container" class="flex-1 p-6 overflow-y-auto space-y-4">
+                <!-- הודעות יוכנסו לכאן ע"י JS -->
+            </div>
+            
+            <!-- Quick Replies -->
+            <div id="quick-replies" classs="p-2 flex flex-wrap gap-2 border-t border-gray-200 dark:border-gray-700">
+                 <!-- הצעות יוכנסו לכאן ע"י JS -->
+            </div>
+            
+            <!-- Footer (שליחת הודעה) -->
+            <div class="glass-chat-footer p-4">
+                <div class="flex items-center gap-3">
+                    <input type="text" id="reply-message-text" class="form-input flex-1 px-4 py-3 rounded-lg" placeholder="הקלד הודעה..." onkeydown="handleKeydown(event)">
+                    <button onclick="sendAdminReply()" class="btn btn-primary p-3 rounded-lg">
+                        <i data-feather="send" class="w-6 h-6"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Placeholder (כאשר לא נבחרה שיחה) -->
+        <div id="chat-placeholder" class="flex items-center justify-center h-full text-gray-500 dark:text-gray-400">
+            <div class="text-center">
+                <i data-feather="message-square" class="w-24 h-24 mx-auto"></i>
+                <h2 class="text-2xl font-medium mt-4">בחר שיחה מהרשימה כדי להתחיל</h2>
+                <p class="text-lg">כל ההודעות מלקוחות יופיעו כאן בזמן אמת.</p>
+            </div>
+        </div>
 
+    </div>
+    
     <!-- 
       ==========================================================
-      ===               תחילת סקריפט ראשי (v5.1)              ===
+      ===               תחילת סקריפט ראשי (v5.2)              ===
       ==========================================================
     -->
     <script type="module">
-        // [FIX v5.1] תיקון נתיבי ייבוא
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        // [FIX v5.0] שימוש בנתיבי CDN רשמיים
+        import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
         import { 
             getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot, 
             collection, query, where, Timestamp, runTransaction, getDocs, orderBy, 
-            serverTimestamp, limit, writeBatch, collectionGroup, arrayUnion
+            serverTimestamp, limit, writeBatch, arrayUnion
         } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-        
+        import { setLogLevel } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+
         // --- Global Variables ---
         let db, auth;
-        let currentUserId = "Admin"; // מנהל תמיד
-        let allConversations = [];
+        let currentUserId = null;
+        let conversations = []; // כל השיחות
         let currentConversationId = null;
-        let messagesUnsubscribe = null;
-        let conversationsUnsubscribe = null;
-        let currentConversationFilter = 'all'; // [NEW v4.3]
+        let messagesUnsubscribe = null; // מאזין להודעות בשיחה הפתוחה
+        let conversationUnsubscribe = null; // מאזין לשיחות ברשימה
+        let currentConversationFilter = 'all'; // 'all', 'new', 'mine'
         
-        // [NEW v5.0] Admin details
-        const ADMIN_AGENT = {
-            id: "Admin",
-            name: "צוות האתר"
-        };
+        // [FIX v5.1] דגל למניעת טעינה כפולה
+        let appInitialized = false; 
 
         // --- Firebase Config (Placeholder) ---
         const fallbackConfig = {
           apiKey: "AIzaSyDq0oVwS6zbEfsgrYBRkeBq80dDUKMedzo", 
           authDomain: "saban94-78949.firebaseapp.com", 
           projectId: "saban94-78949",
-          storageBucket: "saban94-78949.appspot.com",
+          storageBucket: "saban94-78949.firebasestorage.app", 
           messagingSenderId: "41553157903", 
           appId: "1:41553157903:web:cc33d252cff023be97a87a", 
           measurementId: "G-XV6RZDESSB"
         };
         
         // --- Initialization ---
-        try {
-            const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : JSON.stringify(fallbackConfig));
-            const app = initializeApp(firebaseConfig);
-            db = getFirestore(app);
-            auth = getAuth(app);
-            console.log("Firebase Initialized.");
-
-            onAuthStateChanged(auth, async (user) => {
-                if (user) {
-                    currentUserId = user.uid;
-                    console.log("Admin User Signed In:", currentUserId);
-                    ADMIN_AGENT.id = currentUserId; // עדכון מזהה מנהל
-                    ADMIN_AGENT.name = user.displayName || "מנהל"; // עדכון שם מנהל אם קיים
-                    
-                    // התחל האזנה לשיחות
-                    listenForConversations();
-                    
-                } else {
-                    console.log("No user. Trying auth...");
-                    try {
-                        // נסה להתחבר עם טוקן מיוחד אם קיים
-                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                            await signInWithCustomToken(auth, __initial_auth_token);
-                        } else {
-                            // אם לא, התחבר כאנונימי (לצורך גישה)
-                            await signInAnonymously(auth);
-                        }
-                    } catch (error) {
-                        console.error("Firebase Auth Error:", error);
-                        document.getElementById('conv-loader').innerHTML = '<p class="p-4 text-red-500">שגיאת התחברות קריטית ל-Firebase.</p>';
-                    }
-                }
-            });
-
-        } catch (e) {
-            console.error("Firebase Initialization Failed:", e);
-            document.getElementById('conv-loader').innerHTML = '<p class="p-4 text-red-500">שגיאה באתחול Firebase.</p>';
-        }
-
-        // --- Data Listeners ---
-
-        function listenForConversations() {
-            // [FIX v5.4] הוספת בדיקות בטיחות ו-try...catch
-            if (!db) {
-                console.error("Firestore 'db' object is not initialized. Cannot listen for conversations.");
-                document.getElementById('conv-loader').innerHTML = '<p class="p-4 text-red-500">שגיאה קריטית: חיבור מסד הנתונים נכשל.</p>';
-                return;
-            }
-
-            if (conversationsUnsubscribe) conversationsUnsubscribe();
-            
+        function initApp() {
             try {
-                // [FIX v5.3] החלפת הקולקציה ל-"conversations"
-                // [FIX v5.3] החזרת המיון + הוספת הגבלה
-                const q = query(
-                    collection(db, "conversations"), // <-- התיקון כאן
-                    orderBy("lastMessageTimestamp", "desc"),
-                    limit(100) // הוספת הגבלה למניעת טעינת יתר
-                );
+                const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : JSON.stringify(fallbackConfig));
                 
-                conversationsUnsubscribe = onSnapshot(q, (snapshot) => {
-                    document.getElementById('conv-loader').classList.add('hidden');
-                    allConversations = [];
-                    snapshot.forEach(doc => {
-                        allConversations.push({ id: doc.id, ...doc.data() });
-                    });
+                const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+                db = getFirestore(app);
+                auth = getAuth(app);
+                setLogLevel('Debug');
+                console.log("Firebase Initialized.");
 
-                    // [FIX v5.2] אין צורך במיון לקוח כי השרת עושה זאת
-                    // allConversations.sort((a, b) => 
-                    //     (b.lastMessageTimestamp?.toMillis() || 0) - (a.lastMessageTimestamp?.toMillis() || 0)
-                    // );
+                // --- Authentication ---
+                // [FIX v5.2] 1. חבר את המאזין קודם. הוא "יתפוס" את אירוע ההתחברות.
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        currentUserId = user.uid;
+                        console.log(`Admin User Signed In: ${currentUserId}`);
+                        
+                        // הפעלת האזנה רק פעם אחת
+                        if (!appInitialized) {
+                            appInitialized = true;
+                            listenForConversations();
+                        }
 
-                    renderConversationList();
-                }, (error) => {
-                    console.error("Error listening to conversations:", error);
-                    // [FIX v5.3] שגיאת אינדקס צפויה
-                    if (error.code === 'failed-precondition') {
-                         document.getElementById('conv-loader').innerHTML = `<p class="p-4 text-red-500"><b>שגיאת מסד נתונים:</b> חסר אינדקס. <br> לחץ על הקישור בקונסול (F12) כדי ליצור אותו.</p>`;
-                         // הדפסת הקישור לקונסול
-                         console.error("השאילתה דורשת אינדקס. אנא צור אותו כאן:", error.message.split(' visit ')[1] || error.message);
-                    } else if (error.code === 'permission-denied') {
-                         document.getElementById('conv-loader').innerHTML = `<p class="p-4 text-red-500"><b>שגיאת הרשאות:</b> אין לך הרשאה לקרוא את קולקציית 'conversations'. בדוק את חוקי האבטחה (Security Rules) ב-Firebase.</p>`;
                     } else {
-                        document.getElementById('conv-loader').innerHTML = `<p class="p-4 text-red-500">שגיאה בטעינת שיחות: ${error.message}</p>`;
+                        // משתמש מחובר, או שההתחברות האנונימית נכשלה
+                        console.log("User is signed out.");
+                        appInitialized = false; 
                     }
                 });
+                
+                // [FIX v5.2] 2. הפעל את תהליך ההתחברות. זה יגרום למאזין למעלה לפעול.
+                triggerAuth();
 
-            } catch (error) {
-                // תפיסת שגיאה אם בניית השאילתה (query) עצמה נכשלה
-                console.error("Error creating query:", error);
-                document.getElementById('conv-loader').innerHTML = `<p class="p-4 text-red-500">שגיאה בבניית השאילתה: ${error.message}</p>`;
+            } catch (e) {
+                console.error("Firebase Initialization Failed:", e);
+                document.getElementById('conv-loader').innerHTML = '<p class="text-red-500">שגיאת התחברות חמורה</p>';
             }
         }
-
-        function renderConversationList() {
-            const listEl = document.getElementById('conversation-items');
-            const search = document.getElementById('search-conversations').value.toLowerCase();
+        
+        // [NEW v5.2] פונקציה ייעודית להפעלת התחברות
+        async function triggerAuth() {
+            // אם המשתמש כבר מחובר (נדיר בטעינה ראשונית, אבל אפשרי), המאזין יתפוס אותו
+            if (auth.currentUser) {
+                 console.log("User already signed in. Listener will handle it.");
+                 return;
+            }
             
-            let filteredConversations = allConversations.filter(conv => {
-                // 1. Filter by Search
-                const searchMatch = !search ||
-                    (conv.customer?.name && conv.customer.name.toLowerCase().includes(search)) ||
-                    (conv.customer?.phone && conv.customer.phone.toLowerCase().includes(search)) ||
-                    (conv.lastMessage && conv.lastMessage.toLowerCase().includes(search));
-                
-                if (!searchMatch) return false;
-
-                // 2. Filter by Tab [NEW v4.3]
-                switch (currentConversationFilter) {
-                    case 'unread':
-                        // הצג רק שיחות עם adminHasUnread
-                        return conv.adminHasUnread === true;
-                    case 'agent':
-                        // הצג רק שיחות שמשויכות למנהל
-                        return conv.agent?.id === ADMIN_AGENT.id;
-                    case 'bot':
-                        // הצג רק שיחות שאינן משויכות למנהל (בטיפול בוט)
-                        return !conv.agent || conv.agent.id !== ADMIN_AGENT.id;
-                    case 'all':
-                    default:
-                        return true; // הצג הכל
+            console.log("No current user. Trying auth...");
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
                 }
+            } catch (error) {
+                console.error("Firebase Auth Error:", error);
+            }
+        }
+        
+        // --- Data Listeners ---
+        
+        // 1. האזנה לרשימת השיחות
+        function listenForConversations() {
+            if (conversationUnsubscribe) conversationUnsubscribe();
+            
+            document.getElementById('conv-loader').classList.remove('hidden');
+            
+            // [FIX v5.1] שימוש בקולקציה הנכונה, החזרת המיון + הוספת הגבלה
+            const q = query(
+                collection(db, "conversations"), 
+                orderBy("lastMessageTimestamp", "desc"),
+                limit(100) // טעינת 100 השיחות האחרונות
+            );
+            
+            conversationUnsubscribe = onSnapshot(q, (snapshot) => {
+                conversations = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                renderConversationList();
+                document.getElementById('conv-loader').classList.add('hidden');
+                
+                // [FIX v5.1] רענון אוטומטי של השיחה הפתוחה אם היא עודכנה
+                if (currentConversationId) {
+                    const updatedConv = conversations.find(c => c.id === currentConversationId);
+                    if (updatedConv) {
+                        updateChatHeader(updatedConv);
+                    }
+                }
+                
+            }, (error) => {
+                console.error("Failed to listen for conversations:", error);
+                document.getElementById('conv-loader').innerHTML = `<p class="p-4 text-red-500">שגיאה בטעינת שיחות. ייתכן שחסר אינדקס ב-Firestore.<br><br>${error.message}</p>`;
             });
-
-            if (filteredConversations.length === 0) {
-                listEl.innerHTML = '<p class="p-4 text-center text-gray-500">לא נמצאו שיחות תואמות.</p>';
+        }
+        
+        // 2. האזנה להודעות בשיחה ספציפית
+        function openConversation(convId) {
+            if (messagesUnsubscribe) messagesUnsubscribe(); // הפסק האזנה קודמת
+            
+            currentConversationId = convId;
+            
+            document.getElementById('chat-placeholder').style.display = 'none';
+            document.getElementById('chat-area').style.display = 'flex';
+            document.getElementById('messages-container').innerHTML = '<div class="loader-container"><div class="loader"></div></div>';
+            
+            const conv = conversations.find(c => c.id === convId);
+            if (!conv) {
+                console.error("Conversation not found!");
                 return;
             }
             
-            listEl.innerHTML = filteredConversations.map(conv => {
-                const isActive = conv.id === currentConversationId;
-                const isUnread = conv.adminHasUnread;
-                const time = conv.lastMessageTimestamp?.toDate ? formatTime(conv.lastMessageTimestamp.toDate()) : '';
-                const initial = (conv.customer?.name || "א")[0].toUpperCase();
+            updateChatHeader(conv);
+            renderConversationList(); // רענון הרשימה לסימון 'active'
+            
+            // האזנה להודעות חדשות
+            const messagesQuery = query(
+                collection(db, "conversations", convId, "messages"),
+                orderBy("timestamp", "asc")
+            );
+            
+            messagesUnsubscribe = onSnapshot(messagesQuery, (snapshot) => {
+                const messagesContainer = document.getElementById('messages-container');
+                messagesContainer.innerHTML = ''; // נקה הודעות קודמות
                 
-                // [NEW v5.0] הגדרת סוכן
-                const agentName = conv.agent?.id === ADMIN_AGENT.id ? "בטיפולך" : "בטיפול בוט";
+                snapshot.forEach(doc => {
+                    renderMessage(doc.data());
+                });
+                
+                // גלול לתחתית
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                
+                // [FIX v5.0] סמן הודעות כנקראו (אם הן מהלקוח)
+                markMessagesAsRead(convId, snapshot.docs);
+                
+            }, (error) => {
+                console.error("Failed to listen for messages:", error);
+                messagesContainer.innerHTML = '<p class="text-red-500">שגיאה בטעינת הודעות.</p>';
+            });
+            
+            // טעינת הצעות מהבוט
+            loadBotSuggestions(conv);
+        }
+        window.openConversation = openConversation; // חשיפה ל-HTML
 
+        // --- Rendering Functions ---
+
+        // 1. רנדור רשימת השיחות
+        function renderConversationList() {
+            const listEl = document.getElementById('conv-list');
+            if (!listEl) return;
+            
+            let filteredConvs = conversations;
+            
+            // [NEW v4.3] סינון לפי טאבים
+            if (currentConversationFilter === 'new') {
+                filteredConvs = conversations.filter(c => c.isUnread && c.assignedTo === 'bot');
+            } else if (currentConversationFilter === 'mine') {
+                filteredConvs = conversations.filter(c => c.assignedTo === currentUserId);
+            }
+            
+            // סינון לפי חיפוש
+            const searchTerm = document.getElementById('search-conversations').value.toLowerCase();
+            if (searchTerm) {
+                filteredConvs = filteredConvs.filter(c => 
+                    (c.customer?.name && c.customer.name.toLowerCase().includes(searchTerm)) ||
+                    (c.customer?.phone && c.customer.phone.includes(searchTerm))
+                );
+            }
+
+            if (filteredConvs.length === 0) {
+                listEl.innerHTML = '<p class="p-4 text-center text-gray-500">לא נמצאו שיחות.</p>';
+                return;
+            }
+            
+            listEl.innerHTML = filteredConvs.map(conv => {
+                const isActive = conv.id === currentConversationId;
+                const isUnread = conv.isUnread;
+                const time = conv.lastMessageTimestamp?.toDate ? formatTime(conv.lastMessageTimestamp.toDate()) : '';
+                
+                // [NEW v5.0] חיווי שיוך (בוט/מנהל)
+                let assignedText = "משויך לבוט";
+                let assignedClass = "text-gray-400";
+                if (conv.assignedTo !== 'bot') {
+                    assignedText = "בטיפולך";
+                    assignedClass = "text-brand-blue font-semibold";
+                }
+                
                 return `
-                    <div class="conv-item ${isActive ? 'active' : ''}" onclick="selectConversation('${conv.id}')">
-                        <div class="avatar ${isUnread ? 'unread' : ''}">${initial}</div>
-                        <div class="conv-details">
-                            <div class="conv-header">
-                                <span class="conv-name">${conv.customer?.name || 'לקוח לא ידוע'}</span>
-                                <span class="conv-time">${time}</span>
-                            </div>
-                            <p class="conv-preview ${isUnread ? 'font-bold text-gray-800 dark:text-gray-200' : ''}">
-                                ${conv.lastMessage || '...'}
-                            </p>
-                            <p class="conv-agent">${agentName}</p>
+                    <div class="conv-card p-4 cursor-pointer ${isActive ? 'active' : ''}" onclick="openConversation('${conv.id}')">
+                        <div class="flex justify-between items-center">
+                            <h3 class="font-bold text-lg truncate ${isUnread ? 'text-brand-blue' : 'text-gray-800'}">${conv.customer?.name || 'לקוח לא ידוע'}</h3>
+                            <span class="text-xs text-gray-500 flex-shrink-0 ml-2">${time}</span>
+                        </div>
+                        <p class="text-sm text-gray-600 truncate">${conv.lastMessageSnippet || '...'}</p>
+                        <div class="flex justify-between items-center mt-1">
+                            <span class="text-xs ${assignedClass}">${assignedText}</span>
+                            ${isUnread ? '<span class="w-3 h-3 bg-brand-blue rounded-full"></span>' : ''}
                         </div>
                     </div>
                 `;
             }).join('');
         }
 
-        async function selectConversation(convId) {
-            if (currentConversationId === convId) return; // אל תטען מחדש אם כבר נבחר
+        // 2. רנדור הודעה בודדת
+        function renderMessage(msg) {
+            if (!msg.timestamp) return;
             
-            currentConversationId = convId;
-            renderConversationList(); // עדכון הרשימה להצגת 'active'
+            const messagesContainer = document.getElementById('messages-container');
+            const time = msg.timestamp.toDate().toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
             
-            // הצג את אזור הצ'אט והסתר את הפתיח
-            document.getElementById('chat-welcome').classList.add('hidden');
-            document.getElementById('chat-active').classList.remove('hidden');
-            document.getElementById('chat-loader').classList.remove('hidden');
+            // [NEW v5.0] הוספת "וי קריאה"
+            const readReceipt = msg.isRead ? '✔️✔️' : '✔️';
             
-            // הפעל כפתורי שליחה
-            document.getElementById('reply-message-text').disabled = false;
-            document.getElementById('send-reply-btn').disabled = false;
-
-            // עדכון כותרת
-            const conv = allConversations.find(c => c.id === convId);
-            if (conv) {
-                document.getElementById('chat-header-name').innerText = conv.customer?.name || 'לקוח';
-                document.getElementById('chat-header-phone').innerText = conv.customer?.phone || '';
-                // [NEW v5.0] הצג/הסתר כפתור השתלטות
-                const escalateBtn = document.getElementById('escalate-btn');
-                if (conv.agent?.id === ADMIN_AGENT.id) {
-                    escalateBtn.style.display = 'none'; // כבר בטיפולך
-                } else {
-                    escalateBtn.style.display = 'block'; // בטיפול בוט
-                }
+            if (msg.sender === 'customer') {
+                messagesContainer.innerHTML += `
+                    <div class="flex justify-start">
+                        <div class="chat-bubble-in p-3 max-w-lg shadow">
+                            <p>${msg.text}</p>
+                            <span class="text-xs text-gray-400 mt-1 block text-left">${time} ${readReceipt}</span>
+                        </div>
+                    </div>
+                `;
+            } else { // 'admin' or 'bot'
+                messagesContainer.innerHTML += `
+                    <div class="flex justify-end">
+                        <div class="chat-bubble-out p-3 max-w-lg shadow">
+                            <p>${msg.text}</p>
+                            <span class="text-xs text-blue-100 opacity-70 mt-1 block text-left">${time} ${readReceipt}</span>
+                        </div>
+                    </div>
+                `;
             }
-
-            // האזנה להודעות
-            if (messagesUnsubscribe) messagesUnsubscribe();
+        }
+        
+        // 3. עדכון כותרת הצ'אט
+        function updateChatHeader(conv) {
+            document.getElementById('chat-customer-name').innerText = conv.customer?.name || 'לקוח';
+            document.getElementById('chat-customer-details').innerText = `משויך ל: ${conv.assignedTo === 'bot' ? 'בוט' : 'בטיפולך'} | ${conv.customer?.phone || ''}`;
             
-            // [FIX v5.3] החלפת הקולקציה ל-"conversations"
-            const messagesCol = collection(db, "conversations", convId, "messages");
-            const q = query(messagesCol, orderBy("timestamp", "asc"));
-            
-            messagesUnsubscribe = onSnapshot(q, (snapshot) => {
-                document.getElementById('chat-loader').classList.add('hidden');
-                const messagesEl = document.getElementById('chat-messages');
-                messagesEl.innerHTML = ''; // נקה הודעות קודמות
-                
-                snapshot.forEach(doc => {
-                    messagesEl.appendChild(createMessageBubble(doc.data()));
-                });
-
-                // בדוק אם יש חיווי הקלדה [NEW v5.0]
-                const currentConv = allConversations.find(c => c.id === currentConversationId);
-                if (currentConv && currentConv.customerIsTyping === true) {
-                    messagesEl.appendChild(createTypingIndicator());
-                }
-
-                scrollToBottom();
-            }, (error) => {
-                console.error("Error fetching messages:", error);
-                document.getElementById('chat-loader').innerHTML = '<p class="p-4 text-red-500">שגיאה בטעינת הודעות.</p>';
-            });
-
-            // סמן כנקרא
-            if (conv && conv.adminHasUnread) {
-                // [FIX v5.3] החלפת הקולקציה ל-"conversations"
-                await updateDoc(doc(db, "conversations", convId), {
-                    adminHasUnread: false
-                });
+            // [NEW v5.0] חיווי הקלדה
+            const typingIndicator = document.getElementById('chat-typing-indicator');
+            if (conv.customerIsTyping) {
+                typingIndicator.classList.remove('hidden');
+            } else {
+                typingIndicator.classList.add('hidden');
             }
             
-            // טען תשובות מהירות
-            loadQuickReplies(conv.lastBotMessageKey);
+            // [NEW v5.0] כפתור השתלטות
+            const takeoverBtn = document.getElementById('takeover-btn');
+            if (conv.assignedTo === 'bot') {
+                takeoverBtn.classList.remove('hidden');
+            } else {
+                takeoverBtn.classList.add('hidden');
+            }
             
-            // עדכון תצוגה למובייל
-            document.body.classList.add('chat-selected');
-        }
-        window.selectConversation = selectConversation; // Expose globally
-
-        // --- פונקציות UI (מובייל, יצירת בועות) ---
-        function goBackToList() {
-            document.body.classList.remove('chat-selected');
-            currentConversationId = null;
-            if (messagesUnsubscribe) messagesUnsubscribe();
-            renderConversationList();
-        }
-        window.goBackToList = goBackToList;
-
-        function createMessageBubble(msg) {
-            const bubble = document.createElement('div');
-            const isOut = msg.sender === 'customer'; // 'customer' = יוצא (מהמנהל), 'bot'/'agent' = נכנס
-            
-            const time = msg.timestamp?.toDate ? formatTime(msg.timestamp.toDate()) : '';
-            const readReceipt = isOut ? '✓' : '✓'; // [NEW v5.0]
-
-            bubble.className = `message-bubble ${isOut ? 'message-out' : 'message-in'}`;
-            bubble.innerHTML = `
-                <div class="message-text">${msg.text.replace(/\n/g, '<br>')}</div>
-                <div class="message-time">
-                    <span class="read-receipt">${readReceipt}</span>
-                    ${time}
-                </div>
-            `;
-            return bubble;
+            // עדכון קישור לכרטיס לקוח (אם קיים)
+            const customerLink = document.getElementById('customer-link');
+            if (conv.customer?.order_id) {
+                // הנחה שהקישור הוא לדף `customer.html`
+                customerLink.href = `../customer.html?id=${conv.customer.order_id}`;
+                customerLink.style.display = 'block';
+            } else {
+                customerLink.style.display = 'none';
+            }
         }
 
-        function createTypingIndicator() {
-             const typingEl = document.createElement('div');
-             typingEl.className = 'typing-indicator';
-             typingEl.innerText = '...מקליד ✍️';
-             return typingEl;
-        }
+        // --- Chat Actions ---
 
-        function scrollToBottom() {
-            const messagesEl = document.getElementById('chat-messages');
-            messagesEl.scrollTop = messagesEl.scrollHeight;
-        }
-
-        // --- שליחת הודעות ופעולות ---
-
+        // 1. שליחת הודעת מנהל
         async function sendAdminReply() {
-            const textarea = document.getElementById('reply-message-text');
-            const text = textarea.value.trim();
-            if (!text || !currentConversationId) return;
+            const text = document.getElementById('reply-message-text').value;
+            if (!text.trim() || !currentConversationId) return;
 
-            // [FIX v5.3] החלפת הקולקציה ל-"conversations"
+            document.getElementById('reply-message-text').value = '';
+            
             const convRef = doc(db, "conversations", currentConversationId);
-            const convSnap = await getDoc(convRef);
-            if (!convSnap.exists() || convSnap.data().agent?.id !== ADMIN_AGENT.id) {
-                // אם לא, בצע השתלטות אוטומטית
-                await escalateToHuman(false); // בצע השתלטות שקטה
-            }
-
-            const message = {
+            const messagesCol = collection(db, "conversations", currentConversationId, "messages");
+            
+            const messageData = {
                 text: text,
-                sender: "agent", // המנהל הוא 'agent'
+                sender: 'admin',
                 timestamp: serverTimestamp(),
-                agent: ADMIN_AGENT // שמור מידע על המנהל ששלח
+                isRead: false
             };
-
-            textarea.value = ''; // נקה מיידית
             
             try {
-                // הוסף הודעה חדשה
-                // [FIX v5.3] החלפת הקולקציה ל-"conversations"
-                await addDoc(collection(db, "conversations", currentConversationId, "messages"), message);
+                // 1. הוסף הודעה חדשה
+                await addDoc(messagesCol, messageData);
                 
-                // עדכן את השיחה הראשית
+                // 2. עדכן את השיחה הראשית
                 await updateDoc(convRef, {
-                    lastMessage: text,
+                    lastMessageSnippet: text,
                     lastMessageTimestamp: serverTimestamp(),
-                    adminHasUnread: false,
-                    customerHasUnread: true, // סמן כלא נקרא עבור הלקוח
-                    lastBotMessageKey: null, // נקה תשובות מהירות
-                    customerIsTyping: false // [NEW v5.0]
+                    isUnread: false, // מנהל תמיד קורא כשהוא שולח
+                    assignedTo: currentUserId // [FIX v5.0] שייך למנהל אוטומטית
                 });
                 
-                loadQuickReplies(null); // נקה תשובות מהירות
-                scrollToBottom();
-            } catch (error) {
-                console.error("Error sending reply:", error);
-                showToast("שגיאה בשליחת ההודעה", "error");
-                textarea.value = text; // החזר טקסט במקרה של כשל
+                console.log("Admin reply sent.");
+            } catch (e) {
+                console.error("Error sending reply:", e);
+                showToast("שגיאה בשליחת הודעה", "error");
+                document.getElementById('reply-message-text').value = text; // החזר טקסט
             }
         }
-        window.sendAdminReply = sendAdminReply;
+        window.sendAdminReply = sendAdminReply; // חשיפה ל-HTML
 
-        /**
-         * [NEW v5.0] השתלטות על שיחה
-         */
-        async function escalateToHuman(showAlert = true) {
+        // 2. לחיצה על Enter
+        function handleKeydown(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendAdminReply();
+            }
+        }
+        window.handleKeydown = handleKeydown; // חשיפה ל-HTML
+
+        // 3. [NEW v5.0] השתלטות על שיחה
+        async function escalateToHuman() {
             if (!currentConversationId) return;
             
-            // [FIX v5.3] החלפת הקולקציה ל-"conversations"
             const convRef = doc(db, "conversations", currentConversationId);
             try {
                 await updateDoc(convRef, {
-                    agent: ADMIN_AGENT, // שייך למנהל הנוכחי
-                    lastBotMessageKey: null // נקה תשובות מהירות של הבוט
+                    assignedTo: currentUserId,
+                    isUnread: false // המנהל "קרא" את השיחה ברגע שהשתלט
                 });
-                
-                // הסתר את כפתור ההשתלטות
-                document.getElementById('escalate-btn').style.display = 'none';
-                loadQuickReplies(null); // נקה תשובות מהירות
-                
-                if (showAlert) {
-                    showToast("השיחה שויכה אליך. הלקוח יקבל כעת את הודעותיך.", "success");
-                }
-            } catch (error) {
-                console.error("Error escalating to human:", error);
-                if (showAlert) {
-                    showToast("שגיאה בהשתלטות על השיחה", "error");
-                }
+                document.getElementById('takeover-btn').classList.add('hidden');
+                // העדכון יגיע דרך onSnapshot ויעדכן את הכותרת
+                console.log("Conversation escalated to human.");
+            } catch (e) {
+                console.error("Error escalating conversation:", e);
+                showToast("שגיאה בהשתלטות על השיחה", "error");
             }
         }
-        window.escalateToHuman = escalateToHuman;
-
-
-        async function archiveConversation() {
-            if (!currentConversationId) return;
+        window.escalateToHuman = escalateToHuman; // חשיפה ל-HTML
+        
+        // 4. [NEW v5.0] סימון כנקרא
+        async function markMessagesAsRead(convId, messageDocs) {
+            const convRef = doc(db, "conversations", convId);
+            const batch = writeBatch(db);
+            let needsUpdate = false;
             
-            if (!confirm("האם אתה בטוח שברצונך לסגור (לשמור בארכיון) שיחה זו?")) return;
-
-            try {
-                // [FIX v5.3] החלפת הקולקציה ל-"conversations"
-                await updateDoc(doc(db, "conversations", currentConversationId), {
-                    status: "Archived", // סטטוס חדש
-                    adminHasUnread: false // נקה חיווי
-                });
-                
-                // חזור לרשימה
-                document.getElementById('chat-welcome').classList.remove('hidden');
-                document.getElementById('chat-active').classList.add('hidden');
-                goBackToList();
-                
-                showToast("השיחה הועברה לארכיון", "success");
-
-            } catch (error) {
-                console.error("Error archiving conversation:", error);
-                showToast("שגיאה בסגירת השיחה", "error");
+            messageDocs.forEach(doc => {
+                const msg = doc.data();
+                if (msg.sender === 'customer' && !msg.isRead) {
+                    batch.update(doc.ref, { isRead: true });
+                    needsUpdate = true;
+                }
+            });
+            
+            if (needsUpdate) {
+                // עדכן גם את השיחה הראשית שהיא נקראה
+                batch.update(convRef, { isUnread: false });
+                await batch.commit();
+                console.log("Marked messages as read.");
             }
         }
-        window.archiveConversation = archiveConversation;
-
-        // --- Helpers ---
-        function formatTime(date) {
-            return date.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
-        }
         
-        function showToast(message, type = 'success') {
-            // (פונקציית עזר להצגת התראות - ניתן להוסיף כאן)
-            console.log(`[${type}]: ${message}`);
-        }
-        
-        // [NEW v4.2] טעינת תשובות מהירות
-        async function loadQuickReplies(key) {
+        // 5. [NEW v4.3] טעינת הצעות מהבוט
+        function loadBotSuggestions(conversation) {
             const container = document.getElementById('quick-replies');
             container.innerHTML = '';
-            if (!key) return; // אין מפתח, אין תשובות
-
-            try {
-                const docRef = doc(db, "bot_quick_replies", key);
-                const docSnap = await getDoc(docRef);
-
-                if (docSnap.exists() && docSnap.data().replies) {
-                    docSnap.data().replies.forEach(reply => {
-                        const btn = document.createElement('button');
-                        btn.className = 'quick-reply-btn';
-                        btn.innerText = reply;
-                        btn.onclick = () => {
-                            const textarea = document.getElementById('reply-message-text');
-                            textarea.value = reply;
-                            textarea.focus();
-                        };
-                        container.appendChild(btn);
-                    });
-                }
-            } catch (error) {
-                console.error("Error loading quick replies:", error);
+            
+            // פונקציית דמה - בעתיד יגיע מ-Dialogflow או שירות Bot
+            const suggestions = [
+                "בטח, מיד בודק...",
+                "מה מספר ההזמנה?",
+                "אני מעביר את פנייתך למנהל.",
+                "תודה רבה!"
+            ];
+            
+            if (conversation.assignedTo === 'bot') {
+                 // אל תציג הצעות אם הבוט עדיין שולט
+                return;
             }
+
+            suggestions.forEach(reply => {
+                const btn = document.createElement('button');
+                btn.className = 'btn-quick-reply py-1 px-3 rounded-full text-sm font-medium';
+                btn.innerText = reply;
+                btn.onclick = () => {
+                    const textarea = document.getElementById('reply-message-text');
+                    textarea.value = reply;
+                    textarea.focus();
+                };
+                container.appendChild(btn);
+            });
         }
         
-        // [NEW v4.3] Filter tabs
+        // [NEW v4.3] סינון טאבים
         function setConversationFilter(filter) {
             currentConversationFilter = filter;
+            
             // Update active button
-            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
-            document.querySelector(`.tab-button[onclick="setConversationFilter('${filter}')"]`).classList.add('active');
+            document.querySelectorAll('.tab-button').forEach(btn => {
+                if(btn) btn.classList.remove('active'); // [FIX v5.1] בדיקת בטיחות
+            });
+            
+            const activeButton = document.querySelector(`.tab-button[onclick="setConversationFilter('${filter}')"]`);
+            if (activeButton) { // [FIX v5.1] בדיקת בטיחות
+                activeButton.classList.add('active');
+            }
+            
             renderConversationList(); // Re-render the list
         }
         window.setConversationFilter = setConversationFilter;
 
-        // --- Init ---\
+        // --- Utilities ---
+        
+        function formatTime(date) {
+            const now = new Date();
+            const diff = now.getTime() - date.getTime();
+            const minutes = Math.floor(diff / 60000);
+            
+            if (minutes < 1) return 'כעת';
+            if (minutes < 60) return `לפני ${minutes} דק'`;
+            
+            // אם זה היום, הצג שעה
+            if (date.getDate() === now.getDate() && date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear()) {
+                return date.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
+            }
+            
+            // אם זה אתמול
+            const yesterday = new Date(now);
+            yesterday.setDate(yesterday.getDate() - 1);
+            if (date.getDate() === yesterday.getDate() && date.getMonth() === yesterday.getMonth() && date.getFullYear() === yesterday.getFullYear()) {
+                return 'אתמול';
+            }
+            
+            // אחרת, הצג תאריך מלא
+            return date.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit' });
+        }
+        
+        // [NEW v4.3] Dark Mode Toggle
+        function toggleDarkMode() {
+            const html = document.documentElement;
+            if (html.classList.contains('dark')) {
+                html.classList.remove('dark');
+                localStorage.setItem('theme', 'light');
+                updateThemeIcons('light');
+            } else {
+                html.classList.add('dark');
+                localStorage.setItem('theme', 'dark');
+                updateThemeIcons('dark');
+            }
+        }
+        window.toggleDarkMode = toggleDarkMode;
+
+        function updateThemeIcons(theme) {
+            if (theme === 'dark') {
+                document.getElementById('theme-icon-sun').classList.remove('hidden');
+                document.getElementById('theme-icon-moon').classList.add('hidden');
+            } else {
+                document.getElementById('theme-icon-sun').classList.add('hidden');
+                document.getElementById('theme-icon-moon').classList.remove('hidden');
+            }
+        }
+        
+        // --- Init ---
         document.addEventListener('DOMContentLoaded', () => {
+            initApp();
             feather.replace();
             document.getElementById('search-conversations').addEventListener('keyup', renderConversationList);
             
             // [NEW v4.3] Dark mode init
-            if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
                 document.documentElement.classList.add('dark');
+                updateThemeIcons('dark');
             } else {
                 document.documentElement.classList.remove('dark');
+                updateThemeIcons('light');
             }
         });
     </script>
