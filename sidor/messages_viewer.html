@@ -3,23 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>✍️ מרכז הודעות (v5.6 - ייצוב סופי)</title>
+    <title>✍️ מרכז הודעות (v5.7 - ייצוב סופי)</title>
     <!-- 
-      DeliveryMaster Admin - מרכז הודעות v5.6 (ייצוב סופי)
+      DeliveryMaster Admin - מרכז הודעות v5.7 (ייצוב סופי)
       
       Changelog:
+      - [FIX v5.7] Auth Logic Fix:
+        - תיקון כשל לוגי ב-signInUser שבוצעה קריאה לא תקינה ל-onAuthStateChanged.
+        - הלוגיקה כעת מבטיחה שה-listener המקורי יטפל באימות כראוי.
       - [FIX v5.6] Auth/DOM Race Condition:
         - תיקון כשל לוגי שבו מאזיני הנתונים לא נקראו.
-        - הלוגיקה כעת מבטיחה שגם ה-DOM וגם ה-Auth מוכנים לפני טעינת נתונים.
       - [FIX v5.6] Index Bypass:
         - הסרת orderBy("lastMessageTimestamp") מהשאילתה ל-Firestore.
         - הוספת מיון בצד הלקוח (JavaScript) כדי למנוע כשל אינדקס.
-      - [FIX v5.5] Race Condition:
-        - העברת כל הלוגיקה של טעינת הנתונים (initApp) לתוך 'DOMContentLoaded'.
-      - [FIX v5.4] Auth Loop:
-        - הוספת דגל 'appInitialized' כדי למנוע קריאות כפולות ל-listener-ים.
-      - [NEW v5.3] Global Alert System:
-        - הוספת מאזין (onSnapshot) לקולקציית 'orders' להתראות חיות.
     -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/feather-icons"></script>
@@ -678,11 +674,10 @@
         
         async function signInUser() {
             try {
+                // [FIX v5.7] Corrected logic
                 if (auth.currentUser) {
-                    console.log("User already signed in. Triggering state check.");
-                    // Force trigger the listener if auth object is already populated
-                    onAuthStateChanged(auth, auth.currentUser); 
-                    return;
+                    console.log("User is already signed in. Listener will handle.");
+                    return; // The onAuthStateChanged listener will fire automatically
                 }
                 
                 console.log("No current user. Trying auth...");
