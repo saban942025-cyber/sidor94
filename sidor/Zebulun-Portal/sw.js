@@ -1,105 +1,82 @@
-// service-worker.js
-
-// [1] --- הגדרות גרסה ו-Cache ---
 const CACHE_VERSION = 'v1.0.0';
 const CACHE_NAME = `zebulun-portal-cache-${CACHE_VERSION}`;
-// רשימת הקבצים הנדרשים לפעולת האפליקציה הבסיסית
 const APP_SHELL_FILES = [
-  '/Zebulun-Portal/index.html'
-  // ניתן להוסיף כאן נכסים סטטיים נוספים אם יהיו, כגון קובץ CSS ייעודי או אייקונים
+  'index.html',
+  'app.desktop.css',
+  'app.mobile.css',
+  'app.logic.js',
+  'https://cdn.tailwindcss.com',
+  'https://unpkg.com/feather-icons'
 ];
 
-// [2] --- התקנה (Install) ---
-// שלב זה קורה כשהדפדפן מזהה Service Worker חדש
+// 1. Install Event: Cache the app shell
 self.addEventListener('install', (event) => {
-  console.log('[SW] ⚡️ Install event!', CACHE_NAME);
-  // אנו אומרים לדפדפן להמתין עד שה-Cache יתעדכן
+  console.log('[SW] Install event triggered. Caching app shell.');
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => {
-        console.log('[SW] Caching app shell...');
+        console.log('[SW] Caching files:', APP_SHELL_FILES);
         return cache.addAll(APP_SHELL_FILES);
       })
-      .then(() => {
-        // הפעלה מיידית של ה-SW החדש
-        return self.skipWaiting();
-      })
+      .then(() => self.skipWaiting()) // Force activation
   );
 });
 
-// [3] --- הפעלה (Activate) ---
-// שלב זה קורה אחרי ההתקנה, כשה-SW החדש לוקח שליטה
+// 2. Activate Event: Clean up old caches
 self.addEventListener('activate', (event) => {
-  console.log('[SW] ⚡️ Activate event!', CACHE_NAME);
-  // ניקוי גרסאות Cache ישנות
+  console.log('[SW] Activate event triggered. Cleaning old caches.');
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
-        cacheNames
-          .filter((name) => name.startsWith('zebulun-portal-cache-') && name !== CACHE_NAME)
-          .map((name) => {
-            console.log('[SW] Deleting old cache:', name);
-            return caches.delete(name);
-          })
+        cacheNames.map((cacheName) => {
+          if (cacheName !== CACHE_NAME) {
+            console.log('[SW] Deleting old cache:', cacheName);
+            return caches.delete(cacheName);
+          }
+        })
       );
-    }).then(() => {
-      // שליטה מיידית על כל הדפים הפתוחים
-      return self.clients.claim();
-    }).then(() => {
-      // [דרישה 4] שליחת הודעה לדף שהאפליקציה עודכנה
-      self.clients.matchAll().then(clients => {
-        clients.forEach(client => client.postMessage({ type: 'APP_UPDATED', version: CACHE_VERSION }));
-      });
-    })
+    }).then(() => self.clients.claim()) // Claim clients immediately
   );
 });
 
-// [4] --- יירוט בקשות (Fetch) ---
-// זה הלב של תמיכת ה-Offline
+// 3. Fetch Event: Serve from cache (Cache-First for shell, Network-First for data)
 self.addEventListener('fetch', (event) => {
-  // אנו רוצים להגיב רק לבקשות GET (לא POST ל-Firestore וכו')
-  if (event.request.method !== 'GET') {
-    return;
-  }
+  const requestUrl = new URL(event.request.url);
 
-  // אסטרטגיה: Cache-First (נסה קודם מה-Cache)
-  event.respondWith(
-    caches.match(event.request)
-      .then((cachedResponse) => {
-        // [א] נמצא ב-Cache
-        if (cachedResponse) {
-          // console.log('[SW] Serving from Cache:', event.request.url);
-          return cachedResponse;
-        }
+  // Check if the request is for one of the app shell files
+  const isAppShell = APP_SHELL_FILES.includes(requestUrl.pathname.split('/').pop()) || requestUrl.origin === self.location.origin;
 
-        // [ב] לא נמצא ב-Cache - גש לרשת
-        // console.log('[SW] Serving from Network:', event.request.url);
-        return fetch(event.request)
-          .then((networkResponse) => {
-            // אם הבקשה הצליחה, נשמור עותק ב-Cache לפעם הבאה
-            // (אנחנו בודקים רק אם הבקשה היא מהמקור שלנו, לא ל-Firebase וכו')
-            if (networkResponse.ok && event.request.url.includes('/Zebulun-Portal/')) {
-              const responseToCache = networkResponse.clone();
-              caches.open(CACHE_NAME)
-                .then(cache => {
-                  cache.put(event.request, responseToCache);
-                });
-            }
-            return networkResponse;
-          })
-          .catch((error) => {
-            // אם גם הרשת וגם ה-Cache נכשלו (מצב Offline אמיתי)
-            console.warn('[SW] Fetch failed, network and cache unavailable.', error);
-            // כאן אפשר להחזיר דף Offline ייעודי אם רוצים
-            // return caches.match('/offline.html');
-          });
+  if (isAppShell) {
+    // Cache-First strategy for App Shell
+    event.respondWith(
+      caches.match(event.request).then((cachedResponse) => {
+        return cachedResponse || fetch(event.request).then((networkResponse) => {
+          // Optional: cache the new response if it's a successful GET
+          if (networkResponse.ok && event.request.method === 'GET') {
+            caches.open(CACHE_NAME).then(cache => cache.put(event.request, networkResponse.clone()));
+          }
+          return networkResponse;
+        });
+      }).catch(() => {
+        // Fallback for offline (if even cache fails, though unlikely for shell)
+        // You could return an offline.html page here if you had one
       })
-  );
-});
-
-// האזנה להודעות מהדף (למשל, לבדיקת גרסה)
-self.addEventListener('message', (event) => {
-  if (event.data && event.data.type === 'GET_VERSION') {
-    event.source.postMessage({ type: 'SW_VERSION', version: CACHE_VERSION });
+    );
+  } else {
+    // Network-First strategy for API calls or other resources
+    event.respondWith(
+      fetch(event.request).catch(() => {
+        // If network fails, try to match from cache (e.g., for previously fetched data)
+        return caches.match(event.request);
+      })
+    );
   }
 });
+
+// Listen for messages from the client (e.g., to show update notification)
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+});
+
