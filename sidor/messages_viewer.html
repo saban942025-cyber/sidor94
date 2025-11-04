@@ -3,11 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>✍️ מרכז הודעות (v5.0 - Glassmorphism)</title>
+    <title>✍️ מרכז הודעות (v5.1 - Glassmorphism)</title>
     <!-- 
-      DeliveryMaster Admin - מרכז הודעות v5.0 (Glassmorphism + Bot)
+      DeliveryMaster Admin - מרכז הודעות v5.1 (Glassmorphism + Bot)
       
       Changelog:
+      - [FIX v5.2] - תיקון טעינה תקועה ע"י הסרת מיון שרת זמנית.
       - [FIX v5.1] - תיקון נתיבי ייבוא קריטיים של Firebase SDK.
       - [NEW v5.0] Glassmorphism UI
       - [NEW v5.0] Bot/Agent Flow
@@ -650,7 +651,7 @@
 
     <!-- 
       ==========================================================
-      ===               תחילת סקריפט ראשי (v5.0)              ===
+      ===               תחילת סקריפט ראשי (v5.1)              ===
       ==========================================================
     -->
     <script type="module">
@@ -732,7 +733,12 @@
         // --- Data Listeners ---
 
         function listenForConversations() {
-            const q = query(collection(db, "orders"), orderBy("lastMessageTimestamp", "desc"));
+            // [FIX v5.2] הסרת המיון הזמנית כדי למנוע שגיאת אינדקס חסר
+            // הדרך הנכונה היא ליצור אינדקס ב-Firebase על 'orders' -> 'lastMessageTimestamp' (descending)
+            // const q = query(collection(db, "orders"), orderBy("lastMessageTimestamp", "desc"));
+            
+            // [חדש] שאילתה בסיסית ללא מיון (דורש אינדקס)
+            const q = query(collection(db, "orders"));
             
             if (conversationsUnsubscribe) conversationsUnsubscribe();
             
@@ -742,10 +748,16 @@
                 snapshot.forEach(doc => {
                     allConversations.push({ id: doc.id, ...doc.data() });
                 });
+
+                // [FIX v5.2] מיון בצד הלקוח (Client-side) בגלל הסרת המיון מהשרת
+                allConversations.sort((a, b) => 
+                    (b.lastMessageTimestamp?.toMillis() || 0) - (a.lastMessageTimestamp?.toMillis() || 0)
+                );
+
                 renderConversationList();
             }, (error) => {
                 console.error("Error listening to conversations:", error);
-                document.getElementById('conv-loader').innerHTML = '<p class="p-4 text-red-500">שגיאה בטעינת שיחות.</p>';
+                document.getElementById('conv-loader').innerHTML = `<p class="p-4 text-red-500">שגיאה בטעינת שיחות. ייתכן שחסר אינדקס במסד הנתונים: ${error.message}</p>`;
             });
         }
 
@@ -1093,3 +1105,4 @@
     </script>
 </body>
 </html>
+
