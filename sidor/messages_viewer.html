@@ -734,40 +734,56 @@
         // --- Data Listeners ---
 
         function listenForConversations() {
-            // [FIX v5.3] החלפת הקולקציה ל-"conversations"
-            // [FIX v5.3] החזרת המיון + הוספת הגבלה
-            const q = query(
-                collection(db, "conversations"), // <-- התיקון כאן
-                orderBy("lastMessageTimestamp", "desc"),
-                limit(100) // הוספת הגבלה למניעת טעינת יתר
-            );
-            
+            // [FIX v5.4] הוספת בדיקות בטיחות ו-try...catch
+            if (!db) {
+                console.error("Firestore 'db' object is not initialized. Cannot listen for conversations.");
+                document.getElementById('conv-loader').innerHTML = '<p class="p-4 text-red-500">שגיאה קריטית: חיבור מסד הנתונים נכשל.</p>';
+                return;
+            }
+
             if (conversationsUnsubscribe) conversationsUnsubscribe();
             
-            conversationsUnsubscribe = onSnapshot(q, (snapshot) => {
-                document.getElementById('conv-loader').classList.add('hidden');
-                allConversations = [];
-                snapshot.forEach(doc => {
-                    allConversations.push({ id: doc.id, ...doc.data() });
+            try {
+                // [FIX v5.3] החלפת הקולקציה ל-"conversations"
+                // [FIX v5.3] החזרת המיון + הוספת הגבלה
+                const q = query(
+                    collection(db, "conversations"), // <-- התיקון כאן
+                    orderBy("lastMessageTimestamp", "desc"),
+                    limit(100) // הוספת הגבלה למניעת טעינת יתר
+                );
+                
+                conversationsUnsubscribe = onSnapshot(q, (snapshot) => {
+                    document.getElementById('conv-loader').classList.add('hidden');
+                    allConversations = [];
+                    snapshot.forEach(doc => {
+                        allConversations.push({ id: doc.id, ...doc.data() });
+                    });
+
+                    // [FIX v5.2] אין צורך במיון לקוח כי השרת עושה זאת
+                    // allConversations.sort((a, b) => 
+                    //     (b.lastMessageTimestamp?.toMillis() || 0) - (a.lastMessageTimestamp?.toMillis() || 0)
+                    // );
+
+                    renderConversationList();
+                }, (error) => {
+                    console.error("Error listening to conversations:", error);
+                    // [FIX v5.3] שגיאת אינדקס צפויה
+                    if (error.code === 'failed-precondition') {
+                         document.getElementById('conv-loader').innerHTML = `<p class="p-4 text-red-500"><b>שגיאת מסד נתונים:</b> חסר אינדקס. <br> לחץ על הקישור בקונסול (F12) כדי ליצור אותו.</p>`;
+                         // הדפסת הקישור לקונסול
+                         console.error("השאילתה דורשת אינדקס. אנא צור אותו כאן:", error.message.split(' visit ')[1] || error.message);
+                    } else if (error.code === 'permission-denied') {
+                         document.getElementById('conv-loader').innerHTML = `<p class="p-4 text-red-500"><b>שגיאת הרשאות:</b> אין לך הרשאה לקרוא את קולקציית 'conversations'. בדוק את חוקי האבטחה (Security Rules) ב-Firebase.</p>`;
+                    } else {
+                        document.getElementById('conv-loader').innerHTML = `<p class="p-4 text-red-500">שגיאה בטעינת שיחות: ${error.message}</p>`;
+                    }
                 });
 
-                // [FIX v5.2] אין צורך במיון לקוח כי השרת עושה זאת
-                // allConversations.sort((a, b) => 
-                //     (b.lastMessageTimestamp?.toMillis() || 0) - (a.lastMessageTimestamp?.toMillis() || 0)
-                // );
-
-                renderConversationList();
-            }, (error) => {
-                console.error("Error listening to conversations:", error);
-                // [FIX v5.3] שגיאת אינדקס צפויה
-                if (error.code === 'failed-precondition') {
-                     document.getElementById('conv-loader').innerHTML = `<p class="p-4 text-red-500"><b>שגיאת מסד נתונים:</b> חסר אינדקס. <br> לחץ על הקישור בקונסול (F12) כדי ליצור אותו.</p>`;
-                     // הדפסת הקישור לקונסול
-                     console.error("השאילתה דורשת אינדקס. אנא צור אותו כאן:", error.message.split(' visit ')[1] || error.message);
-                } else {
-                    document.getElementById('conv-loader').innerHTML = `<p class="p-4 text-red-500">שגיאה בטעינת שיחות: ${error.message}</p>`;
-                }
-            });
+            } catch (error) {
+                // תפיסת שגיאה אם בניית השאילתה (query) עצמה נכשלה
+                console.error("Error creating query:", error);
+                document.getElementById('conv-loader').innerHTML = `<p class="p-4 text-red-500">שגיאה בבניית השאילתה: ${error.message}</p>`;
+            }
         }
 
         function renderConversationList() {
