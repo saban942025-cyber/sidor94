@@ -28,6 +28,9 @@
       - [FIX v5.2] תיקון לוגיקת Auth:
         - הפרדת תהליך ההתחברות (Sign-in) מהמאזין (onAuthStateChanged)
         - מניעת "Chicken-and-egg" problem שגרם לטעינה אינסופית.
+      - [FIX v5.3] אילוץ שגיאת אינדקס:
+        - הסרת `limit()` מהשאילתה הראשית כדי לאלץ את Firestore
+        - להחזיר שגיאת אינדקס ברורה וניתנת ללחיצה.
     -->
     
     <!-- Icons (Feather) & Fonts -->
@@ -411,7 +414,7 @@
     
     <!-- 
       ==========================================================
-      ===               תחילת סקריפט ראשי (v5.2)              ===
+      ===               תחילת סקריפט ראשי (v5.3)              ===
       ==========================================================
     -->
     <script type="module">
@@ -514,21 +517,21 @@
         function listenForConversations() {
             if (conversationUnsubscribe) conversationUnsubscribe();
             
-            document.getElementById('conv-loader').classList.remove('hidden');
+            const loader = document.getElementById('conv-loader');
+            loader.classList.remove('hidden');
+            console.log("Attempting to listen for conversations..."); // [FIX v5.3] הוספת לוג
             
-            // [FIX v5.1] שימוש בקולקציה הנכונה, החזרת המיון + הוספת הגבלה
+            // [FIX v5.3] הסרת limit() כדי לאלץ שגיאת אינדקס ברורה
             const q = query(
                 collection(db, "conversations"), 
-                orderBy("lastMessageTimestamp", "desc"),
-                limit(100) // טעינת 100 השיחות האחרונות
+                orderBy("lastMessageTimestamp", "desc")
             );
             
             conversationUnsubscribe = onSnapshot(q, (snapshot) => {
                 conversations = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 renderConversationList();
-                document.getElementById('conv-loader').classList.add('hidden');
+                loader.classList.add('hidden');
                 
-                // [FIX v5.1] רענון אוטומטי של השיחה הפתוחה אם היא עודכנה
                 if (currentConversationId) {
                     const updatedConv = conversations.find(c => c.id === currentConversationId);
                     if (updatedConv) {
@@ -537,8 +540,10 @@
                 }
                 
             }, (error) => {
-                console.error("Failed to listen for conversations:", error);
-                document.getElementById('conv-loader').innerHTML = `<p class="p-4 text-red-500">שגיאה בטעינת שיחות. ייתכן שחסר אינדקס ב-Firestore.<br><br>${error.message}</p>`;
+                // [FIX v5.3] הוספת לוגים ברורים יותר לשגיאה
+                console.error("CRITICAL: Failed to listen for conversations:", error.message);
+                console.error("THIS IS LIKELY A MISSING INDEX. Click the link in the error message to create it.");
+                loader.innerHTML = `<p class="p-4 text-red-500"><b>שגיאה קריטית בטעינת שיחות.</b><br>ייתכן שחסר אינדקס ב-Firestore.<br><br><b>הודעת שגיאה:</b> ${error.message}</p>`;
             });
         }
         
