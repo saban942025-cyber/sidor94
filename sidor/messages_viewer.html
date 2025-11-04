@@ -8,6 +8,7 @@
       DeliveryMaster Admin - מרכז הודעות v5.1 (Glassmorphism + Bot)
       
       Changelog:
+      - [FIX v5.3] - תיקון נתיב קולקציה (מ-orders ל-conversations).
       - [FIX v5.2] - תיקון טעינה תקועה ע"י הסרת מיון שרת זמנית.
       - [FIX v5.1] - תיקון נתיבי ייבוא קריטיים של Firebase SDK.
       - [NEW v5.0] Glassmorphism UI
@@ -733,12 +734,13 @@
         // --- Data Listeners ---
 
         function listenForConversations() {
-            // [FIX v5.2] הסרת המיון הזמנית כדי למנוע שגיאת אינדקס חסר
-            // הדרך הנכונה היא ליצור אינדקס ב-Firebase על 'orders' -> 'lastMessageTimestamp' (descending)
-            // const q = query(collection(db, "orders"), orderBy("lastMessageTimestamp", "desc"));
-            
-            // [חדש] שאילתה בסיסית ללא מיון (דורש אינדקס)
-            const q = query(collection(db, "orders"));
+            // [FIX v5.3] החלפת הקולקציה ל-"conversations"
+            // [FIX v5.3] החזרת המיון + הוספת הגבלה
+            const q = query(
+                collection(db, "conversations"), // <-- התיקון כאן
+                orderBy("lastMessageTimestamp", "desc"),
+                limit(100) // הוספת הגבלה למניעת טעינת יתר
+            );
             
             if (conversationsUnsubscribe) conversationsUnsubscribe();
             
@@ -749,15 +751,22 @@
                     allConversations.push({ id: doc.id, ...doc.data() });
                 });
 
-                // [FIX v5.2] מיון בצד הלקוח (Client-side) בגלל הסרת המיון מהשרת
-                allConversations.sort((a, b) => 
-                    (b.lastMessageTimestamp?.toMillis() || 0) - (a.lastMessageTimestamp?.toMillis() || 0)
-                );
+                // [FIX v5.2] אין צורך במיון לקוח כי השרת עושה זאת
+                // allConversations.sort((a, b) => 
+                //     (b.lastMessageTimestamp?.toMillis() || 0) - (a.lastMessageTimestamp?.toMillis() || 0)
+                // );
 
                 renderConversationList();
             }, (error) => {
                 console.error("Error listening to conversations:", error);
-                document.getElementById('conv-loader').innerHTML = `<p class="p-4 text-red-500">שגיאה בטעינת שיחות. ייתכן שחסר אינדקס במסד הנתונים: ${error.message}</p>`;
+                // [FIX v5.3] שגיאת אינדקס צפויה
+                if (error.code === 'failed-precondition') {
+                     document.getElementById('conv-loader').innerHTML = `<p class="p-4 text-red-500"><b>שגיאת מסד נתונים:</b> חסר אינדקס. <br> לחץ על הקישור בקונסול (F12) כדי ליצור אותו.</p>`;
+                     // הדפסת הקישור לקונסול
+                     console.error("השאילתה דורשת אינדקס. אנא צור אותו כאן:", error.message.split(' visit ')[1] || error.message);
+                } else {
+                    document.getElementById('conv-loader').innerHTML = `<p class="p-4 text-red-500">שגיאה בטעינת שיחות: ${error.message}</p>`;
+                }
             });
         }
 
@@ -855,7 +864,8 @@
             // האזנה להודעות
             if (messagesUnsubscribe) messagesUnsubscribe();
             
-            const messagesCol = collection(db, "orders", convId, "messages");
+            // [FIX v5.3] החלפת הקולקציה ל-"conversations"
+            const messagesCol = collection(db, "conversations", convId, "messages");
             const q = query(messagesCol, orderBy("timestamp", "asc"));
             
             messagesUnsubscribe = onSnapshot(q, (snapshot) => {
@@ -881,7 +891,8 @@
 
             // סמן כנקרא
             if (conv && conv.adminHasUnread) {
-                await updateDoc(doc(db, "orders", convId), {
+                // [FIX v5.3] החלפת הקולקציה ל-"conversations"
+                await updateDoc(doc(db, "conversations", convId), {
                     adminHasUnread: false
                 });
             }
@@ -940,8 +951,8 @@
             const text = textarea.value.trim();
             if (!text || !currentConversationId) return;
 
-            // [NEW v5.0] ודא שהשיחה משויכת למנהל לפני שליחה
-            const convRef = doc(db, "orders", currentConversationId);
+            // [FIX v5.3] החלפת הקולקציה ל-"conversations"
+            const convRef = doc(db, "conversations", currentConversationId);
             const convSnap = await getDoc(convRef);
             if (!convSnap.exists() || convSnap.data().agent?.id !== ADMIN_AGENT.id) {
                 // אם לא, בצע השתלטות אוטומטית
@@ -959,7 +970,8 @@
             
             try {
                 // הוסף הודעה חדשה
-                await addDoc(collection(db, "orders", currentConversationId, "messages"), message);
+                // [FIX v5.3] החלפת הקולקציה ל-"conversations"
+                await addDoc(collection(db, "conversations", currentConversationId, "messages"), message);
                 
                 // עדכן את השיחה הראשית
                 await updateDoc(convRef, {
@@ -987,7 +999,8 @@
         async function escalateToHuman(showAlert = true) {
             if (!currentConversationId) return;
             
-            const convRef = doc(db, "orders", currentConversationId);
+            // [FIX v5.3] החלפת הקולקציה ל-"conversations"
+            const convRef = doc(db, "conversations", currentConversationId);
             try {
                 await updateDoc(convRef, {
                     agent: ADMIN_AGENT, // שייך למנהל הנוכחי
@@ -1014,16 +1027,11 @@
         async function archiveConversation() {
             if (!currentConversationId) return;
             
-            // [הערה] פעולה זו צריכה להיות 'סגור' ולא 'מחק'
-            // אנו משנים את הסטטוס כדי שהמאזין הראשי יפסיק להביא אותה
-            
-            // [הערה 2] - כרגע המאזין הראשי לא מסנן לפי סטטוס.
-            // נוסיף סטטוס 'Archived'
-            
             if (!confirm("האם אתה בטוח שברצונך לסגור (לשמור בארכיון) שיחה זו?")) return;
 
             try {
-                await updateDoc(doc(db, "orders", currentConversationId), {
+                // [FIX v5.3] החלפת הקולקציה ל-"conversations"
+                await updateDoc(doc(db, "conversations", currentConversationId), {
                     status: "Archived", // סטטוס חדש
                     adminHasUnread: false // נקה חיווי
                 });
