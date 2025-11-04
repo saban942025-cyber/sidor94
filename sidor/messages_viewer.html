@@ -3,21 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>✍️ מרכז הודעות (v5.3 - התראות גלובליות)</title>
+    <title>✍️ מרכז הודעות (v5.4 - ייצוב)</title>
     <!-- 
-      DeliveryMaster Admin - מרכז הודעות v5.3 (התראות גלובליות)
+      DeliveryMaster Admin - מרכז הודעות v5.4 (ייצוב)
       
       Changelog:
+      - [FIX v5.4] Auth Loop:
+        - הוספת דגל 'appInitialized' כדי למנוע קריאות כפולות ל-listener-ים
+          במהלך לופ התחברות או רענון טוקן.
+      - [FIX v5.4] classList Crash:
+        - הוספת בדיקת בטיחות (if (activeButton)) לפונקציה
+          setConversationFilter כדי למנוע קריסה.
       - [NEW v5.3] Global Alert System:
-        - הוספת מאזין (onSnapshot) לקולקציית 'orders'.
-        - הוספת פונקציית playAlert() לצפצוף והתראה ויזואלית.
-        - הוספת פונקציית logEvent() לתיעוד שינויים ב-system_logs.
-        - המאזין מופעל רק לאחר טעינה ראשונית למניעת התראות היסטוריות.
-      - [FIX v5.2] Auth/Init Logic:
-        - תיקון הלוגיקה של onAuthStateChanged כדי להבטיח טעינה יציבה.
-      - [FIX v5.1] Path/Index:
-        - תיקון נתיב הקולקציה ל-'conversations'.
-        - הוספת orderBy + limit והנחיות ליצירת אינדקס.
+        - הוספת מאזין (onSnapshot) לקולקציית 'orders' להתראות חיות.
     -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/feather-icons"></script>
@@ -392,7 +390,7 @@
             background: rgba(255, 255, 255, 0.5);
         }
 
-        /* --- [NEW v5.3] Global Alert CSS --- */
+        /* --- Global Alert CSS --- */
         .global-alert {
           position: fixed;
           bottom: 20px;
@@ -546,23 +544,17 @@
         
         let db, auth;
         let currentUserId = null;
-        let appInitialized = false; // [FIX v5.2]
+        let appInitialized = false; // [NEW v5.4] Auth loop fix
         
         let conversations = [];
         let currentConversationId = null;
         let currentConversationFilter = 'all';
         let messageUnsubscribe = null;
         
-        // [NEW v5.3] Global Alert System flags
-        let hasLoadedInitialAlerts = false;
+        let hasLoadedInitialAlerts = false; 
 
-        // --- [NEW v5.3] Global Alert System (as per plan) ---
+        // --- Global Alert System ---
         
-        /**
-         * Logs an event to the 'system_logs' collection.
-         * @param {string} type - The type of event (e.g., "order_added").
-         * @param {object} details - The data associated with the event.
-         */
         async function logEvent(type, details) {
           if (!db) return;
           const logsRef = collection(db, "system_logs");
@@ -578,16 +570,10 @@
           }
         }
 
-        /**
-         * Plays a sound and shows a visual alert.
-         * @param {string} message - The message to display.
-         */
         function playAlert(message) {
-          // 1. Play sound
           const audio = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
           audio.play().catch(e => console.warn("Audio play failed. User interaction needed."));
 
-          // 2. Visual alert
           const alertBox = document.createElement("div");
           alertBox.textContent = message;
           alertBox.className = "global-alert";
@@ -599,42 +585,39 @@
                   if (document.body.contains(alertBox)) {
                       document.body.removeChild(alertBox);
                   }
-              }, 500); // Fade out
+              }, 500); 
           }, 4000);
         }
 
-        /**
-         * Listens for changes in the 'orders' collection to provide global alerts.
-         */
         function listenForGlobalAlerts() {
             if (!db) return;
             console.log("Global Alert System: Listening for order changes...");
             
-            // Note: This query might require an index if the collection is large.
-            // For now, we listen to all changes.
             const ordersRef = collection(db, "orders");
             
             onSnapshot(ordersRef, (snapshot) => {
-              // This is the safety check. We ignore the *first* snapshot
-              // which contains all existing documents.
               if (!hasLoadedInitialAlerts) {
                 hasLoadedInitialAlerts = true;
                 console.log("Global Alert System: Initial order snapshot loaded. Ready for real-time alerts.");
                 return; 
               }
 
-              // These are real-time changes happening *after* initial load
-              snapshot.docChanges().forEach((change) => {
-                if (change.type === "added") {
-                  playAlert("הזמנה חדשה נוספה!");
-                  logEvent("order_added", change.doc.data());
-                }
-                if (change.type === "modified") {
-                  playAlert("עודכנה הזמנה קיימת!");
-                  logEvent("order_modified", change.doc.data());
-                }
-                // We can also add "removed" if needed
-              });
+              // [FIX v5.4] Add try/catch inside loop
+              try {
+                snapshot.docChanges().forEach((change) => {
+                  if (change.type === "added") {
+                    playAlert("הזמנה חדשה נוספה!");
+                    logEvent("order_added", change.doc.data());
+                  }
+                  if (change.type === "modified") {
+                    playAlert("עודכנה הזמנה קיימת!");
+                    logEvent("order_modified", change.doc.data());
+                  }
+                });
+              } catch (e) {
+                  console.error("Error inside global alert docChanges loop:", e);
+              }
+
             }, (error) => {
                 console.error("Global Alert System failed:", error);
                 logEvent("alert_system_failed", { error: error.message });
@@ -660,12 +643,12 @@
                         currentUserId = user.uid;
                         console.log("Admin User Signed In:", currentUserId);
                         
-                        // [FIX v5.2] Only run init functions ONCE
+                        // [FIX v5.4] Only run init functions ONCE
                         if (!appInitialized) {
                             appInitialized = true;
                             document.getElementById('conv-loader').classList.add('hidden');
                             listenForConversations();
-                            listenForGlobalAlerts(); // [NEW v5.3] Activate alert system
+                            listenForGlobalAlerts();
                         }
                     } else {
                         console.log("User is signed out.");
@@ -686,6 +669,14 @@
             try {
                 if (auth.currentUser) {
                     console.log("User already signed in.");
+                    // [FIX v5.4] Force trigger listener if user is already signed in
+                    if (!appInitialized && auth.currentUser.uid) {
+                        currentUserId = auth.currentUser.uid;
+                        appInitialized = true;
+                        document.getElementById('conv-loader').classList.add('hidden');
+                        listenForConversations();
+                        listenForGlobalAlerts();
+                    }
                     return;
                 }
                 
@@ -711,25 +702,27 @@
             console.log("Attempting to listen for conversations...");
             document.getElementById('conv-loader').classList.remove('hidden');
 
-            // [FIX v5.1] Point to 'conversations' collection
             const convRef = collection(db, "conversations");
             
-            // [FIX v5.1] Add orderBy and limit.
             // This query REQUIRES a composite index in Firestore:
             // Collection: conversations, Field: lastMessageTimestamp, Order: Descending
             const q = query(convRef, orderBy("lastMessageTimestamp", "desc"), limit(100));
 
             onSnapshot(q, (snapshot) => {
-                conversations = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                renderConversationList();
-                document.getElementById('conv-loader').classList.add('hidden');
-                
-                // If a conversation was open, refresh its data
-                if (currentConversationId) {
-                    const activeConv = conversations.find(c => c.id === currentConversationId);
-                    if (activeConv) {
-                        updateChatHeader(activeConv);
+                // [FIX v5.4] Add try/catch
+                try {
+                    conversations = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    renderConversationList();
+                    document.getElementById('conv-loader').classList.add('hidden');
+                    
+                    if (currentConversationId) {
+                        const activeConv = conversations.find(c => c.id === currentConversationId);
+                        if (activeConv) {
+                            updateChatHeader(activeConv);
+                        }
                     }
+                } catch(e) {
+                    console.error("Error inside conversation onSnapshot:", e);
                 }
                 
             }, (error) => {
@@ -751,24 +744,26 @@
             updateChatHeader(conversation);
             renderConversationList(); // To update active state
             
-            // Unsubscribe from old message listener
             if (messageUnsubscribe) {
                 messageUnsubscribe();
             }
             
-            // Listen for new messages
             const messagesRef = collection(db, "conversations", convId, "messages");
             const q = query(messagesRef, orderBy("timestamp", "desc"), limit(50));
             
             messageUnsubscribe = onSnapshot(q, (snapshot) => {
-                const messages = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                renderMessages(messages.reverse()); // Reverse to show oldest first
-                document.getElementById('msg-loader').classList.add('hidden');
-                
-                // Mark conversation as read by admin
-                if (!conversation.status_read_by_admin) {
-                    const convDocRef = doc(db, "conversations", convId);
-                    updateDoc(convDocRef, { status_read_by_admin: true });
+                // [FIX v5.4] Add try/catch
+                try {
+                    const messages = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    renderMessages(messages.reverse()); 
+                    document.getElementById('msg-loader').classList.add('hidden');
+                    
+                    if (!conversation.status_read_by_admin) {
+                        const convDocRef = doc(db, "conversations", convId);
+                        updateDoc(convDocRef, { status_read_by_admin: true });
+                    }
+                } catch(e) {
+                    console.error("Error inside message onSnapshot:", e);
                 }
             });
         }
@@ -780,7 +775,6 @@
             
             let filteredConvs = conversations;
             
-            // 1. Filter by search
             if (search) {
                 filteredConvs = filteredConvs.filter(c => 
                     (c.customerName && c.customerName.toLowerCase().includes(search)) ||
@@ -789,7 +783,6 @@
                 );
             }
             
-            // 2. Filter by tab
             if (currentConversationFilter !== 'all') {
                 filteredConvs = filteredConvs.filter(c => {
                     const assignedTo = c.assignedTo || 'bot';
@@ -864,16 +857,11 @@
             }).join('');
             
             feather.replace();
-            // Scroll to bottom
             document.getElementById('message-list').scrollTop = document.getElementById('message-list').scrollHeight;
         }
 
         // --- Actions ---
         
-        /**
-         * @function escalateToHuman
-         * Assigns the conversation to the admin and logs the event.
-         */
         async function escalateToHuman() {
             if (!currentConversationId || !currentUserId) return;
             
@@ -889,7 +877,6 @@
                     status_read_by_admin: true
                 });
                 console.log("Conversation escalated to human.");
-                // The onSnapshot listener for conversations will handle the UI update
             } catch (e) {
                 console.error("Error escalating conversation:", e);
                 showToast("שגיאה בהשתלטות על השיחה", "error");
@@ -898,10 +885,6 @@
         }
         window.escalateToHuman = escalateToHuman;
 
-        /**
-         * @function sendAdminReply
-         * Sends a reply from the admin.
-         */
         async function sendAdminReply(e) {
             e.preventDefault();
             if (!currentConversationId || !currentUserId) return;
@@ -920,7 +903,6 @@
             const conversation = conversations.find(c => c.id === currentConversationId);
             
             try {
-                // 1. Add the new message
                 await addDoc(messagesRef, {
                     text: text,
                     timestamp: serverTimestamp(),
@@ -929,35 +911,30 @@
                     isRead: false
                 });
                 
-                // 2. Update the conversation document
                 const updatePayload = {
                     lastMessage: text,
                     lastMessageTimestamp: serverTimestamp(),
                     lastMessageSender: "Admin",
                     status_read_by_customer: false,
-                    status_read_by_admin: true // Admin just sent it
+                    status_read_by_admin: true
                 };
                 
-                // 3. Ensure conversation is assigned to human if it wasn't already
                 if (conversation.assignedTo === 'bot') {
                     updatePayload.assignedTo = currentUserId;
                 }
                 
                 await updateDoc(convRef, updatePayload);
-                
-                // Clear quick replies
                 document.getElementById('quick-replies').innerHTML = '';
 
             } catch (e) {
                 console.error("Error sending reply:", e);
                 showToast("שגיאה בשליחת ההודעה", "error");
-                textarea.value = text; // Put text back on error
+                textarea.value = text;
             } finally {
                 btn.disabled = false;
             }
         }
         
-        // This function is triggered by the customer app
         function showQuickReplies(replies) {
             const container = document.getElementById('quick-replies');
             container.innerHTML = '';
@@ -976,15 +953,18 @@
             }
         }
         
-        // [NEW v4.3] Filter tabs
         function setConversationFilter(filter) {
             currentConversationFilter = filter;
-            // Update active button
             document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+            
+            // [FIX v5.4] Safety check for classList crash
             const activeButton = document.querySelector(`.tab-button[onclick="setConversationFilter('${filter}')"]`);
             if (activeButton) {
                 activeButton.classList.add('active');
+            } else {
+                console.warn(`Could not find active tab button for filter: ${filter}`);
             }
+            
             renderConversationList(); // Re-render the list
         }
         window.setConversationFilter = setConversationFilter;
@@ -995,16 +975,39 @@
             document.getElementById('search-conversations').addEventListener('keyup', renderConversationList);
             document.getElementById('reply-form').addEventListener('submit', sendAdminReply);
             
-            // [NEW v4.3] Dark mode init
             if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
                 document.documentElement.classList.add('dark');
             } else {
                 document.documentElement.classList.remove('dark');
             }
             
-            // Start the app
             initApp();
         });
+        
+        // --- Helper Functions ---
+        function formatTime(date) {
+            if (!date) return '';
+            const now = new Date();
+            const diff = (now.getTime() - date.getTime()) / 1000; // seconds
+            
+            if (diff < 60) return 'כעת';
+            if (diff < 3600) return `${Math.floor(diff / 60)} דק'`;
+            
+            // If same day
+            if (now.toDateString() === date.toDateString()) {
+                return date.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
+            }
+            
+            // If yesterday
+            const yesterday = new Date(now.setDate(now.getDate() - 1));
+            if (yesterday.toDateString() === date.toDateString()) {
+                return 'אתמול';
+            }
+            
+            // Older
+            return date.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit' });
+        }
+        
     </script>
 </body>
 </html>
