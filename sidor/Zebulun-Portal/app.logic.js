@@ -1,12 +1,12 @@
 // --- Firebase SDK Imports ---
 // (הנחה שה-SDKs יובאו ב-index.html)
-import { initializeApp, getApp, getApps } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+import { initializeApp, getApp, getApps } from "https.www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
 import { 
     getAuth, 
     signInAnonymously, 
     onAuthStateChanged, 
     signInWithCustomToken 
-} from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+} from "https.www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
 import { 
     getFirestore, 
     collection, 
@@ -21,7 +21,7 @@ import {
     limit, 
     serverTimestamp,
     getDocs
-} from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+} from "https.www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 import { 
     getStorage, 
     ref, 
@@ -304,7 +304,7 @@ function setThemeUI(theme) {
     document.querySelectorAll('#desktop-theme-toggle i, #mobile-theme-toggle i').forEach(el => {
         if (el) el.setAttribute('data-feather', icon);
     });
-    const desktopText = document.getElementById('desktop-theme-toggle span');
+    const desktopText = document.querySelector('#desktop-theme-toggle span');
     if (desktopText) desktopText.innerText = text;
     
     feather.replace();
@@ -696,7 +696,7 @@ function renderNewOrderPage() {
                 כאן יוסי (מנהל רכש) יכול להדביק את תוכן ההזמנה המלא ישירות מהמערכת, לצרף קבצים, והמערכת תנתח ותשלח.
             </p>
             
-            <form id="smart-order-form" onsubmit="sendSmartOrder(event)">
+            <form id="smart-order-form" onsubmit="event.preventDefault(); sendSmartOrder(event);">
                 <div class="space-y-4">
                     <!-- 1. תיבת ההדבקה -->
                     <div>
@@ -1119,7 +1119,7 @@ const sendSmartOrder = debounce(async (event) => {
         
         // 4. אישור והדמיית המשך
         state.processedOrderIds.add(orderId);
-        state.orderHistory.unshift({ id: orderId, ...orderPayload, createdAt: new Date() }); // הוסף להיסטוריה המקומית
+        state.orderHistory.unshift({ id: orderId, ...orderPayload, createdAt: { seconds: Date.now() / 1000 } }); // הוסף להיסטוריה המקומית
         
         showToast("ההזמנה נשלחה בהצלחה!", "success");
         playPingSound();
@@ -1178,6 +1178,9 @@ function listenForGlobalAlerts() {
                     }
                 }
             });
+        }, (error) => {
+            logError("Failed to listen for order alerts. Index or permissions issue.", error);
+            // לא מציג שגיאה למשתמש, פשוט ממשיך ללא התראות
         });
     } catch (e) {
         logError("Failed to listen for order alerts. Index might be missing.", e);
@@ -1274,7 +1277,11 @@ function showToast(message, type = "info") {
     setTimeout(() => {
         alertBox.style.opacity = '0';
         alertBox.style.transform = 'translateY(20px)';
-        setTimeout(() => alertBox.remove(), 300);
+        setTimeout(() => {
+            if (alertBox.parentElement === container) {
+                container.removeChild(alertBox);
+            }
+        }, 300);
     }, 4000);
 }
 
@@ -1291,15 +1298,15 @@ function generateUUID() {
 // --- Logging ---
 function logInfo(message, context = {}) {
     console.log(`[INFO] ${message}`, context);
-    globalLog.push({ timestamp: new Date().toISOString(), level: "INFO", message, context });
+    globalLog.push({ timestamp: new Date().toISOString(), level: "INFO", message, context: JSON.stringify(context) });
 }
 function logWarn(message, context = {}) {
     console.warn(`[WARN] ${message}`, context);
-    globalLog.push({ timestamp: new Date().toISOString(), level: "WARN", message, context });
+    globalLog.push({ timestamp: new Date().toISOString(), level: "WARN", message, context: JSON.stringify(context) });
 }
 function logError(message, error) {
     console.error(`[ERROR] ${message}`, error);
-    globalLog.push({ timestamp: new Date().toISOString(), level: "ERROR", message, error: error.message, stack: error.stack });
+    globalLog.push({ timestamp: new Date().toISOString(), level: "ERROR", message, error: error ? error.message : "Unknown", stack: error ? error.stack : "N/A" });
 }
 
 /**
