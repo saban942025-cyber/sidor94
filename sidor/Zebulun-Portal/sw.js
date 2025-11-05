@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v1.0.1'; // עדכון גרסה
+const CACHE_VERSION = 'v1.0.2'; // עדכון גרסה
 const CACHE_NAME = `zebulun-portal-cache-${CACHE_VERSION}`;
 const APP_SHELL_FILES = [
   'index.html',
@@ -6,7 +6,6 @@ const APP_SHELL_FILES = [
   'app.mobile.css',
   'app.logic.js',
   'https://unpkg.com/feather-icons'
-  // Tailwind CSS loaded via <style> tag in index.html, not cached here.
 ];
 
 // 1. Install Event: Cache the app shell
@@ -70,8 +69,10 @@ self.addEventListener('fetch', (event) => {
       // Not in cache, fetch from network
       return fetch(event.request).then((networkResponse) => {
         // Optional: cache the new response if it's a successful GET
-        if (networkResponse.ok && event.request.method === 'GET') {
-          caches.open(CACHE_NAME).then(cache => cache.put(event.request, networkResponse.clone()));
+        // Clone the response because it's a stream
+        const responseToCache = networkResponse.clone();
+        if (networkResponse.ok && event.request.method === 'GET' && !requestUrl.hostname.includes('gstatic.com')) { // Avoid caching dynamic scripts
+          caches.open(CACHE_NAME).then(cache => cache.put(event.request, responseToCache));
         }
         return networkResponse;
       });
@@ -84,9 +85,8 @@ self.addEventListener('fetch', (event) => {
 
 // Listen for messages from the client (e.g., to show update notification)
 self.addEventListener('message', (event) => {
-  if (event.data && event.data.type === 'CHECK_VERSION') {
-      // Logic to inform client if a new version is available
-      // This is often handled by checking a version file on the server
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+      self.skipWaiting();
   }
 });
 
