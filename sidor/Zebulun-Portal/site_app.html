@@ -353,7 +353,15 @@
 
             // 2. Initialize Firebase
             try {
-                const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+                const fallbackConfig = {
+                    apiKey: "AIzaSyDq0oVwS6zbEfsgrYBRkeBq80dDUKMedzo",
+                    authDomain: "saban94-78949.firebaseapp.com",
+                    projectId: "saban94-78949",
+                    storageBucket: "saban94-78949.appspot.com",
+                    messagingSenderId: "41553157903",
+                    appId: "1:41553157903:web:cc33d252cff023be97a87a"
+                };
+                const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : JSON.stringify(fallbackConfig));
                 app = initializeApp(firebaseConfig);
                 db = getFirestore(app);
                 auth = getAuth(app);
@@ -749,4 +757,53 @@
                             statusColor = "text-blue-600";
                             statusBg = "bg-blue-100";
                             statusData = "on-way";
-                            break
+                            break;
+                        case "הושלם":
+                            statusText = "הושלם";
+                            statusColor = "text-gray-600";
+                            statusBg = "bg-gray-100";
+                            statusData = "completed";
+                            break;
+                        default:
+                            statusText = data.status;
+                            statusColor = "text-gray-600";
+                            statusBg = "bg-gray-100";
+                            statusData = "unknown";
+                    }
+                    
+                    card.dataset.status = statusData;
+                    card.innerHTML = `
+                        <div class="flex justify-between items-center">
+                            <span class="font-bold text-gray-800 truncate max-w-[60%]">הזמנה ${orderNum}</span>
+                            <span class="text-xs font-medium ${statusColor} ${statusBg} px-2 py-0.5 rounded-full">${statusText}</span>
+                        </div>
+                        <p class="text-sm text-gray-500 mt-1">${items}</p>
+                        <p class="text-xs text-gray-400 mt-1">נוצר ב-${date}</p>
+                        ${statusData === 'on-way' ? `<button class="text-sm font-semibold text-primary-color mt-2" onclick="showTrackingView('${docId}')">עקוב אחר המשלוח</button>` : ''}
+                    `;
+                });
+                feather.replace();
+            }, e => console.error("Error listening to orders:", e));
+        }
+        
+        // זהו ה-Placeholder עבור המעקב החי
+        function showTrackingView(orderId) {
+            document.getElementById('tracking-view-container').classList.remove('hidden');
+            document.getElementById('track-order-id').innerText = `#${orderId.slice(0,6)}`;
+            
+            // TODO: לטעון כאן את הלוגיקה מ-customer.html
+            // 1. ליצור מופע מפה ב-#map-track
+            // 2. להאזין ל-onSnapshot של orders/{orderId}
+            // 3. להאזין ל-onSnapshot של driverLocations/{driverId}
+            // 4. לעדכן את המפה ואת ממשק הסטטוסים
+            
+            document.getElementById('map-track').innerHTML = '<p class="p-4 text-center">טעינת מפת מעקב...</p>';
+            
+            // גלול למטה למפת המעקב
+            document.getElementById('tracking-view-container').scrollIntoView({ behavior: 'smooth' });
+        }
+        window.showTrackingView = showTrackingView;
+        
+    </script>
+</body>
+</html>
