@@ -1,12 +1,12 @@
 // --- Firebase SDK Imports ---
 // (הנחה שה-SDKs יובאו ב-index.html)
-import { initializeApp, getApp, getApps } from "https.www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+import { initializeApp, getApp, getApps } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
 import { 
     getAuth, 
     signInAnonymously, 
     onAuthStateChanged, 
     signInWithCustomToken 
-} from "https.www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+} from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
 import { 
     getFirestore, 
     collection, 
@@ -21,7 +21,7 @@ import {
     limit, 
     serverTimestamp,
     getDocs
-} from "https.www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+} from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 import { 
     getStorage, 
     ref, 
@@ -34,7 +34,7 @@ import {
 const FIREBASE_CONFIG = typeof __firebase_config !== 'undefined' 
     ? JSON.parse(__firebase_config) 
     : {
-        apiKey: "AIzaSyDq0oVwS6zbEfsgrYBRkeBq80dDUKMedzo", // Replace with your actual config
+        apiKey: "AIzaSyDq0oVwS6zbEfsgrYBRkeBq80dDUKMedzo", 
         authDomain: "saban94-78949.firebaseapp.com", 
         projectId: "saban94-78949",
         storageBucket: "saban94-78949.appspot.com", 
@@ -50,13 +50,12 @@ const CLIENT_ID = "zebulun_adiran"; // מזהה לקוח קבוע עבור פו�
 let db, auth, storage;
 let currentUserId = null;
 let appInitialized = false;
-let globalLog = []; // For session log export
+let globalAlertsListener = null;
 
 const state = {
     currentView: 'dashboard',
     theme: 'light',
     filesToUpload: [], // מערך של אובייקטי File
-    // נתונים מדומים עבור הפרויקטים של זבולון עדירן
     mockProjects: [
         { id: "proj_1", name: "זבולון-עדירן/דהבני", address: "הגדרות 39, סביון", contact: "עלי (052-3993017)", customerId: "5020317" },
         { id: "proj_2", name: "זבולון-עדירן/חדד", address: "וינגייט 27, כפר שמריהו", contact: "עבד (050-5938716)", customerId: "5020321" },
@@ -64,6 +63,7 @@ const state = {
         { id: "proj_4", name: "זבולון-עדירן/סמדרי", address: "ניצנים 20, כפר סבא", contact: "מיכאל (0523411067)", customerId: "620003" }
     ],
     orderHistory: [],
+    selectedProjectId: null,
     processedOrderIds: new Set() // למניעת שליחות כפולות
 };
 
@@ -74,7 +74,7 @@ document.addEventListener('DOMContentLoaded', initApp);
  * מפעיל את האפליקציה לאחר טעינת ה-DOM
  */
 function initApp() {
-    logInfo("DOM loaded. Initializing app...");
+    console.log("DOM loaded. Initializing app...");
     feather.replace();
     
     // אתחול Firebase
@@ -91,8 +91,9 @@ function initApp() {
         setTheme(window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
     }
     
-    // הצגת העמוד הראשי (דשבורד)
+    // הצגת העמוד הראשי (דשבורד) - יקרה בפועל לאחר אימות
     navigate('dashboard');
+    console.log("Initial navigation set to dashboard.");
 }
 
 /**
@@ -104,10 +105,10 @@ function initFirebase() {
         db = getFirestore(app);
         auth = getAuth(app);
         storage = getStorage(app);
-        logInfo("Firebase Initialized.");
+        console.log("Firebase Initialized.");
         authenticateUser();
     } catch (error) {
-        logError("Firebase Init Error:", error);
+        console.error("Firebase Init Error:", error);
         showToast("שגיאת התחברות קריטית ל-Firebase", "error");
         document.getElementById('loader-text').innerText = "שגיאת התחברות";
     }
@@ -122,6 +123,7 @@ function initEventListeners() {
     document.getElementById('nav-desktop-new-order').addEventListener('click', () => navigate('new-order'));
     document.getElementById('nav-desktop-projects').addEventListener('click', () => navigate('projects'));
     document.getElementById('nav-desktop-history').addEventListener('click', () => navigate('orders-history'));
+    document.getElementById('nav-desktop-map').addEventListener('click', () => navigate('live-map'));
 
     // כפתורי ניווט (מובייל)
     document.getElementById('nav-mobile-dashboard').addEventListener('click', () => navigate('dashboard'));
@@ -132,23 +134,23 @@ function initEventListeners() {
     document.getElementById('desktop-theme-toggle').addEventListener('click', toggleTheme);
     document.getElementById('mobile-theme-toggle').addEventListener('click', toggleTheme);
     
-    // כפתור הורדת לוג
-    document.getElementById('download-log-btn').addEventListener('click', downloadSessionLog);
-
     // חשיפת פונקציות גלובליות לשימוש מתוך HTML (onclick)
+    // זה התיקון הקריטי לשגיאות `Maps is not defined`
+    window.navigate = navigate;
     window.openProjectModal = openProjectModal;
     window.openNewProjectModal = openNewProjectModal;
     window.saveProject = saveProject;
     window.closeModal = closeModal;
-    window.sendSmartOrder = sendSmartOrder;
+    window.sendSmartOrder = debounce(sendSmartOrder, 1000); // Debounce למניעת לחיצות כפולות
     window.handlePaste = handlePaste;
     window.triggerFileInput = triggerFileInput;
     window.handleFileSelect = handleFileSelect;
     window.handleDragOver = handleDragOver;
     window.handleDragLeave = handleDragLeave;
     window.handleFileDrop = handleFileDrop;
-    window.navigate = navigate; // חשיפת פונקציית הניווט
-    window.showOrderDetails = showOrderDetails; // חשיפה עבור לחיצה על היסטוריה
+    window.removeFile = removeFile;
+    window.toggleTheme = toggleTheme;
+    window.showOrderDetail = showOrderDetail; // [FIX] Expose showOrderDetail
 }
 
 /**
@@ -158,7 +160,7 @@ function authenticateUser() {
     onAuthStateChanged(auth, async (user) => {
         if (user) {
             currentUserId = user.uid;
-            logInfo(`User Authenticated: ${currentUserId}`);
+            console.log(`User Authenticated: ${currentUserId}`);
             updateAuthStatus(`מחובר (משתמש: ${currentUserId.slice(0, 6)})`);
             
             if (!appInitialized) {
@@ -166,11 +168,16 @@ function authenticateUser() {
                 await loadClientData(); // טעינת נתונים ראשונית
                 navigate('dashboard'); // הצג דשבורד רק לאחר טעינת נתונים
                 listenForGlobalAlerts(); // הפעל מאזין להתראות
-                document.getElementById('app-loader').style.opacity = '0';
-                setTimeout(() => document.getElementById('app-loader').style.display = 'none', 300);
+                
+                // הסתר טעינה
+                const loader = document.getElementById('app-loader');
+                if (loader) {
+                    loader.style.opacity = '0';
+                    setTimeout(() => loader.style.display = 'none', 300);
+                }
             }
         } else {
-            logInfo("No user found. Signing in anonymously...");
+            console.log("No user found. Signing in anonymously...");
             updateAuthStatus("מתחבר...");
             signInUser();
         }
@@ -182,14 +189,14 @@ function authenticateUser() {
  */
 async function signInUser() {
     try {
-        // בדוק אם הטוקן מוגדר גלובלית ב-index.html
+        // הנחה שמשתמש בטוקן אם הוא זמין, אחרת אנונימי
         if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
             await signInWithCustomToken(auth, __initial_auth_token);
         } else {
             await signInAnonymously(auth);
         }
     } catch (error) {
-        logError("Anonymous Sign-In Error:", error);
+        console.error("Authentication Error:", error);
         updateAuthStatus("שגיאת התחברות");
         showToast("שגיאת התחברות. בדוק חיבור רשת.", "error");
     }
@@ -206,21 +213,21 @@ function updateAuthStatus(message) {
     statusElements.forEach(el => { if (el) el.innerText = message; });
 }
 
-// --- Navigation ---
+// --- Navigation Engine ---
 
 /**
  * מנוע הניווט הראשי של האפליקציה (SPA)
  */
 function navigate(viewId) {
+    console.log(`Navigating to: ${viewId}`);
     state.currentView = viewId;
-    logInfo(`Navigating to: ${viewId}`);
     
     // הסתרת כל הדפים (מובייל)
     document.querySelectorAll('#mobile-main-content .app-page').forEach(page => {
         page.classList.remove('active');
     });
     
-    // הסתרת כל התכנים (דסקטופ)
+    // איפוס תוכן דסקטופ
     document.getElementById('desktop-detail-content').innerHTML = '';
     document.getElementById('desktop-list-content').innerHTML = '';
 
@@ -241,26 +248,29 @@ function navigate(viewId) {
     });
 
     // טעינת התוכן המתאים
-    switch (viewId) {
-        case 'dashboard':
-            renderDashboard();
-            break;
-        case 'new-order':
-            renderNewOrderPage();
-            break;
-        case 'projects':
-            renderProjectsPage();
-            break;
-        case 'orders-history':
-            renderOrdersHistoryPage();
-            break;
-        case 'live-map':
-            // (Placeholder)
-            document.getElementById('desktop-detail-content').innerHTML = '<h2>מפה חיה (בבנייה)</h2><p>כאן תוצג מפה עם מיקומי הזמנות פעילות.</p>';
-            break;
+    try {
+        switch (viewId) {
+            case 'dashboard':
+                renderDashboard();
+                break;
+            case 'new-order':
+                renderNewOrderPage();
+                break;
+            case 'projects':
+                renderProjectsPage();
+                break;
+            case 'orders-history':
+                renderOrdersHistoryPage();
+                break;
+            case 'live-map':
+                document.getElementById('desktop-detail-content').innerHTML = '<h2>מפה חיה (בבנייה)</h2><p>כאן תוצג מפה עם מיקומי נהגים והזמנות פעילות.</p>';
+                break;
+        }
+    } catch (error) {
+        console.error(`Failed to render page ${viewId}:`, error);
+        showToast(`שגיאה בטעינת עמוד: ${viewId}`, 'error');
     }
     
-    // החלפת דף במובייל
     const mobilePage = document.getElementById(`page-${viewId}`);
     if (mobilePage) {
         mobilePage.classList.add('active');
@@ -271,80 +281,45 @@ function navigate(viewId) {
 
 // --- Theme Toggle ---
 
-/**
- * מחליף בין מצב בהיר לכהה
- */
 function toggleTheme() {
     state.theme = document.documentElement.classList.toggle('dark') ? 'dark' : 'light';
     localStorage.setItem('theme', state.theme);
     setThemeUI(state.theme);
-    logInfo(`Theme changed to: ${state.theme}`);
 }
 
-/**
- * מגדיר את ערכת הנושא בטעינה
- */
 function setTheme(theme) {
+    document.documentElement.classList.toggle('dark', theme === 'dark');
     state.theme = theme;
-    if (theme === 'dark') {
-        document.documentElement.classList.add('dark');
-    } else {
-        document.documentElement.classList.remove('dark');
-    }
     setThemeUI(theme);
 }
 
-/**
- * מעדכן את האייקונים והטקסט של כפתורי ערכת הנושא
- */
 function setThemeUI(theme) {
     const icon = theme === 'dark' ? 'sun' : 'moon';
-    const text = theme === 'dark' ? 'מצב יום' : 'מצב לילה';
-    
     document.querySelectorAll('#desktop-theme-toggle i, #mobile-theme-toggle i').forEach(el => {
-        if (el) el.setAttribute('data-feather', icon);
+        if(el) el.setAttribute('data-feather', icon);
     });
-    const desktopText = document.querySelector('#desktop-theme-toggle span');
-    if (desktopText) desktopText.innerText = text;
-    
+    const textEl = document.getElementById('desktop-theme-toggle span');
+    if(textEl) textEl.innerText = theme === 'dark' ? 'מצב יום' : 'מצב לילה';
     feather.replace();
 }
 
-
 // --- Data Loading & Rendering ---
-
-/**
- * טוען נתונים ראשוניים (פרויקטים והיסטוריית הזמנות)
- */
 async function loadClientData() {
-    logInfo("Loading client data...");
-    // בעתיד, נטען את זה מ-Firestore. כרגע משתמשים ב-MOCK.
-    // לדוגמה:
-    // try {
-    //     const q = query(collection(db, "projects"), where("clientId", "==", CLIENT_ID));
-    //     const snapshot = await getDocs(q);
-    //     state.mockProjects = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    //     logInfo(`Loaded ${state.mockProjects.length} projects from Firestore.`);
-    // } catch (e) {
-    //     logError("Failed to load projects, using mock data.", e);
-    // }
-    
-    // טעינת היסטוריית הזמנות
     try {
         const q = query(collection(db, "orders"), where("clientId", "==", CLIENT_ID), orderBy("createdAt", "desc"), limit(20));
         const snapshot = await getDocs(q);
         state.orderHistory = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        logInfo(`Loaded ${state.orderHistory.length} order history items.`);
     } catch (error) {
-        logError("Failed to load order history:", error);
-        // ייתכן שחסר אינדקס או הרשאות, נמשיך עם מערך ריק
+        console.error("Failed to load order history:", error);
         state.orderHistory = [];
+        if (error.code === 'failed-precondition') {
+             showToast("נדרש אינדקס. פנה למנהל המערכת.", "error");
+        } else {
+             showToast("שגיאה בטעינת היסטוריית הזמנות.", "error");
+        }
     }
 }
 
-/**
- * מרנדר את עמוד הדשבורד (ברכה + כפתורי פרויקטים)
- */
 function renderDashboard() {
     const greeting = getGreeting();
     
@@ -358,7 +333,7 @@ function renderDashboard() {
         
         <h3 class="text-lg font-semibold mb-3">הפרויקטים שלי</h3>
         <div class="project-grid">
-            ${state.mockProjects.map(p => createProjectCard(p, 'mobile')).join('')}
+            ${state.mockProjects.map(p => createProjectCard(p)).join('')}
             <div class="add-project-card" onclick="openNewProjectModal()">
                 <i data-feather="plus" class="w-8 h-8"></i>
                 <span class="font-semibold mt-1">הוסף פרויקט חדש</span>
@@ -368,9 +343,9 @@ function renderDashboard() {
         <div class="glass-card mt-6">
             <h4 class="font-semibold mb-2">הדרכה קולית</h4>
             <p class="text-sm text-light mb-3">לחץ לשמיעת הסבר קצר על הפורטל.</p>
-            <button class="btn btn-secondary w-full" onclick="playWelcomeGreeting()">
+            <button class="btn btn-secondary w-full" disabled>
                 <i data-feather="play-circle"></i>
-                <span>"היי יוסי, ברוך הבא..."</span>
+                <span>"היי יוסי, ברוך הבא..." (בקרוב)</span>
             </button>
         </div>
     `;
@@ -378,14 +353,8 @@ function renderDashboard() {
     // תוכן דסקטופ
     document.getElementById('desktop-list-content').innerHTML = `
         <div class="p-4">
-            <h3 class="text-lg font-semibold mb-3">הפרויקטים שלי</h3>
-            <div class="flex flex-col gap-2">
-                ${state.mockProjects.map(p => createProjectCard(p, 'desktop')).join('')}
-                <button class="btn btn-secondary mt-2" onclick="openNewProjectModal()">
-                    <i data-feather="plus"></i>
-                    <span>הוסף פרויקט חדש</span>
-                </button>
-            </div>
+            <h3 class="text-lg font-semibold mb-3">הזמנות אחרונות</h3>
+            ${renderOrderHistoryList(5)}
         </div>
     `;
     document.getElementById('desktop-detail-content').innerHTML = `
@@ -409,9 +378,6 @@ function renderDashboard() {
     feather.replace();
 }
 
-/**
- * מחזיר ברכת בוקר/צהריים/ערב טוב
- */
 function getGreeting() {
     const hour = new Date().getHours();
     if (hour < 12) return "בוקר טוב";
@@ -419,42 +385,24 @@ function getGreeting() {
     return "ערב טוב";
 }
 
-/**
- * יוצר כרטיס HTML לפרויקט (למובייל או דסקטופ)
- */
-function createProjectCard(project, type = 'mobile') {
-    if (type === 'mobile') {
-        return `
-            <div class="project-card" onclick="openProjectModal('${project.id}')">
-                <h4 class="truncate">${project.name}</h4>
-                <p class="truncate">${project.address}</p>
-            </div>
-        `;
-    } else {
-        // Desktop list item
-        return `
-            <div class="list-item-card" onclick="openProjectDetails('${project.id}')">
-                <h4>${project.name}</h4>
-                <p>${project.address}</p>
-            </div>
-        `;
-    }
+function createProjectCard(project) {
+    return `
+        <div class="project-card" onclick="openProjectModal('${project.id}')">
+            <h4 class="truncate">${project.name}</h4>
+            <p class="truncate">${project.address}</p>
+        </div>
+    `;
 }
 
 // --- Project Management ---
-
-/**
- * מרנדר את עמוד ניהול הפרויקטים (מובייל ודסקטופ)
- */
 function renderProjectsPage() {
     const projectListHTML = state.mockProjects.map(p => `
-        <div class="list-item-card ${state.selectedProjectId === p.id ? 'active' : ''}" onclick="openProjectDetails('${p.id}')">
+        <div class="list-item-card ${state.selectedProjectId === p.id ? 'active' : ''}" onclick="openProjectModal('${p.id}', true)">
             <h4>${p.name}</h4>
             <p>${p.address}</p>
         </div>
     `).join('');
     
-    // מובייל
     document.getElementById('page-projects').innerHTML = `
         <div class="flex justify-between items-center mb-4">
             <h2 class="text-xl font-bold">ניהול פרויקטים</h2>
@@ -464,21 +412,18 @@ function renderProjectsPage() {
             </button>
         </div>
         <div class="flex flex-col gap-3">
-            ${state.mockProjects.map(p => createProjectCard(p, 'mobile')).join('')}
+            ${state.mockProjects.map(p => createProjectCard(p)).join('')}
         </div>
     `;
     
-    // דסקטופ
     document.getElementById('desktop-list-content').innerHTML = `
         <div class="p-4">
-            <button class="btn btn-primary w-full mb-4" onclick="openNewProjectModal()">
+            <button class="btn btn-primary w-full" onclick="openNewProjectModal()">
                 <i data-feather="plus"></i>
                 <span>צור פרויקט חדש</span>
             </button>
-            <div class="flex flex-col gap-2">
-                ${projectListHTML}
-            </div>
         </div>
+        <div class="flex flex-col gap-2 p-2">${projectListHTML}</div>
     `;
     
     document.getElementById('desktop-detail-content').innerHTML = `
@@ -488,842 +433,584 @@ function renderProjectsPage() {
             <p class="text-light">בחר פרויקט מהרשימה לעריכה, או צור פרויקט חדש.</p>
         </div>
     `;
-    
     feather.replace();
 }
 
-/**
- * פותח מודאל (פופאפ) עם פרטי פרויקט קיים (מובייל)
- */
-function openProjectModal(projectId) {
+function openProjectModal(projectId, isDesktop = false) {
     const project = state.mockProjects.find(p => p.id === projectId);
     if (!project) return;
     
     state.selectedProjectId = projectId;
     
-    const content = `
-        <div class="space-y-4">
+    const contentHTML = `
+        <form id="project-form" class="space-y-4">
+            <input type="hidden" id="project-id" value="${project.id}">
             <div>
-                <label class="form-label">שם פרויקט</label>
-                <input type="text" id="project-edit-name" class="form-input" value="${project.name}">
+                <label class="form-label" for="project-name">שם פרויקט</label>
+                <input type="text" id="project-name" class="form-input" value="${project.name}" required>
             </div>
             <div>
-                <label class="form-label">כתובת אספקה</label>
-                <input type="text" id="project-edit-address" class="form-input" value="${project.address}">
+                <label class="form-label" for="project-address">כתובת אספקה</label>
+                <input type="text" id="project-address" class="form-input" value="${project.address}" required>
             </div>
             <div>
-                <label class="form-label">איש קשר ראשי (ופלאפון)</label>
-                <input type="text" id="project-edit-contact" class="form-input" value="${project.contact}">
+                <label class="form-label" for="project-contact">איש קשר (כולל טלפון)</label>
+                <input type="text" id="project-contact" class="form-input" value="${project.contact}">
             </div>
-        </div>
+        </form>
     `;
     
-    const footer = `
-        <button class="btn btn-danger" onclick="deleteProject('${projectId}')">מחק</button>
-        <div class="flex-grow"></div>
+    const footerHTML = `
         <button class="btn btn-secondary" onclick="closeModal()">ביטול</button>
-        <button class="btn btn-primary" onclick="saveProject('${projectId}')">שמור שינויים</button>
-    `;
-    
-    showModal('ערוך פרויקט', content, footer);
-}
-
-/**
- * פותח פאנל פרטים (דסקטופ)
- */
-function openProjectDetails(projectId) {
-    const project = state.mockProjects.find(p => p.id === projectId);
-    if (!project) return;
-    
-    state.selectedProjectId = projectId;
-    
-    const content = `
-        <div class="space-y-4">
-            <div>
-                <label class="form-label">שם פרויקט</label>
-                <input type="text" id="project-edit-name" class="form-input" value="${project.name}">
-            </div>
-            <div>
-                <label class="form-label">כתובת אספקה</label>
-                <input type="text" id="project-edit-address" class="form-input" value="${project.address}">
-            </div>
-            <div>
-                <label class="form-label">איש קשר ראשי (ופלאפון)</label>
-                <input type="text" id="project-edit-contact" class="form-input" value="${project.contact}">
-            </div>
-        </div>
-    `;
-    
-    const footer = `
-        <button class="btn btn-danger" onclick="deleteProject('${projectId}')">מחק</button>
-        <div class="flex-grow"></div>
-        <button class="btn btn-primary" onclick="saveProject('${projectId}')">שמור שינויים</button>
+        <button class="btn btn-primary" onclick="saveProject()">
+            <i data-feather="save"></i> <span>שמור שינויים</span>
+        </button>
+        <button class="btn btn-danger ml-auto" onclick="deleteProject('${project.id}')">
+            <i data-feather="trash-2"></i>
+        </button>
     `;
 
-    document.getElementById('desktop-detail-content').innerHTML = `
-        <h2 class="text-2xl font-bold mb-6">ערוך פרויקט</h2>
-        ${content}
-        <div class="flex gap-2 mt-6">
-            ${footer}
-        </div>
-    `;
-    feather.replace();
-    // עדכון הרשימה כדי להציג 'active'
-    renderProjectsPage();
-}
-window.openProjectDetails = openProjectDetails;
-
-/**
- * פותח מודאל ליצירת פרויקט חדש
- */
-function openNewProjectModal() {
-    const content = `
-        <div class="space-y-4">
-            <div>
-                <label class="form-label">שם פרויקט</label>
-                <input type="text" id="project-new-name" class="form-input" placeholder="לדוגמה: זבולון-עדירן/רמת גן">
-            </div>
-            <div>
-                <label class="form-label">כתובת אספקה</label>
-                <input type="text" id="project-new-address" class="form-input" placeholder="רחוב, מספר, עיר">
-            </div>
-            <div>
-                <label class="form-label">איש קשר ראשי (ופלאפון)</label>
-                <input type="text" id="project-new-contact" class="form-input" placeholder="שם ומספר">
-            </div>
-        </div>
-    `;
-    
-    const footer = `
-        <button class="btn btn-secondary" onclick="closeModal()">ביטול</button>
-        <button class="btn btn-primary" onclick="saveProject()">צור פרויקט</button>
-    `;
-    
-    if (window.innerWidth >= 768) { // בדיקה אם במצב דסקטופ
+    if (isDesktop && window.innerWidth >= 768) {
         document.getElementById('desktop-detail-content').innerHTML = `
-            <h2 class="text-2xl font-bold mb-6">פרויקט חדש</h2>
-            ${content}
-            <div class="flex gap-2 mt-6">
-                ${footer}
+            <h2 class="text-2xl font-bold mb-4">עריכת פרויקט</h2>
+            ${contentHTML}
+            <div class="mt-6 pt-4 border-t border-border-color flex gap-2">
+                ${footerHTML}
+            </div>
+        `;
+        document.querySelectorAll('#desktop-list-content .list-item-card').forEach(el => el.classList.remove('active'));
+        document.querySelector(`#desktop-list-content .list-item-card[onclick*="'${projectId}'"]`).classList.add('active');
+        feather.replace();
+    } else {
+        openModal(`עריכת פרויקט: ${project.name}`, contentHTML, footerHTML);
+    }
+}
+
+function openNewProjectModal() {
+    const contentHTML = `
+        <form id="project-form" class="space-y-4">
+            <input type="hidden" id="project-id" value="new">
+            <div>
+                <label class="form-label" for="project-name">שם פרויקט</label>
+                <input type="text" id="project-name" class="form-input" placeholder="לדוגמה: בניין חדד" required>
+            </div>
+            <div>
+                <label class="form-label" for="project-address">כתובת אספקה</label>
+                <input type="text" id="project-address" class="form-input" placeholder="כתובת מלאה" required>
+            </div>
+            <div>
+                <label class="form-label" for="project-contact">איש קשר (כולל טלפון)</label>
+                <input type="text" id="project-contact" class="form-input" placeholder="לדוגמה: עבד (050-1234567)">
+            </div>
+        </form>
+    `;
+    
+    const footerHTML = `
+        <button class="btn btn-secondary" onclick="closeModal()">ביטול</button>
+        <button class="btn btn-primary" onclick="saveProject()">
+            <i data-feather="save"></i> <span>שמור פרויקט</span>
+        </button>
+    `;
+    
+    if (window.innerWidth >= 768) {
+        document.getElementById('desktop-detail-content').innerHTML = `
+            <h2 class="text-2xl font-bold mb-4">פרויקט חדש</h2>
+            ${contentHTML}
+            <div class="mt-6 pt-4 border-t border-border-color flex gap-2">
+                ${footerHTML}
             </div>
         `;
         feather.replace();
     } else {
-        showModal('פרויקט חדש', content, footer);
+        openModal("פרויקט חדש", contentHTML, footerHTML);
     }
 }
 
-/**
- * שומר פרויקט חדש או קיים (סימולציה)
- */
-function saveProject(projectId = null) {
-    let project, name, address, contact;
+function saveProject() {
+    const id = document.getElementById('project-id').value;
+    const name = document.getElementById('project-name').value;
+    const address = document.getElementById('project-address').value;
+    const contact = document.getElementById('project-contact').value;
     
-    if (projectId) {
-        // עריכה
-        project = state.mockProjects.find(p => p.id === projectId);
-        if (!project) return;
-        
-        name = document.getElementById('project-edit-name').value;
-        address = document.getElementById('project-edit-address').value;
-        contact = document.getElementById('project-edit-contact').value;
-        
-        project.name = name;
-        project.address = address;
-        project.contact = contact;
-    } else {
-        // יצירה
-        name = document.getElementById('project-new-name').value;
-        address = document.getElementById('project-new-address').value;
-        contact = document.getElementById('project-new-contact').value;
-        
-        if (!name || !address) {
-            showToast("שם פרויקט וכתובת הם שדות חובה", "error");
-            return;
-        }
-        
-        project = {
+    if (!name || !address) {
+        showToast("שם פרויקט וכתובת הם שדות חובה", "error");
+        return;
+    }
+    
+    if (id === 'new') {
+        const newProject = {
             id: `proj_${Date.now()}`,
-            name,
-            address,
-            contact,
-            customerId: `NEW_${Date.now()}`
+            name, address, contact, customerId: CLIENT_ID
         };
-        state.mockProjects.push(project);
-    }
-    
-    logInfo("Saving project (simulation):", project);
-    showToast("פרויקט נשמר בהצלחה", "success");
-    closeModal();
-    
-    // רענון התצוגה
-    if (state.currentView === 'projects') {
-        renderProjectsPage();
-    } else if (state.currentView === 'dashboard') {
-        renderDashboard();
-    }
-}
-
-/**
- * מוחק פרויקט (סימולציה)
- */
-function deleteProject(projectId) {
-    if (confirm("האם אתה בטוח שברצונך למחוק פרויקט זה?")) {
-        state.mockProjects = state.mockProjects.filter(p => p.id !== projectId);
-        logInfo(`Project ${projectId} deleted.`);
-        showToast("פרויקט נמחק", "success");
-        closeModal();
-        // רענון התצוגה
-        if (state.currentView === 'projects') {
-            renderProjectsPage();
-        } else if (state.currentView === 'dashboard') {
-            renderDashboard();
+        state.mockProjects.push(newProject);
+        console.log("Creating new project (simulation):", newProject);
+        // TODO: addDoc(collection(db, "projects"), newProject);
+    } else {
+        const index = state.mockProjects.findIndex(p => p.id === id);
+        if (index !== -1) {
+            state.mockProjects[index] = { ...state.mockProjects[index], name, address, contact };
+            console.log("Updating project (simulation):", state.mockProjects[index]);
+            // TODO: updateDoc(doc(db, "projects", id), { name, address, contact });
         }
     }
+    
+    showToast("הפרויקט נשמר בהצלחה", "success");
+    closeModal();
+    renderProjectsPage();
 }
 
+function deleteProject(projectId) {
+    if (confirm(`האם אתה בטוח שברצונך למחוק פרויקט זה?`)) {
+        state.mockProjects = state.mockProjects.filter(p => p.id !== projectId);
+        console.log(`Project ${projectId} deleted (simulation)`);
+        // TODO: deleteDoc(doc(db, "projects", projectId));
+        showToast("הפרויקט נמחק", "info");
+        closeModal();
+        navigate('projects');
+    }
+}
 
-// --- New Order (Smart Paste) Page ---
-
-/**
- * מרנדר את עמוד ההזמנה החדשה (Smart Paste)
- */
+// --- Smart Paste Order ---
 function renderNewOrderPage() {
     const pageContent = `
-        <h2 class="text-xl font-bold mb-4">הזמנה חדשה (Smart Paste)</h2>
         <div class="glass-card">
-            <p class="text-sm text-light mb-3">
-                כאן יוסי (מנהל רכש) יכול להדביק את תוכן ההזמנה המלא ישירות מהמערכת, לצרף קבצים, והמערכת תנתח ותשלח.
+            <h2 class="text-xl font-bold mb-2">הזמנה חדשה (Smart Paste)</h2>
+            <p class="text-sm text-light mb-4">
+                יוסי, הדבק כאן את תוכן ההזמנה המלא שקיבלת מהאתר או מהמנהל.
+                המערכת תנסה לנתח את הפרטים אוטומטית.
             </p>
             
-            <form id="smart-order-form" onsubmit="event.preventDefault(); sendSmartOrder(event);">
-                <div class="space-y-4">
-                    <!-- 1. תיבת ההדבקה -->
+            <form id="smart-order-form" onsubmit="event.preventDefault(); sendSmartOrder();">
+                <!-- 1. תיבת הדבקה -->
+                <div>
+                    <label class="form-label" for="smart-paste-box">הדבק תוכן הזמנה:</label>
+                    <textarea id="smart-paste-box" onpaste="handlePaste(event)" placeholder="...הדבק כאן..."></textarea>
+                </div>
+                
+                <!-- 2. ניתוח אוטומטי -->
+                <div id="parsed-fields-container" class="space-y-3 my-4 p-4 border border-border-color rounded-lg bg-light" style="display:none;">
+                    <h4 class="font-semibold">פרטים שזוהו (ניתן לערוך):</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                            <label class="form-label" for="parsed-name">שם איש קשר</label>
+                            <input type="text" id="parsed-name" class="form-input" placeholder="לדוגמה: יוסי">
+                        </div>
+                        <div>
+                            <label class="form-label" for="parsed-phone">טלפון</label>
+                            <input type="text" id="parsed-phone" class="form-input" placeholder="לדוגמה: 050-...">
+                        </div>
+                    </div>
                     <div>
-                        <label for="smart-paste-box" class="form-label">הדבק את תוכן ההזמנה כאן:</label>
-                        <textarea id="smart-paste-box" placeholder="לדוגמה:
-לקוח: 5020321 (זבולון-עדירן/חדד)
-פרויקט: וינגייט 27, כפר שמריהו
-איש קשר: עבד (050-5938716)
-
-הזמנה:
-100 בלוק 20
-50 מלט
-..." onpaste="handlePaste(event)"></textarea>
+                        <label class="form-label" for="parsed-project">שם פרויקט</label>
+                        <input type="text" id="parsed-project" class="form-input" placeholder="לדוגמה: זבולון-עדירן/חדד">
                     </div>
-                    
-                    <!-- 2. שדות מנותחים -->
-                    <div id="parsed-fields-container" class="hidden space-y-3 p-4 border border-blue-200 bg-primary-light rounded-lg">
-                        <h4 class="font-semibold text-primary-dark">פרטים שזוהו:</h4>
-                        <div class="grid md:grid-cols-2 gap-3">
-                            <div>
-                                <label class="form-label text-xs">מזהה לקוח (ID)</label>
-                                <input type="text" id="parsed-client-id" class="form-input form-input-sm" placeholder="לא זוהה">
-                            </div>
-                            <div>
-                                <label class="form-label text-xs">שם פרויקט</label>
-                                <input type="text" id="parsed-project-name" class="form-input form-input-sm" placeholder="לא זוהה">
-                            </div>
-                            <div>
-                                <label class="form-label text-xs">איש קשר</label>
-                                <input type="text" id="parsed-contact-name" class="form-input form-input-sm" placeholder="לא זוהה">
-                            </div>
-                            <div>
-                                <label class="form-label text-xs">טלפון</label>
-                                <input type="text" id="parsed-contact-phone" class="form-input form-input-sm" placeholder="לא זוהה">
-                            </div>
-                        </div>
+                </div>
+                
+                <!-- 3. צירוף קבצים -->
+                <div class="mt-4">
+                    <label class="form-label">צרף קבצים, תמונות או מסמכים:</label>
+                    <div id="file-drop-area">
+                        גרור קבצים לכאן או 
+                        <span class="text-primary-color font-semibold cursor-pointer" onclick="triggerFileInput()">
+                            בחר קבצים
+                        </span>
+                        <input type="file" id="file-input" multiple onchange="handleFileSelect(event)" class="hidden">
                     </div>
-                    
-                    <!-- 3. צירוף קבצים -->
-                    <div>
-                        <label class="form-label">צרף קבצים, תמונות או מסמכים:</label>
-                        <div id="file-drop-area" 
-                             ondragover="handleDragOver(event)" 
-                             ondragleave="handleDragLeave(event)" 
-                             ondrop="handleFileDrop(event)">
-                            גרור קבצים לכאן או <span class="text-primary-color font-semibold cursor-pointer" onclick="triggerFileInput()">לחץ לבחירה</span>
-                        </div>
-                        <input type="file" id="file-input" class="hidden" multiple onchange="handleFileSelect(event)">
-                        <div id="preview-container">
-                            <!-- תצוגה מקדימה של קבצים תופיע כאן -->
-                        </div>
-                    </div>
-                    
-                    <!-- 4. כפתור שליחה -->
-                    <div class="pt-4 border-t border-border-color">
-                        <button type="submit" id="send-order-btn" class="btn btn-primary w-full text-base py-3">
-                            <i data-feather="send"></i>
-                            <span>שלח הזמנה</span>
-                        </button>
-                    </div>
+                    <div id="preview-container"></div>
+                </div>
+                
+                <!-- 4. שליחה -->
+                <div class="mt-6 text-left">
+                    <button type="submit" id="send-order-btn" class="btn btn-primary btn-lg w-full md:w-auto">
+                        <i data-feather="send"></i>
+                        <span>שלח הזמנה למערכת</span>
+                    </button>
                 </div>
             </form>
         </div>
     `;
-    
-    // מובייל
+
     document.getElementById('page-new-order').innerHTML = pageContent;
-    
-    // דסקטופ (משתמש באותו תוכן, אבל בפאנל הימני)
     document.getElementById('desktop-list-content').innerHTML = `
         <div class="p-4">
-            <h3 class="text-lg font-semibold mb-2">הזמנות אחרונות</h3>
-            <div id="desktop-history-list-small">
-                ${renderOrderHistoryList(5)}
-            </div>
+            <h3 class="text-lg font-semibold mb-3">הזמנות אחרונות</h3>
+            ${renderOrderHistoryList(10)}
         </div>
     `;
     document.getElementById('desktop-detail-content').innerHTML = pageContent;
     
+    const dropArea = document.getElementById('file-drop-area');
+    if (dropArea) {
+        dropArea.addEventListener('dragover', handleDragOver, false);
+        dropArea.addEventListener('dragleave', handleDragLeave, false);
+        dropArea.addEventListener('drop', handleFileDrop, false);
+    }
+    
     feather.replace();
 }
 
-/**
- * מרנדר את עמוד היסטוריית ההזמנות
- */
 function renderOrdersHistoryPage() {
-    // מובייל
+    const historyHTML = renderOrderHistoryList();
     document.getElementById('page-orders-history').innerHTML = `
         <h2 class="text-xl font-bold mb-4">היסטוריית הזמנות</h2>
-        <div id="mobile-history-list">
-            ${renderOrderHistoryList()}
-        </div>
+        ${historyHTML}
     `;
     
-    // דסקטופ
-    document.getElementById('desktop-list-content').innerHTML = `
-        <div class="p-4 no-scrollbar">
-            ${renderOrderHistoryList()}
-        </div>
-    `;
+    document.getElementById('desktop-list-content').innerHTML = historyHTML;
     document.getElementById('desktop-detail-content').innerHTML = `
         <div class="flex flex-col items-center justify-center h-full text-center">
             <i data-feather="archive" class="w-16 h-16 text-light"></i>
             <h3 class="text-lg font-semibold mt-4">היסטוריית הזמנות</h3>
-            <p class="text-light">בחר הזמנה מהרשימה כדי לראות את פרטיה המלאים.</p>
+            <p class="text-light">בחר הזמנה מהרשימה כדי לראות פרטים מלאים.</p>
         </div>
     `;
-    
     feather.replace();
 }
 
-/**
- * יוצר רשימת HTML של היסטוריית הזמנות
- */
-function renderOrderHistoryList(count = null) {
-    let orders = state.orderHistory;
-    if (count) {
-        orders = orders.slice(0, count);
-    }
-    
-    if (orders.length === 0) {
+function renderOrderHistoryList(count = state.orderHistory.length) {
+    if (state.orderHistory.length === 0) {
         return '<p class="text-light text-center p-4">אין היסטוריית הזמנות.</p>';
     }
     
-    return orders.map(order => `
-        <div class="list-item-card" onclick="showOrderDetails('${order.id}')">
-            <div class="flex justify-between items-center">
-                <h4 class="truncate">${order.projectName || 'הזמנה כללית'}</h4>
-                <span class="text-xs font-mono text-light">${order.id.slice(0, 8)}...</span>
-            </div>
-            <p class="text-sm text-light truncate">${order.rawText ? order.rawText.split('\n')[0] : '...'}</p>
-            <div class="flex justify-between items-center mt-2">
-                <span class="status-badge status-${order.status}">${order.status || 'חדש'}</span>
-                <span class="text-xs text-light">${order.createdAt?.seconds ? new Date(order.createdAt.seconds * 1000).toLocaleDateString('he-IL') : '...'}</span>
-            </div>
+    return state.orderHistory.slice(0, count).map(order => `
+        <div class="list-item-card" onclick="showOrderDetail('${order.id}')">
+            <h4>${order.projectName || 'הזמנה כללית'}</h4>
+            <p>${order.status || 'חדש'} - ${new Date(order.createdAt?.toDate ? order.createdAt.toDate() : Date.now()).toLocaleDateString('he-IL')}</p>
         </div>
     `).join('');
 }
 
-/**
- * מציג פרטי הזמנה (דסקטופ)
- */
-function showOrderDetails(orderId) {
+function showOrderDetail(orderId) {
     const order = state.orderHistory.find(o => o.id === orderId);
     if (!order) return;
-    
-    // עדכון הרשימה להצגת הפריט הפעיל
-    document.querySelectorAll('#desktop-list-content .list-item-card').forEach(card => {
-        card.classList.remove('active');
-        if (card.getAttribute('onclick').includes(orderId)) {
-            card.classList.add('active');
+
+    document.getElementById('desktop-detail-content').innerHTML = `
+        <h2 class="text-2xl font-bold mb-4">${order.projectName || 'הזמנה'}</h2>
+        <p><strong>סטטוס:</strong> ${order.status}</p>
+        <p><strong>תאריך:</strong> ${new Date(order.createdAt?.toDate()).toLocaleString('he-IL')}</p>
+        <p><strong>איש קשר:</strong> ${order.contactName || 'לא צוין'}</p>
+        <p><strong>טלפון:</strong> ${order.contactPhone || 'לא צוין'}</p>
+        
+        <h3 class="text-xl font-semibold mt-6 mb-2">תוכן ההזמנה</h3>
+        <pre class="glass-card p-4 text-sm whitespace-pre-wrap">${order.rawText || 'אין תוכן'}</pre>
+        
+        <h3 class="text-xl font-semibold mt-6 mb-2">קבצים מצורפים</h3>
+        ${(order.attachments && order.attachments.length > 0) 
+            ? order.attachments.map(f => `<a href="${f.url}" target="_blank" class="block text-primary-color">${f.name}</a>`).join('')
+            : '<p>אין קבצים מצורפים.</p>'
         }
-    });
-
-    const content = `
-        <h2 class="text-2xl font-bold mb-4">${order.projectName || 'הזמנה כללית'}</h2>
-        
-        <div class="grid grid-cols-2 gap-4 mb-4">
-            <div class="glass-card-sm">
-                <label class="form-label text-xs">סטטוס</label>
-                <p class="font-semibold text-lg status-text-${order.status}">${order.status}</p>
-            </div>
-            <div class="glass-card-sm">
-                <label class="form-label text-xs">תאריך</label>
-                <p class="font-semibold">${order.createdAt?.seconds ? new Date(order.createdAt.seconds * 1000).toLocaleString('he-IL') : '...'}</p>
-            </div>
-        </div>
-
-        <div class="glass-card mb-4">
-            <h4 class="text-lg font-semibold mb-3">פרטים שזוהו</h4>
-            <div class="space-y-2">
-                <p><strong>מזהה לקוח:</strong> ${order.projectId || 'לא צוין'}</p>
-                <p><strong>איש קשר:</strong> ${order.contactName || 'לא צוין'}</p>
-                <p><strong>טלפון:</strong> ${order.contactPhone || 'לא צוין'}</p>
-            </div>
-        </div>
-        
-        <div class="glass-card mb-4">
-            <h4 class="text-lg font-semibold mb-3">תוכן ההזמנה המקורי</h4>
-            <pre class="whitespace-pre-wrap p-4 bg-light rounded-md text-sm">${order.rawText || 'אין'}</pre>
-        </div>
-        
-        <div class="glass-card">
-            <h4 class="text-lg font-semibold mb-3">קבצים מצורפים</h4>
-            ${order.attachments && order.attachments.length > 0
-                ? order.attachments.map(file => `
-                    <a href="${file.url}" target="_blank" class="flex items-center gap-2 p-2 rounded-md hover:bg-light">
-                        <i data-feather="file-text"></i>
-                        <span>${file.name}</span>
-                    </a>
-                `).join('')
-                : '<p class="text-light">לא צורפו קבצים.</p>'
-            }
-        </div>
     `;
-    
-    document.getElementById('desktop-detail-content').innerHTML = content;
-    feather.replace();
 }
-
 
 // --- Smart Paste Logic ---
-
-/**
- * מטפל באירוע הדבקה בתיבה
- */
 function handlePaste(event) {
-    try {
-        event.preventDefault();
-        const text = (event.clipboardData || window.clipboardData).getData('text');
-        document.getElementById('smart-paste-box').value = text;
-        
-        parsePastedText(text);
-        
-        // [חדש] מנסה לטעון קבצים מלוח העריכה (למשל צילום מסך)
-        const files = event.clipboardData.files;
-        if (files.length > 0) {
-            showToast(`זיהוי תמונה מההדבקה...`, "info");
-            handleFiles(files);
-        }
-    } catch (e) {
-        logError("Paste event failed", e);
+    const paste = (event.clipboardData || window.clipboardData).getData('text');
+    if (paste) {
+        document.getElementById('parsed-fields-container').style.display = 'block';
+        parsePastedText(paste);
     }
 }
 
-/**
- * מנתח את הטקסט המודבק ומנסה למלא שדות
- */
 function parsePastedText(text) {
-    if (!text) return;
+    let name = text.match(/איש קשר:\s*(.*)/i)?.[1] || '';
+    let phone = text.match(/טלפון:\s*(.*)/i)?.[1] || '';
+    let project = text.match(/פרויקט:\s*(.*)/i)?.[1] || '';
     
-    try {
-        // ניסיון לזהות שדות באמצעות ביטויים רגולריים פשוטים
-        const clientIdMatch = text.match(/לקוח:\s*(\d+)/);
-        const projectNameMatch = text.match(/פרויקט:\s*(.*)/) || text.match(/לקוח:.*?\((.*?)\)/);
-        const contactNameMatch = text.match(/איש קשר:\s*([^(\n]+)/);
-        const contactPhoneMatch = text.match(/איש קשר:.*?\(([\d-]+)\)/);
-
-        if (clientIdMatch || projectNameMatch || contactNameMatch) {
-            document.getElementById('parsed-fields-container').classList.remove('hidden');
-            
-            if (clientIdMatch) document.getElementById('parsed-client-id').value = clientIdMatch[1].trim();
-            if (projectNameMatch) document.getElementById('parsed-project-name').value = projectNameMatch[1].trim();
-            if (contactNameMatch) document.getElementById('parsed-contact-name').value = contactNameMatch[1].trim();
-            if (contactPhoneMatch) document.getElementById('parsed-contact-phone').value = contactPhoneMatch[1].trim();
-        }
-    } catch (e) {
-        logError("Text parsing failed", e);
-    }
+    if (!name) name = text.match(/שם:\s*(.*)/i)?.[1] || '';
+    
+    document.getElementById('parsed-name').value = name.trim();
+    document.getElementById('parsed-phone').value = phone.trim();
+    document.getElementById('parsed-project').value = project.trim();
 }
 
-// --- File Handling ---
-
+// --- File Handling Logic ---
 function triggerFileInput() {
     document.getElementById('file-input').click();
 }
 
 function handleFileSelect(event) {
-    handleFiles(event.target.files);
+    addFiles(event.target.files);
 }
 
 function handleDragOver(event) {
     event.preventDefault();
-    document.getElementById('file-drop-area').classList.add('dragover');
+    event.currentTarget.classList.add('dragover');
 }
 
 function handleDragLeave(event) {
-    document.getElementById('file-drop-area').classList.remove('dragover');
+    event.currentTarget.classList.remove('dragover');
 }
 
 function handleFileDrop(event) {
     event.preventDefault();
-    document.getElementById('file-drop-area').classList.remove('dragover');
-    handleFiles(event.dataTransfer.files);
+    event.currentTarget.classList.remove('dragover');
+    addFiles(event.dataTransfer.files);
 }
 
-/**
- * מטפל בקבצים שנבחרו או נגררו
- */
-function handleFiles(files) {
-    const newFiles = [...files];
-    state.filesToUpload.push(...newFiles);
+function addFiles(files) {
+    for (const file of files) {
+        if (state.filesToUpload.length >= 5) {
+            showToast("ניתן להעלות עד 5 קבצים", "error");
+            break;
+        }
+        state.filesToUpload.push(file);
+    }
     renderFilePreviews();
 }
 
-/**
- * מרנדר תצוגה מקדימה של הקבצים שנבחרו
- */
 function renderFilePreviews() {
     const container = document.getElementById('preview-container');
-    container.innerHTML = ''; // נקה
+    container.innerHTML = '';
     
     state.filesToUpload.forEach((file, index) => {
-        const preview = document.createElement('div');
-        preview.className = 'file-preview';
+        const previewEl = document.createElement('div');
+        previewEl.className = 'file-preview';
         
         if (file.type.startsWith('image/')) {
             const reader = new FileReader();
             reader.onload = (e) => {
-                preview.innerHTML = `
+                previewEl.innerHTML = `
                     <img src="${e.target.result}" alt="${file.name}">
-                    <button class="remove-file" onclick="removeFile(${index})"><i data-feather="x" class="w-4 h-4"></i></button>
+                    <div class="remove-file" onclick="removeFile(${index})"><i data-feather="x" class="w-4 h-4"></i></div>
                 `;
                 feather.replace();
             };
             reader.readAsDataURL(file);
         } else {
-            preview.innerHTML = `
+            previewEl.innerHTML = `
                 <div class="file-icon">
                     <i data-feather="file-text" class="w-8 h-8 text-light"></i>
                 </div>
-                <button class="remove-file" onclick="removeFile(${index})"><i data-feather="x" class="w-4 h-4"></i></button>
+                <div class="remove-file" onclick="removeFile(${index})"><i data-feather="x" class="w-4 h-4"></i></div>
             `;
             feather.replace();
         }
-        container.appendChild(preview);
+        container.appendChild(previewEl);
     });
 }
 
-/**
- * מסיר קובץ מרשימת ההעלאה
- */
 function removeFile(index) {
     state.filesToUpload.splice(index, 1);
     renderFilePreviews();
 }
-window.removeFile = removeFile; // Expose globally
 
-/**
- * מעלה קבצים ל-Storage ומחזיר רשימת URL-ים
- */
 async function uploadFiles(orderId) {
-    if (state.filesToUpload.length === 0) {
-        return [];
-    }
-    
-    showToast("מעלה קבצים...", "info");
+    if (state.filesToUpload.length === 0) return [];
     
     const uploadPromises = state.filesToUpload.map(async (file) => {
-        const filePath = `zebulun_orders/${orderId}/${file.name}`;
-        const fileRef = ref(storage, filePath);
-        
         try {
+            const fileRef = ref(storage, `zebulun_orders/${orderId}/${file.name}`);
             const snapshot = await uploadBytes(fileRef, file);
-            const downloadURL = await getDownloadURL(snapshot.ref);
-            logInfo(`File uploaded: ${file.name}`);
-            return { name: file.name, url: downloadURL, path: filePath };
+            const url = await getDownloadURL(snapshot.ref);
+            
+            console.log(`File uploaded: ${file.name} -> ${url}`);
+            return { name: file.name, url: url };
+            
         } catch (error) {
-            logError(`File upload failed for ${file.name}:`, error);
-            showToast(`שגיאה בהעלאת קובץ: ${file.name}`, "error");
+            console.error(`Failed to upload file ${file.name}:`, error);
+            showToast(`שגיאה בהעלאת קובץ: ${file.name}`, 'error');
             return null;
         }
     });
-    
+
     const results = await Promise.all(uploadPromises);
-    return results.filter(Boolean); // סנן קבצים שנכשלו
+    return results.filter(result => result !== null);
 }
 
 
 // --- Order Sending Logic ---
-
-// Debounce function
-function debounce(func, wait) {
-    let timeout;
-    return function (...args) {
-        clearTimeout(timeout);
-        timeout = setTimeout(() => func.apply(this, args), wait);
-    };
-}
-
-/**
- * מטפל בשליחת הטופס החכם
- */
-const sendSmartOrder = debounce(async (event) => {
-    if (event) event.preventDefault();
+async function sendSmartOrder() {
     const btn = document.getElementById('send-order-btn');
     btn.disabled = true;
     btn.innerHTML = '<div class="loader-small"></div> <span>שולח...</span>';
     
-    const orderId = generateUUID();
+    const rawText = document.getElementById('smart-paste-box').value;
+    if (rawText.trim().length === 0 && state.filesToUpload.length === 0) {
+        showToast("חובה להדביק תוכן הזמנה או לצרף קובץ", "error");
+        resetSendButton(btn);
+        return;
+    }
     
-    // חסום שליחה כפולה
-    if (state.processedOrderIds.has(orderId)) {
-        logWarn("Duplicate send blocked", { orderId });
-        showToast("הזמנה זו כבר נשלחה.", "error");
+    const orderId = `ZEB-${Date.now()}`;
+    
+    let attachmentURLs = [];
+    try {
+        attachmentURLs = await uploadFiles(orderId);
+    } catch (error) {
+        console.error("File upload failed:", error);
+        showToast("שגיאה קריטית בהעלאת קבצים. ההזמנה לא נשלחה.", "error");
+        resetSendButton(btn);
         return;
     }
 
-    try {
-        // 1. העלאת קבצים (אם יש)
-        const attachmentURLs = await uploadFiles(orderId);
-        
-        // 2. בניית אובייקט ההזמנה
-        const rawText = document.getElementById('smart-paste-box').value;
-        const parsedFields = {
-            clientId: document.getElementById('parsed-client-id').value,
-            projectName: document.getElementById('parsed-project-name').value,
-            contactName: document.getElementById('parsed-contact-name').value,
-            contactPhone: document.getElementById('parsed-contact-phone').value,
-        };
-        
-        const orderPayload = {
-            orderId: orderId,
-            clientId: CLIENT_ID, // מזהה לקוח ראשי
-            projectId: parsedFields.clientId, // שימוש במזהה הלקוח שזוהה כשדה הפרויקט
-            projectName: parsedFields.projectName,
-            contactName: parsedFields.contactName,
-            contactPhone: parsedFields.contactPhone,
-            rawText: rawText,
-            parsedFields: parsedFields,
-            attachments: attachmentURLs,
-            createdAt: serverTimestamp(),
-            status: "חדש" // סטטוס התחלתי
-        };
+    const orderPayload = {
+        orderId: orderId,
+        clientId: CLIENT_ID,
+        projectId: document.getElementById('parsed-project').value || null,
+        projectName: document.getElementById('parsed-project').value || "לא שויך לפרויקט",
+        contactName: document.getElementById('parsed-name').value || "יוסי (ראשי)",
+        contactPhone: document.getElementById('parsed-phone').value || "לא צוין",
+        rawText: rawText,
+        attachments: attachmentURLs,
+        createdAt: serverTimestamp(),
+        status: "חדש"
+    };
 
-        // 3. שמירה ב-Firestore
-        logInfo("Attempting to write to Firestore...", orderPayload);
-        const orderRef = doc(db, "orders", orderId);
-        await setDoc(orderRef, orderPayload);
-        
-        // 4. אישור והדמיית המשך
-        state.processedOrderIds.add(orderId);
-        state.orderHistory.unshift({ id: orderId, ...orderPayload, createdAt: { seconds: Date.now() / 1000 } }); // הוסף להיסטוריה המקומית
+    try {
+        await sendOrderToFirestore(orderPayload);
         
         showToast("ההזמנה נשלחה בהצלחה!", "success");
-        playPingSound();
-        logInfo("Order Sent:", orderPayload);
+        playAlert("הזמנה חדשה נשלחה", "info");
+        state.orderHistory.unshift(orderPayload);
+        resetNewOrderForm();
+        navigate('orders-history');
         
-        // איפוס הטופס
-        document.getElementById('smart-order-form').reset();
-        document.getElementById('parsed-fields-container').classList.add('hidden');
-        state.filesToUpload = [];
-        renderFilePreviews();
-        
-        // הדמיית ניתוב
-        setTimeout(() => {
-            showToast("ההזמנה מנותבת למחלקת הזמנות...", "info");
-            navigate('orders-history');
-        }, 1500);
-
     } catch (error) {
-        logError("Failed to send order via Firestore:", error);
-        showToast(`שגיאה בשליחת הזמנה: ${error.message}`, "error");
-        // [TODO] Fallback to WEB_APP_URL_PLACEHOLDER
+        console.error("Firestore send failed:", error);
+        showToast("שגיאה בשליחה ל-Firestore. מנסה גיבוי...", "error");
+        
+        try {
+            await sendOrderToWebApp(orderPayload);
+            showToast("ההזמנה נשלחה בגיבוי!", "success");
+            resetNewOrderForm();
+        } catch (webAppError) {
+            console.error("WebApp fallback failed:", webAppError);
+            showToast("שליחת ההזמנה נכשלה סופית.", "error");
+        }
     } finally {
-        btn.disabled = false;
-        btn.innerHTML = '<i data-feather="send"></i> <span>שלח הזמנה</span>';
-        feather.replace();
-    }
-}, 1000); // Debounce ל-1 שנייה
-
-// --- Alerts & Sounds ---
-
-/**
- * מאזין לשינויי סטטוס והזמנות חדשות (סימולציה)
- */
-function listenForGlobalAlerts() {
-    // מאחר וזו אפליקציית לקוח, נאזין רק לשינויים בהזמנות *שלו*
-    const q = query(
-        collection(db, "orders"), 
-        where("clientId", "==", CLIENT_ID),
-        orderBy("createdAt", "desc"), // דורש אינדקס
-        limit(10) // האזנה רק לשינויים האחרונים
-    );
-    
-    try {
-        onSnapshot(q, (snapshot) => {
-            logInfo(`Order listener snapshot received (${snapshot.size} docs)`);
-            snapshot.docChanges().forEach((change) => {
-                if (change.type === "modified" && appInitialized) {
-                    const order = change.doc.data();
-                    const message = `עדכון סטטוס: הזמנה ${order.projectName || order.orderId.slice(0,6)} כעת ${order.status}`;
-                    showToast(message, "info");
-                    playPingSound();
-                    
-                    // רענון היסטוריית הזמנות אם היא פתוחה
-                    if (state.currentView === 'orders-history') {
-                        loadClientData().then(renderOrdersHistoryPage);
-                    }
-                }
-            });
-        }, (error) => {
-            logError("Failed to listen for order alerts. Index or permissions issue.", error);
-            // לא מציג שגיאה למשתמש, פשוט ממשיך ללא התראות
-        });
-    } catch (e) {
-        logError("Failed to listen for order alerts. Index might be missing.", e);
+        resetSendButton(btn);
     }
 }
 
-/**
- * מפעיל צליל התראה
- */
-function playPingSound() {
-    try {
-        const audio = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
-        audio.play();
-    } catch (e) {
-        logWarn("Audio playback failed.", e);
-    }
-}
-
-/**
- * מפעיל ברכה קולית (דמו)
- */
-function playWelcomeGreeting() {
-    try {
-        const greeting = "היי יוסי, ברוך הבא לפורטל ההזמנות של זבולון עדירן וחומרי בנין סבן. מכאן תוכל ליצור הזמנות חדשות ולעקוב אחריהן בזמן אמת.";
-        const utterance = new SpeechSynthesisUtterance(greeting);
-        utterance.lang = 'he-IL';
-        utterance.rate = 0.9;
-        speechSynthesis.speak(utterance);
-    } catch (e) {
-        logError("Speech synthesis failed", e);
-        showToast("ההפעלה הקולית נכשלה. ייתכן שהדפדפן שלך לא תומך.", "error");
-    }
-}
-window.playWelcomeGreeting = playWelcomeGreeting;
-
-
-// --- Modal & Utility Functions ---
-
-/**
- * פותח את המודאל (פופאפ) הראשי
- */
-function showModal(title, content, footerContent = null) {
-    document.getElementById('modal-title').innerText = title;
-    document.getElementById('modal-body').innerHTML = content;
-    
-    const footer = document.getElementById('modal-footer');
-    if (footerContent) {
-        footer.innerHTML = footerContent;
-        footer.style.display = 'flex';
-    } else {
-        footer.style.display = 'none';
-    }
-    
-    document.getElementById('modal-overlay').classList.add('visible');
-    document.getElementById('main-modal').classList.add('visible');
+function resetSendButton(btn) {
+    btn.disabled = false;
+    btn.innerHTML = '<i data-feather="send"></i> <span>שלח הזמנה למערכת</span>';
     feather.replace();
 }
 
-/**
- * סוגר את המודאל (פופאפ) הראשי
- */
-function closeModal() {
-    document.getElementById('modal-overlay').classList.remove('visible');
-    document.getElementById('main-modal').classList.remove('visible');
+function resetNewOrderForm() {
+    document.getElementById('smart-paste-box').value = '';
+    document.getElementById('parsed-name').value = '';
+    document.getElementById('parsed-phone').value = '';
+    document.getElementById('parsed-project').value = '';
+    document.getElementById('parsed-fields-container').style.display = 'none';
+    state.filesToUpload = [];
+    renderFilePreviews();
 }
 
-/**
- * מציג התראה קופצת (Toast)
- */
-function showToast(message, type = "info") {
-    const container = document.getElementById("global-alert-container");
-    if (!container) return;
+async function sendOrderToFirestore(payload) {
+    if (!db) throw new Error("Firestore is not initialized");
+    const orderRef = doc(db, "orders", payload.orderId);
+    await setDoc(orderRef, payload);
+    console.log("Order sent to Firestore with ID:", payload.orderId);
+}
+
+async function sendOrderToWebApp(payload) {
+    const jsonPayload = { ...payload, createdAt: new Date().toISOString() };
     
-    const alertBox = document.createElement("div");
+    const response = await fetch(WEB_APP_URL_PLACEHOLDER, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'NEW_ORDER', data: jsonPayload })
+    });
+    console.log("Order sent to WebApp (fallback).");
+}
+
+
+// --- Global Alerts & Utils ---
+function listenForGlobalAlerts() {
+    if (globalAlertsListener) globalAlertsListener();
     
-    let icon = "info";
-    let styleClass = "alert-info";
+    try {
+        const q = query(
+            collection(db, "globalAlerts"),
+            orderBy("timestamp", "desc"),
+            limit(1)
+        );
+        
+        let initialLoad = true;
+        globalAlertsListener = onSnapshot(q, (snapshot) => {
+            if (initialLoad) {
+                initialLoad = false;
+                return;
+            }
+            
+            snapshot.docChanges().forEach((change) => {
+                if (change.type === "added") {
+                    const alert = change.doc.data();
+                    playAlert(alert.title, alert.type || 'info');
+                }
+            });
+        }, (error) => {
+            console.error("Failed to listen for global alerts:", error);
+        });
+        
+    } catch (error) {
+        console.error("Error setting up alert listener:", error);
+    }
+}
+
+function playAlert(message, type = "info") {
+    console.log(`Playing Alert: ${message} (Type: ${type})`);
     
-    if (type === "error") {
-        icon = "alert-triangle";
-        styleClass = "alert-error"; // (מוגדר ב-CSS כ-red-500)
-    } else if (type === "success") {
-        icon = "check-circle";
-        styleClass = "alert-success"; // (מוגדר ב-CSS כ-green-500)
+    try {
+        const soundUrl = (type === "error" || type === "broadcast")
+            ? "https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg" 
+            : "https://actions.google.com/sounds/v1/alarms/beep_short.ogg";
+        const audio = new Audio(soundUrl);
+        audio.play().catch(e => console.warn("Audio playback blocked by browser."));
+    } catch (e) {
+        console.warn("Audio playback failed.", e);
     }
 
-    alertBox.className = `global-alert ${styleClass}`;
+    const container = document.getElementById("global-alert-container");
+    const alertBox = document.createElement("div");
+    alertBox.className = `global-alert ${type === 'error' ? 'alert-error' : (type === 'success' ? 'alert-success' : 'alert-info')}`;
+    
+    const icon = (type === "error") ? "alert-triangle" : (type === 'success' ? 'check-circle' : 'info');
     alertBox.innerHTML = `<i data-feather="${icon}" class="w-5 h-5"></i><span>${message}</span>`;
     
     container.appendChild(alertBox);
     feather.replace();
     
-    // הסר אחרי 4 שניות
     setTimeout(() => {
         alertBox.style.opacity = '0';
         alertBox.style.transform = 'translateY(20px)';
-        setTimeout(() => {
-            if (alertBox.parentElement === container) {
-                container.removeChild(alertBox);
-            }
-        }, 300);
+        setTimeout(() => alertBox.remove(), 300);
     }, 4000);
 }
 
-/**
- * יוצר מזהה ייחודי
- */
-function generateUUID() {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-    var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
-    return v.toString(16);
-  });
+function showToast(message, type = "info") {
+    playAlert(message, type);
 }
 
-// --- Logging ---
-function logInfo(message, context = {}) {
-    console.log(`[INFO] ${message}`, context);
-    globalLog.push({ timestamp: new Date().toISOString(), level: "INFO", message, context: JSON.stringify(context) });
-}
-function logWarn(message, context = {}) {
-    console.warn(`[WARN] ${message}`, context);
-    globalLog.push({ timestamp: new Date().toISOString(), level: "WARN", message, context: JSON.stringify(context) });
-}
-function logError(message, error) {
-    console.error(`[ERROR] ${message}`, error);
-    globalLog.push({ timestamp: new Date().toISOString(), level: "ERROR", message, error: error ? error.message : "Unknown", stack: error ? error.stack : "N/A" });
+function openModal(title, body, footer) {
+    document.getElementById('modal-title').innerText = title;
+    document.getElementById('modal-body').innerHTML = body;
+    document.getElementById('modal-footer').innerHTML = footer;
+    document.getElementById('modal-overlay').classList.add('visible');
+    document.getElementById('main-modal').classList.add('visible');
+    feather.replace();
 }
 
-/**
- * מאפשר הורדת לוג של הסשן הנוכחי
- */
-function downloadSessionLog() {
-    try {
-        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(globalLog, null, 2));
-        const downloadAnchorNode = document.createElement('a');
-        downloadAnchorNode.setAttribute("href", dataStr);
-        downloadAnchorNode.setAttribute("download", `zebulun_portal_log_${new Date().toISOString()}.json`);
-        document.body.appendChild(downloadAnchorNode); // required for firefox
-        downloadAnchorNode.click();
-        downloadAnchorNode.remove();
-        showToast("הורדת הלוג החלה", "success");
-    } catch (e) {
-        logError("Failed to download session log", e);
-        showToast("שגיאה בהורדת הלוג", "error");
+function closeModal() {
+    document.getElementById('modal-overlay').classList.remove('visible');
+    document.getElementById('main-modal').classList.remove('visible');
+    
+    if (state.currentView === 'projects') {
+        renderProjectsPage();
     }
+}
+
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
 }
