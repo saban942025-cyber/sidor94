@@ -2,8 +2,28 @@
 <html lang="he" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
-    <title>Zebulun Delivery Portal – Powered by H.Saban Materials</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Zebulun CRM Portal v53 (Desktop)</title>
+    <!-- 
+      Zebulun CRM Portal v53 (Desktop Edition)
+      
+      Changelog:
+      - [MASSIVE UPGRADE v53]:
+        - "Desktop Mode": האפליקציה מזהה גודל מסך.
+          - במחשב: מציגה פריסת CRM מלאה (ניווט צד, רשימות, פאנל פרטים).
+          - במובייל: נשארת אפליקציית PWA רגילה (ניווט תחתון).
+        - "Smart Paste": נוספה תיבת "הדבקת הזמנה" חדשה ליוסי.
+          - מאפשרת הדבקת טקסט מלא, צירוף קבצים, ותמונות.
+          - מנתחת את הטקסט ומזהה שדות (שם לקוח, פרויקט, טלפון).
+          - שולחת את ההזמנה המלאה (כולל קבצים) ל-Firestore.
+        - "Theme Toggle": נוסף כפתור (שמש/ירח) לשינוי עיצוב בהיר/כהה.
+        - "App-like Navigation": מעבר בין דפים מדמה אפליקציה, ללא טעינה מחדש.
+      - v52 (Nav Fix):
+        - תיקון לולאה אינסופית (Maximum call stack size exceeded) במערכת הניווט.
+        - תיקון אייקון 'crane' חסר.
+      - v51 (Global Alerts):
+        - הוספת מערכת התראות גלובלית (צפצוף + פופאפ).
+    -->
     
     <!-- PWA Manifest & Theme -->
     <link rel="manifest" href="manifest.json">
@@ -11,399 +31,562 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="images/icons/icon-192x192.png">
+    
+    <!-- TailwindCSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- LeafletJS (Map) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     
     <!-- Icons (Feather) -->
     <script src="https://unpkg.com/feather-icons"></script>
-    <link rel="icon" href="https://i.postimg.cc/ryPT3r29/image.png">
-
+    
     <!-- Google Font: Rubik -->
     <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700&display=swap" rel="stylesheet">
 
-    <!-- TailwindCSS (Inlined for simplicity in this example) -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- App Stylesheets -->
-    <!-- Mobile styles load by default -->
-    <link rel="stylesheet" href="app.mobile.css">
-    <!-- Desktop styles load only on larger screens -->
-    <link rel="stylesheet" href="app.desktop.css" media="screen and (min-width: 769px)">
-
     <style>
-      /* Initial loader to prevent flash of unstyled content */
-      body { font-family: 'Rubik', sans-serif; }
-      .initial-loader {
-        position: fixed;
-        inset: 0;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background-color: #f0f4f8;
-        z-index: 9999;
-      }
-      .loader-spinner {
-        border: 4px solid #e5e9f0;
-        border-top: 4px solid #3b82f6;
-        border-radius: 50%;
-        width: 50px;
-        height: 50px;
-        animation: spin 1s linear infinite;
-      }
-      @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-      .hidden { display: none; }
+        :root {
+            --primary-color: #3b82f6; /* blue-500 */
+            --primary-dark: #2563eb; /* blue-600 */
+            --primary-light: #eff6ff; /* blue-50 */
+            --bg-light: #f3f4f6; /* gray-100 */
+            --bg-white: #ffffff;
+            --border-color: #e5e7eb; /* gray-200 */
+            --text-dark: #1f2937; /* gray-800 */
+            --text-light: #6b7280; /* gray-500 */
+            --danger: #ef4444; /* red-500 */
+        }
+        
+        html.dark {
+            --primary-color: #60a5fa; /* blue-400 */
+            --primary-dark: #3b82f6; /* blue-500 */
+            --primary-light: #1e3a8a; /* blue-900 */
+            --bg-light: #0f172a; /* slate-900 */
+            --bg-white: #1e293b; /* slate-800 */
+            --border-color: #334155; /* slate-700 */
+            --text-dark: #f1f5f9; /* slate-100 */
+            --text-light: #94a3b8; /* slate-400 */
+            --danger: #f87171; /* red-400 */
+        }
+
+        /* --- Global Styles --- */
+        html { -webkit-tap-highlight-color: transparent; }
+        body {
+            font-family: 'Rubik', sans-serif;
+            background-color: var(--bg-light);
+            color: var(--text-dark);
+            overscroll-behavior: none;
+            overflow: hidden; /* מניעת גלילה ברמת ה-BODY */
+        }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        /* --- Loader --- */
+        #app-loader {
+            position: fixed;
+            inset: 0;
+            background-color: var(--bg-light);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            transition: opacity 0.3s ease;
+        }
+        .loader {
+            border: 4px solid var(--border-color);
+            border-top: 4px solid var(--primary-color);
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        /* --- Global Alert (Toast) --- */
+        #global-alert-container {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10000;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            width: 90%;
+            max-width: 400px;
+        }
+        .global-alert {
+            background: rgba(239, 68, 68, 0.85); /* red-500 */
+            backdrop-filter: blur(5px);
+            color: #fff;
+            padding: 1rem 1.25rem;
+            border-radius: 0.75rem;
+            font-weight: 600;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            animation: popIn 0.3s ease-out;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        .global-alert.alert-info {
+            background: rgba(59, 130, 246, 0.85); /* blue-500 */
+        }
+        @keyframes popIn {
+          from { transform: translateY(20px) scale(0.9); opacity: 0; }
+          to { transform: translateY(0) scale(1); opacity: 1; }
+        }
+
+        /* --- Modal (Popup) --- */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(4px);
+            z-index: 500;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            pointer-events: none;
+        }
+        .modal-overlay.visible {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .modal-container {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0.95);
+            background-color: var(--bg-white);
+            border-radius: 0.75rem;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            z-index: 501;
+            width: 90%;
+            max-width: 500px;
+            opacity: 0;
+            transition: all 0.2s ease-out;
+            pointer-events: none;
+        }
+        .modal-container.visible {
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1);
+            pointer-events: auto;
+        }
+        .modal-header {
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .modal-body {
+            padding: 1.5rem;
+            max-height: 70vh;
+            overflow-y: auto;
+        }
+        .modal-footer {
+            padding: 1rem 1.5rem;
+            border-top: 1px solid var(--border-color);
+            background-color: var(--bg-light);
+            text-align: left;
+        }
+
+        /* --- DESKTOP CRM LAYOUT (v53) --- */
+        #desktop-crm-layout {
+            display: none; /* Hidden on mobile */
+            grid-template-columns: 260px 1fr; /* Nav | Main Area */
+            height: 100vh;
+        }
+        #desktop-nav {
+            background-color: var(--bg-white);
+            border-left: 1px solid var(--border-color); /* RTL */
+            display: flex;
+            flex-direction: column;
+            padding: 1rem;
+        }
+        .desktop-nav-header {
+            padding: 0.5rem;
+            margin-bottom: 1rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .desktop-nav-header img {
+            max-height: 40px;
+            width: auto;
+            margin-bottom: 0.5rem;
+        }
+        .desktop-nav-link {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem 1rem;
+            border-radius: 0.5rem;
+            font-weight: 500;
+            color: var(--text-light);
+            transition: all 0.2s;
+        }
+        .desktop-nav-link:hover {
+            background-color: var(--bg-light);
+            color: var(--text-dark);
+        }
+        .desktop-nav-link.active {
+            background-color: var(--primary-light);
+            color: var(--primary-dark);
+            font-weight: 600;
+        }
+        
+        #desktop-main-area {
+            display: grid;
+            grid-template-columns: 400px 1fr; /* List | Details */
+            height: 100vh;
+            overflow: hidden;
+        }
+        #desktop-list-panel {
+            background-color: var(--bg-light);
+            border-left: 1px solid var(--border-color);
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+        #desktop-detail-panel {
+            height: 100%;
+            overflow-y: auto;
+            padding: 1.5rem 2rem;
+        }
+        .desktop-list-header {
+            padding: 1rem;
+            flex-shrink: 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+        #desktop-list-content {
+            flex-grow: 1;
+            overflow-y: auto;
+        }
+        
+        /* --- MOBILE PWA LAYOUT (v53) --- */
+        #mobile-pwa-layout {
+            display: grid; /* Hidden on desktop */
+            grid-template-rows: auto 1fr auto;
+            height: 100vh;
+            height: -webkit-fill-available;
+        }
+        #mobile-header {
+            background-color: var(--bg-white);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            z-index: 10;
+            padding: 1rem 1.25rem;
+            padding-top: calc(1rem + env(safe-area-inset-top, 0));
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header-logos { display: flex; align-items: center; gap: 0.5rem; }
+        .header-logos img { max-height: 32px; width: auto; }
+        .logo-divider {
+            width: 1px;
+            height: 24px;
+            background-color: var(--border-color);
+        }
+        
+        #mobile-main-content {
+            overflow-y: auto;
+            position: relative;
+        }
+        
+        #bottom-nav {
+            display: grid;
+            grid-auto-flow: column;
+            background-color: var(--bg-white);
+            border-top: 1px solid var(--border-color);
+            box-shadow: 0 -1px 3px rgba(0,0,0,0.05);
+            z-index: 10;
+            padding-bottom: env(safe-area-inset-bottom, 0);
+        }
+        .nav-button {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 8px 4px;
+            color: var(--text-light);
+            font-size: 0.7rem;
+            font-weight: 500;
+            border-top: 3px solid transparent;
+            transition: all 0.2s ease;
+        }
+        .nav-button.active {
+            color: var(--primary-color);
+            border-top-color: var(--primary-color);
+            background-color: var(--primary-light);
+        }
+
+        /* --- Main Content Pages (App-like navigation) --- */
+        .app-page {
+            padding: 1rem;
+            display: none; /* Hidden by default */
+        }
+        .app-page.active {
+            display: block;
+        }
+        
+        /* --- Smart Paste Box --- */
+        #smart-paste-box {
+            width: 100%;
+            height: 150px;
+            padding: 0.75rem 1rem;
+            border: 2px dashed var(--border-color);
+            border-radius: 0.5rem;
+            background-color: var(--bg-light);
+            color: var(--text-dark);
+            resize: vertical;
+        }
+        #smart-paste-box:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            background-color: var(--bg-white);
+        }
+        
+        #file-drop-area {
+            margin-top: 0.5rem;
+            border: 2px dashed var(--border-color);
+            border-radius: 0.5rem;
+            padding: 1.5rem;
+            text-align: center;
+            color: var(--text-light);
+            background-color: var(--bg-light);
+            transition: all 0.2s;
+        }
+        #file-drop-area.dragover {
+            border-color: var(--primary-color);
+            background-color: var(--primary-light);
+        }
+        #preview-container {
+            display: flex;
+            gap: 0.75rem;
+            margin-top: 1rem;
+            flex-wrap: wrap;
+        }
+        .file-preview {
+            position: relative;
+            width: 80px;
+            height: 80px;
+            border-radius: 0.5rem;
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+        }
+        .file-preview img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .file-preview .file-icon {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: var(--bg-light);
+        }
+        .file-preview .remove-file {
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            background-color: rgba(0,0,0,0.6);
+            color: white;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+        
+        /* --- General Form Elements --- */
+        .form-label {
+            display: block;
+            font-weight: 500;
+            font-size: 0.9rem;
+            margin-bottom: 0.25rem;
+        }
+        .form-input {
+            width: 100%;
+            padding: 0.6rem 0.9rem;
+            border: 1px solid var(--border-color);
+            border-radius: 0.5rem;
+            background-color: var(--bg-white);
+            color: var(--text-dark);
+        }
+        .form-input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 2px var(--primary-light);
+        }
+        .btn {
+            padding: 0.6rem 1.25rem;
+            border: none;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+        .btn-primary {
+            background-color: var(--primary-color);
+            color: white;
+        }
+        .btn-primary:hover {
+            background-color: var(--primary-dark);
+        }
+        .btn-secondary {
+            background-color: var(--bg-light);
+            color: var(--text-dark);
+            border: 1px solid var(--border-color);
+        }
+        .btn-secondary:hover {
+            background-color: var(--border-color);
+        }
+        .btn-danger {
+            background-color: var(--danger);
+            color: white;
+        }
+        .btn-icon {
+            padding: 0.5rem;
+            border-radius: 0.5rem;
+            background: none;
+            border: none;
+            color: var(--text-light);
+        }
+        .btn-icon:hover {
+            background-color: var(--bg-light);
+            color: var(--text-dark);
+        }
+
+
+        /* --- Media Query for Desktop/Mobile Swap --- */
+        @media (min-width: 768px) {
+            #desktop-crm-layout {
+                display: grid;
+            }
+            #mobile-pwa-layout {
+                display: none;
+            }
+            .modal-container {
+                /* במצב דסקטופ, המודאלים יכולים להיות רחבים יותר */
+                max-width: 600px;
+            }
+        }
+        
     </style>
 </head>
-<body class="bg-gray-100 dark:bg-gray-900">
+<body class="antialiased">
 
-    <!-- Initial Page Loader -->
-    <div id="initial-loader" class="initial-loader">
-        <div class="loader-spinner"></div>
+    <!-- Loader
+    <div id="app-loader">
+        <div class="loader"></div>
+        <p class="mt-4 font-semibold text-lg" id="loader-text">טוען נתונים...</p>
     </div>
-
-    <!-- 
-      =====================================================
-      DESKTOP CRM LAYOUT (Hidden on mobile by app.mobile.css)
-      =====================================================
     -->
-    <div id="desktop-crm-layout">
-        <!-- 1. HEADER -->
-        <header id="app-header">
-            <div id="app-branding">
-                <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTcYS_xImwWt1fAYIK1UTXHtbCfmt5TOny5UQ&s" alt="לוגו זבולון עדירן" class="h-10 object-contain rounded">
-                <img src="https://i.postimg.cc/ryPT3r29/image.png" alt="לוגו ח.סבן" class="h-10 object-contain rounded">
-                <h1 id="app-title">Zebulun Delivery Portal</h1>
-            </div>
-            <div id="app-controls">
-                <span id="welcome-message-desktop" class="font-medium">טוען...</span>
-                <button id="theme-toggle-desktop" class="theme-toggle" title="שנה מצב תצוגה">
-                    <i data-feather="sun"></i>
-                </button>
-            </div>
+
+    <!-- Global Alert (Toast) Container -->
+    <div id="global-alert-container"></div>
+
+    <!-- Modal (Popup) Structure -->
+    <div id="modal-overlay" class="modal-overlay" onclick="closeModal()"></div>
+    <div id="main-modal" class="modal-container">
+        <header class="modal-header flex justify-between items-center">
+            <h3 id="modal-title" class="text-lg font-semibold">...</h3>
+            <button class="btn-icon" onclick="closeModal()">
+                <i data-feather="x"></i>
+            </button>
         </header>
-
-        <!-- 2. LEFT NAVIGATION -->
-        <nav id="main-nav">
-            <a href="#" class="nav-link active" data-view="new-order">
-                <i data-feather="plus-circle"></i>
-                <span>הזמנה חכמה (הדבקה)</span>
-            </a>
-            <a href="#" class="nav-link" data-view="projects">
-                <i data-feather="briefcase"></i>
-                <span>ניהול פרויקטים</span>
-            </a>
-            <a href="#" class="nav-link" data-view="orders">
-                <i data-feather="truck"></i>
-                <span>מעקב הזמנות</span>
-            </a>
-            <a href="#" class="nav-link" data-view="guide">
-                <i data-feather="play-circle"></i>
-                <span>הדרכה</span>
-            </a>
-        </nav>
-
-        <!-- 3. MAIN CONTENT (Center) -->
-        <main id="main-content-wrapper">
-            <!-- View: Smart Paste (Default) -->
-            <div id="new-order-view" class="app-view active">
-                <h2 class="section-header">הזמנה חכמה (העתק-הדבק)</h2>
-                <div id="smart-paste-box">
-                    <p class="form-label">שלום יוסי, הדבק כאן את תוכן ההזמנה שלך:</p>
-                    <textarea id="smart-paste-textarea" class="form-textarea" placeholder="הדבק כאן תוכן... לדוגמה:
-לקוח: 601524 - זבולון-עדירן/חדד
-איש קשר: עבד
-טלפון: 050-1234567
-פרויקט: וינגייט 27, כפר שמריהו
-...
-- 10 בלוק 20
-- 5 מלט
-- מצורף קובץ..."></textarea>
-                    
-                    <div class="flex gap-4 mt-4">
-                        <button id="parse-paste-btn-desktop" class="btn btn-secondary">
-                            <i data-feather="cpu"></i>
-                            <span>נתח והצג תצוגה מקדימה</span>
-                        </button>
-                         <input type="file" id="file-upload-input" multiple hidden>
-                         <button id="file-upload-btn-desktop" class="btn btn-secondary">
-                             <i data-feather="paperclip"></i>
-                             <span>צרף קבצים (0)</span>
-                         </button>
-                    </div>
-
-                    <div id="parsed-fields-preview-desktop" class="hidden mt-4">
-                        <h3 class="text-lg font-semibold col-span-2">תצוגה מקדימה</h3>
-                        <div class="parsed-fields-grid">
-                            <div class="form-group">
-                                <label class="form-label">מזהה לקוח:</label>
-                                <input type="text" id="parsed-client-id-desktop" class="form-input" placeholder="למשל: 601524">
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label">שם פרויקט:</label>
-                                <input type="text" id="parsed-project-name-desktop" class="form-input" placeholder="למשל: וינגייט 27">
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label">איש קשר:</label>
-                                <input type="text" id="parsed-contact-name-desktop" class="form-input" placeholder="למשל: יוסי / עבד">
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label">טלפון:</label>
-                                <input type="text" id="parsed-contact-phone-desktop" class="form-input" placeholder="למשל: 050-1234567">
-                            </div>
-                        </div>
-                    </div>
-                    <div id="attachments-preview-desktop" class="mt-2"></div>
-                    
-                    <button id="send-order-btn-desktop" class="btn btn-primary w-full mt-4">
-                        <i data-feather="send"></i>
-                        <span>שלח הזמנה</span>
-                    </button>
-                </div>
-            </div>
-            
-            <!-- View: Projects -->
-            <div id="projects-view" class="app-view">
-                <h2 class="section-header">ניהול פרויקטים (זבולון עדירן)</h2>
-                <div id="projects-grid-desktop" class="projects-grid">
-                    <!-- כרטיסי פרויקט יטענו לכאן ע"י JS -->
-                    <div class="project-card add-new" id="add-project-btn-desktop">
-                        <i data-feather="plus"></i>
-                        <span class="ml-2 font-semibold">הוסף פרויקט חדש</span>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- View: Orders -->
-            <div id="orders-view" class="app-view">
-                <h2 class="section-header">מעקב הזמנות</h2>
-                <div id="orders-list-desktop">
-                    <!-- רשימת הזמנות תטען לכאן -->
-                </div>
-            </div>
-
-            <!-- View: Guide -->
-            <div id="guide-view" class="app-view">
-                <h2 class="section-header">הדרכה וסרטונים</h2>
-                <!-- Placeholder for voice/video guide -->
-                <div class="p-4 bg-white rounded-lg border">
-                    <p>כאן יוצג סרטון הדרכה...</p>
-                </div>
-            </div>
-        </main>
-
-        <!-- 4. RIGHT DETAILS PANEL -->
-        <aside id="details-panel">
-            <h2>פרטים</h2>
-            <div id="details-content">
-                <p class="text-center p-8 text-sm text-gray-500">בחר פריט להצגת פרטים</p>
-            </div>
-        </aside>
-    </div>
-
-    <!-- 
-      =====================================================
-      MOBILE PWA LAYOUT (Hidden on desktop by app.desktop.css)
-      =====================================================
-    -->
-    <div id="mobile-pwa-layout">
-        <!-- 1. HEADER -->
-        <header id="app-header">
-            <div id="app-branding">
-                <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTcYS_xImwWt1fAYIK1UTXHtbCfmt5TOny5UQ&s" alt="לוגו זבולון עדירן" class="h-8 object-contain rounded">
-                <img src="https://i.postimg.cc/ryPT3r29/image.png" alt="לוגו ח.סבן" class="h-8 object-contain rounded">
-            </div>
-            <div id="app-controls">
-                <button id="theme-toggle-mobile" class="theme-toggle">
-                    <i data-feather="sun"></i>
-                </button>
-            </div>
-        </header>
-
-        <!-- 2. MAIN CONTENT -->
-        <main id="app-content">
-            <!-- View: Dashboard (Projects) -->
-            <div id="view-dashboard" class="app-view active">
-                <h2 id="welcome-message-mobile" class="section-header">טוען...</h2>
-                <div id="projects-grid-mobile" class="projects-grid">
-                    <!-- כרטיסי פרויקט יטענו לכאן ע"י JS -->
-                    <div class="project-card add-new" id="add-project-btn-mobile">
-                        <i data-feather="plus"></i>
-                        <span class="ml-2 font-semibold">הוסף פרויקט חדש</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- View: New Order (Smart Paste) -->
-            <div id="view-new-order" class="app-view">
-                <h2 class="section-header">הזמנה חדשה (הדבקה)</h2>
-                <div id="smart-paste-box-mobile">
-                    <textarea id="smart-paste-textarea-mobile" class="form-textarea" placeholder="הדבק כאן תוכן..."></textarea>
-                    
-                    <div class="flex gap-4 mt-4">
-                         <button id="file-upload-btn-mobile" class="btn btn-secondary flex-1">
-                             <i data-feather="paperclip"></i>
-                             <span>צרף (0)</span>
-                         </button>
-                        <button id="parse-paste-btn-mobile" class="btn btn-secondary flex-1">
-                            <i data-feather="cpu"></i>
-                            <span>נתח</span>
-                        </button>
-                    </div>
-
-                    <div id="parsed-fields-preview-mobile" class="hidden mt-4">
-                        <h3 class="text-lg font-semibold col-span-2">תצוגה מקדימה</h3>
-                        <div class="parsed-fields-grid">
-                            <div class="form-group">
-                                <label class="form-label">מזהה לקוח:</label>
-                                <input type="text" id="parsed-client-id-mobile" class="form-input" placeholder="למשל: 601524">
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label">שם פרויקט:</label>
-                                <input type="text" id="parsed-project-name-mobile" class="form-input" placeholder="למשל: וינגייט 27">
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label">איש קשר:</label>
-                                <input type="text" id="parsed-contact-name-mobile" class="form-input" placeholder="למשל: יוסי / עבד">
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label">טלפון:</label>
-                                <input type="text" id="parsed-contact-phone-mobile" class="form-input" placeholder="למשל: 050-1234567">
-                            </div>
-                        </div>
-                    </div>
-                    <div id="attachments-preview-mobile" class="mt-2"></div>
-                    
-                    <button id="send-order-btn-mobile" class="btn btn-primary w-full mt-4">
-                        <i data-feather="send"></i>
-                        <span>שלח הזמנה</span>
-                    </button>
-                </div>
-            </div>
-            
-            <!-- View: Order Status -->
-            <div id="view-status" class="app-view">
-                <h2 class="section-header">מעקב הזמנות</h2>
-                <div id="orders-list-mobile">
-                    <!-- רשימת הזמנות תטען לכאן -->
-                </div>
-            </div>
-
-            <!-- View: Guide -->
-            <div id="view-guide" class="app-view">
-                <h2 class="section-header">הדרכה</h2>
-                <div id="voice-guide-placeholder" class="p-4 bg-white rounded-lg border text-center">
-                    <i data-feather="play-circle" class="w-12 h-12 text-blue-500 mx-auto"></i>
-                    <p class="font-semibold mt-2">"היי יוסי, ברוך הבא..."</p>
-                    <button class="btn btn-secondary mt-4">צפה בסרטון הדגמה</button>
-                </div>
-            </div>
-        </main>
-
-        <!-- 3. BOTTOM NAVIGATION -->
-        <nav id="mobile-nav">
-            <button class="nav-button active" data-view="dashboard">
-                <i data-feather="briefcase"></i>
-                <span>פרויקטים</span>
-            </button>
-            <button class="nav-button" data-view="new-order">
-                <i data-feather="plus-circle"></i>
-                <span>הזמנה חדשה</span>
-            </button>
-            <button class="nav-button" data-view="status">
-                <i data-feather="truck"></i>
-                <span>מעקב</span>
-            </button>
-            <button class="nav-button" data-view="guide">
-                <i data-feather="help-circle"></i>
-                <span>הדרכה</span>
-            </button>
-        </nav>
-    </div>
-
-    <!-- 
-      =====================================================
-      MODALS & SHARED ELEMENTS
-      =====================================================
-    -->
-
-    <!-- Project Details/Edit Popup -->
-    <div id="project-popup" class="modal-overlay hidden">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2 id="project-popup-title">טוען...</h2>
-                <button id="project-popup-close-btn" class="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700">
-                    <i data-feather="x"></i>
-                </button>
-            </div>
-            <div id="project-popup-body">
-                <form id="project-details-form">
-                    <input type="hidden" id="project-popup-id">
-                    <div class="form-group">
-                        <label class="form-label">שם פרויקט</label>
-                        <input type="text" id="project-popup-name" class="form-input" required>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">כתובת אספקה (ברירת מחדל)</label>
-                        <input type="text" id="project-popup-address" class="form-input" required>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">איש קשר ראשי</label>
-                        <input type="text" id="project-popup-contact" class="form-input">
-                    </div>
-                    
-                    <div class="mt-6 flex flex-col sm:flex-row-reverse gap-3">
-                         <button type="submit" class="btn btn-primary">
-                             <i data-feather="save"></i>
-                             <span>שמור שינויים</span>
-                         </button>
-                         <button type="button" id="project-popup-new-order-btn" class="btn btn-secondary">
-                             <i data-feather="plus"></i>
-                             <span>הזמנה לפרויקט זה</span>
-                         </button>
-                    </div>
-                </form>
-            </div>
+        <div id="modal-body" class="modal-body">
+            <!-- Content Injected by JS -->
         </div>
+        <footer id="modal-footer" class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModal()">סגור</button>
+        </footer>
     </div>
-    
-    <!-- Toast Container (for notifications) -->
-    <div id="toast-container"></div>
-    
-    <!-- Ping Sound Element -->
-    <audio id="ping-sound" src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg" preload="auto"></audio>
-    <audio id="send-sound" src="https://actions.google.com/sounds/v1/device/notifications/notification_simple.ogg" preload="auto"></audio>
 
-    <!-- Firebase SDKs -->
-    <script type="module">
-        // --- Firebase Imports ---
-        import { initializeApp, getApp, getApps } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
-        import { 
-            getFirestore, 
-            collection, 
-            doc, 
-            onSnapshot, 
-            addDoc, 
-            setDoc, 
-            serverTimestamp, 
-            writeBatch,
-            query,
-            where
-        } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-        
-        // --- Pass SDKs to global script ---
-        window.firebaseSDK = {
-            initializeApp, getApp, getApps,
-            getAuth, signInAnonymously, onAuthStateChanged,
-            getFirestore, collection, doc, onSnapshot, addDoc, setDoc, serverTimestamp, writeBatch, query, where
-        };
-    </script>
-    
-    <!-- App Logic -->
-    <script type="module" src="app.logic.js"></script>
 
-    <!-- Feather Icons Init -->
-    <script>
-      feather.replace();
-    </script>
-</body>
-</html>
+    <!-- ====================================================== -->
+    <!-- ===      DESKTOP CRM LAYOUT (v53) - Hidden     === -->
+    <!-- ====================================================== -->
+    <div id="desktop-crm-layout">
+        <!-- Desktop Sidebar Navigation -->
+        <nav id="desktop-nav">
+            <div class="desktop-nav-header">
+                <div class="flex items-center gap-2">
+                    <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTcYS_xImwWt1fAYIK1UTXHtbCfmt5TOny5UQ&s" alt="Zebulun Logo" class="h-10">
+                    <img src="https://i.postimg.cc/ryPT3r29/image.png" alt="Saban Logo" class="h-10">
+                </div>
+                <p class="text-sm font-semibold mt-2">Zebulun Delivery Portal</p>
+            </div>
+            
+            <a href="#" class="desktop-nav-link active" onclick="navigate('dashboard')">
+                <i data-feather="home"></i> <span>דשבורד</span>
+            </a>
+            <a href="#" class="desktop-nav-link" onclick="navigate('new-order')">
+                <i data-feather="plus-circle"></i> <span>הזמנה חדשה (Smart Paste)</span>
+            </a>
+            <a href="#" class="desktop-nav-link" onclick="navigate('projects')">
+                <i data-feather="briefcase"></i> <span>ניהול פרויקטים</span>
+            </a>
+            <a href="#" class="desktop-nav-link" onclick="navigate('orders-history')">
+                <i data-feather="archive"></i> <span>היסטוריית הזמנות</span>
+            </a>
+            <a href="#" class="desktop-nav-link" onclick="navigate('live-map')">
+                <i data-feather="map"></i> <span>מפה (בקרוב)</span>
+            </a>
+            
+            <div class="mt-auto"> <!-- Footer -->
+                <button id="desktop-theme-toggle" class="btn-icon w-full justify-start gap-2 px-3 py-2">
+                    <i data-feather="moon"></i> <span>מצב לילה</span>
+                </button>
+                <div class="text-sm text-gray-400 p-2 mt-2">
+                    <p id="desktop-auth-status">מתחבר...</p>
+                    <p>Powered by H.Saban</p>
+                </div>
+            </div>
+        </nav>
 
+        <!-- Desktop Main Area (List + Details) -->
+        <main id="desktop-main-area">
+            <!-- List Panel (for Orders, Projects, etc.) -->
+            <div id="desktop-list-panel">
+                <div class="desktop-list-header">
+                    <input type="text" id="desktop-search-input" placeholder="חפש הזמנות או פרויקטים..." class="form-input">
+                </div>
+                <div id="desktop-list-content" class="no-scrollbar">
+                    <!-- Content Injected by JS based on navigation -->
+                    <p class="p-4 text-center">טוען תוכן...</p>
+                </div>
+            </div>
+            
+            <!-- Detail Panel (Editor, Viewer, etc.) -->
+            <div id="desktop-detail-panel" class="no-scrollbar">
+                <!-- Content Injected by JS based on selection -->
+                <div id="desktop-detail-content">
+                    <h2 class="text-2xl font-bold mb-4">ברוך הבא לפורטל ה-CRM</h2>
+                    <p>בחר פריט מהרשימה בצד ימין כדי לראות פרטים, או לחץ על "הזמנה חדשה" כדי להתחיל.</p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+
+    <!-- ====================================================== -->
+    <!-- ===       MOBILE PWA LAYOUT (v53) - Default      === -->
+    <!-- ====================================================== -->
+    <div id="mobile-pwa-layout">
+        <!-- Mobile Header -->
+        <header id="mobile-header">
+            <div class="header-logos">
+                <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTcYS_xImwWt1fAYIK1UTXHtbCfmt5TOny5UQ&s" alt="Zebulun Logo">
+                <div class="logo-divider"></div>
+                <img src="https://i.postimg.cc/ryPT3r29/image.png" alt="Saban Logo">
+            </div>
+            <div class="flex items-center gap-2">
+                <p id="auth-status" class="text-xs text-gray-500 hidden">מתחבר...</p>
+                <button id="mobile-theme-toggle" class="btn-icon">
