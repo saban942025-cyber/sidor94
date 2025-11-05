@@ -1,0 +1,369 @@
+/*
+ * Zebulun CRM Portal - Mobile Styles (app.mobile.css)
+ * Hides desktop layout and displays a PWA interface on screens < 768px.
+ * Uses CSS variables for light/dark theme toggling.
+ */
+
+/* --- Root Variables (Light Theme Default) --- */
+:root {
+    --primary-color: #3b82f6; /* blue-500 */
+    --primary-dark: #2563eb; /* blue-600 */
+    --primary-light: #eff6ff; /* blue-50 */
+    --bg-main: #f3f4f6; /* gray-100 */
+    --bg-content: #ffffff; /* white */
+    --border-color: #e5e7eb; /* gray-200 */
+    --text-dark: #1f2937; /* gray-800 */
+    --text-light: #6b7280; /* gray-500 */
+    --danger: #ef4444; /* red-500 */
+    --success: #10b981; /* emerald-500 */
+
+    /* Glassmorphism */
+    --bg-glass: rgba(255, 255, 255, 0.7);
+    --border-glass: rgba(255, 255, 255, 0.5);
+    --shadow-glass: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+html.dark {
+    --primary-color: #60a5fa; /* blue-400 */
+    --primary-dark: #3b82f6; /* blue-500 */
+    --primary-light: #1e3a8a; /* blue-900 */
+    --bg-main: #0f172a; /* slate-900 (Main Background) */
+    --bg-content: #1e293b; /* slate-800 (Content Background) */
+    --border-color: #334155; /* slate-700 */
+    --text-dark: #f1f5f9; /* slate-100 */
+    --text-light: #94a3b8; /* slate-400 */
+    --danger: #f87171; /* red-400 */
+    --success: #34d399; /* emerald-400 */
+
+    /* Glassmorphism */
+    --bg-glass: rgba(30, 41, 59, 0.75);
+    --border-glass: rgba(255, 255, 255, 0.1);
+    --shadow-glass: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
+}
+
+/* --- Base Layout --- */
+body {
+    font-family: 'Rubik', sans-serif;
+    background-color: var(--bg-main);
+    color: var(--text-dark);
+    overflow: hidden; /* No scroll on body */
+}
+
+/* Hide desktop layout on mobile */
+#desktop-crm-layout {
+    display: none;
+}
+
+/* --- Mobile PWA Layout --- */
+#mobile-pwa-layout {
+    display: grid;
+    grid-template-rows: auto 1fr auto; /* Header | Content | Nav */
+    height: 100vh;
+    height: -webkit-fill-available; /* iOS Safari fix */
+}
+
+/* Header */
+#mobile-header {
+    background-color: var(--bg-content);
+    backdrop-filter: blur(10px);
+    background-color: var(--bg-glass);
+    border-bottom: 1px solid var(--border-glass);
+    box-shadow: var(--shadow-glass);
+    z-index: 10;
+    padding: 1rem 1.25rem;
+    padding-top: calc(1rem + env(safe-area-inset-top, 0));
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.header-logos { display: flex; align-items: center; gap: 0.5rem; }
+.header-logos img { max-height: 32px; width: auto; object-fit: contain; }
+.logo-divider {
+    width: 1px;
+    height: 24px;
+    background-color: var(--border-color);
+}
+.header-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* Main Content Area */
+#mobile-main-content {
+    overflow-y: auto;
+    position: relative;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* App-like Pages */
+.app-page {
+    padding: 1rem;
+    display: none; /* Hidden by default */
+}
+.app-page.active {
+    display: block;
+}
+
+/* Bottom Navigation */
+#bottom-nav {
+    display: grid;
+    grid-auto-flow: column;
+    background-color: var(--bg-content);
+    border-top: 1px solid var(--border-color);
+    box-shadow: 0 -1px 3px rgba(0,0,0,0.05);
+    z-index: 10;
+    padding-bottom: env(safe-area-inset-bottom, 0);
+}
+.nav-button {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 4px;
+    color: var(--text-light);
+    font-size: 0.7rem;
+    font-weight: 500;
+    border-top: 3px solid transparent;
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+.nav-button.active {
+    color: var(--primary-color);
+    border-top-color: var(--primary-color);
+    background-color: var(--primary-light);
+}
+
+/* --- Project Buttons --- */
+.project-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 1rem;
+}
+.project-card, .add-project-card {
+    padding: 1rem;
+    border-radius: 0.75rem;
+    background-color: var(--bg-content);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    border: 1px solid var(--border-color);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.project-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+.project-card h4 {
+    font-weight: 600;
+    color: var(--text-dark);
+}
+.project-card p {
+    font-size: 0.85rem;
+    color: var(--text-light);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.add-project-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--primary-color);
+    border: 2px dashed var(--primary-color);
+    background-color: var(--primary-light);
+}
+.add-project-card:hover {
+    background-color: var(--bg-content);
+}
+
+/* --- Smart Paste Box --- */
+#smart-paste-box {
+    width: 100%;
+    height: 150px;
+    padding: 0.75rem 1rem;
+    border: 2px dashed var(--border-color);
+    border-radius: 0.5rem;
+    background-color: var(--bg-content);
+    color: var(--text-dark);
+    resize: vertical;
+}
+#smart-paste-box:focus {
+    outline: none;
+    border-color: var(--primary-color);
+}
+
+#file-drop-area {
+    margin-top: 0.5rem;
+    border: 2px dashed var(--border-color);
+    border-radius: 0.5rem;
+    padding: 1.5rem;
+    text-align: center;
+    color: var(--text-light);
+    background-color: var(--bg-content);
+    transition: all 0.2s;
+    cursor: pointer;
+}
+#file-drop-area.dragover {
+    border-color: var(--primary-color);
+    background-color: var(--primary-light);
+}
+#preview-container {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 1rem;
+    flex-wrap: wrap;
+}
+.file-preview {
+    position: relative;
+    width: 80px;
+    height: 80px;
+    border-radius: 0.5rem;
+    overflow: hidden;
+    border: 1px solid var(--border-color);
+}
+.file-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.file-preview .file-icon {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--bg-light);
+    padding: 4px;
+}
+.file-preview .file-icon span {
+    font-size: 0.7rem;
+    color: var(--text-light);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    width: 100%;
+    text-align: center;
+}
+.file-preview .remove-file {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    background-color: rgba(0,0,0,0.6);
+    color: white;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    line-height: 1;
+}
+
+/* --- General Form Elements --- */
+.form-label {
+    display: block;
+    font-weight: 500;
+    font-size: 0.9rem;
+    margin-bottom: 0.25rem;
+}
+.form-input {
+    width: 100%;
+    padding: 0.6rem 0.9rem;
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    background-color: var(--bg-content);
+    color: var(--text-dark);
+}
+.form-input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px var(--primary-light);
+}
+.btn {
+    padding: 0.6rem 1.25rem;
+    border: none;
+    border-radius: 0.5rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+.btn-primary {
+    background-color: var(--primary-color);
+    color: white;
+}
+.btn-primary:hover {
+    background-color: var(--primary-dark);
+}
+.btn-secondary {
+    background-color: var(--bg-main);
+    color: var(--text-dark);
+    border: 1px solid var(--border-color);
+}
+.btn-secondary:hover {
+    background-color: var(--border-color);
+}
+.btn-danger {
+    background-color: var(--danger);
+    color: white;
+}
+.btn-icon {
+    padding: 0.5rem;
+    border-radius: 0.5rem;
+    background: none;
+    border: none;
+    color: var(--text-light);
+    cursor: pointer;
+}
+.btn-icon:hover {
+    background-color: var(--bg-main);
+    color: var(--text-dark);
+}
+
+/* --- Glassmorphism Elements --- */
+.glass-card {
+    background: var(--bg-glass);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid var(--border-glass);
+    border-radius: 0.75rem;
+    box-shadow: var(--shadow-glass);
+    padding: 1rem;
+}
+
+/* --- Order History List --- */
+.order-history-card {
+    background: var(--bg-content);
+    border-radius: 0.5rem;
+    border: 1px solid var(--border-color);
+    margin-bottom: 0.75rem;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+.order-history-header {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.order-history-header h5 {
+    font-weight: 600;
+}
+.status-badge {
+    padding: 0.2rem 0.6rem;
+    border-radius: 99px;
+    font-weight: 600;
+    font-size: 0.75rem;
+    color: white;
+}
+.status-pending { background-color: var(--text-light); }
+.status-approved { background-color: var(--success); }
+.status-shipped { background-color: var(--primary-color); }
+.status-delivered { background-color: #10b981; } /* emerald-500 */
+.status-cancelled { background-color: var(--danger); }
