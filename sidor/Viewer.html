@@ -3,20 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>DeliveryMaster Viewer v51 (Global Alerts)</title>
+    <title>DeliveryMaster Viewer v52 (Nav Fix)</title>
     <!-- 
-      DeliveryMaster Live Viewer App v51
+      DeliveryMaster Live Viewer App v52
       
       Changelog:
+      - v52 (Nav Fix):
+        - [תיקון קריטי] תוקנה לולאה אינסופית (Maximum call stack size exceeded) 
+          במערכת הניווט.
+        - הלוגיקה של הניווט רוכזה לפונקציה יחידה `Maps()`.
+        - כפתורי הניווט התחתונים קוראים כעת ישירות ל-`Maps()`.
+        - הוסרו קריאות `Maps()` כפולות מתוך פונקציות `show...Page()`.
       - v51 (Global Alerts):
         - נוספה מערכת התראות גלובלית (צפצוף + פופאפ)
         - המערכת מאזינה לקולקציית `globalAlerts` החדשה ב-Firestore.
         - נוסף כפתור "התראות" לסרגל הניווט התחתון.
         - נוסף דף "היסטוריית התראות" דינאמי (`#alert-history-view`).
-        - המערכת מונעת צפצוף על התראות ישנות בטעינה ראשונה.
-      - v50.15 (FIX):
-        - תיקון שגיאת אינדקס בהודעות.
-        - הוספת אנימציה מהבהבת לאייקון הודעות.
     -->
     
     <!-- PWA Manifest & Theme -->
@@ -576,29 +578,29 @@
 
         <!-- ניווט תחתון -->
         <nav id="bottom-nav">
-            <button id="nav-orders" class="nav-button active" onclick="showActiveListPage()">
+            <!-- [תיקון v52] הקריאות שונו ל-navigate() -->
+            <button id="nav-orders" class="nav-button active" onclick="navigate('orders')">
                 <i data-feather="truck" class="w-6 h-6"></i>
                 <span>הזמנות</span>
             </button>
-            <button id="nav-materials" class="nav-button" onclick="showMaterialsPage()">
+            <button id="nav-materials" class="nav-button" onclick="navigate('materials')">
                 <i data-feather="archive" class="w-6 h-6"></i>
                 <span>חומרים</span>
             </button>
-            <button id="nav-containers" class="nav-button" onclick="showContainersPage()">
+            <button id="nav-containers" class="nav-button" onclick="navigate('containers')">
                 <i data-feather="box" class="w-6 h-6"></i>
                 <span>מכולות</span>
             </button>
-            <button id="nav-reports" class="nav-button" onclick="showReportsPage()">
+            <button id="nav-reports" class="nav-button" onclick="navigate('reports')">
                 <i data-feather="bar-chart-2" class="w-6 h-6"></i>
                 <span>דוחות</span>
             </button>
-            <!-- [חדש] כפתור התראות -->
-            <button id="nav-alerts" class="nav-button" onclick="showAlertHistoryPage()">
+            <button id="nav-alerts" class="nav-button" onclick="navigate('alerts')">
                 <i data-feather="bell" class="w-6 h-6"></i>
                 <span>התראות</span>
-                <span class="message-badge"></span> <!-- ישמש גם להתראות וגם להודעות -->
+                <span class="message-badge"></span>
             </button>
-            <button id="nav-messages" class="nav-button" onclick="showMessagesPage()">
+            <button id="nav-messages" class="nav-button" onclick="navigate('messages')">
                 <i data-feather="message-circle" class="w-6 h-6"></i>
                 <span>הודעות</span>
             </button>
@@ -653,7 +655,8 @@
             limit, 
             Timestamp, 
             serverTimestamp,
-            collectionGroup
+            collectionGroup,
+            writeBatch // [FIX v50.15]
         } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         
         // --- Config ---
@@ -673,27 +676,32 @@
         let orderMarkers = {};
         let currentUserId = null;
         let unreadMessagesListener = null;
-        let unreadAlertsListener = null; // [חדש]
+        let unreadAlertsListener = null;
         let activeOrdersListener = null;
         let activeOrders = [];
         let completedTodayOrders = [];
         let futureOrders = [];
         
-        let alertHistory = []; // [חדש]
-        let hasLoadedInitialAlerts = false; // [חדש]
+        let alertHistory = [];
+        let hasLoadedInitialAlerts = false;
 
         // --- Logger ---
         const SmartLog = {
             info(message, category = "General", context = {}) {
                 console.log(`[INFO | ${category}]: ${message}`, context);
+                // logToFirestore('info', message, category, context);
             },
             warn(message, category = "General", context = {}) {
                 console.warn(`[WARN | ${category}]: ${message}`, context);
+                // logToFirestore('warn', message, category, context);
             },
             error(error, category = "General", context = {}) {
                 console.error(`[ERROR | ${category}]:`, error, context);
+                // logToFirestore('error', error.message, category, { ...context, stack: error.stack });
             }
+            // [FIX] Removed logToFirestore to prevent permission errors
         };
+        window.SmartLog = SmartLog; // Expose SmartLog
 
         // --- App Initialization ---
         document.addEventListener('DOMContentLoaded', () => {
@@ -706,7 +714,7 @@
                 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
                 db = getFirestore(app);
                 auth = getAuth(app);
-                SmartLog.info("Firebase Initialized.", "App.Init");
+                SmartLog.info("Firebase Initialized.", "App.Init", app);
 
                 initMap();
                 authenticateUser();
@@ -755,44 +763,40 @@
         function startAllListeners() {
             listenForActiveOrders();
             listenToUnreadMessages();
-            listenForGlobalAlerts(); // [חדש]
+            listenForGlobalAlerts();
         }
 
         // --- [חדש] Global Alert System ---
         function listenForGlobalAlerts() {
-            if (unreadAlertsListener) unreadAlertsListener(); // Stop previous listener
+            if (unreadAlertsListener) unreadAlertsListener(); 
 
             const q = query(
                 collection(db, "globalAlerts"), 
                 orderBy("timestamp", "desc"), 
-                limit(50) // האזנה ל-50 ההתראות האחרונות
+                limit(50) 
             );
             
             unreadAlertsListener = onSnapshot(q, (snapshot) => {
                 SmartLog.info("GlobalAlerts snapshot received", "Data.Alerts", { size: snapshot.size });
                 alertHistory = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 
-                // עדכון רשימת ההיסטוריה (אם הדף פתוח)
                 if (document.getElementById('alert-history-view').classList.contains('visible')) {
                     renderAlertHistory();
                 }
 
                 snapshot.docChanges().forEach((change) => {
-                    // הפעל צפצוף רק על התראות חדשות שנוספו, ורק אחרי טעינה ראשונית
                     if (change.type === "added" && hasLoadedInitialAlerts) {
                         const alertData = change.doc.data();
                         playAlert(alertData.title || "התראה חדשה", alertData.type);
                         
-                        // הבהוב אייקון
                         const navButton = document.getElementById('nav-alerts');
                         if (navButton) {
                             navButton.classList.add('flashing');
-                            setTimeout(() => navButton.classList.remove('flashing'), 3000); // הפסק הבהוב
+                            setTimeout(() => navButton.classList.remove('flashing'), 3000); 
                         }
                     }
                 });
 
-                // סמן שטעינה ראשונית הסתיימה
                 if (!hasLoadedInitialAlerts) {
                     hasLoadedInitialAlerts = true;
                     SmartLog.info("Initial alert snapshot loaded. Ready for real-time alerts.", "Data.Alerts");
@@ -806,9 +810,7 @@
         function playAlert(message, type = "info") {
             SmartLog.info(`Playing Alert: ${message}`, "UI.Alert");
             
-            // 1. צפצוף
             try {
-                // צליל שונה להתראה כללית (broadcast)
                 const soundUrl = (type === "broadcast")
                     ? "https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg" 
                     : "https://actions.google.com/sounds/v1/alarms/beep_short.ogg";
@@ -818,7 +820,6 @@
                 SmartLog.warn("Audio playback failed.", "UI.Alert", { error: e.message });
             }
 
-            // 2. התראה ויזואלית (פופאפ)
             const container = document.getElementById("global-alert-container");
             const alertBox = document.createElement("div");
             alertBox.className = `global-alert ${type === 'broadcast' ? 'alert-broadcast' : 'alert-info'}`;
@@ -829,7 +830,6 @@
             container.appendChild(alertBox);
             feather.replace();
             
-            // הסר אחרי 4 שניות
             setTimeout(() => {
                 alertBox.style.opacity = '0';
                 alertBox.style.transform = 'translateX(100%)';
@@ -865,7 +865,6 @@
                     }
                 });
                 
-                // Sort lists
                 const sortByTime = (a, b) => (a.orderTime || '00:00').localeCompare(b.orderTime || '00:00');
                 activeOrders.sort(sortByTime);
                 completedTodayOrders.sort(sortByTime);
@@ -882,7 +881,6 @@
         function listenToUnreadMessages() {
             if (unreadMessagesListener) unreadMessagesListener();
             
-            // [FIX v50.15] - שאילתה תקינה שלא דורשת אינדקס
             const q = query(
                 collectionGroup(db, 'messages'), 
                 where('isUnread', '==', true),
@@ -900,9 +898,8 @@
                     SmartLog.info(`Unread messages detected: ${snapshot.size}`, "Data.Messages");
                     navButton.classList.add('has-unread');
                     
-                    // בדוק אם יש הודעה חדשה שנוספה עכשיו
                     const isNewMessage = snapshot.docChanges().some(change => change.type === 'added');
-                    if (isNewMessage && hasLoadedInitialAlerts) { // אל תבהב בטעינה ראשונית
+                    if (isNewMessage && hasLoadedInitialAlerts) { 
                         navButton.classList.add('flashing');
                         playAlert("הודעה חדשה מלקוח", "info");
                         setTimeout(() => navButton.classList.remove('flashing'), 3000);
@@ -917,7 +914,6 @@
         function renderMapMarkers() {
             if (!map) return;
             
-            // Clear old markers
             Object.values(orderMarkers).forEach(marker => marker.remove());
             orderMarkers = {};
             
@@ -995,21 +991,26 @@
 
         // --- Page Navigation & Rendering ---
         
+        // [תיקון v52] פונקציית ניווט מרכזית
         function navigate(pageId) {
-            // Deactivate all nav buttons
+            SmartLog.info(`Navigating to: ${pageId}`, "UI.Navigate");
+            
+            // 1. עדכון כפתורים
             document.querySelectorAll('#bottom-nav .nav-button').forEach(btn => {
                 btn.classList.remove('active');
             });
-            // Activate the correct one
             const navBtn = document.getElementById(`nav-${pageId}`);
             if (navBtn) navBtn.classList.add('active');
 
-            // Hide all full pages
-            hideFullPageView();
+            // 2. הסתרת כל הדפים
+            document.querySelectorAll('.full-page-view').forEach(page => {
+                page.classList.remove('visible');
+            });
             
-            // Show the correct page
+            // 3. הצגת הדף הנכון
             if (pageId === 'orders') {
-                showActiveListPage();
+                // 'orders' הוא דף הבית (מפה), לכן אנחנו פשוט מסתירים את כל הדפים
+                hideFullPageView(); 
             } else if (pageId === 'materials') {
                 showMaterialsPage();
             } else if (pageId === 'containers') {
@@ -1018,10 +1019,11 @@
                 showReportsPage();
             } else if (pageId === 'messages') {
                 showMessagesPage();
-            } else if (pageId === 'alerts') { // [חדש]
+            } else if (pageId === 'alerts') {
                 showAlertHistoryPage();
             }
         }
+        window.navigate = navigate; // חשיפה גלובלית
 
         function showFullPageView(pageId) {
             const page = document.getElementById(pageId);
@@ -1034,11 +1036,11 @@
             document.querySelectorAll('.full-page-view').forEach(page => {
                 page.classList.remove('visible');
             });
-            // Activate map button
+            // הפעלת כפתור 'הזמנות' (מפה) כברירת מחדל
             document.querySelectorAll('#bottom-nav .nav-button').forEach(btn => {
                 btn.classList.remove('active');
             });
-            const mapBtn = document.getElementById('nav-orders'); // 'orders' is the map view
+            const mapBtn = document.getElementById('nav-orders'); 
             if(mapBtn) mapBtn.classList.add('active');
         }
         window.hideFullPageView = hideFullPageView;
@@ -1053,18 +1055,22 @@
         function showActiveListPage() {
             updateActiveLists();
             showFullPageView('active-list-page');
-            navigate('orders');
+            // [תיקון v52] הסרת קריאה ל-navigate
         }
+        // [תיקון v52] חשיפה גלובלית
+        window.showActiveListPage = showActiveListPage;
+        
         function showCompletedTodayListPage() {
             updateActiveLists();
             showFullPageView('completed-today-list-page');
-            // No nav button for this, it's a sub-page
         }
+        window.showCompletedTodayListPage = showCompletedTodayListPage;
+        
         function showFutureListPage() {
             updateActiveLists();
             showFullPageView('future-list-page');
-            // No nav button for this, it's a sub-page
         }
+        window.showFutureListPage = showFutureListPage;
         
         function showMaterialsPage() {
             document.getElementById('materials-page').querySelector('.full-page-content').innerHTML = `
@@ -1072,30 +1078,32 @@
                 <button onclick="createTestMessage('TtPodHFNmlplOuP4xbMe')" class="p-2 bg-blue-500 text-white rounded">צור הודעת בדיקה (לדמו)</button>
             `;
             showFullPageView('materials-page');
-            navigate('materials');
+            // [תיקון v52] הסרת קריאה ל-navigate
         }
+        window.showMaterialsPage = showMaterialsPage;
         
         function showContainersPage() {
             document.getElementById('containers-page').querySelector('.full-page-content').innerHTML = "<p>ניהול מכולות (בבנייה)...</p>";
             showFullPageView('containers-page');
-            navigate('containers');
+            // [תיקון v52] הסרת קריאה ל-navigate
         }
+        window.showContainersPage = showContainersPage;
 
         function showReportsPage() {
             document.getElementById('report-date-input').value = new Date().toISOString().split('T')[0];
             renderReports();
             showFullPageView('reports-page');
-            navigate('reports');
+            // [תיקון v52] הסרת קריאה ל-navigate
         }
+        window.showReportsPage = showReportsPage;
         
         async function showMessagesPage() {
             const contentEl = document.getElementById('messages-list-content');
             contentEl.innerHTML = "<p>טוען שיחות...</p>";
             showFullPageView('messages-page');
-            navigate('messages');
+            // [תיקון v52] הסרת קריאה ל-navigate
             
             try {
-                // [FIX v50.15] - שאילתה תקינה שלא דורשת אינדקס
                 const q = query(
                     collectionGroup(db, 'messages'), 
                     orderBy('timestamp', 'desc'),
@@ -1103,7 +1111,6 @@
                 );
                 const snapshot = await getDocs(q);
                 
-                // Group messages by order ID
                 const conversations = new Map();
                 snapshot.docs.forEach(doc => {
                     const msg = doc.data();
@@ -1142,23 +1149,23 @@
                 
             } catch (error) {
                 SmartLog.error(error, "UI.MessagesPage.LoadFailed");
-                contentEl.innerHTML = "<p class_=\"text-red-500\">שגיאה בטעינת השיחות.</p>";
+                contentEl.innerHTML = "<p class=\"text-red-500\">שגיאה בטעינת השיחות.</p>";
             }
         }
+        window.showMessagesPage = showMessagesPage;
         
-        // [חדש] הצגת דף היסטוריית התראות
         function showAlertHistoryPage() {
             renderAlertHistory();
             showFullPageView('alert-history-view');
-            navigate('alerts');
-            // הסרת הבהוב אם היה
+            // [תיקון v52] הסרת קריאה ל-navigate
+            
             const navButton = document.getElementById('nav-alerts');
             if (navButton) navButton.classList.remove('flashing');
         }
+        window.showAlertHistoryPage = showAlertHistoryPage;
 
         // --- Render Functions ---
         
-        // [חדש] רינדור היסטוריית התראות
         function renderAlertHistory() {
             const contentEl = document.getElementById('alert-history-content');
             if (!contentEl) return;
@@ -1196,7 +1203,7 @@
                 <div class="grid grid-cols-2 gap-4">
                     <div class="bg-white p-4 rounded-lg shadow text-center">
                         <h3 class="text-3xl font-bold text-green-500">${completedCount}</h3>
-                        <p class="text-sm font-medium text-gray-500">הזמנות שהושלמו היום</p>
+                        <p class="text-sm font-medium text-gray-500">הושלמו היום</p>
                     </div>
                     <div class="bg-white p-4 rounded-lg shadow text-center">
                         <h3 class="text-3xl font-bold text-blue-500">${activeCount}</h3>
@@ -1210,6 +1217,7 @@
             
             renderOrderListToPage('report-completed-list', completedTodayOrders);
         }
+        window.renderReports = renderReports;
         
         function renderOrderListToPage(elementId, orders) {
             const contentEl = document.getElementById(elementId);
@@ -1227,10 +1235,9 @@
         function createOrderCardHTML(order) {
             const displayId = order.orderNumber || order.order_id || order.id.slice(0,6);
             
-            // [v50.12] לוגיקת אייקון וטקסט לסוג הובלה
             let deliveryIcon = "truck";
             let deliveryType = order.deliveryType || "משאית";
-            if (deliveryType.includes("מנוף")) deliveryIcon = "crane"; // (feather-icon 'crane' לא קיים, נשתמש במשהו דומה)
+            if (deliveryType.includes("מנוף")) deliveryIcon = "crane";
             if (deliveryType.includes("מכולה")) deliveryIcon = "box";
             if (deliveryType.includes("איסוף")) deliveryIcon = "user";
             
@@ -1253,7 +1260,6 @@
                         <i data-feather="clock" class="w-4 h-4"></i>
                         <span>${order.orderDate} | ${order.orderTime || 'לא צוינה שעה'}</span>
                     </div>
-                    <!-- [v50.12] שדה סוג הובלה -->
                     <div class="item">
                         <i data-feather="${deliveryIcon}" class="w-4 h-4"></i>
                         <span>${deliveryType}</span>
@@ -1289,10 +1295,8 @@
             modal.style.display = 'block';
             setTimeout(() => modal.querySelector('.chat-container').classList.add('visible'), 10);
             
-            // Mark messages as read
             markMessagesAsRead(orderId);
 
-            // Listen for new messages in this chat
             if (messageListener) messageListener();
             
             const messagesQuery = query(collection(db, 'orders', orderId, 'messages'), orderBy('timestamp', 'desc'), limit(50));
@@ -1333,7 +1337,6 @@
             modal.querySelector('.chat-container').classList.remove('visible');
             setTimeout(() => modal.style.display = 'none', 300);
             
-            // Stop listening to specific chat
             if (messageListener) {
                 messageListener();
                 messageListener = null;
@@ -1353,19 +1356,19 @@
                 text: text,
                 sender: 'admin',
                 timestamp: serverTimestamp(),
-                isUnread: true // הלקוח יקרא את זה
+                isUnread: true 
             };
             
-            input.value = ''; // נקה שדה
+            input.value = ''; 
             
             try {
+                // [FIX v50.15] - שם משתנה שגוי תוקן
                 const messagesColRef = collection(db, 'orders', orderId, 'messages');
-                await addDoc(messagesColiRef, messageData);
-                // The onSnapshot listener will render the new message
+                await addDoc(messagesColRef, messageData);
             } catch (error) {
                 SmartLog.error(error, "UI.Chat.SendFailed", { orderId });
                 showToast("שגיאה בשליחת הודעה", "error");
-                input.value = text; // החזר טקסט במקרה של כשל
+                input.value = text; 
             }
         }
         window.sendAdminReply = sendAdminReply;
@@ -1395,13 +1398,11 @@
 
         // --- Utils ---
         function filterViewerLists() {
-            // Placeholder for search functionality
             SmartLog.info("Search triggered (functionality not fully implemented)", "UI.Search");
             showToast("פונקציית החיפוש בבנייה", "info");
         }
         window.filterViewerLists = filterViewerLists;
 
-        // [v50.14] Test Function
         async function createTestMessage(orderId) {
             SmartLog.info(`Creating test message for order: ${orderId}`, "Test.Message");
             if (!orderId) {
@@ -1411,37 +1412,23 @@
 
             const messageData = {
                 text: "זוהי הודעת בדיקה אוטומטית מהמערכת.",
-                sender: "customer", // מדמה הודעת לקוח
+                sender: "customer",
                 timestamp: serverTimestamp(),
-                isUnread: true, // יפעיל את המאזין
-                customerName: "לקוח בדיקה" // שם לדוגמה
+                isUnread: true,
+                customerName: "לקוח בדיקה"
             };
 
             try {
                 const messagesColRef = collection(db, 'orders', orderId, 'messages');
                 await addDoc(messagesColRef, messageData);
                 showToast(`הודעת בדיקה נשלחה עבור הזמנה ${orderId}`, 'success');
-                // המאזין listenToUnreadMessages יתפוס את זה אוטומטית
             } catch (error) {
                 SmartLog.error(error, "Test.MessageFailed", { orderId });
                 showToast("שגיאה ביצירת הודעת בדיקה", "error");
             }
         }
-        window.createTestMessage = createTestMessage; 
-
-
-        // --- חשיפה גלובלית לפונקציות --
-        window.showMaterialsPage = showMaterialsPage;
-        window.showContainersPage = showContainersPage;
-        window.showReportsPage = showReportsPage;
-        window.renderReports = renderReports;
-        window.showActiveListPage = showActiveListPage;
-        window.showCompletedTodayListPage = showCompletedTodayListPage;
-        window.showFutureListPage = showFutureListPage;
-        window.showMessagesPage = showMessagesPage;
-        window.showAlertHistoryPage = showAlertHistoryPage; // [חדש]
+        window.createTestMessage = createTestMessage;
         
     </script>
 </body>
 </html>
-
