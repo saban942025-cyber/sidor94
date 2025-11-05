@@ -3,23 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>✍️ מרכז הודעות (v5.7 - ייצוב סופי)</title>
     <!-- 
-      DeliveryMaster Admin - מרכז הודעות v5.7 (ייצוב סופי)
-      
-      Changelog:
-      - [FIX v5.7] Auth Logic Fix:
-        - תיקון כשל לוגי ב-signInUser שבוצעה קריאה לא תקינה ל-onAuthStateChanged.
-        - הלוגיקה כעת מבטיחה שה-listener המקורי יטפל באימות כראוי.
-      - [FIX v5.6] Auth/DOM Race Condition:
-        - תיקון כשל לוגי שבו מאזיני הנתונים לא נקראו.
-      - [FIX v5.6] Index Bypass:
-        - הסרת orderBy("lastMessageTimestamp") מהשאילתה ל-Firestore.
-        - הוספת מיון בצד הלקוח (JavaScript) כדי למנוע כשל אינדקס.
+      v5.7 (Auth/DOM Race Condition Fix 3)
+      - תיקון הפונקציה signInUser כדי להבטיח שה-auth נורה במקביל לטעינת ה-DOM
+        ולא חוסם את ה-onAuthStateChanged.
     -->
+    <title>✍️ מרכז הודעות (v5.7 - ייצוב Auth)</title>
+    
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/feather-icons"></script>
     <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="icon" href="https://firebase.google.com/favicon.ico">
     
     <style>
         :root {
@@ -142,7 +136,7 @@
             background-color: rgba(255, 255, 255, 0.1);
         }
         .conv-card.active {
-            background-color: rgba(var(--primary-color-rgb, 59, 130, 246), 0.2);
+            background-color: rgba(59, 130, 246, 0.2); /* Use var() with RGB values if defined */
             border-right: 4px solid var(--primary-color);
         }
         .conv-card-header {
@@ -205,10 +199,16 @@
             background: var(--bg-glass);
             backdrop-filter: blur(5px);
             display: flex;
+            flex-direction: column; /* Allow text below loader */
             align-items: center;
             justify-content: center;
             z-index: 20;
             transition: opacity 0.3s;
+        }
+        .loader-text {
+            margin-top: 1rem;
+            font-weight: 500;
+            color: var(--text-dark);
         }
         .loader {
             border: 4px solid rgba(255, 255, 255, 0.3);
@@ -402,117 +402,94 @@
           font-weight: bold;
           animation: popIn 0.3s ease;
           z-index: 9999;
-          transition: opacity 0.5s ease;
         }
         @keyframes popIn {
           from { transform: scale(0.7); opacity: 0; }
           to { transform: scale(1); opacity: 1; }
         }
-
-        /* Responsive */
+        
         @media (max-width: 768px) {
             .glass-wrapper {
                 grid-template-columns: 1fr;
-                grid-template-rows: 250px 1fr;
                 margin: 0;
-                height: 100vh;
-                width: 100vw;
                 border-radius: 0;
+                height: 100vh;
             }
             #conversation-list {
-                border-left: none;
-                border-bottom: 1px solid var(--border-glass);
+                /* במובייל, רשימת השיחות תהיה הדבר היחיד שרואים */
+                /* אלא אם כן נבחר צ'אט (מצב שכרגע לא מטופל ב-UI זה) */
             }
-            .conv-header {
-                padding: 0.75rem;
-            }
-            .tab-buttons {
-                gap: 0.25rem;
-            }
-            .tab-button {
-                padding: 0.5rem 0.25rem;
-                font-size: 0.8rem;
-            }
-            .conv-card {
-                padding: 0.75rem;
-            }
-            .conv-name { font-size: 1rem; }
-            .conv-snippet { font-size: 0.85rem; }
-            
-            .chat-header { padding: 0.75rem 1rem; }
             .chat-header h3 { font-size: 1.1rem; }
-            .btn-takeover { padding: 0.4rem 0.8rem; font-size: 0.9rem; }
-            
-            #message-list { padding: 1rem 0.75rem; }
-            .msg-bubble { max-width: 85%; }
-            #chat-input-area { padding: 0.75rem; }
-            #reply-message-text { padding: 0.6rem 0.8rem; }
-            #send-reply-btn { padding: 0.6rem 0.8rem; }
+            #message-list { padding: 1rem; }
+            #chat-input-area { padding: 1rem; }
         }
     </style>
 </head>
 <body>
 
     <div class="glass-wrapper">
-        <!-- Sidebar -->
+        <!-- Sidebar: Conversation List -->
         <aside id="conversation-list">
             <div class="conv-header">
                 <div class="search-bar">
-                    <input type="text" id="search-conversations" class="form-input" placeholder="חיפוש שיחות...">
+                    <input type="text" id="search-conversations" placeholder="חיפוש שיחות...">
                     <i data-feather="search" class="search-icon"></i>
                 </div>
                 <div class="tab-buttons">
                     <button class="tab-button active" onclick="setConversationFilter('all')">הכל</button>
                     <button class="tab-button" onclick="setConversationFilter('customer')">לקוחות</button>
-                    <button class="tab-button" onclick="setConversationFilter('human')">בטיפולך</button>
-                    <button class="tab-button" onclick="setConversationFilter('bot')">בוט</button>
+                    <button class="tab-button" onclick="setConversationFilter('driver')">נהגים</button>
                 </div>
             </div>
             
-            <div id="conv-list-inner" class="relative">
+            <div id="conv-list-inner">
+                <!-- Loader -->
                 <div id="conv-loader" class="loader-container">
                     <div class="loader"></div>
+                    <p class="loader-text">טוען שיחות...</p>
                 </div>
-                <!-- Conversation cards will be injected here -->
+                <!-- Conversation cards will be injected here by JS -->
             </div>
         </aside>
 
-        <!-- Main Chat Panel -->
+        <!-- Main Panel: Chat View -->
         <main id="chat-panel">
-            <div id="chat-welcome">
-                <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="feather feather-message-square"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+            
+            <!-- Welcome Screen (default) -->
+            <div id="chat-welcome" class="flex">
+                <svg xmlns="http://www.w3.org/2000/svg" width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather feather-message-square"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
                 <h2>ברוך הבא למרכז ההודעות</h2>
-                <p class="text-light">בחר שיחה מהצד כדי להתחיל</p>
+                <p class="text-light">בחר שיחה מהצד כדי להתחיל.</p>
             </div>
             
+            <!-- Chat View (hidden by default) -->
             <div id="chat-view" class="hidden">
-                <!-- Loader for messages -->
-                <div id="msg-loader" class="loader-container hidden">
-                    <div class="loader"></div>
-                </div>
-
-                <div class="chat-header">
-                    <h3 id="chat-header-name">טוען...</h3>
+                <header class="chat-header">
+                    <div>
+                        <h3 id="chat-view-title">...</h3>
+                        <p id="chat-view-status" class-="text-sm text-light">...</p>
+                    </div>
                     <button id="takeover-btn" class="btn-takeover" onclick="escalateToHuman()">
-                        <i data-feather="zap" class="inline-block w-4 h-4"></i>
-                        השתלט על השיחה
+                        <i data-feather="zap" class="w-4 h-4"></i>
+                        <span>השתלט על השיחה</span>
                     </button>
-                </div>
+                </header>
                 
                 <div id="message-list">
                     <div id="message-list-inner">
-                        <!-- Messages will be injected here -->
+                        <!-- Messages will be injected here by JS -->
                     </div>
                 </div>
                 
+                <div id="quick-replies" class="px-6 pb-2">
+                    <!-- Quick replies injected by JS -->
+                </div>
+
                 <div id="chat-input-area">
-                    <div id="quick-replies">
-                        <!-- Quick replies injected here -->
-                    </div>
                     <form id="reply-form">
-                        <textarea id="reply-message-text" rows="2" placeholder="כתוב תשובה..."></textarea>
-                        <button id="send-reply-btn" type="submit">
-                            <i data-feather="send" class="w-5 h-5"></i>
+                        <textarea id="reply-message-text" rows="2" placeholder="הקלד הודעה... (לחץ Enter לשליחה)" disabled></textarea>
+                        <button id="send-reply-btn" type="submit" disabled>
+                            <i data-feather="send"></i>
                         </button>
                     </form>
                 </div>
@@ -522,16 +499,27 @@
 
     <!-- Firebase SDKs -->
     <script type="module">
-        // [FIX v5.1] Correct CDN Imports
-        import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        // --- Firebase Imports ---
+        import { initializeApp, getApp, getApps } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
-        // [MODIFIED v5.3] Added addDoc and serverTimestamp
         import { 
-            getFirestore, doc, updateDoc, collection, query, orderBy, limit, 
-            where, onSnapshot, addDoc, serverTimestamp 
+            getFirestore, 
+            collection, 
+            doc, 
+            getDoc, 
+            setDoc, 
+            addDoc, 
+            updateDoc, 
+            onSnapshot, 
+            query, 
+            where, 
+            orderBy, 
+            limit, 
+            serverTimestamp,
+            writeBatch
         } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
-        // --- Global Config ---
+        // --- Config ---
         const fallbackConfig = {
           apiKey: "AIzaSyDq0oVwS6zbEfsgrYBRkeBq80dDUKMedzo", 
           authDomain: "saban94-78949.firebaseapp.com", 
@@ -541,425 +529,489 @@
           appId: "1:41553157903:web:cc33d252cff023be97a87a", 
           measurementId: "G-XV6RZDESSB"
         };
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : JSON.stringify(fallbackConfig));
         
+        // --- Global Variables ---
         let db, auth;
         let currentUserId = null;
-        let appInitialized = false; // [NEW v5.4] Auth loop fix
-        let domLoaded = false; // [NEW v5.6] DOM ready flag
-        
         let conversations = [];
-        let currentConversationId = null;
         let currentConversationFilter = 'all';
-        let messageUnsubscribe = null;
+        let activeConversationId = null;
+        let conversationListener = null;
+        let messagesListener = null;
         
-        let hasLoadedInitialAlerts = false; 
+        // [v5.0] Bot/Agent state
+        let currentConversationData = null; 
+        
+        // [v5.1] Global Alert System
+        let globalAlertListener = null;
+        let hasLoadedInitialAlerts = false;
+        
+        // [v5.6] DOM & Auth Ready Flags
+        let isDomReady = false;
+        let isAuthReady = false;
 
-        // --- Global Alert System ---
+        // [v5.7] App Initialized Flag
+        let appInitialized = false;
+
+
+        // --- [NEW v5.1] Global Alert System ---
         
+        /**
+         * @function logEvent
+         * @description Logs an event to the 'system_logs' collection.
+         */
         async function logEvent(type, details) {
-          if (!db) return;
-          const logsRef = collection(db, "system_logs");
-          try {
-            await addDoc(logsRef, {
-              type: type,
-              details: details || "No details",
-              timestamp: serverTimestamp(),
-              source: "GlobalAlertSystem"
-            });
-          } catch (e) {
-            console.warn("Failed to write log event", e);
-          }
-        }
-
-        function playAlert(message) {
-          const audio = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
-          audio.play().catch(e => console.warn("Audio play failed. User interaction needed."));
-
-          const alertBox = document.createElement("div");
-          alertBox.textContent = message;
-          alertBox.className = "global-alert";
-          document.body.appendChild(alertBox);
-          
-          setTimeout(() => {
-              alertBox.style.opacity = '0';
-              setTimeout(() => {
-                  if (document.body.contains(alertBox)) {
-                      document.body.removeChild(alertBox);
-                  }
-              }, 500); 
-          }, 4000);
-        }
-
-        function listenForGlobalAlerts() {
             if (!db) return;
-            console.log("Global Alert System: Listening for order changes...");
+            try {
+                const logsRef = collection(db, "system_logs");
+                await addDoc(logsRef, {
+                    type: type,
+                    details: details,
+                    timestamp: serverTimestamp(),
+                    source: "MessagesViewer"
+                });
+            } catch (error) {
+                console.error(`Failed to write log event: ${error.message}`);
+            }
+        }
+        
+        /**
+         * @function playAlert
+         * @description Plays a sound and shows a visual popup alert.
+         */
+        function playAlert(message, type = "info") {
+            try {
+                // צליל שונה להתראה כללית (broadcast)
+                const soundUrl = (type === "broadcast")
+                    ? "https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg" 
+                    : "https://actions.google.com/sounds/v1/alarms/beep_short.ogg";
+                const audio = new Audio(soundUrl);
+                audio.play().catch(e => console.warn("Audio play failed:", e));
+            } catch (e) {
+                console.warn("Audio context error:", e);
+            }
+
+            const alertBox = document.createElement("div");
+            alertBox.textContent = message;
+            alertBox.className = "global-alert";
+            document.body.appendChild(alertBox);
+            setTimeout(() => alertBox.remove(), 4000);
+        }
+        
+        /**
+         * @function listenForGlobalAlerts
+         * @description Listens to the 'orders' collection for real-time changes.
+         */
+        function listenForGlobalAlerts() {
+            if (globalAlertListener) globalAlertListener(); // Unsubscribe from previous
             
+            console.log("Global Alert System: Listening for order changes...");
             const ordersRef = collection(db, "orders");
             
-            // [FIX v5.5] Removed orderBy and limit to avoid index error / permission error
-            // This listener is now simpler, just for basic alerts.
-            const q = query(ordersRef);
-
-            onSnapshot(q, (snapshot) => {
-              if (!hasLoadedInitialAlerts) {
-                hasLoadedInitialAlerts = true;
-                console.log("Global Alert System: Initial order snapshot loaded. Ready for real-time alerts.");
-                return; 
-              }
-
-              // [FIX v5.4] Add try/catch inside loop
-              try {
+            globalAlertListener = onSnapshot(ordersRef, (snapshot) => {
+                // בטעינה ראשונית, אל תקפיץ התראות
+                if (!hasLoadedInitialAlerts) {
+                    hasLoadedInitialAlerts = true;
+                    console.log("Global Alert System: Initial order snapshot loaded. Ready for real-time alerts.");
+                    return;
+                }
+                
+                // עקוב רק אחרי שינויים חדשים
                 snapshot.docChanges().forEach((change) => {
-                  if (change.type === "added") {
-                    playAlert("הזמנה חדשה נוספה!");
-                    logEvent("order_added", change.doc.data());
-                  }
-                  if (change.type === "modified") {
-                    playAlert("עודכנה הזמנה קיימת!");
-                    logEvent("order_modified", change.doc.data());
-                  }
+                    const orderData = change.doc.data();
+                    const orderId = orderData.order_id || change.doc.id.slice(0, 6);
+                    
+                    if (change.type === "added") {
+                        const msg = `🔔 הזמנה חדשה נוספה: ${orderId}`;
+                        playAlert(msg, "new_order");
+                        logEvent("order_added", { orderId: orderId, customer: orderData.customer?.name });
+                    }
+                    if (change.type === "modified") {
+                        const msg = `ℹ️ הזמנה ${orderId} עודכנה (סטטוס: ${orderData.status})`;
+                        playAlert(msg, "order_modified");
+                        logEvent("order_modified", { orderId: orderId, status: orderData.status });
+                    }
                 });
-              } catch (e) {
-                  console.error("Error inside global alert docChanges loop:", e);
-              }
-
             }, (error) => {
                 console.error("Global Alert System failed:", error);
                 logEvent("alert_system_failed", { error: error.message });
             });
         }
-        // --- End Global Alert System ---
-
 
         // --- App Initialization ---
+        
         function initApp() {
             try {
-                const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : JSON.stringify(fallbackConfig));
-                
                 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
                 db = getFirestore(app);
                 auth = getAuth(app);
                 console.log("Firebase Initialized.");
 
-                // [FIX v5.6] Simplified Auth Logic
+                // Setup Auth listener
                 onAuthStateChanged(auth, (user) => {
                     if (user) {
                         currentUserId = user.uid;
-                        console.log("Admin User Signed In:", currentUserId);
-                        
-                        // [FIX v5.6] Start app only if DOM is *also* ready
-                        if (domLoaded && !appInitialized) {
+                        console.log(`Admin User Signed In: ${currentUserId}`);
+                        isAuthReady = true;
+                        // [v5.6] בדוק אם גם ה-DOM מוכן
+                        if (isDomReady) {
                             startAppListeners();
                         }
                     } else {
                         console.log("User is signed out.");
-                        // Try to sign in if user is not found
+                        isAuthReady = false;
+                        // אין משתמש, נסה להתחבר
                         signInUser();
                     }
                 });
-
-                // [FIX v5.6] We call signInUser *outside* the listener to kickstart auth
-                // The listener will catch the result.
-                // This was moved from DOMContentLoaded to run immediately
+                
+                // [FIX v5.7] התחל את תהליך ההתחברות *מחוץ* למאזין
                 signInUser();
 
             } catch (e) {
                 console.error("Firebase Initialization Failed:", e);
-                const convLoader = document.getElementById('conv-loader');
-                if (convLoader) {
-                    convLoader.innerHTML = '<p class="text-red-500 p-4">שגיאת התחברות ל-Firebase</p>';
-                }
+                const loader = document.getElementById('conv-loader');
+                if(loader) loader.innerHTML = `<p class="loader-text text-red-500">שגיאת אתחול חמורה.</p>`;
             }
         }
         
+        /**
+         * @function signInUser
+         * @description [FIX v5.7] Tries to sign in with custom token or anonymously.
+         */
         async function signInUser() {
-            try {
-                // [FIX v5.7] Corrected logic
-                if (auth.currentUser) {
-                    console.log("User is already signed in. Listener will handle.");
-                    return; // The onAuthStateChanged listener will fire automatically
-                }
-                
-                console.log("No current user. Trying auth...");
+             try {
                 if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    console.log("Trying auth with custom token...");
                     await signInWithCustomToken(auth, __initial_auth_token);
                 } else {
+                    console.log("No current user. Trying auth...");
                     await signInAnonymously(auth);
                 }
             } catch (error) {
                 console.error("Auth Error:", error);
-                const convLoader = document.getElementById('conv-loader');
-                if (convLoader) {
-                    convLoader.innerHTML = '<p class="text-red-500 p-4">שגיאת אימות משתמש</p>';
-                }
+                const loader = document.getElementById('conv-loader');
+                if(loader) loader.innerHTML = `<p class="loader-text text-red-500">שגיאת התחברות.</p>`;
             }
         }
-        
-        // [NEW v5.6] Function to start data listeners
+
+        /**
+         * @function startAppListeners
+         * @description [v5.6] Main entry point, called only when both DOM and Auth are ready.
+         */
         function startAppListeners() {
-            if (appInitialized) return; // Failsafe
+            // [v5.7] מניעת ריצה כפולה
+            if (appInitialized) return; 
             appInitialized = true;
+            
             console.log("Auth & DOM ready. Starting app listeners...");
-            document.getElementById('conv-loader').classList.add('hidden');
             listenForConversations();
             listenForGlobalAlerts();
+            
+            // חבר מאזינים לכפתורים
+            document.getElementById('search-conversations').addEventListener('keyup', renderConversationList);
+            document.getElementById('reply-form').addEventListener('submit', sendAdminReply);
+            
+            // Handle Enter key for sending messages
+            document.getElementById('reply-message-text').addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendAdminReply(e);
+                }
+            });
         }
 
+        // --- Data Listening & Rendering ---
 
-        // --- Data Listeners ---
         function listenForConversations() {
-            if (!db) {
-                console.error("Firestore DB is not initialized.");
-                return;
-            }
+            if (conversationListener) conversationListener();
             
             console.log("Attempting to listen for conversations...");
-            document.getElementById('conv-loader').classList.remove('hidden');
-
-            const convRef = collection(db, "conversations");
+            const loader = document.getElementById('conv-loader');
+            if (loader) loader.classList.remove('hidden');
             
-            // [FIX v5.6] Removed orderBy to bypass index requirement.
-            // We will sort client-side.
-            const q = query(convRef);
+            // [FIX v5.6] הסרת מיון בצד השרת כדי למנוע שגיאת אינדקס.
+            // המיון יבוצע בצד הלקוח (דפדפן).
+            const q = query(collection(db, "conversations"));
+            
+            conversationListener = onSnapshot(q, (snapshot) => {
+                conversations = [];
+                snapshot.forEach(doc => {
+                    conversations.push({ id: doc.id, ...doc.data() });
+                });
+                
+                // [FIX v5.6] מיון בצד הלקוח (דפדפן)
+                conversations.sort((a, b) => {
+                    const timeA = a.lastMessageTimestamp?.toMillis() || 0;
+                    const timeB = b.lastMessageTimestamp?.toMillis() || 0;
+                    return timeB - timeA; // החדש ביותר ראשון
+                });
 
-            onSnapshot(q, (snapshot) => {
-                try {
-                    conversations = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    
-                    // [NEW v5.6] Client-side sorting
-                    conversations.sort((a, b) => {
-                        const timeA = a.lastMessageTimestamp?.toMillis() || 0;
-                        const timeB = b.lastMessageTimestamp?.toMillis() || 0;
-                        return timeB - timeA; // Descending
-                    });
-
-                    renderConversationList(); // This might call setConversationFilter
-                    document.getElementById('conv-loader').classList.add('hidden');
-                    
-                    if (currentConversationId) {
-                        const activeConv = conversations.find(c => c.id === currentConversationId);
-                        if (activeConv) {
-                            updateChatHeader(activeConv);
-                        }
-                    }
-                } catch(e) {
-                    console.error("Error inside conversation onSnapshot:", e);
-                }
+                renderConversationList();
+                if (loader) loader.classList.add('hidden');
                 
             }, (error) => {
                 console.error("Error listening to conversations:", error);
-                document.getElementById('conv-loader').innerHTML = `<p class="p-4 text-red-500">שגיאה בטעינת שיחות. ${error.message}</p>`;
-            });
-        }
-        
-        function selectConversation(convId) {
-            if (currentConversationId === convId) return;
-            
-            currentConversationId = convId;
-            document.getElementById('chat-welcome').classList.add('hidden');
-            document.getElementById('chat-view').classList.remove('hidden');
-            document.getElementById('msg-loader').classList.remove('hidden');
-            document.getElementById('message-list-inner').innerHTML = '';
-            
-            const conversation = conversations.find(c => c.id === convId);
-            updateChatHeader(conversation);
-            renderConversationList(); // To update active state
-            
-            if (messageUnsubscribe) {
-                messageUnsubscribe();
-            }
-            
-            const messagesRef = collection(db, "conversations", convId, "messages");
-            const q = query(messagesRef, orderBy("timestamp", "desc"), limit(50));
-            
-            messageUnsubscribe = onSnapshot(q, (snapshot) => {
-                // [FIX v5.4] Add try/catch
-                try {
-                    const messages = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    renderMessages(messages.reverse()); 
-                    document.getElementById('msg-loader').classList.add('hidden');
-                    
-                    if (!conversation.status_read_by_admin) {
-                        const convDocRef = doc(db, "conversations", convId);
-                        updateDoc(convDocRef, { status_read_by_admin: true });
-                    }
-                } catch(e) {
-                    console.error("Error inside message onSnapshot:", e);
+                if (loader) {
+                    loader.innerHTML = `<p class="loader-text text-red-500">שגיאה: ${error.message}</p>`;
                 }
             });
         }
 
-        // --- Rendering ---
         function renderConversationList() {
             const listEl = document.getElementById('conv-list-inner');
             const search = document.getElementById('search-conversations').value.toLowerCase();
             
-            let filteredConvs = conversations;
+            let filtered = conversations;
+
+            // 1. Filter by Tab
+            if (currentConversationFilter !== 'all') {
+                filtered = filtered.filter(c => c.type === currentConversationFilter);
+            }
             
+            // 2. Filter by Search
             if (search) {
-                filteredConvs = filteredConvs.filter(c => 
+                filtered = filtered.filter(c => 
                     (c.customerName && c.customerName.toLowerCase().includes(search)) ||
                     (c.lastMessage && c.lastMessage.toLowerCase().includes(search)) ||
-                    (c.customerId && c.customerId.includes(search))
+                    (c.id && c.id.toLowerCase().includes(search))
                 );
             }
-            
-            if (currentConversationFilter !== 'all') {
-                filteredConvs = filteredConvs.filter(c => {
-                    const assignedTo = c.assignedTo || 'bot';
-                    if (currentConversationFilter === 'human') return assignedTo !== 'bot';
-                    if (currentConversationFilter === 'bot') return assignedTo === 'bot';
-                    if (currentConversationFilter === 'customer') return c.source === 'customer_app';
-                    return true;
-                });
-            }
 
-            if (filteredConvs.length === 0) {
-                listEl.innerHTML = '<p class="p-4 text-center text-light">לא נמצאו שיחות</p>';
+            if (filtered.length === 0) {
+                listEl.innerHTML = `<p class="p-4 text-center text-light">לא נמצאו שיחות.</p>`;
                 return;
             }
-            
-            listEl.innerHTML = filteredConvs.map(conv => {
-                const time = conv.lastMessageTimestamp?.toDate ? formatTime(conv.lastMessageTimestamp.toDate()) : '';
-                const snippet = conv.lastMessageSender === 'Admin' ? `<strong>אני:</strong> ${conv.lastMessage || ''}` : (conv.lastMessage || '...שיחה חדשה');
-                const assignedTo = conv.assignedTo || 'bot';
-                const statusText = assignedTo === 'bot' ? 'משויך לבוט' : 'בטיפולך';
-                const statusClass = assignedTo === 'bot' ? 'status-bot' : 'status-human';
-                const unread = !conv.status_read_by_admin;
-                
-                return `
-                    <div class="conv-card ${conv.id === currentConversationId ? 'active' : ''}" onclick="selectConversation('${conv.id}')">
-                        <div class="conv-card-header">
-                            <span class="conv-name">${conv.customerName || 'לקוח לא ידוע'}</span>
-                            ${unread ? '<span class="unread-dot"></span>' : ''}
-                            <span class="conv-time">${time}</span>
-                        </div>
-                        <p class="conv-snippet">${snippet}</p>
-                        <p class="conv-status ${statusClass}">${statusText}</p>
-                        ${conv.customerIsTyping ? '<p class="typing-indicator">...מקליד ✍️</p>' : ''}
-                    </div>
-                `;
-            }).join('');
+
+            listEl.innerHTML = filtered.map(convo => createConversationCard(convo)).join('');
+            feather.replace();
         }
         
-        function updateChatHeader(conversation) {
-            if (!conversation) return;
-            document.getElementById('chat-header-name').innerText = conversation.customerName || 'לקוח לא ידוע';
-            const btn = document.getElementById('takeover-btn');
-            const assignedTo = conversation.assignedTo || 'bot';
+        function createConversationCard(convo) {
+            const time = convo.lastMessageTimestamp?.toDate ? convo.lastMessageTimestamp.toDate().toLocaleString('he-IL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+            const isUnread = convo.isUnread && convo.lastSenderId !== currentUserId;
             
-            if (assignedTo === 'bot') {
-                btn.disabled = false;
-                btn.innerText = "השתלט על השיחה";
-            } else {
-                btn.disabled = true;
-                btn.innerText = "בטיפולך";
+            let statusText = "משויך ל: בוט";
+            let statusClass = "status-bot";
+            if (convo.assignedAgent) {
+                statusText = (convo.assignedAgent === currentUserId) ? "בטיפולך" : `בטיפול: ${convo.assignedAgentName || 'מנהל'}`;
+                statusClass = "status-human";
+            }
+            
+            return `
+                <div class="conv-card ${convo.id === activeConversationId ? 'active' : ''}" onclick="selectConversation('${convo.id}')">
+                    <div class="conv-card-header">
+                        <span class="conv-name">${convo.customerName || 'שיחה לא ידועה'}</span>
+                        <span class="conv-time">${time}</span>
+                    </div>
+                    ${convo.customerIsTyping ? `
+                        <p class="typing-indicator">...מקליד ✍️</p>
+                    ` : `
+                        <p class="conv-snippet">
+                            ${isUnread ? '<span class="unread-dot"></span>' : ''}
+                            ${convo.lastSenderId === currentUserId ? '<strong>אתה:</strong> ' : ''}
+                            ${convo.lastMessage || '...'}
+                        </p>
+                    `}
+                    <p class="conv-status ${statusClass}">${statusText}</p>
+                </div>
+            `;
+        }
+        
+        // --- Chat Logic ---
+
+        function selectConversation(conversationId) {
+            if (activeConversationId === conversationId) return;
+            
+            activeConversationId = conversationId;
+            currentConversationData = conversations.find(c => c.id === conversationId);
+            
+            // Update UI
+            renderConversationList(); // To highlight active
+            document.getElementById('chat-welcome').classList.add('hidden');
+            document.getElementById('chat-view').classList.remove('hidden');
+            
+            // Update Header
+            document.getElementById('chat-view-title').innerText = currentConversationData.customerName || 'שיחה';
+            
+            // Update Takeover Button
+            updateTakeoverButton();
+            
+            // Enable inputs
+            document.getElementById('reply-message-text').disabled = false;
+            document.getElementById('send-reply-btn').disabled = false;
+            
+            // Listen to messages for this conversation
+            listenForMessages(conversationId);
+            
+            // Mark as read
+            if (currentConversationData.isUnread) {
+                markConversationAsRead(conversationId);
             }
         }
+        window.selectConversation = selectConversation;
         
-        function renderMessages(messages) {
-            const listEl = document.getElementById('message-list-inner');
-            listEl.innerHTML = messages.map(msg => {
-                const type = msg.sender === 'Admin' ? 'msg-outgoing' : 'msg-incoming';
-                const time = msg.timestamp?.toDate ? formatTime(msg.timestamp.toDate()) : '';
-                const readIcon = type === 'msg-outgoing' ? 
-                    (msg.isRead ? 'check-double' : 'check') : 
-                    (msg.isReadByAdmin ? 'check-double' : 'check');
-                
-                return `
-                    <div class="msg-bubble ${type}">
-                        <p>${msg.text}</p>
-                        <span class="msg-time">
-                            <i data-feather="${readIcon}"></i>
-                            ${time}
-                        </span>
-                    </div>
-                `;
-            }).join('');
+        function listenForMessages(conversationId) {
+            if (messagesListener) messagesListener(); // Stop old listener
             
-            feather.replace();
-            document.getElementById('message-list').scrollTop = document.getElementById('message-list').scrollHeight;
+            const messageListEl = document.getElementById('message-list');
+            const messageListInnerEl = document.getElementById('message-list-inner');
+            messageListInnerEl.innerHTML = `<div class="loader-container" style="background:none;"><div class="loader"></div></div>`;
+            
+            const q = query(
+                collection(db, "conversations", conversationId, "messages"),
+                orderBy("timestamp", "desc"),
+                limit(50)
+            );
+            
+            messagesListener = onSnapshot(q, (snapshot) => {
+                messageListInnerEl.innerHTML = '';
+                let messages = [];
+                snapshot.forEach(doc => {
+                    messages.push({ id: doc.id, ...doc.data() });
+                });
+                
+                messages.reverse().forEach(msg => { // reverse back to show oldest first
+                    messageListInnerEl.appendChild(createMessageBubble(msg));
+                });
+                
+                // Scroll to bottom
+                messageListEl.scrollTop = messageListEl.scrollHeight;
+                
+                // Render quick replies
+                renderQuickReplies(currentConversationData.quickReplies);
+                
+                feather.replace();
+                
+            }, (error) => {
+                console.error("Error listening to messages:", error);
+                messageListInnerEl.innerHTML = `<p class="text-center text-red-500">שגיאה בטעינת הודעות.</p>`;
+            });
+        }
+        
+        function createMessageBubble(msg) {
+            const div = document.createElement('div');
+            const isOutgoing = msg.senderId === currentUserId; // Check by sender ID
+            div.className = `msg-bubble ${isOutgoing ? 'msg-outgoing' : 'msg-incoming'}`;
+            
+            const time = msg.timestamp ? msg.timestamp.toDate().toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' }) : '';
+            const readIcon = (msg.isReadByCustomer && isOutgoing) ? 'check-double' : 'check';
+            
+            div.innerHTML = `
+                <p>${msg.text}</p>
+                <div class="msg-time">
+                    <i data-feather="${isOutgoing ? readIcon : 'message-square'}" class="w-3 h-3"></i>
+                    ${time}
+                </div>
+            `;
+            return div;
         }
 
-        // --- Actions ---
+        async function sendAdminReply(event) {
+            event.preventDefault();
+            const textEl = document.getElementById('reply-message-text');
+            const text = textEl.value.trim();
+            
+            if (!text || !activeConversationId || !currentUserId) return;
+            
+            textEl.value = ''; // Clear input immediately
+            
+            const messageData = {
+                text: text,
+                sender: "admin",
+                senderId: currentUserId,
+                timestamp: serverTimestamp(),
+                isReadByCustomer: false,
+                isUnread: true // For customer
+            };
+            
+            try {
+                // 1. Add new message
+                const messagesRef = collection(db, "conversations", activeConversationId, "messages");
+                await addDoc(messagesRef, messageData);
+                
+                // 2. Update conversation metadata
+                const convoRef = doc(db, "conversations", activeConversationId);
+                await updateDoc(convoRef, {
+                    lastMessage: text,
+                    lastMessageTimestamp: serverTimestamp(),
+                    lastSender: "admin",
+                    lastSenderId: currentUserId,
+                    isUnread: true, // For customer
+                    customerIsTyping: false,
+                    // [v5.0] Ensure agent is assigned when replying
+                    assignedAgent: currentUserId,
+                    assignedAgentName: auth.currentUser?.displayName || "מנהל",
+                });
+                
+            } catch (error) {
+                console.error("Failed to send reply:", error);
+                logEvent("reply_failed", { error: error.message, conversationId: activeConversationId });
+                textEl.value = text; // Restore text on failure
+            }
+        }
+        window.sendAdminReply = sendAdminReply;
         
         async function escalateToHuman() {
-            if (!currentConversationId || !currentUserId) return;
+            if (!activeConversationId || !currentUserId) return;
             
             const btn = document.getElementById('takeover-btn');
             btn.disabled = true;
             btn.innerText = "משתלט...";
             
-            const convRef = doc(db, "conversations", currentConversationId);
             try {
-                await updateDoc(convRef, {
-                    assignedTo: currentUserId,
-                    lastModified: serverTimestamp(),
-                    status_read_by_admin: true
+                const convoRef = doc(db, "conversations", activeConversationId);
+                await updateDoc(convoRef, {
+                    assignedAgent: currentUserId,
+                    assignedAgentName: auth.currentUser?.displayName || "מנהל",
+                    status: "human_processing"
                 });
-                console.log("Conversation escalated to human.");
-            } catch (e) {
-                console.error("Error escalating conversation:", e);
-                showToast("שגיאה בהשתלטות על השיחה", "error");
+                
+                // Update local data
+                currentConversationData.assignedAgent = currentUserId;
+                updateTakeoverButton();
+                renderConversationList(); // Update sidebar
+                
+            } catch (error) {
+                console.error("Failed to escalate:", error);
+                logEvent("escalate_failed", { error: error.message, conversationId: activeConversationId });
                 btn.disabled = false;
             }
         }
         window.escalateToHuman = escalateToHuman;
-
-        async function sendAdminReply(e) {
-            e.preventDefault();
-            if (!currentConversationId || !currentUserId) return;
-            
-            const textarea = document.getElementById('reply-message-text');
-            const text = textarea.value.trim();
-            if (!text) return;
-            
-            const btn = document.getElementById('send-reply-btn');
-            btn.disabled = true;
-            textarea.value = '';
-            
-            const convRef = doc(db, "conversations", currentConversationId);
-            const messagesRef = collection(db, "conversations", currentConversationId, "messages");
-            
-            const conversation = conversations.find(c => c.id === currentConversationId);
-            
-            try {
-                await addDoc(messagesRef, {
-                    text: text,
-                    timestamp: serverTimestamp(),
-                    sender: "Admin",
-                    senderId: currentUserId,
-                    isRead: false
-                });
-                
-                const updatePayload = {
-                    lastMessage: text,
-                    lastMessageTimestamp: serverTimestamp(),
-                    lastMessageSender: "Admin",
-                    status_read_by_customer: false,
-                    status_read_by_admin: true
-                };
-                
-                if (conversation.assignedTo === 'bot') {
-                    updatePayload.assignedTo = currentUserId;
-                }
-                
-                await updateDoc(convRef, updatePayload);
-                document.getElementById('quick-replies').innerHTML = '';
-
-            } catch (e) {
-                console.error("Error sending reply:", e);
-                showToast("שגיאה בשליחת ההודעה", "error");
-                textarea.value = text;
-            } finally {
+        
+        function updateTakeoverButton() {
+            const btn = document.getElementById('takeover-btn');
+            if (currentConversationData.assignedAgent === currentUserId) {
+                btn.disabled = true;
+                btn.innerText = "בטיפולך";
+            } else if (currentConversationData.assignedAgent) {
+                btn.disabled = true;
+                btn.innerText = `בטיפול: ${currentConversationData.assignedAgentName || 'מנהל'}`;
+            } else {
                 btn.disabled = false;
+                btn.innerText = "השתלט על השיחה";
             }
         }
         
-        function showQuickReplies(replies) {
+        async function markConversationAsRead(conversationId) {
+            try {
+                const convoRef = doc(db, "conversations", conversationId);
+                await updateDoc(convoRef, { isUnread: false });
+                // Note: This only marks the *conversation* as read for the admin list.
+                // We might need a more robust system for message-level read receipts.
+            } catch (error) {
+                console.error("Failed to mark as read:", error);
+            }
+        }
+        
+        // --- Quick Replies ---
+        function renderQuickReplies(replies) {
             const container = document.getElementById('quick-replies');
             container.innerHTML = '';
-            if (Array.isArray(replies)) {
+            
+            if (Array.isArray(replies) && replies.length > 0) {
                 replies.forEach(reply => {
                     const btn = document.createElement('button');
                     btn.className = 'quick-reply-btn';
@@ -974,76 +1026,44 @@
             }
         }
         
+        // --- Filter tabs ---
         function setConversationFilter(filter) {
             currentConversationFilter = filter;
-            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+            // Update active button
+            // [v5.7] Safety check
+            const tabs = document.querySelectorAll('.tab-button');
+            if (!tabs || tabs.length === 0) return;
             
-            // [FIX v5.4] Safety check for classList crash
+            tabs.forEach(btn => btn.classList.remove('active'));
             const activeButton = document.querySelector(`.tab-button[onclick="setConversationFilter('${filter}')"]`);
             if (activeButton) {
                 activeButton.classList.add('active');
-            } else {
-                console.warn(`Could not find active tab button for filter: ${filter}`);
             }
-            
             renderConversationList(); // Re-render the list
         }
         window.setConversationFilter = setConversationFilter;
 
         // --- Init ---
-        // [FIX v5.6] Moved initApp() call to outside DOMContentLoaded
-        initApp();
-        
         document.addEventListener('DOMContentLoaded', () => {
             console.log("DOM loaded.");
-            domLoaded = true; // [NEW v5.6] Set DOM flag
-            
+            isDomReady = true;
             feather.replace();
             
-            // Attach event listeners
-            document.getElementById('search-conversations').addEventListener('keyup', renderConversationList);
-            document.getElementById('reply-form').addEventListener('submit', sendAdminReply);
+            // [v5.6] בדוק אם ה-Auth כבר מוכן
+            if (isAuthReady) {
+                startAppListeners();
+            } else {
+                console.log("DOM loaded, waiting for auth...");
+            }
             
-            // Dark mode
+            // Dark mode init
             if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
                 document.documentElement.classList.add('dark');
             } else {
                 document.documentElement.classList.remove('dark');
             }
-
-            // [FIX v5.6] Check if auth is *already* ready
-            if (appInitialized) {
-                startAppListeners();
-            } else {
-                console.log("DOM loaded, waiting for auth...");
-            }
         });
-        
-        // --- Helper Functions ---
-        function formatTime(date) {
-            if (!date) return '';
-            const now = new Date();
-            const diff = (now.getTime() - date.getTime()) / 1000; // seconds
-            
-            if (diff < 60) return 'כעת';
-            if (diff < 3600) return `${Math.floor(diff / 60)} דק'`;
-            
-            // If same day
-            if (now.toDateString() === date.toDateString()) {
-                return date.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
-            }
-            
-            // If yesterday
-            const yesterday = new Date(now.setDate(now.getDate() - 1));
-            if (yesterday.toDateString() === date.toDateString()) {
-                return 'אתמול';
-            }
-            
-            // Older
-            return date.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit' });
-        }
         
     </script>
 </body>
 </html>
-
