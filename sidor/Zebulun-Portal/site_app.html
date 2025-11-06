@@ -3,18 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Zebulun Site</title>
-    <!-- 
-      Zebulun Site App v1.0
-      אפליקציית PWA למנהלי אתרים של זבולון עדירן.
-      מופעלת באמצעות לינק התקנה מפורטל יוסי.
-      שולחת "בקשות הזמנה" לאישור.
-     -->
+    <title>Zebulun Delivery Portal – Powered by H.Saban Materials</title>
     
     <!-- PWA Manifest & Theme -->
-    <link rel="manifest" href="../site_manifest.json"> <!-- [FIX 1/2] Changed path -->
+    <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
-    <meta name="theme-color" content="#1e293b" media="(prefers-color-scheme: dark)">
+    <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -30,11 +24,8 @@
     <!-- Google Font: Rubik -->
     <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-    <!-- LeafletJS for Map (עבור מעקב עתידי) -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    
     <style>
+        /* [סגנונות CSS זהים לגרסה הקודמת, v55] */
         :root {
             --primary-color: #3b82f6; /* blue-500 */
             --primary-dark: #2563eb; /* blue-600 */
@@ -44,6 +35,7 @@
             --border-color: #e5e7eb; /* gray-200 */
             --text-dark: #1f2937; /* gray-800 */
             --text-light: #6b7280; /* gray-500 */
+            --danger: #ef4444; /* red-500 */
         }
         
         html.dark {
@@ -55,273 +47,2190 @@
             --border-color: #334155; /* slate-700 */
             --text-dark: #f1f5f9; /* slate-100 */
             --text-light: #94a3b8; /* slate-400 */
+            --danger: #f87171; /* red-400 */
         }
 
+        /* --- Global Styles --- */
         html { -webkit-tap-highlight-color: transparent; }
         body {
             font-family: 'Rubik', sans-serif;
             background-color: var(--bg-light);
             color: var(--text-dark);
             overscroll-behavior: none;
-            /* ריפוד תחתון קבוע בגובה הניווט */
-            padding-bottom: 80px;
+            overflow: hidden; /* מניעת גלילה ברמת ה-BODY */
         }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-        /* Loader */
+        /* --- Loader --- */
         #app-loader {
-            position: fixed; inset: 0;
+            position: fixed;
+            inset: 0;
             background-color: var(--bg-light);
-            display: flex; flex-direction: column;
-            align-items: center; justify-content: center;
-            z-index: 10000; transition: opacity 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            transition: opacity 0.3s ease;
         }
         .loader {
             border: 4px solid var(--border-color);
             border-top: 4px solid var(--primary-color);
-            border-radius: 50%; width: 50px; height: 50px;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
             animation: spin 1s linear infinite;
         }
         .loader-small {
             border: 2px solid var(--border-color);
             border-top: 2px solid var(--primary-color);
-            border-radius: 50%; width: 20px; height: 20px;
+            border-radius: 50%;
+            width: 16px;
+            height: 16px;
             animation: spin 0.8s linear infinite;
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         
-        /* App View Management */
-        .app-page { display: none; }
-        .app-page.active { display: block; }
+        /* --- Global Alert (Toast) --- */
+        #global-alert-container {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10000;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            width: 90%;
+            max-width: 400px;
+        }
+        .global-alert {
+            background: rgba(30, 41, 59, 0.85); /* slate-800 */
+            backdrop-filter: blur(5px);
+            color: #fff;
+            padding: 1rem 1.25rem;
+            border-radius: 0.75rem;
+            font-weight: 600;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            animation: popIn 0.3s ease-out;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        .global-alert.alert-info {
+            background: rgba(59, 130, 246, 0.85); /* blue-500 */
+        }
+        .global-alert.alert-success {
+            background: rgba(34, 197, 94, 0.85); /* green-500 */
+        }
+        .global-alert.alert-error {
+            background: rgba(239, 68, 68, 0.85); /* red-500 */
+        }
+        @keyframes popIn {
+          from { transform: translateY(20px) scale(0.9); opacity: 0; }
+          to { transform: translateY(0) scale(1); opacity: 1; }
+        }
+
+        /* --- Modal (Popup) --- */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(4px);
+            z-index: 500;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            pointer-events: none;
+        }
+        .modal-overlay.visible {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .modal-container {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0.95);
+            background-color: var(--bg-white);
+            border-radius: 0.75rem;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            z-index: 501;
+            width: 90%;
+            max-width: 500px;
+            opacity: 0;
+            transition: all 0.2s ease-out;
+            pointer-events: none;
+        }
+        /* [NEW v55] Wide modal for approval */
+        .modal-container.modal-wide {
+            max-width: 800px;
+        }
+        .modal-container.visible {
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1);
+            pointer-events: auto;
+        }
+        .modal-header {
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .modal-body {
+            padding: 1.5rem;
+            max-height: 70vh;
+            overflow-y: auto;
+        }
+        .modal-footer {
+            padding: 1rem 1.5rem;
+            border-top: 1px solid var(--border-color);
+            background-color: var(--bg-light);
+            text-align: left;
+            border-bottom-left-radius: 0.75rem;
+            border-bottom-right-radius: 0.75rem;
+        }
         
-        /* Bottom Nav */
+        /* --- General Form Elements --- */
+        .form-label {
+            display: block;
+            font-weight: 500;
+            font-size: 0.9rem;
+            margin-bottom: 0.25rem;
+            color: var(--text-dark);
+        }
+        .form-input, .form-textarea, .form-select {
+            width: 100%;
+            padding: 0.6rem 0.9rem;
+            border: 1px solid var(--border-color);
+            border-radius: 0.5rem;
+            background-color: var(--bg-white);
+            color: var(--text-dark);
+        }
+        .form-input:focus, .form-textarea:focus, .form-select:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 2px var(--primary-light);
+        }
+        .btn {
+            padding: 0.6rem 1.25rem;
+            border: none;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+        .btn-lg {
+            padding: 0.75rem 1.5rem;
+            font-size: 1rem;
+        }
+        .btn-primary {
+            background-color: var(--primary-color);
+            color: white;
+        }
+        .btn-primary:hover {
+            background-color: var(--primary-dark);
+        }
+        .btn-primary:disabled {
+            background-color: var(--text-light);
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+        .btn-secondary {
+            background-color: var(--bg-light);
+            color: var(--text-dark);
+            border: 1px solid var(--border-color);
+        }
+        .btn-secondary:hover {
+            background-color: var(--border-color);
+        }
+        .btn-danger {
+            background-color: var(--danger);
+            color: white;
+        }
+        .btn-icon {
+            padding: 0.5rem;
+            border-radius: 0.5rem;
+            background: none;
+            border: none;
+            color: var(--text-light);
+        }
+        .btn-icon:hover {
+            background-color: var(--bg-light);
+            color: var(--text-dark);
+        }
+        
+        /* --- Card Styles --- */
+        .glass-card {
+            background: var(--bg-white);
+            border-radius: 0.75rem;
+            padding: 1.25rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+            border: 1px solid var(--border-color);
+        }
+        .list-item-card {
+            background-color: var(--bg-white);
+            border: 1px solid var(--border-color);
+            border-radius: 0.5rem;
+            padding: 1rem;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        .list-item-card:hover {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 2px var(--primary-light);
+        }
+        .list-item-card.active {
+            border-color: var(--primary-color);
+            background-color: var(--primary-light);
+        }
+        .list-item-card h4 {
+            font-weight: 600;
+            color: var(--text-dark);
+        }
+        .list-item-card p {
+            font-size: 0.9rem;
+            color: var(--text-light);
+        }
+
+        /* --- DESKTOP CRM LAYOUT (v53) --- */
+        #desktop-crm-layout {
+            display: none; /* Hidden by default */
+        }
+        
+        /* --- MOBILE PWA LAYOUT (v53) --- */
+        #mobile-pwa-layout {
+            display: grid;
+            grid-template-rows: auto 1fr auto;
+            height: 100vh;
+            height: -webkit-fill-available;
+        }
+        #mobile-header {
+            background-color: var(--bg-white);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            z-index: 10;
+            padding: 1rem 1.25rem;
+            padding-top: calc(1rem + env(safe-area-inset-top, 0));
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header-logos { display: flex; align-items: center; gap: 0.5rem; }
+        .header-logos img { max-height: 32px; width: auto; object-fit: contain; }
+        .logo-divider {
+            width: 1px;
+            height: 24px;
+            background-color: var(--border-color);
+        }
+        
+        #mobile-main-content {
+            overflow-y: auto;
+            position: relative;
+        }
+        
         #bottom-nav {
-            position: fixed; bottom: 0; left: 0; right: 0;
+            display: grid;
+            grid-auto-flow: column;
             background-color: var(--bg-white);
             border-top: 1px solid var(--border-color);
-            display: grid; grid-template-columns: repeat(3, 1fr);
+            box-shadow: 0 -1px 3px rgba(0,0,0,0.05);
+            z-index: 10;
             padding-bottom: env(safe-area-inset-bottom, 0);
-            z-index: 1000;
         }
         .nav-button {
-            display: flex; flex-direction: column;
-            align-items: center; justify-content: center;
-            padding: 8px 4px; color: var(--text-light);
-            font-size: 0.75rem; font-weight: 500;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 8px 4px;
+            color: var(--text-light);
+            font-size: 0.7rem;
+            font-weight: 500;
             border-top: 3px solid transparent;
             transition: all 0.2s ease;
+            position: relative; /* [NEW v55] For badge */
         }
         .nav-button.active {
             color: var(--primary-color);
             border-top-color: var(--primary-color);
             background-color: var(--primary-light);
         }
+        /* [NEW v55] Notification Badge */
+        .notification-badge {
+            position: absolute;
+            top: 4px;
+            right: 20px;
+            background-color: var(--danger);
+            color: white;
+            font-size: 0.65rem;
+            font-weight: 700;
+            border-radius: 99px;
+            padding: 0 6px;
+            min-width: 18px;
+            height: 18px;
+            line-height: 18px;
+            text-align: center;
+            border: 2px solid var(--bg-white);
+            display: none; /* Hidden by default */
+        }
+        .nav-button.active .notification-badge {
+            border-color: var(--primary-light);
+        }
+
+        /* --- Main Content Pages (App-like navigation) --- */
+        .app-page {
+            padding: 1rem;
+            display: none; /* Hidden by default */
+        }
+        .app-page.active {
+            display: block;
+        }
         
-        /* --- Request (Chat) View --- */
-        #request-log-container {
-            /* 100vh - header - input bar - bottom nav - page padding */
-            height: calc(100vh - 60px - 70px - 80px - 2rem);
-            overflow-y: auto;
+        /* --- Dashboard Page (Mobile) --- */
+        .project-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.75rem;
         }
-        .chat-bubble {
-            max-width: 85%; padding: 0.5rem 1rem; border-radius: 1rem;
-            margin-bottom: 0.5rem; word-wrap: break-word;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-        }
-        .chat-bubble-user {
-            background-color: var(--primary-color); color: white;
-            border-bottom-right-radius: 0.25rem; align-self: flex-end;
-        }
-        .chat-bubble-media {
-            background-color: var(--bg-white); border: 1px solid var(--border-color);
-            border-bottom-left-radius: 0.25rem; align-self: flex-start;
-        }
-        .chat-bubble-system {
-            background-color: var(--primary-light); color: var(--primary-dark);
-            border-radius: 0.25rem; align-self: center; text-align: center;
-            font-size: 0.8rem; padding: 0.25rem 0.75rem;
-        }
-        
-        /* --- Catalog View --- */
-        .product-card {
+        .project-card, .add-project-card {
             background-color: var(--bg-white);
             border: 1px solid var(--border-color);
-            border-radius: 0.5rem; overflow: hidden;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            text-align: center;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.03);
             transition: all 0.2s;
         }
-        .product-card:hover { box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
-        .product-card img {
-            height: 120px; width: 100%; object-fit: cover;
+        .project-card:hover, .add-project-card:hover {
+            border-color: var(--primary-color);
+            color: var(--primary-color);
+        }
+        .project-card h4 {
+            font-weight: 600;
+        }
+        .project-card p {
+            font-size: 0.8rem;
+            color: var(--text-light);
+        }
+        .add-project-card {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-light);
+            border-style: dashed;
+        }
+        /* [NEW v55] Share button in project card */
+        .project-share-btn {
+            margin-top: 0.75rem;
+            padding: 0.3rem 0.6rem;
+            font-size: 0.75rem;
+            background-color: var(--bg-light);
+            color: var(--primary-color);
+            border: 1px solid var(--border-color);
+            border-radius: 0.375rem;
+            font-weight: 500;
+        }
+
+        /* --- Smart Paste Box --- */
+        #smart-paste-box {
+            width: 100%;
+            height: 150px;
+            padding: 0.75rem 1rem;
+            border: 2px dashed var(--border-color);
+            border-radius: 0.5rem;
+            background-color: var(--bg-light);
+            color: var(--text-dark);
+            resize: vertical;
+        }
+        #smart-paste-box:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            background-color: var(--bg-white);
+        }
+        
+        #file-drop-area {
+            margin-top: 0.5rem;
+            border: 2px dashed var(--border-color);
+            border-radius: 0.5rem;
+            padding: 1.5rem;
+            text-align: center;
+            color: var(--text-light);
+            background-color: var(--bg-light);
+            transition: all 0.2s;
+        }
+        #file-drop-area.dragover {
+            border-color: var(--primary-color);
+            background-color: var(--primary-light);
+        }
+        #preview-container {
+            display: flex;
+            gap: 0.75rem;
+            margin-top: 1rem;
+            flex-wrap: wrap;
+        }
+        .file-preview {
+            position: relative;
+            width: 80px;
+            height: 80px;
+            border-radius: 0.5rem;
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+        }
+        .file-preview img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .file-preview .file-icon {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             background-color: var(--bg-light);
         }
-        
-        /* --- My Requests (Tracking) View --- */
-        .request-card {
-            background-color: var(--bg-white);
-            border: 1px solid var(--border-color);
-            border-right-width: 4px; border-radius: 0.5rem;
-            padding: 1rem; transition: all 0.2s;
+        .file-preview .remove-file {
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            background-color: rgba(0,0,0,0.6);
+            color: white;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
         }
-        .request-card[data-status="pending"] { border-right-color: #f59e0b; } /* amber-500 */
-        .request-card[data-status="approved"] { border-right-color: #10b981; } /* emerald-500 */
-        .request-card[data-status="on-way"] { border-right-color: var(--primary-color); }
         
-        #map-track { height: 250px; width: 100%; border-radius: 0.5rem; background-color: #eee; }
+        /* [NEW v55] Catalog Search */
+        .catalog-search-results {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid var(--border-color);
+            border-radius: 0.5rem;
+            background-color: var(--bg-white);
+        }
+        .catalog-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.5rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .catalog-item:last-child {
+            border-bottom: none;
+        }
+        .catalog-item img {
+            width: 40px;
+            height: 40px;
+            object-fit: cover;
+            border-radius: 0.375rem;
+            border: 1px solid var(--border-color);
+        }
+        .catalog-item-info {
+            flex-grow: 1;
+        }
+        .catalog-item-info p {
+            font-size: 0.8rem;
+            color: var(--text-light);
+        }
+        
+        /* [NEW v55] Approval Workbench */
+        .approval-grid {
+            display: grid;
+            grid-template-columns: 1fr; /* Stack on mobile */
+            gap: 1rem;
+        }
+        .approval-col h4 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid var(--primary-color);
+            margin-bottom: 0.75rem;
+        }
+        .request-data {
+            font-size: 0.9rem;
+            background-color: var(--bg-light);
+            padding: 0.75rem;
+            border-radius: 0.5rem;
+            border: 1px solid var(--border-color);
+            word-wrap: break-word;
+        }
+        .request-data pre {
+            white-space: pre-wrap;
+            font-family: inherit;
+        }
+        .request-data a {
+            color: var(--primary-color);
+            font-weight: 500;
+        }
+        .order-cart-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.9rem;
+            padding: 0.25rem 0;
+        }
+        .order-cart-item input {
+            padding: 0.25rem 0.5rem; /* Smaller input for cart */
+        }
+
+        /* * app.desktop.css (Embedded)
+         * סגנונות הדורסים ומשנים את הפריסה עבור מסכי מחשב
+         */
+        @media (min-width: 768px) {
+            #desktop-crm-layout {
+                display: grid;
+                grid-template-columns: 260px 1fr; /* Nav | Main Area */
+                height: 100vh;
+            }
+            #mobile-pwa-layout {
+                display: none;
+            }
+            
+            #desktop-nav {
+                background-color: var(--bg-white);
+                border-left: 1px solid var(--border-color); /* RTL */
+                display: flex;
+                flex-direction: column;
+                padding: 1rem;
+            }
+            .desktop-nav-header {
+                padding: 0.5rem;
+                margin-bottom: 1rem;
+                border-bottom: 1px solid var(--border-color);
+            }
+            .desktop-nav-header .header-logos {
+                display: flex;
+                align-items: center;
+                gap: 0.75rem;
+            }
+            .desktop-nav-header img {
+                max-height: 40px;
+                width: auto;
+                object-fit: contain;
+                margin-bottom: 0.5rem;
+            }
+            .desktop-nav-header p {
+                font-weight: 600;
+                color: var(--text-dark);
+            }
+            
+            .desktop-nav-link {
+                display: flex;
+                align-items: center;
+                gap: 0.75rem;
+                padding: 0.75rem 1rem;
+                border-radius: 0.5rem;
+                font-weight: 500;
+                color: var(--text-light);
+                transition: all 0.2s;
+                cursor: pointer;
+                position: relative; /* [NEW v55] For badge */
+            }
+            .desktop-nav-link:hover {
+                background-color: var(--bg-light);
+                color: var(--text-dark);
+            }
+            .desktop-nav-link.active {
+                background-color: var(--primary-light);
+                color: var(--primary-dark);
+                font-weight: 600;
+            }
+            /* [NEW v55] Desktop Badge */
+            .desktop-nav-link .notification-badge {
+                top: 8px;
+                right: 8px;
+            }
+            .desktop-nav-link.active .notification-badge {
+                border-color: var(--primary-light);
+            }
+            
+            #desktop-main-area {
+                display: grid;
+                grid-template-columns: 400px 1fr; /* List | Details */
+                height: 100vh;
+                overflow: hidden;
+            }
+            #desktop-list-panel {
+                background-color: var(--bg-light);
+                border-left: 1px solid var(--border-color);
+                height: 100%;
+                display: flex;
+                flex-direction: column;
+            }
+            #desktop-detail-panel {
+                height: 100%;
+                overflow-y: auto;
+                padding: 1.5rem 2rem;
+            }
+            .desktop-list-header {
+                padding: 1rem;
+                flex-shrink: 0;
+                border-bottom: 1px solid var(--border-color);
+            }
+            #desktop-list-content {
+                flex-grow: 1;
+                overflow-y: auto;
+            }
+            
+            .modal-container {
+                /* במצב דסקטופ, המודאלים יכולים להיות רחבים יותר */
+                max-width: 600px;
+            }
+            
+            /* [NEW v55] Desktop approval grid */
+            .approval-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
     </style>
 </head>
 <body class="antialiased">
 
     <!-- Global Loader -->
     <div id="app-loader">
-        <img src="https://i.postimg.cc/ryPT3r29/image.png" alt="Saban Logo" class="w-20 h-20 mb-4">
         <div class="loader"></div>
-        <p class="mt-4 font-semibold text-lg" id="loader-text">טוען אפליקציית אתר...</p>
+        <p class="mt-4 font-semibold text-lg" id="loader-text">טוען פורטל זבולון...</p>
     </div>
-    
-    <!-- Modal (לשימוש כללי, למשל הצגת מוצר) -->
-    <div id="modal-backdrop" class="fixed inset-0 bg-black/50 z-40 hidden" onclick="closeModal()"></div>
-    <div id="modal-container" class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-11/12 max-w-lg bg-white rounded-lg shadow-xl z-50 hidden transition-all">
-        <div id="modal-header" class="flex justify-between items-center p-4 border-b">
-            <h3 id="modal-title" class="text-lg font-bold">...</h3>
-            <button onclick="closeModal()" class="text-gray-500 hover:text-gray-900"><i data-feather="x"></i></button>
+
+    <!-- Global Alert (Toast) Container -->
+    <div id="global-alert-container"></div>
+
+    <!-- Modal (Popup) Structure -->
+    <div id="modal-overlay" class="modal-overlay" onclick="closeModal()"></div>
+    <div id="main-modal" class="modal-container">
+        <header class="modal-header flex justify-between items-center">
+            <h3 id="modal-title" class="text-lg font-semibold">...</h3>
+            <button class="btn-icon" onclick="closeModal()">
+                <i data-feather="x"></i>
+            </button>
+        </header>
+        <div id="modal-body" class="modal-body no-scrollbar">
+            <!-- Content Injected by JS -->
         </div>
-        <div id="modal-body" class="p-4 max-h-[60vh] overflow-y-auto"></div>
-        <div id="modal-footer" class="p-4 bg-gray-50 border-t flex justify-end"></div>
+        <footer id="modal-footer" class="modal-footer flex gap-2 justify-end">
+            <!-- Buttons Injected by JS -->
+            <button class="btn btn-secondary" onclick="closeModal()">סגור</button>
+        </footer>
     </div>
-    
-    <!-- Header -->
-    <header class="sticky top-0 z-10 bg-white/80 backdrop-blur-sm shadow-sm p-3 flex justify-between items-center">
-        <div>
-            <h1 class="font-bold text-lg text-gray-800">הזמנות - ח. סבן</h1>
-            <p class="text-sm text-gray-600" id="project-name-header">טוען פרויקט...</p>
-        </div>
-        <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTcYS_xImwWt1fAYIK1UTXHtbCfmt5TOny5UQ&s" alt="Zebulun Logo" class="h-10 w-auto">
-    </header>
 
-    <!-- Main Content -->
-    <main class="p-4">
-    
-        <!-- ======================= -->
-        <!-- View 1: New Request (Chat) -->
-        <!-- ======================= -->
-        <div id="view-request" class="app-page active">
-            
-            <!-- Catalog Search Results (Absolutely positioned) -->
-            <div id="catalog-results-popup" class="absolute bg-white shadow-lg rounded-lg border max-h-64 overflow-y-auto z-20 w-full left-0 right-0 -mt-2 hidden">
-                <!-- תוצאות חיפוש יוכנסו לכאן -->
+
+    <!-- ====================================================== -->
+    <!-- ===      DESKTOP CRM LAYOUT (v55) - Hidden     === -->
+    <!-- ====================================================== -->
+    <div id="desktop-crm-layout">
+        <!-- Desktop Sidebar Navigation -->
+        <nav id="desktop-nav">
+            <div class="desktop-nav-header">
+                <div class="header-logos">
+                    <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTcYS_xImwWt1fAYIK1UTXHtbCfmt5TOny5UQ&s" alt="Zebulun Logo">
+                    <div class="logo-divider"></div>
+                    <img src="https://i.postimg.cc/ryPT3r29/image.png" alt="Saban Logo">
+                </div>
+                <p class="text-sm font-semibold mt-2">Zebulun Delivery Portal</p>
             </div>
             
-            <!-- Request Log (like WhatsApp) -->
-            <div id="request-log-container" class="flex flex-col gap-2 p-3 bg-white rounded-lg border no-scrollbar">
-                <!-- Bubbles will be added here by JS -->
-                <div class="chat-bubble-system">
-                    התחל בקשה חדשה ע"י הקלדה, חיפוש בקטלוג, או צירוף מדיה.
+            <a id="nav-desktop-dashboard" class="desktop-nav-link active" onclick="navigate('dashboard')">
+                <i data-feather="home"></i> <span>דשבורד</span>
+            </a>
+            <a id="nav-desktop-pending-orders" class="desktop-nav-link" onclick="navigate('pending-orders')">
+                <i data-feather="inbox"></i> <span>הזמנות לאישור</span>
+                <span id="desktop-pending-badge" class="notification-badge">0</span>
+            </a>
+            <a id="nav-desktop-new-order" class="desktop-nav-link" onclick="navigate('new-order')">
+                <i data-feather="plus-circle"></i> <span>הזמנה חדשה</span>
+            </a>
+            <a id="nav-desktop-projects" class="desktop-nav-link" onclick="navigate('projects')">
+                <i data-feather="briefcase"></i> <span>ניהול פרויקטים</span>
+            </a>
+            <a id="nav-desktop-history" class="desktop-nav-link" onclick="navigate('orders-history')">
+                <i data-feather="archive"></i> <span>היסטוריית הזמנות</span>
+            </a>
+            
+            <div class="mt-auto"> <!-- Footer -->
+                <button id="desktop-theme-toggle" class="btn-icon w-full justify-start gap-2 px-3 py-2">
+                    <i data-feather="moon"></i> <span>מצב לילה</span>
+                </button>
+                <div class="text-xs text-gray-400 p-2 mt-2">
+                    <p id="desktop-auth-status">מתחבר...</p>
+                    <p>Powered by H.Saban</p>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Desktop Main Area (List + Details) -->
+        <main id="desktop-main-area">
+            <!-- List Panel (for Orders, Projects, etc.) -->
+            <div id="desktop-list-panel">
+                <div class="desktop-list-header">
+                    <input type="text" id="desktop-search-input" placeholder="חפש הזמנות או פרויקטים..." class="form-input">
+                </div>
+                <div id="desktop-list-content" class="no-scrollbar">
+                    <p class="p-4 text-center">טוען תוכן...</p>
                 </div>
             </div>
             
-            <!-- Input Bar (Fixed to bottom, above nav) -->
-            <div id="request-input-bar" class="fixed bottom-[80px] left-0 right-0 p-3 bg-white border-t border-gray-200">
-                <div class="flex items-center gap-2">
-                    <button id="media-btn" class="p-3 text-gray-600 hover:text-primary-color"><i data-feather="plus-circle"></i></button>
-                    <input type="text" id="request-input" class="flex-1 p-3 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-primary-color" placeholder="הקלד פריט או חפש בקטלוג...">
-                    <button id="location-btn" class="p-3 text-gray-600 hover:text-primary-color"><i data-feather="map-pin"></i></button>
-                    <button id="send-request-btn" class="p-3 bg-primary-color text-white rounded-full"><i data-feather="send"></i></button>
-                </div>
-                <!-- Media Buttons Popup -->
-                <div id="media-popup" class="absolute bottom-20 right-4 bg-white shadow-lg rounded-lg border p-2 flex gap-2 hidden">
-                    <button class="p-3" onclick="handleMedia('image')"><i data-feather="camera"></i></button>
-                    <button class="p-3" onclick="handleMedia('audio')"><i data-feather="mic"></i></button>
-                    <button class="p-3" onclick="handleMedia('video')"><i data-feather="video"></i></button>
+            <!-- Detail Panel (Editor, Viewer, etc.) -->
+            <div id="desktop-detail-panel" class="no-scrollbar">
+                <!-- Content Injected by JS based on selection -->
+                <div id="desktop-detail-content">
+                    <h2 class="text-2xl font-bold mb-4">ברוך הבא לפורטל ה-CRM</h2>
+                    <p>בחר פריט מהרשימה בצד ימין כדי לראות פרטים, או לחץ על "הזמנה חדשה" כדי להתחיל.</p>
                 </div>
             </div>
-        </div>
+        </main>
+    </div>
 
-        <!-- ======================= -->
-        <!-- View 2: Catalog -->
-        <!-- ======================= -->
-        <div id="view-catalog" class="app-page">
-            <input type="text" id="catalog-search-input" class="w-full p-3 border border-gray-300 rounded-lg mb-4" placeholder="חפש בקטלוג המוצרים...">
-            <div id="catalog-grid" class="grid grid-cols-2 md:grid-cols-3 gap-4">
-                <!-- Product cards will be loaded here -->
-                <div class="text-center p-4 col-span-2">
-                    <div class="loader-small mx-auto"></div>
-                    <p class="mt-2 text-sm text-gray-500">טוען קטלוג...</p>
-                </div>
+
+    <!-- ====================================================== -->
+    <!-- ===       MOBILE PWA LAYOUT (v55) - Default      === -->
+    <!-- ====================================================== -->
+    <div id="mobile-pwa-layout">
+        <!-- Mobile Header -->
+        <header id="mobile-header">
+            <div class="header-logos">
+                <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTcYS_xImwWt1fAYIK1UTXHtbCfmt5TOny5UQ&s" alt="Zebulun Logo">
+                <div class="logo-divider"></div>
+                <img src="https://i.postimg.cc/ryPT3r29/image.png" alt="Saban Logo">
             </div>
-        </div>
+            <div class="flex items-center gap-2">
+                <p id="auth-status" class="text-xs text-gray-500 hidden">מתחבר...</p>
+                <button id="mobile-theme-toggle" class="btn-icon">
+                    <i data-feather="moon"></i>
+                </button>
+            </div>
+        </header>
 
-        <!-- ======================= -->
-        <!-- View 3: My Requests -->
-        <!-- ======================= -->
-        <div id="view-my-requests" class="app-page">
-            <div id="requests-list" class="space-y-3">
-                <!-- Request cards will be loaded here -->
+        <!-- Mobile Main Content (Pages) -->
+        <main id="mobile-main-content" class="no-scrollbar">
+            
+            <!-- Page: Dashboard (Home) -->
+            <div id="page-dashboard" class="app-page active">
+                <!-- Content Injected by JS: renderDashboard() -->
             </div>
             
-            <!-- Order Detail/Tracking View (Placeholder) -->
-            <div id="tracking-view-container" class="mt-4 hidden">
-                <h3 class="text-xl font-bold mb-3">מעקב הזמנה <span id="track-order-id"></span></h3>
-                <div id="map-track"></div>
-                <p class="text-center p-4">ממשק מעקב חי (כמו ב-customer.html) יוטען כאן כשההזמנה תהיה בדרך.</p>
+            <!-- [NEW v55] Page: Pending Orders -->
+            <div id="page-pending-orders" class="app-page">
+                <h2 class="text-xl font-bold mb-4">הזמנות ממתינות לאישור</h2>
+                <div id="pending-orders-list-mobile" class="flex flex-col gap-3">
+                    <!-- Injected by renderPendingOrdersPage() -->
+                </div>
             </div>
-        </div>
-        
-    </main>
+            
+            <!-- Page: New Order (Smart Paste) -->
+            <div id="page-new-order" class="app-page">
+                <!-- Content Injected by JS: renderNewOrderPage() -->
+            </div>
 
-    <!-- Bottom Navigation -->
-    <nav id="bottom-nav">
-        <button id="nav-request" class="nav-button active" onclick="navigate('request')">
-            <i data-feather="plus-circle"></i>
-            <span>הזמנה חדשה</span>
-        </button>
-        <button id="nav-catalog" class="nav-button" onclick="navigate('catalog')">
-            <i data-feather="book-open"></i>
-            <span>קטלוג</span>
-        </button>
-        <button id="nav-my-requests" class="nav-button" onclick="navigate('my-requests')">
-            <i data-feather="check-square"></i>
-            <span>ההזמנות שלי</span>
-        </button>
-    </nav>
+            <!-- Page: Projects -->
+            <div id="page-projects" class="app-page">
+                <!-- Content Injected by JS: renderProjectsPage() -->
+            </div>
+            
+            <!-- Page: Orders History -->
+            <div id="page-orders-history" class="app-page">
+                <!-- Content Injected by JS: renderOrdersHistoryPage() -->
+            </div>
+            
+        </main>
+
+        <!-- Mobile Bottom Navigation -->
+        <nav id="bottom-nav">
+            <button id="nav-mobile-dashboard" class="nav-button active" onclick="navigate('dashboard')">
+                <i data-feather="home" class="w-6 h-6"></i>
+                <span>דשבורד</span>
+            </button>
+            <button id="nav-mobile-pending-orders" class="nav-button" onclick="navigate('pending-orders')">
+                <i data-feather="inbox" class="w-6 h-6"></i>
+                <span>לאישור</span>
+                <span id="mobile-pending-badge" class="notification-badge">0</span>
+            </button>
+            <button id="nav-mobile-new-order" class="nav-button" onclick="navigate('new-order')">
+                <i data-feather="plus-circle" class="w-6 h-6"></i>
+                <span>חדשה</span>
+            </button>
+            <button id="nav-mobile-projects" class="nav-button" onclick="navigate('projects')">
+                <i data-feather="briefcase" class="w-6 h-6"></i>
+                <span>פרויקטים</span>
+            </button>
+        </nav>
+    </div>
 
 
     <!-- 
     ======================================================
-    === JAVASCRIPT
+    === 2. EMBEDDED JAVASCRIPT (v55.2 - FIXES)
     ======================================================
     -->
     <script type="module">
-        // --- Firebase SDK Imports ---
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, getDoc, addDoc, setDoc, onSnapshot, collection, query, where, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
+        // [תיקון] הוספת ייבוא מלא של כל הפונקציות הנדרשות
+        import { initializeApp, getApp, getApps } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { 
+            getAuth, 
+            signInAnonymously, 
+            onAuthStateChanged, 
+            signInWithCustomToken 
+        } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+        import { 
+            getFirestore, 
+            collection, 
+            doc, 
+            addDoc, 
+            setDoc, 
+            updateDoc, 
+            deleteDoc, // [NEW v55]
+            onSnapshot, 
+            query, 
+            where, 
+            orderBy, 
+            limit, 
+            serverTimestamp,
+            getDocs
+        } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { 
+            getStorage, 
+            ref, 
+            uploadBytes, 
+            getDownloadURL 
+        } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-storage.js";
 
-        // --- Global Config & State ---
-        const CATALOG_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxXX3Q-_QDl41SxxD-MqyucjIvm5rSOennP_Ld7xoOlYb91T0SrRHFHg2BRkQb3FH5v/exec";
-        
-        let db, auth, storage;
-        let app = null;
-        let authReady = false;
-        let currentUserId = null;
-        let currentSiteManagerName = "מנהל אתר"; // יתעדכן בהמשך
-        
-        let projectConfig = {
-            client_id: null,
-            project_id: null,
-            project_name: "טוען..."
+        // --- Configuration Placeholders ---
+        // [תיקון] הוספת אובייקט גיבוי (fallback) למקרה ש-__firebase_config לא קיים
+        const fallbackConfig = {
+            apiKey: "AIzaSyDq0oVwS6zbEfsgrYBRkeBq80dDUKMedzo", 
+            authDomain: "saban94-78949.firebaseapp.com", 
+            projectId: "saban94-78949",
+            storageBucket: "saban94-78949.appspot.com", 
+            messagingSenderId: "41553157903", 
+            appId: "1:41553157903:web:cc33d252cff023be97a87a"
         };
+        const FIREBASE_CONFIG = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : fallbackConfig;
+
+        // [תיקון] עדכון לכתובת הקטלוג החדשה שסיפקת
+        const CATALOG_API_URL = "https://script.google.com/macros/s/AKfycbzXTd7xKPR6MH9rtOEGxPr3-hrTCTfpuH0kKOzpRkMGOlmYbvKfjwL8d2fgwIa_3_UT/exec";
         
-        let catalogData = [];
-        let newRequest = {
-// ... existing code ... -->
+        const CLIENT_ID = "zebulun_adiran"; // מזהה לקוח קבוע
+
+        // --- Global App State ---
+        let db, auth, storage;
+        let currentUserId = null;
+        let appInitialized = false;
+        let globalAlertsListener = null;
+
+        const state = {
+            currentView: 'dashboard',
+            theme: 'light',
+            filesToUpload: [], 
+            projects: [], // [Changed v55] No longer mock
+            orderHistory: [],
+            pendingOrders: [], // [NEW v55] For approval
+            catalog: [], // [NEW v55]
+            currentApprovalCart: [], // [NEW v55]
+            selectedProjectId: null,
+            processedOrderIds: new Set()
         };
 
         // --- Initialization ---
-        document.addEventListener('DOMContentLoaded', initSiteApp);
+        document.addEventListener('DOMContentLoaded', initApp);
 
-        async function initSiteApp() { // [FIX 2/2] Renamed function
+        function initApp() {
+            console.log("DOM loaded. Initializing app v55...");
+            feather.replace();
+            initFirebase();
+            initEventListeners();
+            
+            const storedTheme = localStorage.getItem('theme');
+            setTheme(storedTheme || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+            
+            navigate('dashboard'); // קבע דף ראשוני
+        }
+
+        function initFirebase() {
+            try {
+                const app = !getApps().length ? initializeApp(FIREBASE_CONFIG) : getApp();
+                db = getFirestore(app);
+                auth = getAuth(app);
+                storage = getStorage(app);
+                console.log("Firebase Initialized.");
+                authenticateUser();
+            } catch (error) {
+                console.error("Firebase Init Error:", error);
+                showToast("שגיאת התחברות קריטית ל-Firebase", "error");
+                document.getElementById('loader-text').innerText = "שגיאת התחברות";
+            }
+        }
+
+        function initEventListeners() {
+            // כפתורי ניווט (דסקטופ)
+            document.getElementById('nav-desktop-dashboard').addEventListener('click', () => navigate('dashboard'));
+            document.getElementById('nav-desktop-pending-orders').addEventListener('click', () => navigate('pending-orders')); // [NEW v55]
+            document.getElementById('nav-desktop-new-order').addEventListener('click', () => navigate('new-order'));
+            document.getElementById('nav-desktop-projects').addEventListener('click', () => navigate('projects'));
+            document.getElementById('nav-desktop-history').addEventListener('click', () => navigate('orders-history'));
+
+            // כפתורי ניווט (מובייל)
+            document.getElementById('nav-mobile-dashboard').addEventListener('click', () => navigate('dashboard'));
+            document.getElementById('nav-mobile-pending-orders').addEventListener('click', () => navigate('pending-orders')); // [NEW v55]
+            document.getElementById('nav-mobile-new-order').addEventListener('click', () => navigate('new-order'));
+            document.getElementById('nav-mobile-projects').addEventListener('click', () => navigate('projects'));
+
+            // כפתורי ערכת נושא
+            document.getElementById('desktop-theme-toggle').addEventListener('click', toggleTheme);
+            document.getElementById('mobile-theme-toggle').addEventListener('click', toggleTheme);
+            
+            // חשיפת פונקציות גלובליות לחלון
+            window.navigate = navigate;
+            window.openProjectModal = openProjectModal;
+            window.openNewProjectModal = openNewProjectModal;
+            window.saveProject = saveProject;
+            window.deleteProject = deleteProject;
+            window.closeModal = closeModal;
+            window.sendSmartOrder = debounce(sendSmartOrder, 1000);
+            window.handlePaste = handlePaste;
+            window.triggerFileInput = triggerFileInput;
+            window.handleFileSelect = handleFileSelect;
+            window.handleDragOver = handleDragOver;
+            window.handleDragLeave = handleDragLeave;
+            window.handleFileDrop = handleFileDrop;
+            window.removeFile = removeFile;
+            window.toggleTheme = toggleTheme;
+            window.showOrderDetail = showOrderDetail;
+            window.shareProjectLink = shareProjectLink; // [NEW v55]
+            window.openApprovalModal = openApprovalModal; // [NEW v55]
+            window.searchCatalog = debounce(searchCatalog, 300); // [NEW v55]
+            window.searchCatalogApproval = debounce(searchCatalogApproval, 300); // [NEW v55]
+            window.addCatalogItemToCart = addCatalogItemToCart; // [NEW v55]
+            window.submitApprovedOrder = submitApprovedOrder; // [NEW v55]
+            window.rejectPendingOrder = rejectPendingOrder; // [NEW v55]
+        }
+
+        function authenticateUser() {
+            onAuthStateChanged(auth, async (user) => {
+                if (user) {
+                    currentUserId = user.uid;
+                    console.log(`User Authenticated: ${currentUserId}`);
+                    updateAuthStatus(`מחובר (משתמש: ${currentUserId.slice(0, 6)})`);
+                    
+                    if (!appInitialized) {
+                        appInitialized = true;
+                        await loadClientData();
+                        navigate('dashboard'); 
+                        listenForGlobalAlerts();
+                        listenForPendingOrders(); // [NEW v55]
+                        
+                        const loader = document.getElementById('app-loader');
+                        if (loader) {
+                            loader.style.opacity = '0';
+                            setTimeout(() => loader.style.display = 'none', 300);
+                        }
+                    }
+                } else {
+                    console.log("No user found. Signing in...");
+                    updateAuthStatus("מתחבר...");
+                    signInUser();
+                }
+            });
+        }
+
+        async function signInUser() {
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (error) {
+                console.error("Authentication Error:", error);
+                updateAuthStatus("שגיאת התחברות");
+                showToast("שגיאת התחברות. בדוק חיבור רשת.", "error");
+            }
+        }
+
+        function updateAuthStatus(message) {
+            const statusElements = [
+                document.getElementById('desktop-auth-status'),
+                document.getElementById('auth-status')
+            ];
+            statusElements.forEach(el => { if (el) el.innerText = message; });
+        }
+
+        // --- [NEW v55] Catalog Data Fetching ---
+        async function fetchCatalogData() {
+            if (state.catalog.length > 0) return; //
+            console.log("Fetching catalog data...");
+            try {
+                const response = await fetch(CATALOG_API_URL);
+                if (!response.ok) {
+                    throw new Error(`Catalog API returned status ${response.status}`);
+                }
+                const text = await response.text();
+                
+                // [תיקון] הוספת try-catch סביב response.json()
+                try {
+                    const data = JSON.parse(text);
+                    // [תיקון] בודק את המבנה הנכון מה-API: {status: "success", data: [...]}
+                    if (data && data.status === 'success' && Array.isArray(data.data)) {
+                        state.catalog = data.data; // [תיקון] משתמש ב-data.data
+                        console.log(`Catalog loaded with ${state.catalog.length} items.`);
+                    } else {
+                        // זורק שגיאה אם המבנה לא תקין
+                        throw new Error("Invalid JSON structure from catalog API");
+                    }
+                } catch (e) {
+                    console.error("========================================================");
+                    console.error(`אחי, שגיאה קריטית בטעינת הקטלוג (שגיאת JSON): ${e.message}`);
+                    console.error(`השרת החזיר טקסט שמתחיל ב: ${text.substring(0, 100)}...`);
+                    console.error("זו כנראה *לא* בעיה בקוד הזה, אלא בהגדרות ה-Deployment של ה-Apps Script שלך.");
+                    console.error("אנא ודא שהסקריפט שלך מוגדר לגישה: 'Anyone'.");
+                    console.error("========================================================");
+                    showToast("שגיאה חמורה בטעינת קטלוג. בדוק Console.", "error");
+                }
+                
+            } catch (error) {
+                console.error("Failed to load catalog:", error);
+            }
+        }
+
+        // --- Navigation Engine ---
+        function navigate(viewId) {
+            console.log(`Navigating to: ${viewId}`);
+            state.currentView = viewId;
+            
+            document.querySelectorAll('#mobile-main-content .app-page').forEach(page => page.classList.remove('active'));
+            document.getElementById('desktop-detail-content').innerHTML = '';
+            document.getElementById('desktop-list-content').innerHTML = '';
+
+            document.querySelectorAll('#desktop-nav .desktop-nav-link').forEach(link => {
+                link.classList.remove('active');
+                if (link.id.includes(viewId)) link.classList.add('active');
+            });
+
+            document.querySelectorAll('#bottom-nav .nav-button').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.id.includes(viewId)) btn.classList.add('active');
+            });
+
+            try {
+                switch (viewId) {
+                    case 'dashboard':
+                        renderDashboard();
+                        break;
+                    case 'pending-orders': // [NEW v55]
+                        renderPendingOrdersPage();
+                        break;
+                    case 'new-order':
+                        renderNewOrderPage();
+                        break;
+                    case 'projects':
+                        renderProjectsPage();
+                        break;
+                    case 'orders-history':
+                        renderOrdersHistoryPage();
+                        break;
+                }
+            } catch (error) {
+                console.error(`Failed to render page ${viewId}:`, error);
+                showToast(`שגיאה בטעינת עמוד: ${viewId}`, 'error');
+            }
+            
+            const mobilePage = document.getElementById(`page-${viewId}`);
+            if (mobilePage) mobilePage.classList.add('active');
+            
+            feather.replace();
+        }
+
+        // --- Theme Toggle ---
+        function toggleTheme() {
+            state.theme = document.documentElement.classList.toggle('dark') ? 'dark' : 'light';
+            localStorage.setItem('theme', state.theme);
+            setThemeUI(state.theme);
+        }
+
+        function setTheme(theme) {
+            document.documentElement.classList.toggle('dark', theme === 'dark');
+            state.theme = theme;
+            setThemeUI(theme);
+        }
+        
+        function setThemeUI(theme) {
+            const icon = theme === 'dark' ? 'sun' : 'moon';
+            document.querySelectorAll('#desktop-theme-toggle i, #mobile-theme-toggle i').forEach(el => el.setAttribute('data-feather', icon));
+            const textEl = document.querySelector('#desktop-theme-toggle span');
+            if(textEl) textEl.innerText = theme === 'dark' ? 'מצב יום' : 'מצב לילה';
+            feather.replace();
+        }
+
+        // --- Data Loading & Rendering ---
+        async function loadClientData() {
+            // טען קטלוג במקביל
+            fetchCatalogData();
+            
+            // [NEW v55] Load projects from Firestore
+            try {
+                const q = query(collection(db, "projects"), where("clientId", "==", CLIENT_ID), orderBy("name"));
+                const snapshot = await getDocs(q);
+                state.projects = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                console.log(`Loaded ${state.projects.length} projects from Firestore.`);
+            } catch (error) {
+                console.error("Failed to load projects:", error);
+                showToast("שגיאה בטעינת פרויקטים", "error");
+            }
+            
+            // טעינת היסטוריית הזמנות
+            try {
+                const q = query(collection(db, "orders"), where("clientId", "==", CLIENT_ID), orderBy("createdAt", "desc"), limit(20));
+                const snapshot = await getDocs(q);
+                state.orderHistory = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            } catch (error) {
+                console.error("Failed to load order history:", error.message);
+                // הודעת השגיאה כבר מופיעה בלוג
+            }
+        }
+
+        function renderDashboard() {
+            const greeting = getGreeting();
+            
+            // תוכן מובייל
+            const mobileContainer = document.getElementById('page-dashboard');
+            mobileContainer.innerHTML = `
+                <div class="glass-card mb-4">
+                    <h2 class="text-xl font-bold">${greeting}, יוסי!</h2>
+                    <p class="text-sm text-light">ברוך הבא לפורטל ההזמנות האישי שלך.</p>
+                </div>
+                
+                <h3 class="text-lg font-semibold mb-3">סקירה מהירה</h3>
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="glass-card text-center">
+                        <h4 class="text-3xl font-bold text-primary-color">${state.pendingOrders.length}</h4>
+                        <p class="font-semibold">ממתין לאישור</p>
+                    </div>
+                    <div class="glass-card text-center">
+                        <h4 class="text-3xl font-bold">${state.projects.length}</h4>
+                        <p class="font-semibold">פרויקטים פעילים</p>
+                    </div>
+                </div>
+                
+                <div class="glass-card mt-6">
+                    <h4 class="font-semibold mb-2">הדרכה קולית</h4>
+                    <p class="text-sm text-light mb-3">לחץ לשמיעת הסבר קצר על הפורטל.</p>
+                    <button class="btn btn-secondary w-full" disabled>
+                        <i data-feather="play-circle"></i>
+                        <span>"היי יוסי, ברוך הבא..." (בקרוב)</span>
+                    </button>
+                </div>
+            `;
+            
+            // תוכן דסקטופ
+            document.getElementById('desktop-list-content').innerHTML = `
+                <div class="p-4">
+                    <h3 class="text-lg font-semibold mb-3">הזמנות אחרונות</h3>
+                    ${renderOrderHistoryList(5)}
+                </div>
+            `;
+            document.getElementById('desktop-detail-content').innerHTML = `
+                <h2 class="text-2xl font-bold mb-2">${greeting}, יוסי!</h2>
+                <p class="text-lg text-light mb-6">ברוך הבא לפורטל הניהול של זבולון עדירן.</p>
+                <div class="glass-card">
+                    <h3 class="text-xl font-semibold mb-4">סקירה מהירה</h3>
+                    <div class="grid grid-cols-2 gap-4">
+                         <div class="glass-card text-center shadow-inner">
+                            <h4 class="text-4xl font-bold text-primary-color">${state.pendingOrders.length}</h4>
+                            <p class="font-semibold mt-2">הזמנות ממתינות לאישור</p>
+                        </div>
+                        <div class="glass-card text-center shadow-inner">
+                            <h4 class="text-4xl font-bold">${state.projects.length}</h4>
+                            <p class="font-semibold mt-2">פרויקטים פעילים</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            feather.replace();
+        }
+
+        function getGreeting() {
+            const hour = new Date().getHours();
+            if (hour < 12) return "בוקר טוב";
+            if (hour < 18) return "צהריים טובים";
+            return "ערב טוב";
+        }
+
+        function createProjectCard(project) {
+            // [MODIFIED v55] Added share button
+            return `
+                <div class="project-card">
+                    <h4 class="truncate">${project.name}</h4>
+                    <p class="truncate">${project.address}</p>
+                    <div class="flex justify-center gap-2 mt-3">
+                         <button class="btn-icon" onclick="openProjectModal('${project.id}')">
+                            <i data-feather="edit-2" class="w-5 h-5"></i>
+                         </button>
+                         <button class="btn-icon text-primary-color" onclick="shareProjectLink('${project.id}')">
+                            <i data-feather="share-2" class="w-5 h-5"></i>
+                         </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        // --- [NEW v55] Pending Orders Logic ---
+        function listenForPendingOrders() {
+            console.log("Listening for pending orders...");
+            // [תיקון] היה חסר clientId
+            const q = query(collection(db, "pending_orders"), where("client_id", "==", CLIENT_ID), orderBy("timestamp", "desc"));
+            
+            onSnapshot(q, (snapshot) => {
+                state.pendingOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                console.log(`Found ${state.pendingOrders.length} pending orders.`);
+                updatePendingBadges();
+                
+                // Refresh view if active
+                if (state.currentView === 'pending-orders') {
+                    renderPendingOrdersPage();
+                }
+                if (state.currentView === 'dashboard') {
+                    renderDashboard();
+                }
+            }, (error) => {
+                console.error("Error listening to pending orders:", error.message);
+                // הודעת השגיאה כבר מופיעה בלוג
+            });
+        }
+
+        function updatePendingBadges() {
+            const count = state.pendingOrders.length;
+            const badges = [
+                document.getElementById('mobile-pending-badge'),
+                document.getElementById('desktop-pending-badge')
+            ];
+            
+            badges.forEach(badge => {
+                if (badge) {
+                    badge.innerText = count;
+                    badge.style.display = count > 0 ? 'block' : 'none';
+                }
+            });
+        }
+
+        function renderPendingOrdersPage() {
+            const listMobile = document.getElementById('pending-orders-list-mobile');
+            const listDesktop = document.getElementById('desktop-list-content');
+            
+            let html = '';
+            if (state.pendingOrders.length === 0) {
+                html = `<p class="text-light text-center p-4">אין הזמנות שממתינות לאישור.</p>`;
+            } else {
+                html = state.pendingOrders.map(order => `
+                    <div class="list-item-card" onclick="openApprovalModal('${order.id}')">
+                        <h4>בקשה מפרויקט: ${order.project_name || 'לא ידוע'}</h4>
+                        <p>מאת: ${order.submitter_name || 'מנהל אתר'} | ${new Date(order.timestamp?.toDate()).toLocaleString('he-IL')}</p>
+                        <p class="mt-2 text-sm text-dark truncate">"${order.raw_text || 'מצורפים פריטים/מדיה'}"</p>
+                    </div>
+                `).join('');
+            }
+            
+            if (listMobile) listMobile.innerHTML = html;
+            if (listDesktop) listDesktop.innerHTML = `<div class="flex flex-col gap-2 p-2">${html}</div>`;
+            
+            document.getElementById('desktop-detail-content').innerHTML = `
+                <div class="flex flex-col items-center justify-center h-full text-center">
+                    <i data-feather="inbox" class="w-16 h-16 text-light"></i>
+                    <h3 class="text-lg font-semibold mt-4">הזמנות לאישור</h3>
+                    <p class="text-light">בחר בקשה מהרשימה כדי לבדוק ולאשר אותה.</p>
+                </div>
+            `;
+            
+            feather.replace();
+        }
+
+        // --- Project Management ---
+        function renderProjectsPage() {
+            const projectListHTML = state.projects.map(p => `
+                <div class="list-item-card ${state.selectedProjectId === p.id ? 'active' : ''}" onclick="openProjectModal('${p.id}', true)">
+                    <h4>${p.name}</h4>
+                    <p>${p.address}</p>
+                </div>
+            `).join('');
+            
+            document.getElementById('page-projects').innerHTML = `
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-bold">ניהול פרויקטים</h2>
+                    <button class="btn btn-primary" onclick="openNewProjectModal()">
+                        <i data-feather="plus" class="w-5 h-5"></i>
+                        <span>חדש</span>
+                    </button>
+                </div>
+                <div class="project-grid">
+                    ${state.projects.map(p => createProjectCard(p)).join('')}
+                </div>
+            `;
+            
+            document.getElementById('desktop-list-content').innerHTML = `
+                <div class="p-4">
+                    <button class="btn btn-primary w-full" onclick="openNewProjectModal()">
+                        <i data-feather="plus"></i>
+                        <span>צור פרויקט חדש</span>
+                    </button>
+                </div>
+                <div class="flex flex-col gap-2 p-2">${projectListHTML}</div>
+            `;
+            
+            document.getElementById('desktop-detail-content').innerHTML = `
+                <div class="flex flex-col items-center justify-center h-full text-center">
+                    <i data-feather="briefcase" class="w-16 h-16 text-light"></i>
+                    <h3 class="text-lg font-semibold mt-4">ניהול פרויקטים</h3>
+                    <p class="text-light">בחר פרויקט מהרשימה לעריכה, או צור פרויקט חדש.</p>
+                </div>
+            `;
+            feather.replace();
+        }
+
+        function openProjectModal(projectId, isDesktop = false) {
+            const project = state.projects.find(p => p.id === projectId);
+            if (!project) return;
+            
+            state.selectedProjectId = projectId;
+            
+            const contentHTML = `
+                <form id="project-form" class="space-y-4">
+                    <input type="hidden" id="project-id" value="${project.id}">
+                    <div>
+                        <label class="form-label" for="project-name">שם פרויקט</label>
+                        <input type="text" id="project-name" class="form-input" value="${project.name}" required>
+                    </div>
+                    <div>
+                        <label class="form-label" for="project-address">כתובת אספקה</label>
+                        <input type="text" id="project-address" class="form-input" value="${project.address}" required>
+                    </div>
+                    <div>
+                        <label class="form-label" for="project-contact">איש קשר (כולל טלפון)</label>
+                        <input type="text" id="project-contact" class="form-input" value="${project.contact || ''}">
+                    </div>
+                </form>
+            `;
+            
+            const footerHTML = `
+                <button class="btn btn-secondary" onclick="closeModal()">ביטול</button>
+                <button class="btn btn-primary" onclick="saveProject()">
+                    <i data-feather="save"></i> <span>שמור שינויים</span>
+                </button>
+                <button class="btn btn-danger ml-auto" onclick="deleteProject('${project.id}')">
+                    <i data-feather="trash-2"></i>
+                </button>
+            `;
+
+            if (isDesktop && window.innerWidth >= 768) {
+                document.getElementById('desktop-detail-content').innerHTML = `
+                    <h2 class="text-2xl font-bold mb-4">עריכת פרויקט</h2>
+                    ${contentHTML}
+                    <div class="mt-6 pt-4 border-t border-border-color flex gap-2">
+                        ${footerHTML}
+                    </div>
+                `;
+                document.querySelectorAll('#desktop-list-content .list-item-card').forEach(el => el.classList.remove('active'));
+                document.querySelector(`#desktop-list-content .list-item-card[onclick*="'${projectId}'"]`).classList.add('active');
+                feather.replace();
+            } else {
+                openModal(`עריכת פרויקט: ${project.name}`, contentHTML, footerHTML);
+            }
+        }
+
+        function openNewProjectModal() {
+            const contentHTML = `
+                <form id="project-form" class="space-y-4">
+                    <input type="hidden" id="project-id" value="new">
+                    <div>
+                        <label class="form-label" for="project-name">שם פרויקט</label>
+                        <input type="text" id="project-name" class="form-input" placeholder="לדוגמה: בניין חדד" required>
+                    </div>
+                    <div>
+                        <label class="form-label" for="project-address">כתובת אספקה</label>
+                        <input type="text" id="project-address" class="form-input" placeholder="כתובת מלאה" required>
+                    </div>
+                    <div>
+                        <label class="form-label" for="project-contact">איש קשר (כולל טלפון)</label>
+                        <input type="text" id="project-contact" class="form-input" placeholder="לדוגמה: עבד (050-1234567)">
+                    </div>
+                </form>
+            `;
+            
+            const footerHTML = `
+                <button class="btn btn-secondary" onclick="closeModal()">ביטול</button>
+                <button class="btn btn-primary" onclick="saveProject()">
+                    <i data-feather="save"></i> <span>שמור פרויקט</span>
+                </button>
+            `;
+            
+            if (window.innerWidth >= 768) {
+                document.getElementById('desktop-detail-content').innerHTML = `
+                    <h2 class="text-2xl font-bold mb-4">פרויקט חדש</h2>
+                    ${contentHTML}
+                    <div class="mt-6 pt-4 border-t border-border-color flex gap-2">
+                        ${footerHTML}
+                    </div>
+                `;
+                feather.replace();
+            } else {
+                openModal("פרויקט חדש", contentHTML, footerHTML);
+            }
+        }
+
+        async function saveProject() {
+            const id = document.getElementById('project-id').value;
+            const name = document.getElementById('project-name').value;
+            const address = document.getElementById('project-address').value;
+            const contact = document.getElementById('project-contact').value;
+            
+            if (!name || !address) {
+                showToast("שם פרויקט וכתובת הם שדות חובה", "error");
+                return;
+            }
+            
+            if (id === 'new') {
+                const newProject = {
+                    name, address, contact, 
+                    clientId: CLIENT_ID,
+                    setupKey: `zebulun-${name.replace(/[^a-z0-9]/gi, '').toLowerCase()}-${Date.now().toString().slice(-5)}`
+                };
+                try {
+                    const docRef = await addDoc(collection(db, "projects"), newProject);
+                    state.projects.push({ id: docRef.id, ...newProject });
+                    showToast("הפרויקט נוצר בהצלחה", "success");
+                } catch (e) {
+                    console.error("Error creating project:", e);
+                    showToast("שגיאה ביצירת פרויקט", "error");
+                }
+            } else {
+                try {
+                    const projectRef = doc(db, "projects", id);
+                    await updateDoc(projectRef, { name, address, contact });
+                    const index = state.projects.findIndex(p => p.id === id);
+                    if (index !== -1) {
+                        state.projects[index] = { ...state.projects[index], name, address, contact };
+                    }
+                    showToast("הפרויקט עודכן בהצלחה", "success");
+                } catch (e) {
+                    console.error("Error updating project:", e);
+                    showToast("שגיאה בעדכון פרויקט", "error");
+                }
+            }
+            
+            closeModal();
+            renderProjectsPage();
+        }
+
+        async function deleteProject(projectId) {
+            if (confirm(`האם אתה בטוח שברצונך למחוק פרויקט זה?`)) {
+                try {
+                    await deleteDoc(doc(db, "projects", projectId));
+                    state.projects = state.projects.filter(p => p.id !== projectId);
+                    showToast("הפרויקט נמחק", "info");
+                    closeModal();
+                    navigate('projects');
+                } catch (e) {
+                    console.error("Error deleting project:", e);
+                    showToast("שגיאה במחיקת פרויקט", "error");
+                }
+            }
+        }
+        
+        // [NEW v55] Share Project Link
+        function shareProjectLink(projectId) {
+            const project = state.projects.find(p => p.id === projectId);
+            if (!project || !project.setupKey) {
+                showToast("שגיאה: מפתח התקנה לא קיים לפרויקט", "error");
+                return;
+            }
+            
+            // הנחה ש-site_app.html נמצא באותה רמה
+            const installUrl = `${window.location.origin}${window.location.pathname.replace('index.html', 'site_app.html')}?setup_key=${project.setupKey}`;
+            
+            try {
+                navigator.clipboard.writeText(installUrl);
+                showToast("לינק התקנה למנהל האתר הועתק!", "success");
+            } catch (e) {
+                console.error("Failed to copy link:", e);
+                alert(`העתקה נכשלה. הלינק הוא:\n${installUrl}`);
+            }
+        }
+
+        // --- Smart Paste Order ---
+        function renderNewOrderPage() {
+            const pageContent = `
+                <div class="glass-card">
+                    <h2 class="text-xl font-bold mb-2">הזמנה חדשה (מנהל)</h2>
+                    <p class="text-sm text-light mb-4">
+                        יוסי, כאן תוכל ליצור הזמנה מהירה שתשלח ישירות למערכת DeliveryMaster (ללא צורך באישור).
+                    </p>
+                    
+                    <form id="smart-order-form" onsubmit="event.preventDefault(); sendSmartOrder();">
+                        <!-- 1. Catalog Search -->
+                        <div class="mb-4">
+                             <label class="form-label" for="product-search-main">חפש פריט בקטלוג</label>
+                             <input type="text" id="product-search-main" class="form-input" placeholder="הקלד מק'ט, שם מוצר..." onkeyup="searchCatalog(this.value, 'catalog-results-main')">
+                             <div id="catalog-results-main" class="catalog-search-results mt-2"></div>
+                             <div id="main-order-cart" class="mt-4 space-y-2">
+                                <!-- Cart items will be injected here -->
+                             </div>
+                        </div>
+
+                        <!-- 2. תיבת הדבקה -->
+                        <div>
+                            <label class="form-label" for="smart-paste-box">הדבק טקסט חופשי (אופציונלי)</label>
+                            <textarea id="smart-paste-box" onpaste="handlePaste(event)" placeholder="...הדבק כאן תוכן נוסף..."></textarea>
+                        </div>
+                        
+                        <!-- 3. שיוך לפרויקט -->
+                        <div class="mt-4">
+                            <label class="form-label" for="project-select-main">שייך לפרויקט (חובה)</label>
+                            <select id="project-select-main" class="form-select">
+                                <option value="">בחר פרויקט...</option>
+                                ${state.projects.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}
+                            </select>
+                        </div>
+                        
+                        <!-- 4. צירוף קבצים -->
+                        <div class="mt-4">
+                            <label class="form-label">צרף קבצים (אופציונלי)</label>
+                            <div id="file-drop-area">
+                                גרור קבצים לכאן או 
+                                <span class="text-primary-color font-semibold cursor-pointer" onclick="triggerFileInput()">
+                                    בחר קבצים
+                                </span>
+                                <input type="file" id="file-input" multiple onchange="handleFileSelect(event)" class="hidden">
+                            </div>
+                            <div id="preview-container"></div>
+                        </div>
+                        
+                        <!-- 5. שליחה -->
+                        <div class="mt-6 text-left">
+                            <button type="submit" id="send-order-btn" class="btn btn-primary btn-lg w-full md:w-auto">
+                                <i data-feather="send"></i>
+                                <span>שלח הזמנה ל-DeliveryMaster</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            `;
+
+            document.getElementById('page-new-order').innerHTML = pageContent;
+            document.getElementById('desktop-list-content').innerHTML = `
+                <div class="p-4">
+                    <h3 class="text-lg font-semibold mb-3">הזמנות אחרונות</h3>
+                    ${renderOrderHistoryList(10)}
+                </div>
+            `;
+            document.getElementById('desktop-detail-content').innerHTML = pageContent;
+            
+            const dropArea = document.getElementById('file-drop-area');
+            if (dropArea) {
+                dropArea.addEventListener('dragover', handleDragOver, false);
+                dropArea.addEventListener('dragleave', handleDragLeave, false);
+                dropArea.addEventListener('drop', handleFileDrop, false);
+            }
+            
+            feather.replace();
+        }
+
+        // --- [NEW v55] Catalog Search Logic ---
+        function searchCatalog(term, resultsElementId) {
+            const resultsContainer = document.getElementById(resultsElementId);
+            if (!resultsContainer) return;
+            
+            if (term.length < 2) {
+                resultsContainer.innerHTML = '';
+                return;
+            }
+            
+            const lowerTerm = term.toLowerCase();
+            const results = state.catalog.filter(item => 
+                item.name.toLowerCase().includes(lowerTerm) ||
+                (item.sku && item.sku.toString().includes(lowerTerm))
+            ).slice(0, 5); // Limit to 5 results
+            
+            if (results.length === 0) {
+                resultsContainer.innerHTML = '<p class="p-3 text-light text-sm">לא נמצאו פריטים.</p>';
+                return;
+            }
+            
+            // Check which cart we are adding to
+            const addFunction = resultsElementId.includes('approval') ? 'addCatalogItemToCart(this, true)' : 'addCatalogItemToCart(this, false)';
+
+            resultsContainer.innerHTML = results.map(item => `
+                <div class="catalog-item">
+                    <img src="${item.imageUrl || 'https://placehold.co/40x40/e2e8f0/94a3b8?text=N/A'}" alt="${item.name}">
+                    <div class="catalog-item-info">
+                        <strong>${item.name}</strong>
+                        <p>מק"ט: ${item.sku}</p>
+                    </div>
+                    <button class="btn btn-secondary btn-sm" 
+                            data-sku="${item.sku}" 
+                            data-name="${item.name}" 
+                            onclick="${addFunction}">
+                        <i data-feather="plus" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            `).join('');
+            feather.replace();
+        }
+        
+        // [תיקון] היה חסר searchCatalogApproval
+        function searchCatalogApproval(term, resultsElementId) {
+            searchCatalog(term, resultsElementId);
+        }
+        
+        function addCatalogItemToCart(button, isApprovalCart) {
+            const sku = button.dataset.sku;
+            const name = button.dataset.name;
+            const cartId = isApprovalCart ? 'approval-order-cart' : 'main-order-cart';
+            const cartContainer = document.getElementById(cartId);
+            
+            const existingItem = document.getElementById(`cart-item-${sku}-${isApprovalCart}`);
+            if (existingItem) {
+                existingItem.querySelector('input').value = parseInt(existingItem.querySelector('input').value) + 1;
+                return;
+            }
+
+            const itemEl = document.createElement('div');
+            itemEl.className = 'order-cart-item';
+            itemEl.id = `cart-item-${sku}-${isApprovalCart}`;
+            itemEl.dataset.sku = sku;
+            itemEl.dataset.name = name;
+            itemEl.innerHTML = `
+                <span class="flex-grow">${name} (מק"ט: ${sku})</span>
+                <input type="number" value="1" min="1" class="form-input w-20 text-center">
+                <button class="btn-icon text-danger" onclick="this.parentElement.remove()">
+                    <i data-feather="x" class="w-4 h-4"></i>
+                </button>
+            `;
+            cartContainer.appendChild(itemEl);
+            feather.replace();
+        }
+
+        // --- History Page ---
+        function renderOrdersHistoryPage() {
+            const historyHTML = renderOrderHistoryList();
+            document.getElementById('page-orders-history').innerHTML = `
+                <h2 class="text-xl font-bold mb-4">היסטוריית הזמנות</h2>
+                ${historyHTML}
+            `;
+            
+            document.getElementById('desktop-list-content').innerHTML = `<div class="flex flex-col gap-2 p-2">${historyHTML}</div>`;
+            document.getElementById('desktop-detail-content').innerHTML = `
+                <div class="flex flex-col items-center justify-center h-full text-center">
+                    <i data-feather="archive" class="w-16 h-16 text-light"></i>
+                    <h3 class="text-lg font-semibold mt-4">היסטוריית הזמנות</h3>
+                    <p class="text-light">בחר הזמנה מהרשימה כדי לראות פרטים מלאים.</p>
+                </div>
+            `;
+            feather.replace();
+        }
+
+        function renderOrderHistoryList(count = state.orderHistory.length) {
+            if (state.orderHistory.length === 0) {
+                return '<p class="text-light text-center p-4">אין היסטוריית הזמנות.</p>';
+            }
+            
+            return state.orderHistory.slice(0, count).map(order => `
+                <div class="list-item-card" onclick="showOrderDetail('${order.id}')">
+                    <h4>${order.projectName || 'הזמנה כללית'}</h4>
+                    <p>${order.status || 'חדש'} - ${new Date(order.createdAt?.toDate ? order.createdAt.toDate() : Date.now()).toLocaleDateString('he-IL')}</p>
+                </div>
+            `).join('');
+        }
+
+        function showOrderDetail(orderId) {
+            const order = state.orderHistory.find(o => o.id === orderId);
+            if (!order) return;
+
+            document.getElementById('desktop-detail-content').innerHTML = `
+                <h2 class="text-2xl font-bold mb-4">${order.projectName || 'הזמנה'}</h2>
+                <p><strong>סטטוס:</strong> ${order.status}</p>
+                <p><strong>תאריך:</strong> ${new Date(order.createdAt?.toDate()).toLocaleString('he-IL')}</p>
+                <p><strong>איש קשר:</strong> ${order.contactName || 'לא צוין'}</p>
+                <p><strong>טלפון:</strong> ${order.contactPhone || 'לא צוין'}</p>
+                
+                <h3 class="text-xl font-semibold mt-6 mb-2">תוכן ההזמנה</h3>
+                <pre class="glass-card p-4 text-sm whitespace-pre-wrap">${order.rawText || 'אין תוכן'}</pre>
+                
+                <h3 class="text-xl font-semibold mt-6 mb-2">קבצים מצורפים</h3>
+                ${(order.attachments && order.attachments.length > 0) 
+                    ? order.attachments.map(f => `<a href="${f.url}" target="_blank" class="block text-primary-color">${f.name}</a>`).join('')
+                    : '<p>אין קבצים מצורפים.</p>'
+                }
+            `;
+        }
+
+        // --- Smart Paste Logic ---
+        function handlePaste(event) {
+            const paste = (event.clipboardData || window.clipboardData).getData('text');
+            if (paste) {
+                console.log("Pasted content:", paste);
+            }
+        }
+
+        // --- File Handling Logic ---
+        function triggerFileInput() { document.getElementById('file-input').click(); }
+        function handleFileSelect(event) { addFiles(event.target.files); }
+        function handleDragOver(event) { event.preventDefault(); event.currentTarget.classList.add('dragover'); }
+        function handleDragLeave(event) { event.currentTarget.classList.remove('dragover'); }
+        function handleFileDrop(event) { event.preventDefault(); event.currentTarget.classList.remove('dragover'); addFiles(event.dataTransfer.files); }
+
+        function addFiles(files) {
+            for (const file of files) {
+                if (state.filesToUpload.length >= 5) {
+                    showToast("ניתן להעלות עד 5 קבצים", "error");
+                    break;
+                }
+                state.filesToUpload.push(file);
+            }
+            renderFilePreviews();
+        }
+
+        function renderFilePreviews() {
+            const container = document.getElementById('preview-container');
+            if (!container) return;
+            container.innerHTML = '';
+            
+            state.filesToUpload.forEach((file, index) => {
+                const previewEl = document.createElement('div');
+                previewEl.className = 'file-preview';
+                
+                if (file.type.startsWith('image/')) {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        previewEl.innerHTML = `
+                            <img src="${e.target.result}" alt="${file.name}">
+                            <div class="remove-file" onclick="removeFile(${index})"><i data-feather="x" class="w-4 h-4"></i></div>
+                        `;
+                        feather.replace();
+                    };
+                    reader.readAsDataURL(file);
+                } else {
+                    previewEl.innerHTML = `
+                        <div class="file-icon">
+                            <i data-feather="file-text" class="w-8 h-8 text-light"></i>
+                        </div>
+                        <div class="remove-file" onclick="removeFile(${index})"><i data-feather="x" class="w-4 h-4"></i></div>
+                    `;
+                    feather.replace();
+                }
+                container.appendChild(previewEl);
+            });
+        }
+
+        function removeFile(index) {
+            state.filesToUpload.splice(index, 1);
+            renderFilePreviews();
+        }
+
+        async function uploadFiles(orderId) {
+            if (state.filesToUpload.length === 0) return [];
+            
+            const uploadPromises = state.filesToUpload.map(async (file) => {
+                try {
+                    const fileRef = ref(storage, `zebulun_orders/${orderId}/${file.name}`);
+                    const snapshot = await uploadBytes(fileRef, file);
+                    const url = await getDownloadURL(snapshot.ref);
+                    
+                    console.log(`File uploaded: ${file.name} -> ${url}`);
+                    return { name: file.name, url: url };
+                    
+                } catch (error) {
+                    console.error(`Failed to upload file ${file.name}:`, error);
+                    showToast(`שגיאה בהעלאת קובץ: ${file.name}`, 'error');
+                    return null;
+                }
+            });
+
+            const results = await Promise.all(uploadPromises);
+            return results.filter(result => result !== null);
+        }
+
+
+        // --- Order Sending Logic ---
+        async function sendSmartOrder() {
+            const btn = document.getElementById('send-order-btn');
+            btn.disabled = true;
+            btn.innerHTML = '<div class="loader-small"></div> <span>שולח...</span>';
+            
+            const rawText = document.getElementById('smart-paste-box').value;
+            const projectId = document.getElementById('project-select-main').value;
+            
+            if (!projectId) {
+                showToast("חובה לשייך הזמנה לפרויקט", "error");
+                resetSendButton(btn);
+                return;
+            }
+
+            const project = state.projects.find(p => p.id === projectId);
+            const cartItems = getCartItems('main-order-cart');
+            
+            if (rawText.trim().length === 0 && state.filesToUpload.length === 0 && cartItems.length === 0) {
+                showToast("חובה להוסיף פריטים, טקסט או קבצים להזמנה", "error");
+                resetSendButton(btn);
+                return;
+            }
+            
+            const orderId = `ZEB-${Date.now()}`;
+            
+            let attachmentURLs = [];
+            try {
+                attachmentURLs = await uploadFiles(orderId);
+            } catch (error) {
+                console.error("File upload failed:", error);
+                showToast("שגיאה קריטית בהעלאת קבצים. ההזמנה לא נשלחה.", "error");
+                resetSendButton(btn);
+                return;
+            }
+
+            const orderPayload = {
+                orderId: orderId,
+                clientId: CLIENT_ID,
+                projectId: projectId,
+                projectName: project.name,
+                address: project.address,
+                contactName: project.contact || "יוסי (ראשי)",
+                contactPhone: "לא צוין", // [TODO] Add this field?
+                rawText: rawText,
+                cartItems: cartItems, // [NEW v55]
+                attachments: attachmentURLs,
+                createdAt: serverTimestamp(),
+                status: "חדש" // [NEW v55] This skips approval
+            };
+
+            try {
+                await sendOrderToFirestore(orderPayload);
+                
+                showToast("ההזמנה נשלחה בהצלחה!", "success");
+                state.orderHistory.unshift(orderPayload);
+                resetNewOrderForm();
+                navigate('orders-history');
+                
+            } catch (error) {
+                console.error("Firestore send failed:", error);
+                showToast("שגיאה בשליחה ל-Firestore.", "error");
+            } finally {
+                resetSendButton(btn);
+            }
+        }
+        
+        function getCartItems(cartId) {
+            const cartContainer = document.getElementById(cartId);
+            const items = [];
+            if (!cartContainer) return items;
+            cartContainer.querySelectorAll('.order-cart-item').forEach(itemEl => {
+                items.push({
+                    sku: itemEl.dataset.sku,
+                    name: itemEl.dataset.name,
+                    quantity: parseInt(itemEl.querySelector('input').value)
+                });
+            });
+            return items;
+        }
+
+        function resetSendButton(btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i data-feather="send"></i> <span>שלח הזמנה ל-DeliveryMaster</span>';
+            feather.replace();
+        }
+
+        function resetNewOrderForm() {
+            document.getElementById('smart-paste-box').value = '';
+            document.getElementById('project-select-main').value = '';
+            document.getElementById('catalog-results-main').innerHTML = '';
+            document.getElementById('main-order-cart').innerHTML = '';
+            state.filesToUpload = [];
+            renderFilePreviews();
+        }
+
+        async function sendOrderToFirestore(payload) {
+            if (!db) throw new Error("Firestore is not initialized");
+            const orderRef = doc(db, "orders", payload.orderId);
+            await setDoc(orderRef, payload);
+            console.log("Order sent to Firestore with ID:", payload.orderId);
+        }
+
+        // --- [NEW v55] Approval Workbench Logic ---
+        function openApprovalModal(pendingOrderId) {
+            const order = state.pendingOrders.find(o => o.id === pendingOrderId);
+            if (!order) {
+                showToast("הבקשה לא נמצאה", "error");
+                return;
+            }
+
+            // איפוס עגלת אישור
+            state.currentApprovalCart = [];
+            
+            let mediaHTML = '';
+            if (order.media_files && order.media_files.length > 0) {
+                mediaHTML = order.media_files.map(file => {
+                    if (file.type.startsWith('image/')) {
+                        return `<li><a href="${file.url}" target="_blank" class="hover:underline">תמונה מצורפת</a></li>`;
+                    }
+                    if (file.type.startsWith('audio/')) {
+                        return `<li><audio controls src="${file.url}" class="w-full">הקלטה</audio></li>`;
+                    }
+                    return `<li><a href="${file.url}" target="_blank" class="hover:underline">קובץ מצורף</a></li>`;
+                }).join('');
+            }
+            
+            const cartItemsHTML = (order.cart_items && order.cart_items.length > 0)
+                ? order.cart_items.map(item => `<li>${item.quantity} x ${item.name} (מק"ט: ${item.sku})</li>`).join('')
+                : '<li>אין פריטים מהקטלוג</li>';
+
+            const body = `
+                <div class="approval-grid">
+                    <!-- Column 1: Request from Site -->
+                    <div class="approval-col">
+                        <h4>בקשה מפרויקט: ${order.project_name}</h4>
+                        <div class="request-data space-y-3">
+                            <p><strong>מנהל אתר:</strong> ${order.submitter_name}</p>
+                            <p><strong>מיקום מבוקש:</strong> ${order.location_address || 'לא צוין'}</p>
+                            <div>
+                                <strong>טקסט חופשי:</strong>
+                                <pre>${order.raw_text || "---"}</pre>
+                            </div>
+                            <div>
+                                <strong>פריטים מהקטלוג (שטח):</strong>
+                                <ul class="list-disc pr-4">${cartItemsHTML}</ul>
+                            </div>
+                            <div>
+                                <strong>מדיה מצורפת:</strong>
+                                <ul class="list-disc pr-4">${mediaHTML || '<li>אין מדיה</li>'}</ul>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Column 2: Official Order (Yossi's Workbench) -->
+                    <div class="approval-col">
+                        <h4>בניית הזמנה רשמית</h4>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="form-label" for="product-search-approval">חפש והוסף פריטים</label>
+                                <input type="text" id="product-search-approval" class="form-input" placeholder="הקלד מק'ט או שם..." onkeyup="searchCatalogApproval(this.value, 'catalog-results-approval')">
+                                <div id="catalog-results-approval" class="catalog-search-results mt-2"></div>
+                            </div>
+                            <div>
+                                <label class="form-label">עגלת הזמנה רשמית</label>
+                                <div id="approval-order-cart" class="mt-2 space-y-2 p-3 bg-light rounded-md border min-h-[100px]">
+                                    <!-- Approval cart items will be injected here -->
+                                </div>
+                            </div>
+                             <div>
+                                <label class="form-label" for="approval-notes">הערות נוספות (מנהל)</label>
+                                <textarea id="approval-notes" class="form-input" rows="2"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            const footer = `
+                <button class="btn btn-danger" onclick="rejectPendingOrder('${order.id}')">
+                    <i data-feather="x"></i> <span>דחה בקשה</span>
+                </button>
+                <div class="flex-grow"></div>
+                <button class="btn btn-secondary" onclick="closeModal()">ביטול</button>
+                <button class="btn btn-primary btn-lg" onclick="submitApprovedOrder('${order.id}')">
+                    <i data-feather="check"></i> <span>אשר ושלח ל-DeliveryMaster</span>
+                </button>
+            `;
+            
+            openModal(`אישור בקשה: ${order.project_name}`, body, footer, true);
+        }
+        
+        // [NEW v55]
+        async function submitApprovedOrder(pendingOrderId) {
+            const pendingOrder = state.pendingOrders.find(o => o.id === pendingOrderId);
+            if (!pendingOrder) return;
+
+            const btn = document.querySelector('.modal-footer .btn-primary');
+            btn.disabled = true;
+            btn.innerHTML = '<div class="loader-small"></div> <span>מאשר...</span>';
+            
+            const cartItems = getCartItems('approval-order-cart');
+            const managerNotes = document.getElementById('approval-notes').value;
+
+            if (cartItems.length === 0) {
+                showToast("חובה להוסיף פריטים להזמנה הרשמית", "error");
+                btn.disabled = false;
+                btn.innerHTML = '<i data-feather="check"></i> <span>אשר ושלח</span>';
+                return;
+            }
+            
+            const project = state.projects.find(p => p.id === pendingOrder.project_id);
+            if (!project) {
+                 showToast("שגיאה: הפרויקט המשויך לבקשה זו לא נמצא.", "error");
+                 btn.disabled = false;
+                 btn.innerHTML = '<i data-feather="check"></i> <span>אשר ושלח</span>';
+                 return;
+            }
+
+            const orderPayload = {
+                orderId: `ZEB-${Date.now()}`,
+                clientId: CLIENT_ID,
+                projectId: pendingOrder.project_id,
+                projectName: pendingOrder.project_name,
+                address: pendingOrder.location_address || project.address,
+                // [TODO] Add lat/lon from pending order
+                contactName: project.contact || pendingOrder.submitter_name,
+                rawText: `--- בקשה מקורית מהשטח ---\n${pendingOrder.raw_text}\n\n--- הערות מנהל ---\n${managerNotes}`,
+                cartItems: cartItems,
+                attachments: pendingOrder.media_files || [],
+                createdAt: serverTimestamp(),
+                status: "חדש",
+                sourceRequestId: pendingOrderId, // [NEW v55] Link to the original request
+                siteManagerUid: pendingOrder.site_manager_uid // [NEW v55] For tracking
+            };
+
+            try {
+                // 1. Send official order
+                await sendOrderToFirestore(orderPayload);
+                
+                // 2. Update pending order (mark as approved)
+                const pendingRef = doc(db, "pending_orders", pendingOrderId);
+                await updateDoc(pendingRef, {
+                    status: "approved",
+                    final_order_id: orderPayload.orderId
+                });
+                
+                showToast("ההזמנה אושרה ונשלחה!", "success");
+                closeModal();
+                
+            } catch (error) {
+                 console.error("Error approving order:", error);
+                 showToast("שגיאה באישור ההזמנה", "error");
+                 btn.disabled = false;
+                 btn.innerHTML = '<i data-feather="check"></i> <span>אשר ושלח</span>';
+            }
+        }
+        
+        // [NEW v55]
+        async function rejectPendingOrder(pendingOrderId) {
+            if (!confirm("האם אתה בטוח שברצונך לדחות בקשה זו? לא ניתן לשחזר אותה.")) {
+                return;
+            }
+            
+            try {
+                const pendingRef = doc(db, "pending_orders", pendingOrderId);
+                await updateDoc(pendingRef, {
+                    status: "rejected"
+                    // [TODO] Add a rejection note?
+                });
+                showToast("הבקשה נדחתה", "info");
+                closeModal();
+            } catch (error) {
+                console.error("Error rejecting order:", error);
+                showToast("שגיאה בדחיית הבקשה", "error");
+            }
+        }
+
+
+        // --- Global Alerts & Utils ---
+        function listenForGlobalAlerts() {
+            try {
+                const q = query(
+                    collection(db, "globalAlerts"),
+                    orderBy("timestamp", "desc"),
+                    limit(1)
+                );
+                
+                let initialLoad = true;
+                globalAlertsListener = onSnapshot(q, (snapshot) => {
+                    if (initialLoad) {
+                        initialLoad = false;
+                        return;
+                    }
+                    
+                    snapshot.docChanges().forEach((change) => {
+                        if (change.type === "added") {
+                            const alert = change.doc.data();
+                            playAlert(alert.title, alert.type || 'info');
+                        }
+                    });
+                }, (error) => {
+                    console.error("Failed to listen for global alerts:", error.message);
+                });
+                
+            } catch (error) {
+                console.error("Error setting up alert listener:", error);
+            }
+        }
+
+        function playAlert(message, type = "info") {
+            console.log(`Playing Alert: ${message} (Type: ${type})`);
+            
+            try {
+                const soundUrl = (type === "error" || type === "broadcast")
+                    ? "https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg" 
+                    : "https://actions.google.com/sounds/v1/alarms/beep_short.ogg";
+                const audio = new Audio(soundUrl);
+                audio.play().catch(e => console.warn("Audio playback blocked by browser."));
+            } catch (e) {
+                console.warn("Audio playback failed.", e);
+            }
+
+            const container = document.getElementById("global-alert-container");
+            const alertBox = document.createElement("div");
+            alertBox.className = `global-alert ${type === 'error' ? 'alert-error' : (type === 'success' ? 'alert-success' : 'alert-info')}`;
+            
+            const icon = (type === "error") ? "alert-triangle" : (type === 'success' ? 'check-circle' : 'info');
+            alertBox.innerHTML = `<i data-feather="${icon}" class="w-5 h-5"></i><span>${message}</span>`;
+            
+            container.appendChild(alertBox);
             feather.replace();
             
-            // 1. Parse URL for setup key
+            setTimeout(() => {
+                alertBox.style.opacity = '0';
+                alertBox.style.transform = 'translateY(20px)';
+                setTimeout(() => alertBox.remove(), 300);
+            }, 4000);
+        }
+
+        function showToast(message, type = "info") {
+            playAlert(message, type);
+        }
+
+        function openModal(title, body, footer, isWide = false) {
+            const modal = document.getElementById('main-modal');
+            modal.classList.toggle('modal-wide', isWide);
+            document.getElementById('modal-title').innerText = title;
+            document.getElementById('modal-body').innerHTML = body;
+            document.getElementById('modal-footer').innerHTML = footer;
+            document.getElementById('modal-overlay').classList.add('visible');
+            modal.classList.add('visible');
+            feather.replace();
+        }
+
+        function closeModal() {
+            document.getElementById('modal-overlay').classList.remove('visible');
+            document.getElementById('main-modal').classList.remove('visible');
+            document.getElementById('main-modal').classList.remove('modal-wide');
+            
+            if (state.currentView === 'projects') {
+                renderProjectsPage();
+            }
+        }
+
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+    </script>
+
+</body>
+</html>
