@@ -21,11 +21,14 @@
             --primary-hover: #075985; /* sky-800 */
             --glass-bg: rgba(255, 255, 255, 0.7);
             --glass-border: rgba(255, 255, 255, 0.4);
+            --border-color: #e5e7eb; /* gray-200 */
+            --danger: #ef4444; /* red-500 */
         }
         
         html.dark {
             --glass-bg: rgba(30, 41, 59, 0.7); /* slate-800 */
             --glass-border: rgba(255, 255, 255, 0.1);
+            --border-color: #334155; /* slate-700 */
         }
 
         body {
@@ -66,6 +69,20 @@
             padding: 1.5rem;
             border-bottom: 1px solid var(--glass-border);
             z-index: 10;
+        }
+        
+        .form-input {
+             width: 100%;
+            padding: 0.6rem 0.9rem;
+            border: 1px solid var(--border-color);
+            border-radius: 0.5rem;
+            background-color: rgba(255,255,255,0.8);
+            color: #1f2937; /* gray-800 */
+        }
+        .form-input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 2px rgba(12, 74, 110, 0.3);
         }
 
         /* --- כרטיס מוצר --- */
@@ -201,6 +218,7 @@
             top: 2rem;
             left: 2rem; /* הפוך ב-RTL */
             color: white;
+            cursor: pointer;
         }
 
         /* --- לואדר --- */
@@ -252,7 +270,7 @@
     <!-- כפתור סל צף למובייל -->
     <button id="mobile-cart-button" onclick="toggleCart(true)" class="lg:hidden p-4 rounded-full bg-sky-800 text-white shadow-lg">
         <i data-feather="shopping-cart"></i>
-        <span id="mobile-cart-badge" class_alias="badge" class="absolute top-0 right-0 block w-5 h-5 text-xs font-bold bg-red-500 text-white rounded-full text-center leading-5 hidden">0</span>
+        <span id="mobile-cart-badge" class="absolute top-0 right-0 block w-5 h-5 text-xs font-bold bg-red-500 text-white rounded-full text-center leading-5 hidden">0</span>
     </button>
     
     <div class="main-layout">
@@ -562,7 +580,7 @@
             feather.replace();
         }
 
-        window.updateCartQuantity = function(sku, newQuantity) {
+        function updateCartQuantity(sku, newQuantity) {
             const qty = parseInt(newQuantity);
             const item = cart.find(i => i.sku === sku);
             
@@ -575,7 +593,7 @@
             renderCart();
         }
 
-        window.removeFromCart = function(sku) {
+        function removeFromCart(sku) {
             cart = cart.filter(i => i.sku !== sku);
             renderCart();
         }
@@ -665,7 +683,7 @@
             }, 3000);
         }
 
-        window.toggleCart = function(forceOpen = null) {
+        function toggleCart(forceOpen = null) {
             const cartSidebar = document.getElementById('cart-sidebar');
             if (forceOpen === true) {
                 cartSidebar.classList.add('open');
@@ -677,14 +695,14 @@
         }
         
         // פונקציות מודאל תמונה
-        window.showImageModal = function(imageUrl, productName) {
+        function showImageModal(imageUrl, productName) {
             event.stopPropagation(); // מנע לחיצה על הכרטיס
             document.getElementById('image-zoom-content').src = imageUrl;
             document.getElementById('image-zoom-modal-caption').textContent = productName;
             document.getElementById('image-zoom-modal').classList.add('open');
         }
         
-        window.closeImageModal = function() {
+        function closeImageModal() {
             document.getElementById('image-zoom-modal').classList.remove('open');
         }
         
