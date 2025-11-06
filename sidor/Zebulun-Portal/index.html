@@ -2,19 +2,9 @@
 <html lang="he" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Zebulun Delivery Portal – Powered by H.Saban Materials</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>קטלוג מוצרים | ח. סבן</title>
     
-    <!-- PWA Manifest & Theme -->
-    <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
-    <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <link rel="apple-touch-icon" href="https://i.postimg.cc/ryPT3r29/image.png">
-    <link rel="icon" href="https://i.postimg.cc/ryPT3r29/image.png">
-
     <!-- TailwindCSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
@@ -25,907 +15,679 @@
     <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700&display=swap" rel="stylesheet">
 
     <style>
-        /* [סגנונות CSS זהים לגרסה הקודמת, v55] */
+        /* --- הגדרות בסיס וערכת נושא --- */
         :root {
-            --primary-color: #3b82f6; /* blue-500 */
-            --primary-dark: #2563eb; /* blue-600 */
-            --primary-light: #eff6ff; /* blue-50 */
-            --bg-light: #f3f4f6; /* gray-100 */
-            --bg-white: #ffffff;
-            --border-color: #e5e7eb; /* gray-200 */
-            --text-dark: #1f2937; /* gray-800 */
-            --text-light: #6b7280; /* gray-500 */
-            --danger: #ef4444; /* red-500 */
+            --primary-color: #0c4a6e; /* sky-900 */
+            --primary-hover: #075985; /* sky-800 */
+            --glass-bg: rgba(255, 255, 255, 0.7);
+            --glass-border: rgba(255, 255, 255, 0.4);
         }
         
         html.dark {
-            --primary-color: #60a5fa; /* blue-400 */
-            --primary-dark: #3b82f6; /* blue-500 */
-            --primary-light: #1e3a8a; /* blue-900 / slate-700 */
-            --bg-light: #0f172a; /* slate-900 */
-            --bg-white: #1e293b; /* slate-800 */
-            --border-color: #334155; /* slate-700 */
-            --text-dark: #f1f5f9; /* slate-100 */
-            --text-light: #94a3b8; /* slate-400 */
-            --danger: #f87171; /* red-400 */
+            --glass-bg: rgba(30, 41, 59, 0.7); /* slate-800 */
+            --glass-border: rgba(255, 255, 255, 0.1);
         }
 
-        /* --- Global Styles --- */
-        html { -webkit-tap-highlight-color: transparent; }
         body {
             font-family: 'Rubik', sans-serif;
-            background-color: var(--bg-light);
-            color: var(--text-dark);
-            overscroll-behavior: none;
-            overflow: hidden; /* מניעת גלילה ברמת ה-BODY */
+            /* רקע פרימיום עדין */
+            background-color: #f0f4f8;
+            background-image: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
         }
+        
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-        /* --- Loader --- */
-        #app-loader {
-            position: fixed;
-            inset: 0;
-            background-color: var(--bg-light);
+        /* --- אפקט Glassmorphism --- */
+        .glass-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--glass-border);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.1);
+        }
+        
+        /* --- פריסה ראשית --- */
+        .main-layout {
+            display: grid;
+            grid-template-columns: 1fr;
+            height: 100vh;
+        }
+        
+        @media (min-width: 1024px) {
+            .main-layout {
+                /* סל קניות צדדי בדסקטופ */
+                grid-template-columns: 3fr 1fr;
+            }
+        }
+
+        /* --- כותרת וחיפוש --- */
+        .catalog-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid var(--glass-border);
+            z-index: 10;
+        }
+
+        /* --- כרטיס מוצר --- */
+        .product-card {
+            border-radius: 0.75rem;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+        .product-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 40px 0 rgba(0, 0, 0, 0.15);
+        }
+        
+        /* קונטיינר לתמונת זום */
+        .product-image-container {
+            position: relative;
+            overflow: hidden;
+            cursor: pointer;
+            background-color: #e2e8f0; /* gray-200 */
+        }
+        
+        .product-image-container img {
+            transition: transform 0.4s ease-in-out;
+        }
+        
+        .product-card:hover .product-image-container img {
+            transform: scale(1.1);
+        }
+        
+        /* אייקון זום */
+        .zoom-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.3);
             display: flex;
-            flex-direction: column;
             align-items: center;
             justify-content: center;
-            z-index: 10000;
+            opacity: 0;
             transition: opacity 0.3s ease;
         }
+        .product-card:hover .zoom-overlay {
+            opacity: 1;
+        }
+
+        /* --- סל קניות --- */
+        #cart-sidebar {
+            position: fixed;
+            top: 0;
+            right: -100%; /* מוסתר מחוץ למסך במובייל */
+            width: 100%;
+            max-width: 400px;
+            height: 100vh;
+            z-index: 40;
+            transition: transform 0.3s ease-in-out;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        #cart-sidebar.open {
+            transform: translateX(-100%); /* הכנסה מימין לשמאל (בגלל RTL) */
+        }
+        
+        @media (min-width: 1024px) {
+            #cart-sidebar {
+                position: relative; /* הופך לחלק מהגריד */
+                right: auto;
+                width: auto;
+                transform: none;
+                z-index: 1;
+                border-right: 1px solid var(--glass-border);
+            }
+        }
+        
+        /* כפתור סל צף למובייל */
+        #mobile-cart-button {
+            position: fixed;
+            bottom: 2rem;
+            left: 2rem; /* הפוך ב-RTL */
+            z-index: 30;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+        }
+        
+        .cart-item-qty {
+            width: 60px;
+            padding: 0.25rem 0.5rem;
+            text-align: center;
+            border-radius: 0.375rem;
+            border: 1px solid var(--border-color);
+        }
+        
+        /* --- מודאל זום --- */
+        #image-zoom-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 50;
+            background-color: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+        #image-zoom-modal.open {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        #image-zoom-modal img {
+            max-width: 90vw;
+            max-height: 80vh;
+            object-fit: contain;
+            border-radius: 0.5rem;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        }
+        #image-zoom-modal-caption {
+            position: absolute;
+            bottom: 2rem;
+            color: white;
+            font-size: 1.1rem;
+            font-weight: 500;
+            background-color: rgba(0,0,0,0.5);
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+        }
+        #image-zoom-close {
+            position: absolute;
+            top: 2rem;
+            left: 2rem; /* הפוך ב-RTL */
+            color: white;
+        }
+
+        /* --- לואדר --- */
+        #loader-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 100;
+            background-color: rgba(255, 255, 255, 0.5);
+            backdrop-filter: blur(4px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease;
+        }
+        #loader-overlay.open {
+            opacity: 1;
+            pointer-events: auto;
+        }
         .loader {
-            border: 4px solid var(--border-color);
-            border-top: 4px solid var(--primary-color);
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid var(--primary-color);
             border-radius: 50%;
             width: 50px;
             height: 50px;
             animation: spin 1s linear infinite;
         }
-        .loader-small {
-            border: 2px solid var(--border-color);
-            border-top: 2px solid var(--primary-color);
-            border-radius: 50%;
-            width: 16px;
-            height: 16px;
-            animation: spin 0.8s linear infinite;
-        }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        
-        /* --- Global Alert (Toast) --- */
-        #global-alert-container {
-            position: fixed;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 10000;
-            display: flex;
-            flex-direction: column;
-            gap: 0.5rem;
-            width: 90%;
-            max-width: 400px;
-        }
-        .global-alert {
-            background: rgba(30, 41, 59, 0.85); /* slate-800 */
-            backdrop-filter: blur(5px);
-            color: #fff;
-            padding: 1rem 1.25rem;
-            border-radius: 0.75rem;
-            font-weight: 600;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-            animation: popIn 0.3s ease-out;
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-        }
-        .global-alert.alert-info {
-            background: rgba(59, 130, 246, 0.85); /* blue-500 */
-        }
-        .global-alert.alert-success {
-            background: rgba(34, 197, 94, 0.85); /* green-500 */
-        }
-        .global-alert.alert-error {
-            background: rgba(239, 68, 68, 0.85); /* red-500 */
-        }
-        @keyframes popIn {
-          from { transform: translateY(20px) scale(0.9); opacity: 0; }
-          to { transform: translateY(0) scale(1); opacity: 1; }
-        }
 
-        /* --- Modal (Popup) --- */
-        .modal-overlay {
-            position: fixed;
-            inset: 0;
-            background-color: rgba(0, 0, 0, 0.5);
-            backdrop-filter: blur(4px);
-            z-index: 500;
-            opacity: 0;
-            transition: opacity 0.2s ease;
-            pointer-events: none;
-        }
-        .modal-overlay.visible {
-            opacity: 1;
-            pointer-events: auto;
-        }
-        .modal-container {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%) scale(0.95);
-            background-color: var(--bg-white);
-            border-radius: 0.75rem;
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-            z-index: 501;
-            width: 90%;
-            max-width: 500px;
-            opacity: 0;
-            transition: all 0.2s ease-out;
-            pointer-events: none;
-        }
-        /* [NEW v55] Wide modal for approval */
-        .modal-container.modal-wide {
-            max-width: 800px;
-        }
-        .modal-container.visible {
-            opacity: 1;
-            transform: translate(-50%, -50%) scale(1);
-            pointer-events: auto;
-        }
-        .modal-header {
-            padding: 1rem 1.5rem;
-            border-bottom: 1px solid var(--border-color);
-        }
-        .modal-body {
-            padding: 1.5rem;
-            max-height: 70vh;
-            overflow-y: auto;
-        }
-        .modal-footer {
-            padding: 1rem 1.5rem;
-            border-top: 1px solid var(--border-color);
-            background-color: var(--bg-light);
-            text-align: left;
-            border-bottom-left-radius: 0.75rem;
-            border-bottom-right-radius: 0.75rem;
-        }
-        
-        /* --- General Form Elements --- */
-        .form-label {
-            display: block;
-            font-weight: 500;
-            font-size: 0.9rem;
-            margin-bottom: 0.25rem;
-            color: var(--text-dark);
-        }
-        .form-input, .form-textarea, .form-select {
-            width: 100%;
-            padding: 0.6rem 0.9rem;
-            border: 1px solid var(--border-color);
-            border-radius: 0.5rem;
-            background-color: var(--bg-white);
-            color: var(--text-dark);
-        }
-        .form-input:focus, .form-textarea:focus, .form-select:focus {
-            outline: none;
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 2px var(--primary-light);
-        }
-        .btn {
-            padding: 0.6rem 1.25rem;
-            border: none;
-            border-radius: 0.5rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 0.5rem;
-        }
-        .btn-lg {
-            padding: 0.75rem 1.5rem;
-            font-size: 1rem;
-        }
-        .btn-primary {
-            background-color: var(--primary-color);
-            color: white;
-        }
-        .btn-primary:hover {
-            background-color: var(--primary-dark);
-        }
-        .btn-primary:disabled {
-            background-color: var(--text-light);
-            cursor: not-allowed;
-            opacity: 0.7;
-        }
-        .btn-secondary {
-            background-color: var(--bg-light);
-            color: var(--text-dark);
-            border: 1px solid var(--border-color);
-        }
-        .btn-secondary:hover {
-            background-color: var(--border-color);
-        }
-        .btn-danger {
-            background-color: var(--danger);
-            color: white;
-        }
-        .btn-icon {
-            padding: 0.5rem;
-            border-radius: 0.5rem;
-            background: none;
-            border: none;
-            color: var(--text-light);
-        }
-        .btn-icon:hover {
-            background-color: var(--bg-light);
-            color: var(--text-dark);
-        }
-        
-        /* --- Card Styles --- */
-        .glass-card {
-            background: var(--bg-white);
-            border-radius: 0.75rem;
-            padding: 1.25rem;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
-            border: 1px solid var(--border-color);
-        }
-        .list-item-card {
-            background-color: var(--bg-white);
-            border: 1px solid var(--border-color);
-            border-radius: 0.5rem;
-            padding: 1rem;
-            transition: all 0.2s;
-            cursor: pointer;
-        }
-        .list-item-card:hover {
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 2px var(--primary-light);
-        }
-        .list-item-card.active {
-            border-color: var(--primary-color);
-            background-color: var(--primary-light);
-        }
-        .list-item-card h4 {
-            font-weight: 600;
-            color: var(--text-dark);
-        }
-        .list-item-card p {
-            font-size: 0.9rem;
-            color: var(--text-light);
-        }
-
-        /* --- DESKTOP CRM LAYOUT (v53) --- */
-        #desktop-crm-layout {
-            display: none; /* Hidden by default */
-        }
-        
-        /* --- MOBILE PWA LAYOUT (v53) --- */
-        #mobile-pwa-layout {
-            display: grid;
-            grid-template-rows: auto 1fr auto;
-            height: 100vh;
-            height: -webkit-fill-available;
-        }
-        #mobile-header {
-            background-color: var(--bg-white);
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-            z-index: 10;
-            padding: 1rem 1.25rem;
-            padding-top: calc(1rem + env(safe-area-inset-top, 0));
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .header-logos { display: flex; align-items: center; gap: 0.5rem; }
-        .header-logos img { max-height: 32px; width: auto; object-fit: contain; }
-        .logo-divider {
-            width: 1px;
-            height: 24px;
-            background-color: var(--border-color);
-        }
-        
-        #mobile-main-content {
-            overflow-y: auto;
-            position: relative;
-        }
-        
-        #bottom-nav {
-            display: grid;
-            grid-auto-flow: column;
-            background-color: var(--bg-white);
-            border-top: 1px solid var(--border-color);
-            box-shadow: 0 -1px 3px rgba(0,0,0,0.05);
-            z-index: 10;
-            padding-bottom: env(safe-area-inset-bottom, 0);
-        }
-        .nav-button {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 8px 4px;
-            color: var(--text-light);
-            font-size: 0.7rem;
-            font-weight: 500;
-            border-top: 3px solid transparent;
-            transition: all 0.2s ease;
-            position: relative; /* [NEW v55] For badge */
-        }
-        .nav-button.active {
-            color: var(--primary-color);
-            border-top-color: var(--primary-color);
-            background-color: var(--primary-light);
-        }
-        /* [NEW v55] Notification Badge */
-        .notification-badge {
-            position: absolute;
-            top: 4px;
-            right: 20px;
-            background-color: var(--danger);
-            color: white;
-            font-size: 0.65rem;
-            font-weight: 700;
-            border-radius: 99px;
-            padding: 0 6px;
-            min-width: 18px;
-            height: 18px;
-            line-height: 18px;
-            text-align: center;
-            border: 2px solid var(--bg-white);
-            display: none; /* Hidden by default */
-        }
-        .nav-button.active .notification-badge {
-            border-color: var(--primary-light);
-        }
-
-        /* --- Main Content Pages (App-like navigation) --- */
-        .app-page {
-            padding: 1rem;
-            display: none; /* Hidden by default */
-        }
-        .app-page.active {
-            display: block;
-        }
-        
-        /* --- Dashboard Page (Mobile) --- */
-        .project-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 0.75rem;
-        }
-        .project-card, .add-project-card {
-            background-color: var(--bg-white);
-            border: 1px solid var(--border-color);
-            border-radius: 0.5rem;
-            padding: 1rem;
-            text-align: center;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.03);
-            transition: all 0.2s;
-        }
-        .project-card:hover, .add-project-card:hover {
-            border-color: var(--primary-color);
-            color: var(--primary-color);
-        }
-        .project-card h4 {
-            font-weight: 600;
-        }
-        .project-card p {
-            font-size: 0.8rem;
-            color: var(--text-light);
-        }
-        .add-project-card {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            color: var(--text-light);
-            border-style: dashed;
-        }
-        /* [NEW v55] Share button in project card */
-        .project-share-btn {
-            margin-top: 0.75rem;
-            padding: 0.3rem 0.6rem;
-            font-size: 0.75rem;
-            background-color: var(--bg-light);
-            color: var(--primary-color);
-            border: 1px solid var(--border-color);
-            border-radius: 0.375rem;
-            font-weight: 500;
-        }
-
-        /* --- Smart Paste Box --- */
-        #smart-paste-box {
-            width: 100%;
-            height: 150px;
-            padding: 0.75rem 1rem;
-            border: 2px dashed var(--border-color);
-            border-radius: 0.5rem;
-            background-color: var(--bg-light);
-            color: var(--text-dark);
-            resize: vertical;
-        }
-        #smart-paste-box:focus {
-            outline: none;
-            border-color: var(--primary-color);
-            background-color: var(--bg-white);
-        }
-        
-        #file-drop-area {
-            margin-top: 0.5rem;
-            border: 2px dashed var(--border-color);
-            border-radius: 0.5rem;
-            padding: 1.5rem;
-            text-align: center;
-            color: var(--text-light);
-            background-color: var(--bg-light);
-            transition: all 0.2s;
-        }
-        #file-drop-area.dragover {
-            border-color: var(--primary-color);
-            background-color: var(--primary-light);
-        }
-        #preview-container {
-            display: flex;
-            gap: 0.75rem;
-            margin-top: 1rem;
-            flex-wrap: wrap;
-        }
-        .file-preview {
-            position: relative;
-            width: 80px;
-            height: 80px;
-            border-radius: 0.5rem;
-            overflow: hidden;
-            border: 1px solid var(--border-color);
-        }
-        .file-preview img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-        .file-preview .file-icon {
-            width: 100%;
-            height: 100%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background-color: var(--bg-light);
-        }
-        .file-preview .remove-file {
-            position: absolute;
-            top: 2px;
-            right: 2px;
-            background-color: rgba(0,0,0,0.6);
-            color: white;
-            border-radius: 50%;
-            width: 20px;
-            height: 20px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-        }
-        
-        /* [NEW v55] Catalog Search */
-        .catalog-search-results {
-            max-height: 300px;
-            overflow-y: auto;
-            border: 1px solid var(--border-color);
-            border-radius: 0.5rem;
-            background-color: var(--bg-white);
-        }
-        .catalog-item {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            padding: 0.5rem;
-            border-bottom: 1px solid var(--border-color);
-        }
-        .catalog-item:last-child {
-            border-bottom: none;
-        }
-        .catalog-item img {
-            width: 40px;
-            height: 40px;
-            object-fit: cover;
-            border-radius: 0.375rem;
-            border: 1px solid var(--border-color);
-        }
-        .catalog-item-info {
-            flex-grow: 1;
-        }
-        .catalog-item-info p {
-            font-size: 0.8rem;
-            color: var(--text-light);
-        }
-        
-        /* [NEW v55] Approval Workbench */
-        .approval-grid {
-            display: grid;
-            grid-template-columns: 1fr; /* Stack on mobile */
-            gap: 1rem;
-        }
-        .approval-col h4 {
-            font-size: 1.1rem;
-            font-weight: 600;
-            padding-bottom: 0.5rem;
-            border-bottom: 2px solid var(--primary-color);
-            margin-bottom: 0.75rem;
-        }
-        .request-data {
-            font-size: 0.9rem;
-            background-color: var(--bg-light);
-            padding: 0.75rem;
-            border-radius: 0.5rem;
-            border: 1px solid var(--border-color);
-            word-wrap: break-word;
-        }
-        .request-data pre {
-            white-space: pre-wrap;
-            font-family: inherit;
-        }
-        .request-data a {
-            color: var(--primary-color);
-            font-weight: 500;
-        }
-        .order-cart-item {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            font-size: 0.9rem;
-            padding: 0.25rem 0;
-        }
-
-        /* * app.desktop.css (Embedded)
-         * סגנונות הדורסים ומשנים את הפריסה עבור מסכי מחשב
-         */
-        @media (min-width: 768px) {
-            #desktop-crm-layout {
-                display: grid;
-                grid-template-columns: 260px 1fr; /* Nav | Main Area */
-                height: 100vh;
-            }
-            #mobile-pwa-layout {
-                display: none;
-            }
-            
-            #desktop-nav {
-                background-color: var(--bg-white);
-                border-left: 1px solid var(--border-color); /* RTL */
-                display: flex;
-                flex-direction: column;
-                padding: 1rem;
-            }
-            .desktop-nav-header {
-                padding: 0.5rem;
-                margin-bottom: 1rem;
-                border-bottom: 1px solid var(--border-color);
-            }
-            .desktop-nav-header .header-logos {
-                display: flex;
-                align-items: center;
-                gap: 0.75rem;
-            }
-            .desktop-nav-header img {
-                max-height: 40px;
-                width: auto;
-                object-fit: contain;
-                margin-bottom: 0.5rem;
-            }
-            .desktop-nav-header p {
-                font-weight: 600;
-                color: var(--text-dark);
-            }
-            
-            .desktop-nav-link {
-                display: flex;
-                align-items: center;
-                gap: 0.75rem;
-                padding: 0.75rem 1rem;
-                border-radius: 0.5rem;
-                font-weight: 500;
-                color: var(--text-light);
-                transition: all 0.2s;
-                cursor: pointer;
-                position: relative; /* [NEW v55] For badge */
-            }
-            .desktop-nav-link:hover {
-                background-color: var(--bg-light);
-                color: var(--text-dark);
-            }
-            .desktop-nav-link.active {
-                background-color: var(--primary-light);
-                color: var(--primary-dark);
-                font-weight: 600;
-            }
-            /* [NEW v55] Desktop Badge */
-            .desktop-nav-link .notification-badge {
-                top: 8px;
-                right: 8px;
-            }
-            .desktop-nav-link.active .notification-badge {
-                border-color: var(--primary-light);
-            }
-            
-            #desktop-main-area {
-                display: grid;
-                grid-template-columns: 400px 1fr; /* List | Details */
-                height: 100vh;
-                overflow: hidden;
-            }
-            #desktop-list-panel {
-                background-color: var(--bg-light);
-                border-left: 1px solid var(--border-color);
-                height: 100%;
-                display: flex;
-                flex-direction: column;
-            }
-            #desktop-detail-panel {
-                height: 100%;
-                overflow-y: auto;
-                padding: 1.5rem 2rem;
-            }
-            .desktop-list-header {
-                padding: 1rem;
-                flex-shrink: 0;
-                border-bottom: 1px solid var(--border-color);
-            }
-            #desktop-list-content {
-                flex-grow: 1;
-                overflow-y: auto;
-            }
-            
-            .modal-container {
-                /* במצב דסקטופ, המודאלים יכולים להיות רחבים יותר */
-                max-width: 600px;
-            }
-            
-            /* [NEW v55] Desktop approval grid */
-            .approval-grid {
-                grid-template-columns: 1fr 1fr;
-            }
-        }
     </style>
 </head>
-<body class="antialiased">
+<body class="text-gray-900">
 
-    <!-- Global Loader -->
-    <div id="app-loader">
+    <!-- לואדר גלובלי -->
+    <div id="loader-overlay" class="open">
         <div class="loader"></div>
-        <p class="mt-4 font-semibold text-lg" id="loader-text">טוען פורטל זבולון...</p>
+    </div>
+    
+    <!-- מודאל להגדלת תמונה -->
+    <div id="image-zoom-modal" onclick="closeImageModal()">
+        <button id="image-zoom-close" class="p-2">
+            <i data-feather="x" class="w-8 h-8"></i>
+        </button>
+        <img id="image-zoom-content" src="" alt="תצוגה מקדימה">
+        <div id="image-zoom-modal-caption"></div>
     </div>
 
-    <!-- Global Alert (Toast) Container -->
-    <div id="global-alert-container"></div>
+    <!-- כפתור סל צף למובייל -->
+    <button id="mobile-cart-button" onclick="toggleCart(true)" class="lg:hidden p-4 rounded-full bg-sky-800 text-white shadow-lg">
+        <i data-feather="shopping-cart"></i>
+        <span id="mobile-cart-badge" class_alias="badge" class="absolute top-0 right-0 block w-5 h-5 text-xs font-bold bg-red-500 text-white rounded-full text-center leading-5 hidden">0</span>
+    </button>
+    
+    <div class="main-layout">
 
-    <!-- Modal (Popup) Structure -->
-    <div id="modal-overlay" class="modal-overlay" onclick="closeModal()"></div>
-    <div id="main-modal" class="modal-container">
-        <header class="modal-header flex justify-between items-center">
-            <h3 id="modal-title" class="text-lg font-semibold">...</h3>
-            <button class="btn-icon" onclick="closeModal()">
-                <i data-feather="x"></i>
-            </button>
-        </header>
-        <div id="modal-body" class="modal-body no-scrollbar">
-            <!-- Content Injected by JS -->
-        </div>
-        <footer id="modal-footer" class="modal-footer flex gap-2 justify-end">
-            <!-- Buttons Injected by JS -->
-            <button class="btn btn-secondary" onclick="closeModal()">סגור</button>
-        </footer>
-    </div>
+        <!-- =================================== -->
+        <!--          אזור תוכן ראשי (קטלוג)      -->
+        <!-- =================================== -->
+        <main id="main-content" class="h-screen overflow-y-auto no-scrollbar">
+            <!-- כותרת וחיפוש -->
+            <header class="catalog-header glass-card">
+                <div class="flex flex-col md:flex-row justify-between items-center gap-4">
+                    <div>
+                        <h1 class="text-2xl font-bold text-gray-800">קטלוג מוצרים</h1>
+                        <p class="text-gray-600">זבולון עדירן | ח. סבן חומרי בנין</p>
+                    </div>
+                    <div class="flex flex-col md:flex-row gap-2 w-full md:w-auto">
+                        <!-- פילטר קטגוריות -->
+                        <select id="category-filter" class="form-input w-full md:w-48 order-2 md:order-1 rounded-md border-gray-300 shadow-sm focus:border-sky-800 focus:ring-sky-800">
+                            <option value="all">כל הקטגוריות</option>
+                            <!-- יאוכלס דינמית -->
+                        </select>
+                        <!-- חיפוש חכם -->
+                        <input type="text" id="search-input" placeholder="חפש לפי שם, מק'ט או כינוי..." class="form-input w-full md:w-72 order-1 md:order-2 rounded-md border-gray-300 shadow-sm focus:border-sky-800 focus:ring-sky-800">
+                    </div>
+                </div>
+            </header>
 
-
-    <!-- ====================================================== -->
-    <!-- ===      DESKTOP CRM LAYOUT (v55) - Hidden     === -->
-    <!-- ====================================================== -->
-    <div id="desktop-crm-layout">
-        <!-- Desktop Sidebar Navigation -->
-        <nav id="desktop-nav">
-            <div class="desktop-nav-header">
-                <div class="header-logos">
-                    <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTcYS_xImwWt1fAYIK1UTXHtbCfmt5TOny5UQ&s" alt="Zebulun Logo">
-                    <div class="logo-divider"></div>
-                    <img src="https://i.postimg.cc/ryPT3r29/image.png" alt="Saban Logo">
-                </div>
-                <p class="text-sm font-semibold mt-2">Zebulun Delivery Portal</p>
-            </div>
-            
-            <a id="nav-desktop-dashboard" class="desktop-nav-link active" onclick="navigate('dashboard')">
-                <i data-feather="home"></i> <span>דשבורד</span>
-            </a>
-            <a id="nav-desktop-pending-orders" class="desktop-nav-link" onclick="navigate('pending-orders')">
-                <i data-feather="inbox"></i> <span>הזמנות לאישור</span>
-                <span id="desktop-pending-badge" class="notification-badge">0</span>
-            </a>
-            <a id="nav-desktop-new-order" class="desktop-nav-link" onclick="navigate('new-order')">
-                <i data-feather="plus-circle"></i> <span>הזמנה חדשה</span>
-            </a>
-            <a id="nav-desktop-projects" class="desktop-nav-link" onclick="navigate('projects')">
-                <i data-feather="briefcase"></i> <span>ניהול פרויקטים</span>
-            </a>
-            <a id="nav-desktop-history" class="desktop-nav-link" onclick="navigate('orders-history')">
-                <i data-feather="archive"></i> <span>היסטוריית הזמנות</span>
-            </a>
-            
-            <div class="mt-auto"> <!-- Footer -->
-                <button id="desktop-theme-toggle" class="btn-icon w-full justify-start gap-2 px-3 py-2">
-                    <i data-feather="moon"></i> <span>מצב לילה</span>
-                </button>
-                <div class="text-xs text-gray-400 p-2 mt-2">
-                    <p id="desktop-auth-status">מתחבר...</p>
-                    <p>Powered by H.Saban</p>
-                </div>
-            </div>
-        </nav>
-
-        <!-- Desktop Main Area (List + Details) -->
-        <main id="desktop-main-area">
-            <!-- List Panel (for Orders, Projects, etc.) -->
-            <div id="desktop-list-panel">
-                <div class="desktop-list-header">
-                    <input type="text" id="desktop-search-input" placeholder="חפש הזמנות או פרויקטים..." class="form-input">
-                </div>
-                <div id="desktop-list-content" class="no-scrollbar">
-                    <p class="p-4 text-center">טוען תוכן...</p>
-                </div>
-            </div>
-            
-            <!-- Detail Panel (Editor, Viewer, etc.) -->
-            <div id="desktop-detail-panel" class="no-scrollbar">
-                <!-- Content Injected by JS based on selection -->
-                <div id="desktop-detail-content">
-                    <h2 class="text-2xl font-bold mb-4">ברוך הבא לפורטל ה-CRM</h2>
-                    <p>בחר פריט מהרשימה בצד ימין כדי לראות פרטים, או לחץ על "הזמנה חדשה" כדי להתחיל.</p>
+            <!-- רשת מוצרים -->
+            <div id="product-grid" class="p-4 md:p-8 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6">
+                <!-- כרטיסי מוצר יוכנסו כאן על ידי JavaScript -->
+                <!-- דוגמה ל-Skeleton Loader -->
+                <div class="glass-card rounded-xl animate-pulse">
+                    <div class="h-40 bg-gray-300 rounded-t-xl"></div>
+                    <div class="p-4 space-y-3">
+                        <div class="h-4 bg-gray-300 rounded w-1/3"></div>
+                        <div class="h-6 bg-gray-300 rounded w-3/4"></div>
+                        <div class="h-4 bg-gray-300 rounded w-full"></div>
+                        <div class="h-10 bg-gray-300 rounded-lg w-1/2 ml-auto"></div>
+                    </div>
                 </div>
             </div>
         </main>
-    </div>
 
-
-    <!-- ====================================================== -->
-    <!-- ===       MOBILE PWA LAYOUT (v55) - Default      === -->
-    <!-- ====================================================== -->
-    <div id="mobile-pwa-layout">
-        <!-- Mobile Header -->
-        <header id="mobile-header">
-            <div class="header-logos">
-                <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTcYS_xImwWt1fAYIK1UTXHtbCfmt5TOny5UQ&s" alt="Zebulun Logo">
-                <div class="logo-divider"></div>
-                <img src="https://i.postimg.cc/ryPT3r29/image.png" alt="Saban Logo">
-            </div>
-            <div class="flex items-center gap-2">
-                <p id="auth-status" class="text-xs text-gray-500 hidden">מתחבר...</p>
-                <button id="mobile-theme-toggle" class="btn-icon">
-                    <i data-feather="moon"></i>
+        <!-- =================================== -->
+        <!--          סל קניות צדדי/צף          -->
+        <!-- =================================== -->
+        <aside id="cart-sidebar" class="glass-card">
+            <!-- כותרת סל -->
+            <div class="p-4 border-b border-white/30 flex justify-between items-center">
+                <h2 class="text-xl font-bold text-gray-800">סל קניות</h2>
+                <button class="lg:hidden p-1" onclick="toggleCart(false)">
+                    <i data-feather="x" class="w-6 h-6 text-gray-700"></i>
                 </button>
             </div>
-        </header>
 
-        <!-- Mobile Main Content (Pages) -->
-        <main id="mobile-main-content" class="no-scrollbar">
-            
-            <!-- Page: Dashboard (Home) -->
-            <div id="page-dashboard" class="app-page active">
-                <!-- Content Injected by JS: renderDashboard() -->
+            <!-- רשימת פריטים בסל -->
+            <div id="cart-items" class="flex-grow p-4 overflow-y-auto no-scrollbar space-y-4">
+                <!-- פריטים יוכנסו כאן -->
+                <p id="cart-empty-msg" class="text-gray-600 text-center pt-8">הסל שלך ריק.</p>
             </div>
-            
-            <!-- [NEW v55] Page: Pending Orders -->
-            <div id="page-pending-orders" class="app-page">
-                <h2 class="text-xl font-bold mb-4">הזמנות ממתינות לאישור</h2>
-                <div id="pending-orders-list-mobile" class="flex flex-col gap-3">
-                    <!-- Injected by renderPendingOrdersPage() -->
+
+            <!-- סיכום וסיום הזמנה -->
+            <div class="p-4 border-t border-white/30 space-y-4">
+                <div>
+                    <label for="customer-name-input" class="block text-sm font-medium text-gray-700">שם המזמין</label>
+                    <input type="text" id="customer-name-input" class="form-input mt-1 w-full rounded-md border-gray-300 shadow-sm" placeholder="שם מלא (חובה)">
                 </div>
+                <div>
+                    <label for="project-name-input" class="block text-sm font-medium text-gray-700">שם פרויקט</label>
+                    <input type="text" id="project-name-input" class="form-input mt-1 w-full rounded-md border-gray-300 shadow-sm" placeholder="לדוגמה: בניין בראשון">
+                </div>
+                <div>
+                    <label for="cart-notes" class="block text-sm font-medium text-gray-700">הערות להזמנה</label>
+                    <textarea id="cart-notes" rows="2" class="form-input mt-1 w-full rounded-md border-gray-300 shadow-sm" placeholder="כל דבר שחשוב שהמחסנאי ידע..."></textarea>
+                </div>
+                <div class="flex justify-between items-center text-lg font-bold">
+                    <span>סה"כ פריטים:</span>
+                    <span id="cart-total-items-summary">0</span>
+                </div>
+                <button id="send-order-btn" class="w-full p-3 bg-sky-800 text-white font-bold rounded-lg shadow-md hover:bg-sky-900 transition duration-200 flex items-center justify-center gap-2">
+                    <i data-feather="send" class="w-5 h-5"></i>
+                    <span>שלח הזמנה למחסן</span>
+                </button>
             </div>
-            
-            <!-- Page: New Order (Smart Paste) -->
-            <div id="page-new-order" class="app-page">
-                <!-- Content Injected by JS: renderNewOrderPage() -->
-            </div>
+        </aside>
 
-            <!-- Page: Projects -->
-            <div id="page-projects" class="app-page">
-                <!-- Content Injected by JS: renderProjectsPage() -->
-            </div>
-            
-            <!-- Page: Orders History -->
-            <div id="page-orders-history" class="app-page">
-                <!-- Content Injected by JS: renderOrdersHistoryPage() -->
-            </div>
-            
-        </main>
-
-        <!-- Mobile Bottom Navigation -->
-        <nav id="bottom-nav">
-            <button id="nav-mobile-dashboard" class="nav-button active" onclick="navigate('dashboard')">
-                <i data-feather="home" class="w-6 h-6"></i>
-                <span>דשבורד</span>
-            </button>
-            <button id="nav-mobile-pending-orders" class="nav-button" onclick="navigate('pending-orders')">
-                <i data-feather="inbox" class="w-6 h-6"></i>
-                <span>לאישור</span>
-                <span id="mobile-pending-badge" class="notification-badge">0</span>
-            </button>
-            <button id="nav-mobile-new-order" class="nav-button" onclick="navigate('new-order')">
-                <i data-feather="plus-circle" class="w-6 h-6"></i>
-                <span>חדשה</span>
-            </button>
-            <button id="nav-mobile-projects" class="nav-button" onclick="navigate('projects')">
-                <i data-feather="briefcase" class="w-6 h-6"></i>
-                <span>פרויקטים</span>
-            </button>
-        </nav>
     </div>
 
-
-    <!-- 
-    ======================================================
-    === 2. EMBEDDED JAVASCRIPT (v55)
-    ======================================================
-    -->
-    <script type="module">
-        // [תיקון] הוספת ייבוא מלא של כל הפונקציות הנדרשות
-        import { initializeApp, getApp, getApps } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { 
-            getAuth, 
-            signInAnonymously, 
-            onAuthStateChanged, 
-            signInWithCustomToken 
-        } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
-        import { 
-            getFirestore, 
-            collection, 
-            doc, 
-            addDoc, 
-            setDoc, 
-            updateDoc, 
-            deleteDoc, // [NEW v55]
-            onSnapshot, 
-            query, 
-            where, 
-            orderBy, 
-            limit, 
-            serverTimestamp,
-            getDocs
-        } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-        import { 
-            getStorage, 
-            ref, 
-            uploadBytes, 
-            getDownloadURL 
-        } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-storage.js";
-
-        // --- Configuration Placeholders ---
-        // [תיקון] הוספת אובייקט גיבוי (fallback) למקרה ש-__firebase_config לא קיים
-        const fallbackConfig = {
-            apiKey: "AIzaSyDq0oVwS6zbEfsgrYBRkeBq80dDUKMedzo", 
-            authDomain: "saban94-78949.firebaseapp.com", 
-            projectId: "saban94-78949",
-            storageBucket: "saban94-78949.appspot.com", 
-            messagingSenderId: "41553157903", 
-            appId: "1:41553157903:web:cc33d252cff023be97a87a"
-        };
-        const FIREBASE_CONFIG = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : fallbackConfig;
-
-        // [תיקון] עדכון לכתובת הקטלוג החדשה שסיפקת
-        const CATALOG_API_URL = "https://script.google.com/macros/s/AKfycbxXX3Q-_QDl41SxxD-MqyucjIvm5rSOennP_Ld7xoOlYb91T0SrRHFHg2BRkQb3FH5v/exec";
+    <!-- =================================== -->
+    <!--            JavaScript             -->
+    <!-- =================================== -->
+    <script>
+        // --- מצב (State) גלובלי ---
+        let allProducts = [];
+        let cart = []; // { sku, name, quantity, ...}
         
-        const CLIENT_ID = "zebulun_adiran"; // מזהה לקוח קבוע
+        // --- אתחול ---
+        document.addEventListener('DOMContentLoaded', init);
 
-        // --- Global App State ---
-        let db, auth, storage;
-        let currentUserId = null;
-        let appInitialized = false;
-        let globalAlertsListener = null;
+        function init() {
+            console.log("DOM loaded. Initializing Catalog App...");
+            feather.replace();
+            
+            // הצג לואדר
+            toggleLoader(true);
+            
+            // הגדרת מאזינים
+            setupEventListeners();
+            
+            // טען נתונים מ-Apps Script
+            // זוהי הדרישה שלך להשתמש ב-google.script.run
+            // ודא שהקוד הזה רץ בתוך פרויקט Apps Script
+            try {
+                google.script.run
+                    .withSuccessHandler(onCatalogLoaded)
+                    .withFailureHandler(onLoadError)
+                    .getProducts(); // קורא לפונקציה `getProducts` בקובץ Code.gs
+            } catch (e) {
+                console.error("שגיאה בקריאה ל-google.script.run:", e);
+                onLoadError({ 
+                    message: "האם הקובץ רץ בתוך Google Apps Script? " + e.message 
+                });
+            }
+        }
+        
+        function setupEventListeners() {
+            document.getElementById('search-input').addEventListener('input', handleSearchAndFilter);
+            document.getElementById('category-filter').addEventListener('change', handleSearchAndFilter);
+            document.getElementById('send-order-btn').addEventListener('click', sendOrder);
+        }
 
-        const state = {
-            currentView: 'dashboard',
-            theme: 'light',
-            filesToUpload: [], 
-            projects: [], // [Changed v55] No longer mock
-            orderHistory: [],
-            pendingOrders: [], // [NEW v55] For approval
-            catalog: [], // [NEW v55]
-            currentApprovalCart: [], // [NEW v55]
+        // --- טעינת נתונים ---
+        
+        function onCatalogLoaded(products) {
+            console.log("Catalog loaded successfully:", products);
+            toggleLoader(false);
+            
+            // ודא שקיבלנו מערך
+            if (!Array.isArray(products)) {
+                onLoadError({ message: "הנתונים שהתקבלו אינם מערך." });
+                return;
+            }
+
+            allProducts = products;
+            populateCategories(products);
+            renderProductGrid(products);
+        }
+        
+        function onLoadError(error) {
+            console.error("========================================================");
+            console.error("אחי, שגיאה קריטית בטעינת הקטלוג:", error.message);
+            console.error("אם ההודעה כוללת 'This script' או 'Not found' או 'No such function':");
+            console.error("1. ודא שפרסמת את Code.gs (Deploy > New Deployment).");
+            console.error("2. ודא שההרשאת גישה (Who has access) היא 'Anyone'.");
+            console.error("3. ודא ששם הפונקציה ב-Code.gs הוא אכן 'getProducts'.");
+            console.error("========================================================");
+            
+            toggleLoader(false);
+            const grid = document.getElementById('product-grid');
+            grid.innerHTML = `<div class="col-span-full text-center p-8 bg-red-100 text-red-700 rounded-lg">
+                                <h3>שגיאה בטעינת הקטלוג</h3>
+                                <p>${error.message}</p>
+                              </div>`;
+        }
+
+        // --- רנדור (הצגה) ---
+        
+        function populateCategories(products) {
+            const filterSelect = document.getElementById('category-filter');
+            // יצירת רשימה ייחודית של קטגוריות
+            const categories = [...new Set(products.map(p => p.category || "כללי"))];
+            
+            categories.sort().forEach(category => {
+                const option = document.createElement('option');
+                option.value = category;
+                option.textContent = category;
+                filterSelect.appendChild(option);
+            });
+        }
+        
+        function renderProductGrid(productsToRender) {
+            const grid = document.getElementById('product-grid');
+            grid.innerHTML = ''; // נקה תוצאות קודמות
+            
+            if (productsToRender.length === 0) {
+                grid.innerHTML = `<p class="col-span-full text-center text-gray-600">לא נמצאו מוצרים התואמים לחיפוש.</p>`;
+                return;
+            }
+
+            productsToRender.forEach(product => {
+                const card = document.createElement('div');
+                card.className = 'product-card glass-card flex flex-col';
+                
+                const imageUrl = product.imageUrl || 'https://placehold.co/400x300/e2e8f0/94a3b8?text=N/A';
+                
+                card.innerHTML = `
+                    <!-- תמונה עם זום -->
+                    <div class="product-image-container h-48" onclick="showImageModal('${imageUrl}', '${product.name}')">
+                        <img src="${imageUrl}" alt="${product.name}" class="w-full h-full object-cover">
+                        <div class="zoom-overlay">
+                            <i data-feather="zoom-in" class="w-10 h-10 text-white"></i>
+                        </div>
+                    </div>
+                    
+                    <!-- פרטי מוצר -->
+                    <div class="p-4 flex flex-col flex-grow">
+                        <span class="text-xs font-semibold text-sky-800">${product.category}</span>
+                        <h3 class="text-lg font-bold text-gray-800 mt-1">${product.name}</h3>
+                        <p class="text-sm text-gray-600 mt-1">מק"ט: ${product.sku}</p>
+                        <p class="text-sm text-gray-500 mt-2 flex-grow min-h-[40px]">${product.description || 'אין תיאור זמין'}</p>
+                        
+                        <!-- כפתור הוספה -->
+                        <div class="mt-4">
+                            <button class="w-full p-2 bg-sky-800 text-white font-semibold rounded-lg shadow hover:bg-sky-900 transition duration-200 flex items-center justify-center gap-2"
+                                    onclick="event.stopPropagation(); addToCart('${product.sku}');">
+                                <i data-feather="plus" class="w-5 h-5"></i>
+                                <span>הוסף לסל</span>
+                            </button>
+                        </div>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+            
+            feather.replace();
+        }
+
+        // --- לוגיקת חיפוש ופילטור ---
+        
+        function handleSearchAndFilter() {
+            const searchTerm = document.getElementById('search-input').value.toLowerCase().trim();
+            const category = document.getElementById('category-filter').value;
+
+            const filteredProducts = allProducts.filter(product => {
+                // פילטור קטגוריה
+                const categoryMatch = (category === 'all') || (product.category === category);
+                
+                // פילטור חיפוש
+                const searchMatch = (searchTerm === '') ||
+                    (product.name.toLowerCase().includes(searchTerm)) ||
+                    (product.sku.toLowerCase().includes(searchTerm)) ||
+                    (product.aliases.some(alias => alias.toLowerCase().includes(searchTerm)));
+                    
+                return categoryMatch && searchMatch;
+            });
+            
+            renderProductGrid(filteredProducts);
+        }
+
+        // --- לוגיקת סל קניות ---
+        
+        function addToCart(sku) {
+            const product = allProducts.find(p => p.sku === sku);
+            if (!product) return;
+            
+            const existingItem = cart.find(item => item.sku === sku);
+            
+            if (existingItem) {
+                existingItem.quantity++;
+            } else {
+                cart.push({
+                    sku: product.sku,
+                    name: product.name,
+                    quantity: 1
+                });
+            }
+            
+            console.log("Cart updated:", cart);
+            renderCart();
+            showToast(`${product.name} נוסף לסל`, 'success');
+        }
+        
+        function renderCart() {
+            const cartContainer = document.getElementById('cart-items');
+            const emptyMsg = document.getElementById('cart-empty-msg');
+            const totalItemsSummary = document.getElementById('cart-total-items-summary');
+            const mobileBadge = document.getElementById('mobile-cart-badge');
+            
+            if (cart.length === 0) {
+                cartContainer.innerHTML = '';
+                emptyMsg.classList.remove('hidden');
+                totalItemsSummary.textContent = '0';
+                mobileBadge.classList.add('hidden');
+                mobileBadge.textContent = '0';
+                return;
+            }
+            
+            emptyMsg.classList.add('hidden');
+            cartContainer.innerHTML = cart.map((item, index) => `
+                <div class="flex items-center gap-3 py-3 border-b border-gray-200">
+                    <div class="flex-grow">
+                        <span class="font-semibold block">${item.name}</span>
+                        <span class="text-xs text-gray-500">מק"ט: ${item.sku}</span>
+                    </div>
+                    <input type="number" class="form-input cart-item-qty" value="${item.quantity}" min="1" onchange="updateCartQuantity('${item.sku}', this.value)">
+                    <button class="p-1 text-red-500 hover:text-red-700" onclick="removeFromCart('${item.sku}')">
+                        <i data-feather="trash-2" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            `).join('');
+            
+            const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
+            totalItemsSummary.textContent = totalItems;
+            mobileBadge.textContent = totalItems;
+            mobileBadge.classList.remove('hidden');
+            
+            feather.replace();
+        }
+
+        window.updateCartQuantity = function(sku, newQuantity) {
+            const qty = parseInt(newQuantity);
+            const item = cart.find(i => i.sku === sku);
+            
+            if (item && qty > 0) {
+                item.quantity = qty;
+            } else if (item) {
+                // הסר אם הכמות היא 0 או לא תקינה
+                cart = cart.filter(i => i.sku !== sku);
+            }
+            renderCart();
+        }
+
+        window.removeFromCart = function(sku) {
+            cart = cart.filter(i => i.sku !== sku);
+            renderCart();
+        }
+        
+        function sendOrder() {
+            const customerName = document.getElementById('customer-name-input').value.trim();
+            const projectName = document.getElementById('project-name-input').value.trim();
+            const notes = document.getElementById('cart-notes').value.trim();
+            const sendButton = document.getElementById('send-order-btn');
+
+            if (cart.length === 0) {
+                showToast("הסל ריק, אין מה לשלוח.", "error");
+                return;
+            }
+            
+            if (!customerName || !projectName) {
+                showToast("חובה למלא שם מזמין ושם פרויקט.", "error");
+                return;
+            }
+            
+            const orderObject = {
+                customerName: customerName,
+                projectName: projectName,
+                notes: notes,
+                cartItems: cart // שולח את מערך הסל המלא
+            };
+            
+            console.log("Sending order:", orderObject);
+            toggleLoader(true, "שולח הזמנה...");
+            sendButton.disabled = true;
+
+            // קריאה ל-Apps Script ליצירת ההזמנה
+            try {
+                google.script.run
+                    .withSuccessHandler(onOrderSuccess)
+                    .withFailureHandler(onLoadError) // אפשר להשתמש באותה פונקציית שגיאה
+                    .createOrder(orderObject); // קורא לפונקציה `createOrder` ב-Code.gs
+            } catch (e) {
+                onLoadError({ message: "שגיאה בשליחת ההזמנה: " + e.message });
+            }
+        }
+        
+        function onOrderSuccess(response) {
+            toggleLoader(false);
+            document.getElementById('send-order-btn').disabled = false;
+            
+            if (response.status === 'success') {
+                console.log("Order created:", response.data);
+                showToast(`הזמנה ${response.data.orderId} נשלחה בהצלחה!`, 'success');
+                // איפוס
+                cart = [];
+                renderCart();
+                document.getElementById('customer-name-input').value = '';
+                document.getElementById('project-name-input').value = '';
+                document.getElementById('cart-notes').value = '';
+                toggleCart(false); // סגור סל במובייל
+            } else {
+                // אם ה-Apps Script החזיר שגיאה לוגית
+                onLoadError({ message: response.error?.message || "שגיאה לא ידועה מהשרת" });
+            }
+        }
+
+        // --- פונקציות עזר (UI) ---
+        
+        function toggleLoader(show, text = 'טוען נתונים...') {
+            const loader = document.getElementById('loader-overlay');
+            if (show) {
+                loader.classList.add('open');
+            } else {
+                loader.classList.remove('open');
+            }
+        }
+
+        function showToast(message, type = 'info') {
+            const container = document.body; // ניצור טוסט פשוט
+            const toast = document.createElement('div');
+            toast.className = `fixed top-5 left-1/2 -translate-x-1/2 p-4 rounded-lg shadow-lg text-white font-semibold z-[101]`;
+            toast.className += type === 'success' ? ' bg-green-500' : (type === 'error' ? ' bg-red-500' : ' bg-sky-800');
+            toast.textContent = message;
+            
+            container.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.style.transition = 'opacity 0.5s ease';
+                toast.style.opacity = '0';
+                setTimeout(() => toast.remove(), 500);
+            }, 3000);
+        }
+
+        window.toggleCart = function(forceOpen = null) {
+            const cartSidebar = document.getElementById('cart-sidebar');
+            if (forceOpen === true) {
+                cartSidebar.classList.add('open');
+            } else if (forceOpen === false) {
+                cartSidebar.classList.remove('open');
+            } else {
+                cartSidebar.classList.toggle('open');
+            }
+        }
+        
+        // פונקציות מודאל תמונה
+        window.showImageModal = function(imageUrl, productName) {
+            event.stopPropagation(); // מנע לחיצה על הכרטיס
+            document.getElementById('image-zoom-content').src = imageUrl;
+            document.getElementById('image-zoom-modal-caption').textContent = productName;
+            document.getElementById('image-zoom-modal').classList.add('open');
+        }
+        
+        window.closeImageModal = function() {
+            document.getElementById('image-zoom-modal').classList.remove('open');
+        }
+        
+    </script>
+</body>
+</html>
