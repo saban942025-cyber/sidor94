@@ -26,7 +26,6 @@
 
     <style>
         /* [סגנונות CSS זהים לגרסה הקודמת, v55] */
-        /* ... (כל ה-CSS שהיה כאן קודם) ... */
         :root {
             --primary-color: #3b82f6; /* blue-500 */
             --primary-dark: #2563eb; /* blue-600 */
@@ -509,7 +508,7 @@
         }
         
         /* [NEW v55] Catalog Search */
-        #catalog-search-results {
+        .catalog-search-results {
             max-height: 300px;
             overflow-y: auto;
             border: 1px solid var(--border-color);
@@ -544,7 +543,7 @@
         /* [NEW v55] Approval Workbench */
         .approval-grid {
             display: grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: 1fr; /* Stack on mobile */
             gap: 1rem;
         }
         .approval-col h4 {
@@ -680,6 +679,11 @@
             .modal-container {
                 /* במצב דסקטופ, המודאלים יכולים להיות רחבים יותר */
                 max-width: 600px;
+            }
+            
+            /* [NEW v55] Desktop approval grid */
+            .approval-grid {
+                grid-template-columns: 1fr 1fr;
             }
         }
     </style>
@@ -906,7 +910,7 @@
         const FIREBASE_CONFIG = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : fallbackConfig;
 
         // [NEW v55] קישור לקטלוג המוצרים
-        const CATALOG_API_URL = "https://script.google.com/macros/s/AKfycbxXX3Q-_QDl41SxxD-MqyucjIvm5rSOennP_Ld7xoOlYb91T0SrRHFHg2BRkQb3FH5v/exec";
+        const CATALOG_API_URL = "https://script.google.com/macros/s/AKfycbwrzg8d2H3p6I4y-cySVgA-6Sj5q1DOEPKOmXumrElIpdVfM3dBx_WuJ6eZu6q-NhI/exec";
         
         const CLIENT_ID = "zebulun_adiran"; // מזהה לקוח קבוע
 
@@ -1000,6 +1004,7 @@
             window.searchCatalogApproval = debounce(searchCatalogApproval, 300); // [NEW v55]
             window.addCatalogItemToCart = addCatalogItemToCart; // [NEW v55]
             window.submitApprovedOrder = submitApprovedOrder; // [NEW v55]
+            window.rejectPendingOrder = rejectPendingOrder; // [NEW v55]
         }
 
         function authenticateUser() {
@@ -1061,11 +1066,11 @@
                 if (!response.ok) {
                     throw new Error(`Catalog API returned status ${response.status}`);
                 }
-                const text = await response.text();
+                const text = await response.text(); // Get text first to check
                 
                 // [תיקון] הוספת try-catch סביב response.json()
                 try {
-                    const data = JSON.parse(text);
+                    const data = JSON.parse(text); // Try to parse
                     if (data && data.items) {
                         state.catalog = data.items;
                         console.log(`Catalog loaded with ${state.catalog.length} items.`);
@@ -1073,15 +1078,18 @@
                         throw new Error("Invalid JSON structure from catalog API");
                     }
                 } catch (e) {
-                    console.error("Failed to parse catalog JSON:", e.message);
-                    console.error("קיבלת שגיאה בקריאת הקטלוג. זה כנראה בגלל בעיית הרשאות ב-Google Apps Script.");
-                    console.error("אנא ודא שה-Deployment של הסקריפט מוגדר לגישה: 'Anyone'.");
-                    console.error("תגובה שהתקבלה:", text.substring(0, 100) + "..."); // הדפס את התגובה הבעייתית
+                    console.error("========================================================");
+                    console.error("אחי, שגיאה קריטית בטעינת הקטלוג (שגיאת JSON):", e.message);
+                    console.error("השרת החזיר טקסט שמתחיל ב:", text.substring(0, 100) + "...");
+                    console.error("זו כנראה *לא* בעיה בקוד הזה, אלא בהגדרות ה-Deployment של ה-Apps Script שלך.");
+                    console.error("אנא ודא שהסקריפט שלך מוגדר לגישה: 'Anyone'.");
+                    console.error("========================================================");
                     showToast("שגיאה חמורה בטעינת קטלוג. בדוק Console.", "error");
                 }
                 
             } catch (error) {
-                console.error("Failed to load catalog:", error);
+                console.error("Failed to load catalog (fetch error):", error);
+                // This will catch network errors
             }
         }
 
@@ -1667,6 +1675,11 @@
             feather.replace();
         }
         
+        // [NEW v55] Wrapper function for approval search
+        function searchCatalogApproval(term) {
+            searchCatalog(term, 'catalog-results-approval');
+        }
+        
         function addCatalogItemToCart(button, isApprovalCart) {
             const sku = button.dataset.sku;
             const name = button.dataset.name;
@@ -1952,12 +1965,12 @@
             if (order.media_files && order.media_files.length > 0) {
                 mediaHTML = order.media_files.map(file => {
                     if (file.type.startsWith('image/')) {
-                        return `<li><a href="${file.url}" target="_blank">תמונה מצורפת</a></li>`;
+                        return `<li><a href="${file.url}" target="_blank" class="flex items-center gap-1"><i data-feather="image" class="w-4 h-4"></i> תמונה מצורפת</a></li>`;
                     }
                     if (file.type.startsWith('audio/')) {
-                        return `<li><audio controls src="${file.url}">הקלטה</audio></li>`;
+                        return `<li><audio controls src="${file.url}" class="w-full">הקלטה</audio></li>`;
                     }
-                    return `<li><a href="${file.url}" target="_blank">קובץ מצורף</a></li>`;
+                    return `<li><a href="${file.url}" target="_blank" class="flex items-center gap-1"><i data-feather="file" class="w-4 h-4"></i> קובץ מצורף</a></li>`;
                 }).join('');
             }
             
@@ -1983,7 +1996,7 @@
                             </div>
                             <div>
                                 <strong>מדיה מצורפת:</strong>
-                                <ul class="list-disc pr-4">${mediaHTML || '<li>אין מדיה</li>'}</ul>
+                                <ul class="space-y-2">${mediaHTML || '<li>אין מדיה</li>'}</ul>
                             </div>
                         </div>
                     </div>
@@ -1994,7 +2007,7 @@
                         <div class="space-y-4">
                             <div>
                                 <label class="form-label" for="product-search-approval">חפש והוסף פריטים</label>
-                                <input type="text" id="product-search-approval" class="form-input" placeholder="הקלד מק'ט או שם..." onkeyup="searchCatalogApproval(this.value, 'catalog-results-approval')">
+                                <input type="text" id="product-search-approval" class="form-input" placeholder="הקלד מק'ט או שם..." onkeyup="searchCatalogApproval(this.value)">
                                 <div id="catalog-results-approval" class="catalog-search-results mt-2"></div>
                             </div>
                             <div>
@@ -2014,4 +2027,196 @@
             
             const footer = `
                 <button class="btn btn-danger" onclick="rejectPendingOrder('${order.id}')">
-                    <i data-feather="x"></i>
+                    <i data-feather="x"></i> <span>דחה בקשה</span>
+                </button>
+                <div class="flex-grow"></div>
+                <button class="btn btn-secondary" onclick="closeModal()">ביטול</button>
+                <button class="btn btn-primary btn-lg" onclick="submitApprovedOrder('${order.id}')">
+                    <i data-feather="check"></i> <span>אשר ושלח ל-DeliveryMaster</span>
+                </button>
+            `;
+            
+            openModal(`אישור בקשה: ${order.project_name}`, body, footer, true);
+        }
+        
+        // [NEW v55]
+        async function submitApprovedOrder(pendingOrderId) {
+            const pendingOrder = state.pendingOrders.find(o => o.id === pendingOrderId);
+            if (!pendingOrder) return;
+
+            const btn = document.querySelector('.modal-footer .btn-primary');
+            btn.disabled = true;
+            btn.innerHTML = '<div class="loader-small"></div> <span>מאשר...</span>';
+            
+            const cartItems = getCartItems('approval-order-cart');
+            const managerNotes = document.getElementById('approval-notes').value;
+
+            if (cartItems.length === 0) {
+                showToast("חובה להוסיף פריטים להזמנה הרשמית", "error");
+                btn.disabled = false;
+                btn.innerHTML = '<i data-feather="check"></i> <span>אשר ושלח</span>';
+                return;
+            }
+            
+            const project = state.projects.find(p => p.id === pendingOrder.project_id);
+
+            const orderPayload = {
+                orderId: `ZEB-${Date.now()}`,
+                clientId: CLIENT_ID,
+                projectId: pendingOrder.project_id,
+                projectName: pendingOrder.project_name,
+                address: pendingOrder.location_address || project.address,
+                // [TODO] Add lat/lon from pending order
+                contactName: project.contact || pendingOrder.submitter_name,
+                rawText: `--- בקשה מקורית מהשטח ---\n${pendingOrder.raw_text}\n\n--- הערות מנהל ---\n${managerNotes}`,
+                cartItems: cartItems,
+                attachments: pendingOrder.media_files || [],
+                createdAt: serverTimestamp(),
+                status: "חדש",
+                sourceRequestId: pendingOrderId, // [NEW v55] Link to the original request
+                siteManagerUid: pendingOrder.site_manager_uid // [NEW v55] For tracking
+            };
+
+            try {
+                // 1. Send official order
+                await sendOrderToFirestore(orderPayload);
+                
+                // 2. Update pending order (mark as approved)
+                const pendingRef = doc(db, "pending_orders", pendingOrderId);
+                await updateDoc(pendingRef, {
+                    status: "approved",
+                    final_order_id: orderPayload.orderId
+                });
+                
+                showToast("ההזמנה אושרה ונשלחה!", "success");
+                closeModal();
+                
+            } catch (error) {
+                console.error("Failed to approve order:", error);
+                showToast("שגיאה באישור ההזמנה", "error");
+                btn.disabled = false;
+                btn.innerHTML = '<i data-feather="check"></i> <span>אשר ושלח</span>';
+            }
+        }
+        
+        // [NEW v55]
+        async function rejectPendingOrder(pendingOrderId) {
+            if (!confirm("האם אתה בטוח שברצונך לדחות בקשה זו? לא ניתן יהיה לשחזר אותה.")) return;
+            
+            try {
+                const pendingRef = doc(db, "pending_orders", pendingOrderId);
+                await updateDoc(pendingRef, {
+                    status: "rejected"
+                });
+                showToast("הבקשה נדחתה", "info");
+                closeModal();
+            } catch (error) {
+                console.error("Error rejecting order:", error);
+                showToast("שגיאה בדחיית הבקשה", "error");
+            }
+        }
+
+
+        // --- Global Alerts & Utils ---
+        function listenForGlobalAlerts() {
+            if (globalAlertsListener) globalAlertsListener();
+            
+            try {
+                const q = query(
+                    collection(db, "globalAlerts"),
+                    orderBy("timestamp", "desc"),
+                    limit(1)
+                );
+                
+                let initialLoad = true;
+                globalAlertsListener = onSnapshot(q, (snapshot) => {
+                    if (initialLoad) {
+                        initialLoad = false;
+                        return;
+                    }
+                    
+                    snapshot.docChanges().forEach((change) => {
+                        if (change.type === "added") {
+                            const alert = change.doc.data();
+                            playAlert(alert.title, alert.type || 'info');
+                        }
+                    });
+                }, (error) => {
+                    console.error("Failed to listen for global alerts:", error);
+                });
+                
+            } catch (error) {
+                console.error("Error setting up alert listener:", error);
+            }
+        }
+
+        function playAlert(message, type = "info") {
+            console.log(`Playing Alert: ${message} (Type: ${type})`);
+            
+            try {
+                const soundUrl = (type === "error" || type === "broadcast")
+                    ? "https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg" 
+                    : "https://actions.google.com/sounds/v1/alarms/beep_short.ogg";
+                const audio = new Audio(soundUrl);
+                audio.play().catch(e => console.warn("Audio playback blocked by browser."));
+            } catch (e) {
+                console.warn("Audio playback failed.", e);
+            }
+
+            const container = document.getElementById("global-alert-container");
+            const alertBox = document.createElement("div");
+            alertBox.className = `global-alert ${type === 'error' ? 'alert-error' : (type === 'success' ? 'alert-success' : 'alert-info')}`;
+            
+            const icon = (type === "error") ? "alert-triangle" : (type === 'success' ? 'check-circle' : 'info');
+            alertBox.innerHTML = `<i data-feather="${icon}" class="w-5 h-5"></i><span>${message}</span>`;
+            
+            container.appendChild(alertBox);
+            feather.replace();
+            
+            setTimeout(() => {
+                alertBox.style.opacity = '0';
+                alertBox.style.transform = 'translateY(20px)';
+                setTimeout(() => alertBox.remove(), 300);
+            }, 4000);
+        }
+
+        function showToast(message, type = "info") {
+            playAlert(message, type);
+        }
+
+        function openModal(title, body, footer, isWide = false) {
+            const modal = document.getElementById('main-modal');
+            modal.classList.toggle('modal-wide', isWide);
+            document.getElementById('modal-title').innerText = title;
+            document.getElementById('modal-body').innerHTML = body;
+            document.getElementById('modal-footer').innerHTML = footer;
+            document.getElementById('modal-overlay').classList.add('visible');
+            modal.classList.add('visible');
+            feather.replace();
+        }
+
+        function closeModal() {
+            document.getElementById('modal-overlay').classList.remove('visible');
+            document.getElementById('main-modal').classList.remove('visible');
+            document.getElementById('main-modal').classList.remove('modal-wide');
+            
+            if (state.currentView === 'projects') {
+                renderProjectsPage();
+            }
+        }
+
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+    </script>
+
+</body>
+</html>
