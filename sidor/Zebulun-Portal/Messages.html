@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Messages Viewer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Rubik', sans-serif; background: #f9fafb; }
+        #log { border: 1px solid #ccc; padding: 12px; height: 60vh; overflow:auto; background:#fff; border-radius: 8px; }
+        .order { padding:10px; margin:8px 0; border-radius:8px; box-shadow:0 1px 3px rgba(0,0,0,.1); background: #f0f9ff; border: 1px solid #bde0fe; }
+        .meta { font-size:12px; color:#555; white-space: pre-wrap; }
+        .timestamp { font-size: 10px; color: #6b7280; }
+    </style>
+</head>
+<body class="p-4">
+
+    <div class="flex justify-between items-center mb-3">
+        <h2 class="text-xl font-bold text-gray-800">ממשק צ'אט וניהול</h2>
+        <span id="auth-status" class="text-xs font-medium text-gray-500 bg-gray-200 px-2 py-1 rounded-full">מתחבר...</span>
+    </div>
+    
+    <div id="log">
+        <p class="text-gray-400 text-center p-5">טוען חיבור ל-Firebase...</p>
+    </div>
+
+    <form id="sendForm" class="mt-4 flex gap-2">
+        <input id="msg" placeholder='כתוב הודעה לצוות...' class="flex-grow p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <button class="bg-blue-500 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-600">שלח</button>
+    </form>
+
+    <script type="module">
+        // --- ייבוא ספריות Firebase ---
+        import { initializeApp, getApp, getApps } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+        import { getFirestore, collection, doc, addDoc, onSnapshot, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+
+        // --- הגדרות ---
+        const fallbackConfig = {
+            apiKey: "AIzaSyDq0oVwS6zbEfsgrYBRkeBq80dDUKMedzo", 
+            authDomain: "saban94-78949.firebaseapp.com", 
+            projectId: "saban94-78949",
+            storageBucket: "saban94-78949.appspot.com", 
+            messagingSenderId: "41553157903", 
+            appId: "1:41553157903:web:cc33d252cff023be97a87a"
+        };
+        const FIREBASE_CONFIG = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : fallbackConfig;
+        
+        // !!! עדכן את המזהה הזה למזהה חדר הצ'אט שלך ב-Firestore !!!
+        const TEAM_CHAT_ID = "saban94_main_chat"; 
+        
+        let db, auth;
+        let currentUserId = null;
+        let messagesUnsubscribe = null;
+        const log = document.getElementById('log');
+        const authStatus = document.getElementById('auth-status');
+
+        // --- אתחול ---
+        try {
+            const app = !getApps().length ? initializeApp(FIREBASE_CONFIG) : getApp();
+            db = getFirestore(app);
+            auth = getAuth(app);
+            authenticateUser();
+        } catch (error) {
+            console.error("Firebase Init Error:", error);
+            log.innerHTML = `<p class="text-red-500 text-center p-5">שגיאה קריטית באתחול Firebase.</p>`;
+            authStatus.innerText = "שגיאת חיבור";
+            authStatus.classList.add('bg-red-200', 'text-red-700');
+        }
+
+        // --- אימות ---
+        function authenticateUser() {
+            onAuthStateChanged(auth, async (user) => {
+                if (user) {
+                    currentUserId = user.uid;
+                    console.log(`User Authenticated: ${currentUserId}`);
+                    authStatus.innerText = "מחובר";
+                    authStatus.classList.remove('bg-gray-200', 'text-gray-500');
+                    authStatus.classList.add('bg-green-200', 'text-green-700');
+                    
+                    // התחל להאזין להודעות רק לאחר אימות
+                    listenToTeamChat();
+                } else {
+                    console.log("No user found. Signing in...");
+                    authStatus.innerText = "מאמת...";
+                    signInUser();
+                }
+            });
+        }
+
+        async function signInUser() {
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (error) {
+                console.error("Authentication Error:", error);
+                authStatus.innerText = "שגיאת אימות";
+                authStatus.classList.add('bg-red-200', 'text-red-700');
+            }
+        }
+
+        // --- פונקציית האזנה (במקום WebSocket) ---
+        function listenToTeamChat() {
+            if (messagesUnsubscribe) messagesUnsubscribe(); // נתק מאזין קודם אם קיים
+
+            const messagesRef = collection(db, "teamChats", TEAM_CHAT_ID, "messages");
+            const q = query(messagesRef, orderBy("timestamp", "desc")); // מיין מהחדש לישן
+
+            log.innerHTML = ''; // נקה לוג קודם
+
+            messagesUnsubscribe = onSnapshot(q, (snapshot) => {
+                console.log(`Snapshot received: ${snapshot.size} messages`);
+                log.innerHTML = ''; // נקה והצג מחדש בכל עדכון
+                if (snapshot.empty) {
+                    log.innerHTML = `<p class="text-gray-400 text-center p-5">אין עדיין הודעות בחדר הצ'אט...</p>`;
+                    return;
+                }
+                snapshot.docs.forEach(doc => {
+                    appendMessage(doc.data());
+                });
+            }, (error) => {
+                console.error("Error listening to team chat:", error);
+                log.innerHTML = `<p class="text-red-500 text-center p-5">שגיאה בהאזנה להודעות: ${error.message}</p>`;
+            });
+        }
+
+        // --- הצגת הודעה ---
+        function appendMessage(msg) {
+            const el = document.createElement('div');
+            el.className = 'order';
+            
+            const time = msg.timestamp ? new Date(msg.timestamp.toDate()).toLocaleString('he-IL') : 'לפני רגע';
+            
+            el.innerHTML = `
+                <div><strong>${msg.senderName || 'מערכת'}:</strong></div>
+                <div class='meta'>${msg.text || '---'}</div>
+                <div class='timestamp text-right'>${time}</div>
+            `;
+            log.appendChild(el); // שינוי ל-appendChild כדי לשמור על סדר הפוך מהשאילתה
+        }
+
+        // --- שליחת הודעה ---
+        document.getElementById('sendForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const msgInput = document.getElementById('msg');
+            const text = msgInput.value.trim();
+            
+            if (!text || !currentUserId) {
+                alert("חובה לכתוב הודעה ולהיות מחובר");
+                return;
+            }
+
+            const messageData = {
+                text: text,
+                senderName: "מנהל (Messages)", // אפשר להוסיף שם דינאמי
+                senderId: currentUserId,
+                timestamp: serverTimestamp(),
+                type: "message_to_admin" // סוג הודעת מנהל
+            };
+
+            try {
+                const messagesRef = collection(db, "teamChats", TEAM_CHAT_ID, "messages");
+                await addDoc(messagesRef, messageData);
+                msgInput.value = ''; // נקה תיבה
+            } catch (err) {
+                console.error("Error sending message:", err);
+                alert('שגיאה בשליחת ההודעה');
+            }
+        });
+
+    </script>
+</body>
+</html>
