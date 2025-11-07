@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sidor - Master Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/feather-icons"></script>
+    <style>
+        body {
+            font-family: 'Rubik', sans-serif;
+            background-color: #f3f4f6; /* gray-100 */
+        }
+        /* הסתרת iframes כברירת מחדל */
+        .iframe-content {
+            display: none;
+            height: calc(100vh - 60px); /* גובה מלא פחות הטאבים */
+        }
+        .iframe-content.active {
+            display: block;
+        }
+        .tab-button {
+            transition: all 0.2s;
+            border-bottom: 4px solid transparent;
+        }
+        .tab-button.active {
+            border-bottom-color: #3b82f6; /* blue-500 */
+            color: #3b82f6;
+        }
+    </style>
+</head>
+<body class="overflow-hidden">
+    <div class="flex flex-col h-screen">
+        <!-- 1. כותרת וטאבים -->
+        <header class="bg-white shadow-md w-full">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between items-center h-16">
+                    <div class="flex items-center gap-3">
+                        <img src="https://i.postimg.cc/ryPT3r29/image.png" alt="Saban Logo" class="h-10 w-auto">
+                        <h1 class="text-xl font-bold text-gray-800 hidden sm:block">Sidor Master Dashboard</h1>
+                    </div>
+                    <div class="text-sm font-medium text-center text-gray-500 border-b border-gray-200">
+                        <ul class="flex -mb-px">
+                            <li class="mr-2">
+                                <button class="tab-button active inline-flex items-center gap-2 p-4" onclick="showTab('tab-messages')">
+                                    <i data-feather="message-square" class="w-5 h-5"></i>
+                                    <span>צ'אט וניהול</span>
+                                </button>
+                            </li>
+                            <li>
+                                <button class="tab-button inline-flex items-center gap-2 p-4" onclick="showTab('tab-team')">
+                                    <i data-feather="users" class="w-5 h-5"></i>
+                                    <span>צוות יוסי</span>
+                                </button>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- 2. אזור התוכן (IFrames) -->
+        <main class="flex-grow overflow-hidden">
+            <!-- IFrame עבור צ'אט וניהול -->
+            <iframe id="tab-messages" 
+                    src="messages_viewer.html" 
+                    class="iframe-content active w-full h-full border-0"
+                    title="ממשק צ'אט וניהול">
+            </iframe>
+
+            <!-- IFrame עבור צוות יוסי -->
+            <iframe id="tab-team" 
+                    src="team_viewer.html" 
+                    class="iframe-content w-full h-full border-0"
+                    title="ממשק צוות יוסי">
+            </iframe>
+        </main>
+    </div>
+
+    <script>
+        function showTab(tabId) {
+            // הסתר את כל ה-iframes
+            document.querySelectorAll('.iframe-content').forEach(iframe => {
+                iframe.classList.remove('active');
+            });
+            // הסר 'active' מכל הכפתורים
+            document.querySelectorAll('.tab-button').forEach(button => {
+                button.classList.remove('active');
+            });
+
+            // הצג את ה-iframe הנבחר
+            document.getElementById(tabId).classList.add('active');
+            // סמן את הכפתור הנבחר
+            document.querySelector(`button[onclick="showTab('${tabId}')"]`).classList.add('active');
+        }
+
+        // הפעל את Feather icons
+        document.addEventListener('DOMContentLoaded', () => {
+            feather.replace();
+        });
+    </script>
+</body>
+</html>
