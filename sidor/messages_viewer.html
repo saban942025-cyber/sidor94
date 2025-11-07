@@ -1,1304 +1,176 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="he" dir="rtl">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>✍️ מרכז הודעות (v5.0 - Glassmorphism)</title>
-    <!-- 
-      DeliveryMaster Admin - מרכז הודעות v5.0 (Glassmorphism + Bot)
-      
-      Changelog:
-      - [NEW v5.0] Glassmorphism UI:
-        - הוספת עטיפת "זכוכית" (glassmorphism) לכל האפליקציה.
-        - עדכון רקעים וגופנים (Inter/Rubik) לעיצוב מודרני.
-      - [NEW v5.0] Bot/Agent Flow:
-        - הוספת כפתור "השתלט על השיחה" (Force Takeover) בכרטיס הלקוח.
-        - הטמעת פונקציית `escalateToHuman` שמשייכת שיחה למנהל.
-        - `sendAdminReply` מוודא שהשיחה משויכת למנהל לפני שליחה.
-        - עדכון חיווי "משויך ל:" בכרטיס הלקוח (בוט / בטיפולך).
-      - [NEW v5.0] חווית צ'אט:
-        - הוספת "וי קריאה" (✔️) להודעות נכנסות ויוצאות.
-        - חיווי הקלדה "...מקליד ✍️" מופעל על ידי `order.customerIsTyping`.
-      - [FIX v4.x] תיקון באגים קריטיים (doc is not function, mobile back button).
-    -->
-    
-    <!-- TailwindCSS -->
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Messages Viewer</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- Icons (Feather & Font Awesome) -->
-    <script src="https://unpkg.com/feather-icons"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
-    <!-- Google Font: Rubik & Inter -->
-    <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
-
     <style>
-        :root {
-            --primary-color: #3b82f6; /* blue-500 */
-            --bg-light: #f3f4f6; /* gray-100 */
-            --bg-app-light: rgba(249, 250, 251, 0.7); /* gray-50 w/ opacity */
-            --border-color: rgba(229, 231, 235, 0.7); /* gray-200 w/ opacity */
-            --text-dark: #1f2937; /* gray-800 */
-            --text-light: #6b7280; /* gray-500 */
-            --chat-bg-color: #e5ddd5; 
-        }
-        html.dark {
-             --bg-light: #1f2937;
-             --bg-app-light: rgba(55, 65, 81, 0.7); /* gray-700 w/ opacity */
-             --border-color: rgba(75, 85, 99, 0.7); /* gray-600 w/ opacity */
-             --text-dark: #f3f4f6;
-             --text-light: #9ca3af;
-             --chat-bg-color: #0d1418;
-        }
-
-        body {
-            font-family: 'Inter', 'Rubik', sans-serif;
-            background-color: var(--bg-light);
-            color: var(--text-dark);
-            overflow: hidden;
-            height: 100vh;
-            /* [NEW v5.0] Background gradient */
-            background-image: linear-gradient(120deg, #a1c4fd 0%, #c2e9fb 100%);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 1rem; /* Padding for the glass wrapper */
-        }
-        
-        /* [NEW v5.0] Glassmorphism Wrapper */
-        .glass-wrapper {
-            width: 100%;
-            height: 100%;
-            max-width: 1600px; /* Max width for desktop */
-            height: calc(100vh - 2rem);
-            background: var(--bg-glass-light);
-            backdrop-filter: blur(24px) saturate(180%);
-            -webkit-backdrop-filter: blur(24px) saturate(180%);
-            border: 1px solid var(--border-color-light);
-            border-radius: 1.5rem; /* 2xl */
-            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.1);
-            overflow: hidden; /* Crucial for rounded corners */
-        }
-        html.dark .glass-wrapper {
-            background: var(--bg-glass-dark);
-            border: 1px solid var(--border-color-dark);
-            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
-        }
-
-        
-        /* [NEW v4.0] Layout: 3 Columns */
-        .chat-app-layout {
-            display: grid;
-            grid-template-columns: 350px 1fr 0px; 
-            height: 100%;
-            overflow: hidden;
-            transition: grid-template-columns 0.3s ease;
-        }
-        .chat-app-layout.profile-open {
-            grid-template-columns: 350px 1fr 300px;
-        }
-
-        #conversation-list {
-            background-color: var(--bg-app-light);
-            border-left: 1px solid var(--border-color);
-            display: flex;
-            flex-direction: column;
-            overflow-y: auto;
-        }
-        #chat-window {
-            background-color: transparent; /*[FIX v5.0]*/
-            display: flex;
-            flex-direction: column;
-            border-left: 1px solid var(--border-color);
-        }
-        html.dark #chat-window { background-color: transparent; }
-
-        #customer-profile-panel {
-            background-color: rgba(255, 255, 255, 0.8);
-            html.dark & { background-color: var(--bg-app-light); }
-            border-left: 1px solid var(--border-color);
-            display: flex;
-            flex-direction: column;
-            overflow-y: auto;
-            width: 300px;
-        }
-        .profile-section {
-            border-bottom: 1px solid var(--border-color);
-            padding: 1rem;
-        }
-        .profile-detail strong { color: var(--text-light); font-weight: 500; }
-        .profile-detail span, .profile-detail a { color: var(--text-dark); font-weight: 500; }
-        .profile-project-tag {
-            background-color: var(--bg-light);
-            color: var(--text-light);
-            font-size: 0.75rem;
-            font-weight: 500;
-            padding: 2px 8px;
-            border-radius: 99px;
-        }
-        .profile-order-item { font-size: 0.875rem; }
-        html.dark .profile-order-item:hover { background-color: #374151; }
-
-        /* [NEW v4.3] Filter Tabs */
-        .filter-tabs {
-            display: flex;
-            border-bottom: 1px solid var(--border-color);
-            padding: 0.5rem 0.75rem;
-            gap: 0.5rem;
-        }
-        .tab-button {
-            flex: 1;
-            padding: 0.5rem;
-            font-size: 0.875rem;
-            font-weight: 600;
-            color: var(--text-light);
-            border-radius: 0.5rem;
-            cursor: pointer;
-            text-align: center;
-            transition: all 0.2s;
-            border: 1px solid transparent;
-        }
-        .tab-button:hover {
-            background-color: rgba(255, 255, 255, 0.7);
-            html.dark & { background-color: #4b5563; }
-        }
-        .tab-button.active {
-            background-color: var(--primary-color);
-            color: white;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        }
-
-        /* Conversation List Item */
-        .conv-item { cursor: pointer; transition: background-color 0.2s; }
-        .conv-item:hover { background-color: rgba(255, 255, 255, 0.7); }
-        html.dark .conv-item:hover { background-color: #2a3942; }
-        .conv-item.active {
-            background-color: rgba(255, 255, 255, 0.9);
-            border-right: 4px solid var(--primary-color);
-        }
-        html.dark .conv-item.active { background-color: #2a3942; }
-        .conv-unread-badge {
-            background-color: var(--primary-color);
-            color: white;
-            font-size: 0.75rem;
-            font-weight: 700;
-            border-radius: 50%;
-            width: 24px;
-            height: 24px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-        }
-
-        /* Chat Window */
-        #chat-header {
-            border-bottom: 1px solid var(--border-color);
-            cursor: pointer;
-            background-color: var(--bg-app-light);
-        }
-        #chat-header:hover { background-color: rgba(255, 255, 255, 0.9); }
-        html.dark #chat-header:hover { background-color: #2a3942; }
-
-        #chat-history {
-            background-color: var(--chat-bg-color);
-            opacity: 0.9;
-            background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAFAAAABQAgMAAAB2v0G3AAAACVBMVEUAAADy8vL19fX8aK8LAAAAA3RSTlMAAQIDB+hP6wAAACtJREFUeAFjCIfgEAGNkQEIwAhCDQh4wAYIeMAYMKAJg/GgMQPCGgYGAAAzbA82e/YEEwAAAABJRU5ErkJggg==');
-            background-blend-mode: multiply;
-        }
-        
-        .chat-bubble {
-            max-width: 70%;
-            padding: 0.5rem 1rem;
-            border-radius: 0.75rem;
-            margin-bottom: 0.5rem;
-            word-wrap: break-word;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-        }
-        .chat-bubble-admin { /* הודעה יוצאת (מנהל) */
-            background-color: #dcf8c6; 
-            color: var(--text-dark);
-            border-bottom-right-radius: 0.25rem;
-            align-self: flex-end;
-        }
-        html.dark .chat-bubble-admin {
-            background-color: #005c4b; 
-            color: #e9edef;
-        }
-        
-        .chat-bubble-customer { /* הודעה נכנסת (לקוח) */
-            background-color: white;
-            color: var(--text-dark);
-            border-bottom-left-radius: 0.25rem;
-            align-self: flex-start;
-        }
-        html.dark .chat-bubble-customer {
-             background-color: #202c33;
-             color: #e9edef;
-        }
-        
-        .chat-bubble-bot { /* [NEW v4.3] */
-            background-color: #f1f5f9; /* gray-100 */
-            color: var(--text-light);
-            border-bottom-left-radius: 0.25rem;
-            align-self: flex-start;
-            font-style: italic;
-        }
-        html.dark .chat-bubble-bot {
-             background-color: #202c33;
-             color: #a0aec0;
-        }
-
-        .chat-timestamp {
-            font-size: 0.7rem;
-            color: var(--text-light);
-            display: flex;
-            align-items: center;
-            gap: 0.25rem;
-            margin-top: 0.25rem;
-            direction: ltr; 
-        }
-        .read-receipt {
-            font-size: 0.9rem;
-            color: var(--text-light);
-            line-height: 1;
-        }
-        .read-receipt.read {
-            color: #53bdeb; /* Blue ticks */
-        }
-        html.dark .chat-bubble-admin .chat-timestamp, html.dark .chat-bubble-admin .read-receipt {
-            color: #a0aec0;
-        }
-        html.dark .chat-bubble-admin .read-receipt.read {
-            color: #53bdeb;
-        }
-        
-        #typing-indicator {
-            font-style: italic;
-            color: var(--primary-color);
-            font-size: 0.875rem;
-            font-weight: 500;
-        }
-        
-        #chat-input-bar {
-            border-top: 1px solid var(--border-color);
-            background-color: var(--bg-app-light);
-        }
-
-        /* Modal Dialog */
-        .modal-overlay { 
-            position: fixed; top: 0; left: 0; right: 0; bottom: 0; 
-            background: rgba(0,0,0,0.5); z-index: 1000; 
-            display: none;
-            align-items: center;
-            justify-content: center;
-        }
-        .modal-overlay.hidden { display: none; }
-        .modal-overlay:not(.hidden) { display: flex; }
-
-        .modal-content { 
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-            width: 90%;
-            max-width: 600px;
-            z-index: 1001; 
-        }
-        html.dark .modal-content {
-            background-color: #202c33;
-        }
-        
-        /* "מלשינון" */
-        #quick-reply-container {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.5rem;
-            margin-top: 1rem;
-            padding-top: 1rem;
-            border-top: 1px solid var(--border-color);
-        }
-        .quick-reply-btn {
-            background-color: #e0f2fe; /* sky-100 */
-            color: #0c4a6e; /* sky-800 */
-            padding: 0.25rem 0.75rem;
-            border-radius: 99px;
-            font-size: 0.875rem;
-            font-weight: 500;
-            cursor: pointer;
-            transition: background-color 0.2s;
-        }
-        .quick-reply-btn:hover { background-color: #bae6fd; }
-        html.dark .quick-reply-btn {
-            background-color: #374151;
-            color: #e5e7eb;
-        }
-        html.dark .quick-reply-btn:hover { background-color: #4b5563; }
-        
-        .quick-reply-category {
-            font-weight: 600;
-            color: var(--text-light);
-            width: 100%;
-            font-size: 0.75rem;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            margin-bottom: -0.25rem;
-        }
-
-        /* Loader */
-        .loader {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid var(--primary-color);
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-            margin: 4rem auto;
-        }
-        .loader-small {
-            width: 20px; height: 20px;
-            border-width: 2px;
-            margin: 0.5rem auto;
-        }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        
-        /* Mobile View */
-        @media (max-width: 1024px) { /* Changed breakpoint */
-            body { padding: 0; }
-            .glass-wrapper {
-                margin: 0;
-                height: 100vh;
-                width: 100vw;
-                border-radius: 0;
-            }
-            .chat-app-layout {
-                grid-template-columns: 1fr;
-            }
-            .chat-app-layout.profile-open {
-                grid-template-columns: 1fr;
-            }
-            #conversation-list {
-                height: 100%;
-                z-index: 20;
-            }
-            #chat-window {
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                z-index: 30;
-                transform: translateX(-100%); /* RTL: מוסתר משמאל */
-                transition: transform 0.3s ease;
-            }
-            #chat-window.active {
-                transform: translateX(0);
-            }
-            /* Profile Panel on Mobile */
-            #customer-profile-panel {
-                z-index: 40; /* Above chat window */
-                width: 300px;
-                transform: translateX(-100%); /* RTL: מוסתר משמאל */
-                position: fixed; /* [FIX v4.0] Make it overlay */
-                left: 0; /* [FIX v4.0] Stick to left */
-                top: 0;
-                height: 100%;
-            }
-            .chat-app-layout.profile-open #customer-profile-panel {
-                transform: translateX(0);
-            }
-            /* [NEW v4.0] Overlay for mobile profile */
-            #profile-overlay-mobile {
-                position: fixed;
-                inset: 0;
-                background-color: rgba(0,0,0,0.5);
-                z-index: 35;
-                display: none;
-            }
-            .chat-app-layout.profile-open #profile-overlay-mobile {
-                display: block;
-            }
-        }
+        body { font-family: 'Rubik', sans-serif; background: #f9fafb; }
+        #log { border: 1px solid #ccc; padding: 12px; height: 60vh; overflow:auto; background:#fff; border-radius: 8px; }
+        .order { padding:10px; margin:8px 0; border-radius:8px; box-shadow:0 1px 3px rgba(0,0,0,.1); background: #f0f9ff; border: 1px solid #bde0fe; }
+        .meta { font-size:12px; color:#555; white-space: pre-wrap; }
+        .timestamp { font-size: 10px; color: #6b7280; }
     </style>
 </head>
-<body class="antialiased">
+<body class="p-4">
 
-    <!-- Modal: שלח תשובה/התראה ללקוח -->
-    <div id="reply-modal" class="modal-overlay hidden" onclick="closeReplyModal()">
-        <div class="modal-content" onclick="event.stopPropagation()">
-            <div class="p-6">
-                <h3 class="text-lg font-semibold mb-4">שלח תשובה / התראה</h3>
-                <p class="text-sm text-gray-600 mb-2">עבור: <strong id="reply-modal-customer-name"></strong></p>
-                <p class="text-sm text-gray-600 mb-4">הזמנה: <strong id="reply-modal-order-id"></strong></p>
-                
-                <textarea id="reply-message-text" rows="4" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="הקלד את תוכן ההודעה כאן..."></textarea>
-                
-                <input type="hidden" id="reply-modal-doc-id">
-                
-                <!-- [NEW] "מלשינון" - תשובות מהירות -->
-                <div id="quick-reply-container">
-                    <span class="quick-reply-category">טוען תשובות...</span>
-                </div>
-
-                <div class="flex justify-end gap-3 mt-4">
-                    <button onclick="closeReplyModal()" class="py-2 px-4 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300">ביטול</button>
-                    <button onclick="sendAdminReply()" class="py-2 px-4 bg-blue-500 text-white rounded-md hover:bg-blue-600">שלח התראה</button>
-                </div>
-            </div>
-        </div>
+    <div class="flex justify-between items-center mb-3">
+        <h2 class="text-xl font-bold text-gray-800">ממשק צ'אט וניהול</h2>
+        <span id="auth-status" class="text-xs font-medium text-gray-500 bg-gray-200 px-2 py-1 rounded-full">מתחבר...</span>
     </div>
     
-    <!-- Toast Container -->
-    <div id="toast-container" class="fixed bottom-5 right-5 z-[5000]"></div>
-    
-    <!-- [NEW v4.0] Mobile Overlay for Profile -->
-    <div id="profile-overlay-mobile" class="md:hidden" onclick="toggleProfilePanel()"></div>
-    
-    <!-- [NEW v5.0] Main Glassmorphism Wrapper -->
-    <div class="glass-wrapper">
-        <!-- Main Layout -->
-        <div id="main-layout" class="chat-app-layout">
-            
-            <!-- 1. Conversation List (Sidebar) -->
-            <aside id="conversation-list">
-                <!-- Header -->
-                <header class="p-4 border-b border-gray-200 flex-shrink-0">
-                    <h1 class="text-2xl font-bold">שיחות</h1>
-                    <div class="relative mt-2">
-                        <input type="text" id="search-conversations" placeholder="חפש שיחה..." class="w-full p-2 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        <i data-feather="search" class="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400"></i>
-                    </div>
-                </header>
-                
-                <!-- [NEW v4.3] Filter Tabs -->
-                <div class="filter-tabs flex-shrink-0">
-                    <button class="tab-button active" onclick="setConversationFilter('pending')">דורש טיפול</button>
-                    <button class="tab-button" onclick="setConversationFilter('all')">כל השיחות</button>
-                </div>
-                
-                <!-- List -->
-                <div id="conv-list-container" class="flex-1 overflow-y-auto">
-                    <div id="conv-loading" class="text-center text-gray-500 py-10">
-                        <div class="loader"></div>
-                        <span class="block mt-2">טוען שיחות...</span>
-                    </div>
-                    <!-- Conversation items will be injected here -->
-                </div>
-            </aside>
-            
-            <!-- 2. Chat Window -->
-            <main id="chat-window">
-                <!-- Default "Empty" State -->
-                <div id="chat-empty-state" class="flex flex-col items-center justify-center h-full text-center p-4">
-                    <i data-feather="message-circle" class="w-24 h-24 text-gray-300"></i>
-                    <h2 class="text-2xl font-semibold mt-4">בחר שיחה</h2>
-                    <p class="text-gray-500 mt-2">בחר שיחה מהרשימה בצד ימין כדי להתחיל.</p>
-                    <a href="index_admin.html" class="mt-4 text-sm text-blue-500 hover:underline">
-                        &rarr; חזרה לדשבורד הראשי
-                    </a>
-                </div>
-                
-                <!-- Active Chat State (Hidden by default) -->
-                <div id="chat-active-state" class="hidden flex-1 flex flex-col">
-                    <!-- Chat Header -->
-                    <header id="chat-header" class="p-4 flex-shrink-0 flex items-center gap-4" onclick="toggleProfilePanel()">
-                        <!-- [FIX v4.2] Added stopPropagation to fix mobile click -->
-                        <button id="mobile-back-btn" class="md:hidden" onclick="event.stopPropagation(); closeActiveChat()">
-                            <i data-feather="arrow-right"></i>
-                        </button>
-                        <div class="w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold text-xl flex-shrink-0">
-                            <span id="chat-header-initials"></span>
-                        </div>
-                        <div>
-                            <h3 class="font-bold text-lg" id="chat-header-name"></h3>
-                            <p class="text-sm text-gray-600" id="chat-header-order-id"></p>
-                            <!-- [NEW v4.3] Typing Indicator -->
-                            <p id="typing-indicator" class="text-sm text-blue-500 hidden">...מקליד ✍️</p>
-                        </div>
-                    </header>
-                    
-                    <!-- Chat History -->
-                    <div id="chat-history" class="flex-1 overflow-y-auto p-4 space-y-2 flex flex-col">
-                        <!-- Bubbles injected here -->
-                    </div>
-                    
-                    <!-- Chat Input -->
-                    <footer id="chat-input-bar" class="p-4 bg-gray-50 flex-shrink-0">
-                        <div class="flex gap-2">
-                            <button id="quick-reply-toggle" class="bg-gray-200 text-gray-700 p-3 rounded-lg shadow-sm hover:bg-gray-300">
-                                <i class="fas fa-bolt"></i>
-                            </button>
-                            <input type="text" id="chat-input" class="flex-grow p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="הקלד תשובה...">
-                            <button id="chat-send-btn" class="bg-blue-600 text-white p-3 rounded-lg shadow hover:bg-blue-700">
-                                <i data-feather="send"></i>
-                            </button>
-                        </div>
-                    </footer>
-                </div>
-            </main>
-            
-            <!-- 3. [NEW v4.0] Customer Profile Panel -->
-            <aside id="customer-profile-panel">
-                <header class="p-4 flex-shrink-0 flex items-center justify-between border-b border-gray-200">
-                    <h2 class="text-xl font-bold text-gray-800">כרטיס לקוח</h2>
-                    <button onclick="toggleProfilePanel()" class="text-gray-500 hover:text-gray-700">
-                        <i data-feather="x" class="w-6 h-6"></i>
-                    </button>
-                </header>
-                
-                <!-- Profile Content -->
-                <div id="profile-content-loading" class="text-center p-10">
-                    <div class="loader loader-small"></div>
-                    <p class="text-sm text-gray-500">טוען פרטי לקוח...</p>
-                </div>
-                
-                <div id="profile-content" class="hidden">
-                    <!-- Section 1: Customer Details -->
-                    <div class="profile-section space-y-2">
-                        <div class="text-center mb-4">
-                            <div class="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold text-3xl mx-auto">
-                                <span id="profile-initials"></span>
-                            </div>
-                            <h3 class="font-bold text-lg mt-2" id="profile-name"></h3>
-                        </div>
-                        <div class="profile-detail">
-                            <strong>מס' לקוח:</strong> <span id="profile-customer-number"></span>
-                        </div>
-                        <div class="profile-detail">
-                            <strong>טלפון:</strong> <a href="#" id="profile-phone" class="text-blue-500 hover:underline"></a>
-                        </div>
-                        <div class="profile-detail">
-                            <strong>כתובת:</strong> <span id="profile-address"></span>
-                        </div>
-                        <!-- [NEW v4.3] Assigned Agent -->
-                        <div class="profile-detail">
-                            <strong>משויך ל:</strong> <span id="profile-agent" class="font-semibold text-green-600"></span>
-                        </div>
-                        
-                        <!-- [NEW v4.3] Manager Tools -->
-                        <div class="mt-4 space-y-2">
-                            <button id="force-takeover-btn" class="w-full py-2 px-4 bg-green-500 text-white text-sm font-semibold rounded-lg shadow hover:bg-green-600 flex items-center justify-center gap-2">
-                                <i data-feather="zap" class="w-4 h-4"></i>
-                                השתלט על השיחה
-                            </button>
-                            <button id="new-order-for-customer-btn" class="w-full py-2 px-4 bg-blue-500 text-white text-sm font-semibold rounded-lg shadow hover:bg-blue-600 flex items-center justify-center gap-2">
-                                <i data-feather="plus-circle" class="w-4 h-4"></i>
-                                צור הזמנה חדשה ללקוח
-                            </button>
-                        </div>
-                    </div>
-                    
-                    <!-- Section 2: Projects -->
-                    <div class="profile-section">
-                        <h4 class="font-semibold text-gray-700 mb-2">פרויקטים</h4>
-                        <div id="profile-projects-list" class="flex flex-wrap gap-2">
-                            <!-- Project tags injected here -->
-                        </div>
-                    </div>
-                    
-                    <!-- Section 3: Order History -->
-                    <div class="profile-section">
-                        <h4 class="font-semibold text-gray-700 mb-2">היסטוריית הזמנות (5 אחרונות)</h4>
-                        <div id="profile-orders-list" class="space-y-2">
-                            <!-- Order items injected here -->
-                        </div>
-                    </div>
-                </div>
-            </aside>
-        </div>
+    <div id="log">
+        <p class="text-gray-400 text-center p-5">טוען חיבור ל-Firebase...</p>
     </div>
 
-    <!-- 
-      ==========================================================
-      ===               תחילת סקריפט (v5.0)                  ===
-      ==========================================================
-    -->
+    <form id="sendForm" class="mt-4 flex gap-2">
+        <input id="msg" placeholder='כתוב הודעה לצוות...' class="flex-grow p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <button class="bg-blue-500 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-600">שלח</button>
+    </form>
+
     <script type="module">
-        // --- Inlined Firebase SDK Imports ---
-        import { initializeApp, getApps, getApp } from "https.firebasestorage.googleapis.com/v0/b/saban94-78949.appspot.com/o/firebase%2Ffirebase-app.js?alt=media&token=af580718-d04b-449e-a0e2-63f5d56b0606";
-        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https.firebasestorage.googleapis.com/v0/b/saban94-78949.appspot.com/o/firebase%2Ffirebase-auth.js?alt=media&token=0f723631-4ac3-47a6-b51c-f3c05151f153";
-        import { 
-            getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot, 
-            collection, query, where, Timestamp, runTransaction, getDocs, orderBy, 
-            serverTimestamp, limit, writeBatch, collectionGroup
-        } from "https.firebasestorage.googleapis.com/v0/b/saban94-78949.appspot.com/o/firebase%2Ffirebase-firestore.js?alt=media&token=c1964257-ec13-448c-9bfa-517865f9a76d";
-        import { setLogLevel } from "https.firebasestorage.googleapis.com/v0/b/saban94-78949.appspot.com/o/firebase%2Ffirebase-firestore.js?alt=media&token=c1964257-ec13-448c-9bfa-517865f9a76d";
+        // --- ייבוא ספריות Firebase ---
+        import { initializeApp, getApp, getApps } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+        import { getFirestore, collection, doc, addDoc, onSnapshot, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
-        // --- Global Variables ---
-        let db, auth;
-        let messagesUnsubscribe = null;
-        let chatUnsubscribe = null;
-        let typingUnsubscribe = null; 
-        let currentUserId = null;
-        let activeConversations = new Map(); 
-        let activeOrderId = null; 
-        let activeCustomerId = null;
-        let currentConversationFilter = 'pending'; 
-        
-        // --- "מלשינון" (כמו קודם) ---
-        const quickReplyCategories = {
-            "אישור הזמנה": [
-                "הזמנתך אושרה ומטופלת.",
-                "קיבלנו, תודה! ההזמנה בטיפול.",
-                "ההזמנה אושרה. נעדכן כשהנהג בדרך."
-            ],
-            "בירור פרטים": [
-                "אנא שלח כתובת מדויקת למשלוח.",
-                "מה מספר הטלפון של איש הקשר בשטח?",
-                "לאיזו שעה תרצה לתאם את האספקה?",
-                "אנא פרט כמויות מדויקות.",
-                "האם דרוש מנוף לפריקה?"
-            ],
-            "בדרך/נהג": [
-                "הנהג בדרך אליך.",
-                "הנהג יגיע בקרוב.",
-                "שלחנו לך לינק למעקב אחר הנהג.",
-                "הנהג אוסף כעת את הסחורה מהמחסן."
-            ],
-            "דחייה / בעיה": [
-                "לא נוכל לספק בתאריך המבוקש. אנא בחר תאריך חלופי.",
-                "הפריט אזל מהמלאי. נעדכן כשיחזור.",
-                "חיוב האשראי נכשל. אנא צור קשר עם המשרד.",
-                "אנא צור קשר טלפוני עם המשרד להשלמת ההזמנה."
-            ],
-            "כללי": [
-                "קיבלנו, תודה.",
-                "בטיפול.",
-                "תודה על פנייתך.",
-                "יום טוב!"
-            ]
-        };
-
-
-        // --- Firebase Config & Auth ---
+        // --- הגדרות ---
         const fallbackConfig = {
-          apiKey: "AIzaSyDq0oVwS6zbEfsgrYBRkeBq80dDUKMedzo", 
-          authDomain: "saban94-78949.firebaseapp.com", 
-          projectId: "saban94-78949",
-          storageBucket: "saban94-78949.firebasestorage.app", 
-          messagingSenderId: "41553157903", 
-          appId: "1:41553157903:web:cc33d252cff023be97a87a", 
-          measurementId: "G-XV6RZDESSB"
+            apiKey: "AIzaSyDq0oVwS6zbEfsgrYBRkeBq80dDUKMedzo", 
+            authDomain: "saban94-78949.firebaseapp.com", 
+            projectId: "saban94-78949",
+            storageBucket: "saban94-78949.appspot.com", 
+            messagingSenderId: "41553157903", 
+            appId: "1:41553157903:web:cc33d252cff023be97a87a"
         };
+        const FIREBASE_CONFIG = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : fallbackConfig;
         
-        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : JSON.stringify(fallbackConfig));
+        // !!! עדכן את המזהה הזה למזהה חדר הצ'אט שלך ב-Firestore !!!
+        const TEAM_CHAT_ID = "saban94_main_chat"; 
         
+        let db, auth;
+        let currentUserId = null;
+        let messagesUnsubscribe = null;
+        const log = document.getElementById('log');
+        const authStatus = document.getElementById('auth-status');
+
+        // --- אתחול ---
         try {
-            const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+            const app = !getApps().length ? initializeApp(FIREBASE_CONFIG) : getApp();
             db = getFirestore(app);
             auth = getAuth(app);
-            setLogLevel('Debug');
-            console.log("Firebase Initialized (Project: saban94-78949).");
-            
+            authenticateUser();
+        } catch (error) {
+            console.error("Firebase Init Error:", error);
+            log.innerHTML = `<p class="text-red-500 text-center p-5">שגיאה קריטית באתחול Firebase.</p>`;
+            authStatus.innerText = "שגיאת חיבור";
+            authStatus.classList.add('bg-red-200', 'text-red-700');
+        }
+
+        // --- אימות ---
+        function authenticateUser() {
             onAuthStateChanged(auth, async (user) => {
                 if (user) {
                     currentUserId = user.uid;
-                    SmartLog.info("Admin user signed in", "Auth.SignIn", { uid: currentUserId });
-                    listenForConversations();
-                } else {
-                    console.log("No user. Trying auth...");
-                    try {
-                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                            await signInWithCustomToken(auth, __initial_auth_token);
-                        } else {
-                            await signInAnonymously(auth);
-                        }
-                    } catch (error) {
-                        SmartLog.error(error, "Auth.SignInFailed");
-                    }
-                }
-            });
-
-        } catch (e) {
-            SmartLog.error(e, "App.Init");
-            showToast('שגיאת התחברות חמורה ל-Firebase', 'error');
-        }
-
-        // --- SmartLog & Toast ---
-        const SmartLog = {
-            info: (msg, cat, ctx) => console.log(`[INFO|${cat}]`, msg, ctx || ''),
-            warn: (msg, cat, ctx) => console.warn(`[WARN|${cat}]`, msg, ctx || ''),
-            error: (err, cat, ctx) => console.error(`[ERROR|${cat}]`, err, ctx || ''),
-        };
-        
-        function showToast(message, type = 'info') {
-            const container = document.getElementById('toast-container');
-            if (!container) return;
-            // (קוד מלא של showToast...)
-        }
-
-        // --- Conversation Logic ---
-
-        function listenForConversations() {
-            if (messagesUnsubscribe) messagesUnsubscribe();
-            
-            const list = document.getElementById('conv-list-container');
-            
-            const q = query(
-                collectionGroup(db, 'messages'),
-                orderBy('timestamp', 'desc')
-            );
-            
-            messagesUnsubscribe = onSnapshot(q, async (snapshot) => {
-                const loadingEl = document.getElementById('conv-loading');
-                if (loadingEl) loadingEl.style.display = 'none';
-                
-                const convMap = new Map();
-                const orderDataCache = new Map(); 
-
-                // [FIX v4.1] Changed loop variable
-                for (const messageDoc of snapshot.docs) {
-                    const message = messageDoc.data();
-                    const orderId = messageDoc.ref.parent.parent.id;
-                    let customerId = message.senderId; 
-
-                    if (!convMap.has(orderId)) {
-                        if (!orderDataCache.has(orderId)) {
-                            try {
-                                // [FIX v4.1] `doc` (function) is no longer shadowed
-                                const orderRef = doc(db, 'orders', orderId); 
-                                const orderSnap = await getDoc(orderRef);
-                                if (orderSnap.exists()) {
-                                    orderDataCache.set(orderId, orderSnap.data());
-                                } else {
-                                    orderDataCache.set(orderId, null);
-                                }
-                            } catch (e) {
-                                SmartLog.error(e, "Listen.GetOrder", { orderId });
-                                orderDataCache.set(orderId, null);
-                            }
-                        }
-                        
-                        const order = orderDataCache.get(orderId);
-                        
-                        if (!customerId && order && order.customer && order.customer.id) {
-                            customerId = order.customer.id;
-                        }
-
-                        convMap.set(orderId, {
-                            orderId: orderId,
-                            customerId: customerId, 
-                            customerName: order?.customer?.name || message.senderName || 'לקוח לא ידוע',
-                            orderShortId: order?.order_id || orderId.slice(0,6),
-                            lastMessage: message.text,
-                            timestamp: message.timestamp,
-                            assignedAgent: order?.assignedAgent || null, // [NEW v4.3]
-                            unreadCount: 0
-                        });
-                    }
+                    console.log(`User Authenticated: ${currentUserId}`);
+                    authStatus.innerText = "מחובר";
+                    authStatus.classList.remove('bg-gray-200', 'text-gray-500');
+                    authStatus.classList.add('bg-green-200', 'text-green-700');
                     
-                    // Count unread
-                    if (message.type === 'message_to_admin' && !message.readByViewer) {
-                        const conv = convMap.get(orderId);
-                        if (conv) {
-                            conv.unreadCount = (conv.unreadCount || 0) + 1;
-                        }
-                    }
+                    // התחל להאזין להודעות רק לאחר אימות
+                    listenToTeamChat();
+                } else {
+                    console.log("No user found. Signing in...");
+                    authStatus.innerText = "מאמת...";
+                    signInUser();
                 }
-                
-                activeConversations = convMap;
-                renderConversationList();
-
-            }, (error) => {
-                SmartLog.error(error, "Data.Messages.ListenFailed", { msg: "Check Firestore indexes for 'messages' collection group" });
-                console.error("Error listening to messages: ", error);
-                if (list) list.innerHTML = '<p class="p-4 text-red-500">שגיאה בטעינת שיחות.</p>';
             });
         }
-        
-        function renderConversationList() {
-            const list = document.getElementById('conv-list-container');
-            const search = document.getElementById('search-conversations').value.toLowerCase();
-            
-            list.innerHTML = '';
-            
-            const conversations = Array.from(activeConversations.values())
-                .filter(conv => {
-                    // Filter by search
-                    const searchMatch = conv.customerName.toLowerCase().includes(search) ||
-                                        conv.orderShortId.toLowerCase().includes(search) ||
-                                        (conv.lastMessage && conv.lastMessage.toLowerCase().includes(search));
-                    if (!searchMatch) return false;
 
-                    // [NEW v4.3] Filter by tab
-                    if (currentConversationFilter === 'pending') {
-                        // "דורש טיפול":
-                        // 1. יש הודעות שלא נקראו (unreadCount > 0)
-                        // 2. והשיחה משויכת לבוט (assignedAgent == null)
-                        // 3. או שהיא משויכת אלי (assignedAgent == currentUserId) ויש הודעות שלא נקראו
-                        return conv.unreadCount > 0 && (conv.assignedAgent === null || conv.assignedAgent === currentUserId);
-                    }
-                    // "כל השיחות"
-                    return true;
-                })
-                .sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
-
-            if (conversations.length === 0) {
-                list.innerHTML = '<p class="text-gray-500 text-center p-4">לא נמצאו שיחות תואמות.</p>';
-                return;
+        async function signInUser() {
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (error) {
+                console.error("Authentication Error:", error);
+                authStatus.innerText = "שגיאת אימות";
+                authStatus.classList.add('bg-red-200', 'text-red-700');
             }
-            
-            conversations.forEach(conv => {
-                list.appendChild(createConversationCard(conv));
-            });
-            feather.replace();
-        }
-        
-        function createConversationCard(conv) {
-            const card = document.createElement('div');
-            card.className = `conv-item p-4 flex gap-3 ${conv.orderId === activeOrderId ? 'active' : ''}`;
-            card.onclick = () => openChat(conv.orderId, conv.customerId, conv.customerName, conv.orderShortId);
-            
-            const initials = conv.customerName.split(' ').map(n => n[0]).join('').slice(0, 2);
-            const time = conv.timestamp ? new Date(conv.timestamp.seconds * 1000).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' }) : '';
-
-            card.innerHTML = `
-                <div class="w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold text-xl flex-shrink-0">
-                    ${initials}
-                </div>
-                <div class="flex-1 overflow-hidden">
-                    <div class="flex justify-between items-center">
-                        <h3 class="font-bold truncate">${conv.customerName}</h3>
-                        <span class="text-xs text-gray-500 flex-shrink-0">${time}</span>
-                    </div>
-                    <div class="flex justify-between items-center mt-1">
-                        <p class="text-sm text-gray-600 truncate">${conv.lastMessage || '...'}</p>
-                        ${conv.unreadCount > 0 ? `<span class="conv-unread-badge">${conv.unreadCount}</span>` : ''}
-                    </div>
-                </div>
-            `;
-            return card;
         }
 
-        async function openChat(orderId, customerId, customerName, orderShortId) {
-            SmartLog.info("Opening chat", "Chat.Open", { orderId, customerId });
-            activeOrderId = orderId;
-            activeCustomerId = customerId; 
-            
-            renderConversationList(); 
-            
-            document.getElementById('chat-empty-state').style.display = 'none';
-            document.getElementById('chat-active-state').style.display = 'flex';
-            document.getElementById('chat-window').classList.add('active'); 
+        // --- פונקציית האזנה (במקום WebSocket) ---
+        function listenToTeamChat() {
+            if (messagesUnsubscribe) messagesUnsubscribe(); // נתק מאזין קודם אם קיים
 
-            const initials = customerName.split(' ').map(n => n[0]).join('').slice(0, 2);
-            document.getElementById('chat-header-initials').innerText = initials;
-            document.getElementById('chat-header-name').innerText = customerName;
-            document.getElementById('chat-header-order-id').innerText = `הזמנה #${orderShortId}`;
+            const messagesRef = collection(db, "teamChats", TEAM_CHAT_ID, "messages");
+            const q = query(messagesRef, orderBy("timestamp", "desc")); // מיין מהחדש לישן
 
-            const sendBtn = document.getElementById('chat-send-btn');
-            sendBtn.onclick = () => sendAdminReply(orderId);
-            
-            const quickReplyBtn = document.getElementById('quick-reply-toggle');
-            quickReplyBtn.onclick = () => showSendReplyModal(null, orderId, null, customerName); 
+            log.innerHTML = ''; // נקה לוג קודם
 
-            const chatHistoryEl = document.getElementById('chat-history');
-            chatHistoryEl.innerHTML = '<div class="loader"></div>';
-            
-            if (chatUnsubscribe) chatUnsubscribe(); 
-            if (typingUnsubscribe) typingUnsubscribe(); 
-            
-            // [NEW v4.3] Listen for typing indicator
-            const orderRef = doc(db, "orders", orderId);
-            typingUnsubscribe = onSnapshot(orderRef, (docSnap) => {
-                if (docSnap.exists()) {
-                    const orderData = docSnap.data();
-                    const typingEl = document.getElementById('typing-indicator');
-                    if (orderData.customerIsTyping) {
-                        typingEl.classList.remove('hidden');
-                    } else {
-                        typingEl.classList.add('hidden');
-                    }
-                }
-            });
-
-            // Listen for messages
-            const q = query(
-                collection(db, "orders", orderId, "messages"),
-                orderBy("timestamp", "asc")
-            );
-            
-            chatUnsubscribe = onSnapshot(q, (snapshot) => {
-                chatHistoryEl.innerHTML = '';
-                
-                // [NEW v4.3] Bot auto-reply simulation
-                if (snapshot.docs.length === 1 && snapshot.docs[0].data().type === 'message_to_admin') {
-                     const botMsg = {
-                        sender: "bot",
-                        text: `שלום ${customerName.split(' ')[0]}, זוהי מערכת אוטומטית. קיבלנו את פנייתך ומנהל יטפל בה בהקדם.`,
-                        timestamp: Timestamp.now()
-                     };
-                     chatHistoryEl.appendChild(createMessageBubble(botMsg));
-                }
-
+            messagesUnsubscribe = onSnapshot(q, (snapshot) => {
+                console.log(`Snapshot received: ${snapshot.size} messages`);
+                log.innerHTML = ''; // נקה והצג מחדש בכל עדכון
                 if (snapshot.empty) {
-                    chatHistoryEl.innerHTML = '<p class="text-center text-gray-500 p-10">אין הודעות בשיחה זו.</p>';
+                    log.innerHTML = `<p class="text-gray-400 text-center p-5">אין עדיין הודעות בחדר הצ'אט...</p>`;
                     return;
                 }
-                
-                let messagesToMarkAsRead = [];
-                snapshot.forEach(doc => {
-                    const msg = doc.data();
-                    if (msg.type === 'message_to_admin' && !msg.readByViewer) {
-                        messagesToMarkAsRead.push(doc.id);
-                    }
-                    chatHistoryEl.appendChild(createMessageBubble(msg));
+                snapshot.docs.forEach(doc => {
+                    appendMessage(doc.data());
                 });
-                
-                chatHistoryEl.scrollTop = chatHistoryEl.scrollHeight;
-                
-                if (messagesToMarkAsRead.length > 0) {
-                    markMessagesAsRead(orderId, messagesToMarkAsRead);
-                }
+            }, (error) => {
+                console.error("Error listening to team chat:", error);
+                log.innerHTML = `<p class="text-red-500 text-center p-5">שגיאה בהאזנה להודעות: ${error.message}</p>`;
             });
-
-            loadCustomerProfile(customerId);
         }
-        
-        function createMessageBubble(msg) {
-            const wrapper = document.createElement('div');
-            wrapper.className = 'flex flex-col';
-            let bubbleClass = '';
-            let senderName = '';
-            
-            if (msg.type === 'message_to_admin') {
-                bubbleClass = 'chat-bubble chat-bubble-customer';
-                senderName = msg.senderName || 'לקוח';
-                wrapper.classList.add('items-start');
-            } else if (msg.type === 'notification_to_customer') {
-                bubbleClass = 'chat-bubble chat-bubble-admin';
-                senderName = msg.senderName || 'מנהל';
-                wrapper.classList.add('items-end');
-            } else if (msg.sender === 'bot') { // [NEW v4.3]
-                bubbleClass = 'chat-bubble chat-bubble-bot';
-                senderName = '🤖 בוט שירות';
-                wrapper.classList.add('items-start');
-            }
-            
-            const time = msg.timestamp ? new Date(msg.timestamp.seconds * 1000).toLocaleString('he-IL', { hour: '2-digit', minute: '2-digit' }) : '...';
-            
-            let msgText = msg.text || '';
-            const urlRegex = /(https?:\/\/[^\s]+)/g;
-            if (urlRegex.test(msgText)) {
-                msgText = msgText.replace(urlRegex, (url) => `<a href="${url}" target="_blank" rel="noopener noreferrer">${url.includes('drive.google') ? 'פתח קובץ מצורף' : 'פתח קישור'}</a>`);
-            }
-            
-            // [NEW v4.2] Emoji Read Receipt Logic
-            let receiptHtml = '';
-            if (msg.type === 'notification_to_customer') {
-                if (msg.status === 'read') {
-                    receiptHtml = `<span class="read-receipt read" title="נקרא">✔️✔️</span>`;
-                } else {
-                    receiptHtml = `<span class="read-receipt" title="נשלח">✔️</span>`;
-                }
-            }
 
-            wrapper.innerHTML = `
-                <div class="${bubbleClass}">
-                    <strong class="block font-semibold">${senderName}</strong>
-                    <p class="mt-1">${msgText}</p>
-                    <span class="chat-timestamp text-right mt-2">
-                        ${time}
-                        ${receiptHtml}
-                    </span>
-                </div>
+        // --- הצגת הודעה ---
+        function appendMessage(msg) {
+            const el = document.createElement('div');
+            el.className = 'order';
+            
+            const time = msg.timestamp ? new Date(msg.timestamp.toDate()).toLocaleString('he-IL') : 'לפני רגע';
+            
+            el.innerHTML = `
+                <div><strong>${msg.senderName || 'מערכת'}:</strong></div>
+                <div class='meta'>${msg.text || '---'}</div>
+                <div class='timestamp text-right'>${time}</div>
             `;
-            return wrapper;
-        }
-        
-        // [NEW v4.3] Added escalateToHuman
-        async function escalateToHuman(orderId) {
-            if (!orderId || !currentUserId) return;
-            SmartLog.info("Escalating chat to human", "Chat.Escalate", { orderId, agent: currentUserId });
-            try {
-                const orderRef = doc(db, "orders", orderId);
-                await updateDoc(orderRef, {
-                    assignedAgent: currentUserId
-                });
-            } catch (error) {
-                SmartLog.error(error, "Chat.EscalateFailed", { orderId });
-            }
+            log.appendChild(el); // שינוי ל-appendChild כדי לשמור על סדר הפוך מהשאילתה
         }
 
-        async function sendAdminReply(orderId) {
-            const orderDocId = orderId || document.getElementById('reply-modal-doc-id').value;
-            const originalMessageId = document.getElementById('reply-modal-msg-id').value;
+        // --- שליחת הודעה ---
+        document.getElementById('sendForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const msgInput = document.getElementById('msg');
+            const text = msgInput.value.trim();
             
-            const modalText = document.getElementById('reply-message-text').value.trim();
-            const mainInputText = document.getElementById('chat-input').value.trim();
-            const messageText = modalText || mainInputText;
-            
-            if (!orderDocId || !messageText) {
-                showToast('שגיאה: חסרים נתונים לשליחה', 'error');
+            if (!text || !currentUserId) {
+                alert("חובה לכתוב הודעה ולהיות מחובר");
                 return;
             }
-            
-            // [NEW v4.3] Escalate before sending
-            await escalateToHuman(orderDocId);
-            
-            const batch = writeBatch(db);
-            
-            if (originalMessageId) {
-                const msgRef = doc(db, 'orders', orderDocId, 'messages', originalMessageId);
-                batch.update(msgRef, { readByViewer: true });
-            }
-            
-            const newAlertRef = doc(collection(db, 'orders', orderDocId, 'messages'));
-            batch.set(newAlertRef, {
-                text: messageText,
-                type: "notification_to_customer",
-                sender: "agent", // [NEW v4.3] Mark as human agent
-                senderName: "שירות לקוחות",
+
+            const messageData = {
+                text: text,
+                senderName: "מנהל (Messages)", // אפשר להוסיף שם דינאמי
+                senderId: currentUserId,
                 timestamp: serverTimestamp(),
-                status: 'sent', // [NEW v4.3]
-                readByViewer: true
-            });
-            
-            SmartLog.info(`Sending reply to ${orderDocId}`, "CRUD.Message.Reply", { text: messageText });
+                type: "message_to_admin" // סוג הודעת מנהל
+            };
 
             try {
-                await batch.commit();
-                showToast('התראה נשלחה ללקוח', 'success');
-                closeReplyModal();
-                document.getElementById('chat-input').value = '';
-            } catch (error) {
-                SmartLog.error(error, "CRUD.Message.ReplyFailed");
-                showToast('שגיאה בשליחת התראה', 'error');
-            }
-        }
-        window.sendAdminReply = sendAdminReply;
-        
-        async function markMessagesAsRead(orderId, messageIds) {
-            SmartLog.info(`Marking ${messageIds.length} messages as read`, "Chat.MarkRead", { orderId });
-            const batch = writeBatch(db);
-            messageIds.forEach(msgId => {
-                const msgRef = doc(db, 'orders', orderId, 'messages', msgId);
-                batch.update(msgRef, { readByViewer: true });
-            });
-            try {
-                await batch.commit();
-            } catch (error) {
-                SmartLog.error(error, "Chat.MarkReadFailed", { orderId });
-            }
-        }
-        window.markMessagesAsRead = markMessagesAsRead; // For modal button
-
-        // --- [NEW v4.0] Profile Panel Functions ---
-        
-        function toggleProfilePanel() {
-            document.getElementById('main-layout').classList.toggle('profile-open');
-        }
-        window.toggleProfilePanel = toggleProfilePanel;
-
-        async function loadCustomerProfile(customerId) {
-            const loadingEl = document.getElementById('profile-content-loading');
-            const contentEl = document.getElementById('profile-content');
-            loadingEl.style.display = 'block';
-            contentEl.style.display = 'none';
-            
-            if (!customerId) {
-                SmartLog.warn("No customerId provided, cannot load profile", "Profile");
-                loadingEl.innerHTML = '<p class="p-4 text-red-500">לא זוהה מזהה לקוח.</p>';
-                return;
-            }
-
-            try {
-                // 1. Fetch Customer Details
-                const customerRef = doc(db, "customers", customerId);
-                const customerSnap = await getDoc(customerRef);
-                
-                if (!customerSnap.exists()) {
-                    throw new Error("Customer document not found");
-                }
-                const customer = customerSnap.data();
-                
-                document.getElementById('profile-initials').innerText = customer.name.split(' ').map(n => n[0]).join('').slice(0, 2);
-                document.getElementById('profile-name').innerText = customer.name;
-                document.getElementById('profile-customer-number').innerText = customer.customerNumber || 'N/A';
-                document.getElementById('profile-phone').innerText = customer.phone || 'N/A';
-                document.getElementById('profile-phone').href = `tel:${customer.phone || ''}`;
-                document.getElementById('profile-address').innerText = customer.defaultAddress || 'N/A';
-                
-                // [NEW v4.3] Wire up new order button
-                const newOrderBtn = document.getElementById('new-order-for-customer-btn');
-                newOrderBtn.onclick = () => {
-                    // We assume add_customers.html is in the same /sidor/ directory
-                    const url = `add_customers.html?customerId=${customerId}`;
-                    window.open(url, '_blank');
-                };
-                
-                // [NEW v4.3] Wire up force takeover button
-                const takeoverBtn = document.getElementById('force-takeover-btn');
-                takeoverBtn.onclick = async () => {
-                    await escalateToHuman(activeOrderId);
-                    showToast('השיחה שויכה אליך.', 'success');
-                    loadCustomerProfile(customerId); // Refresh profile
-                };
-
-                // 2. Fetch Order History & Projects
-                const ordersQuery = query(
-                    collection(db, "orders"),
-                    where("customer.id", "==", customerId),
-                    orderBy("createdAt", "desc"),
-                    limit(10) // Get last 10 orders
-                );
-                
-                const ordersSnap = await getDocs(ordersQuery);
-                const projects = new Set();
-                const ordersList = document.getElementById('profile-orders-list');
-                ordersList.innerHTML = '';
-                
-                if (ordersSnap.empty) {
-                     ordersList.innerHTML = '<p class="text-sm text-gray-500">אין היסטוריית הזמנות.</p>';
-                }
-
-                let agentText = '🤖 בוט שירות'; // Default
-                ordersSnap.forEach(orderDoc => {
-                    const order = orderDoc.data();
-                    if (order.projectName) {
-                        // A project might be an array or a string, handle both
-                        if (Array.isArray(order.projectName)) {
-                            order.projectName.forEach(p => projects.add(p));
-                        } else {
-                            projects.add(order.projectName);
-                        }
-                    }
-                    
-                    // [NEW v4.3] Check agent status for the *current* order
-                    if (orderDoc.id === activeOrderId && order.assignedAgent) {
-                        if (order.assignedAgent === currentUserId) {
-                            agentText = 'בטיפולך';
-                        } else {
-                            agentText = `בטיפול נציג אחר`;
-                        }
-                    }
-                    
-                    const orderEl = document.createElement('div');
-                    orderEl.className = 'profile-order-item p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700';
-                    const orderDate = order.orderDate || (order.createdAt?.toDate() ? order.createdAt.toDate().toLocaleDateString('he-IL') : '');
-                    orderEl.innerHTML = `
-                        <span class="font-semibold">${order.order_id || orderDoc.id.slice(0,6)}</span>
-                        <span class->(${orderDate})</span>
-                        <span class="block text-xs text-gray-500">${order.status} - ${order.notes.slice(0, 20)}...</span>
-                    `;
-                    ordersList.appendChild(orderEl);
-                });
-                
-                // Set agent text
-                document.getElementById('profile-agent').innerText = agentText;
-                document.getElementById('profile-agent').className = agentText.includes('בטיפולך') ? 'font-semibold text-green-600' : 'font-semibold text-gray-500';
-
-                // 3. Render Projects
-                const projectsList = document.getElementById('profile-projects-list');
-                projectsList.innerHTML = '';
-                if (projects.size === 0) {
-                    projectsList.innerHTML = '<span class="text-sm text-gray-500">אין פרויקטים רשומים.</span>';
-                }
-                projects.forEach(proj => {
-                    projectsList.innerHTML += `<span class="profile-project-tag">${proj}</span>`;
-                });
-
-                // Show content
-                loadingEl.style.display = 'none';
-                contentEl.style.display = 'block';
-                
-            } catch (error) {
-                SmartLog.error(error, "Profile.LoadFailed", { customerId });
-                loadingEl.innerHTML = '<p class="p-4 text-red-500">שגיאה בטעינת כרטיס לקוח.</p>';
-            }
-        }
-
-
-        // --- Modal & Mobile UI ---
-        function showSendReplyModal(event, orderId, messageId, customerName) {
-            if (event) event.stopPropagation();
-            
-            const modal = document.getElementById('reply-modal');
-            if (!modal) return;
-            
-            const orderDocId = orderId || activeOrderId;
-            
-            modal.querySelector('#reply-modal-order-id').innerText = orderDocId.slice(0, 6) || 'לא ידוע';
-            modal.querySelector('#reply-modal-customer-name').innerText = customerName || 'לקוח';
-            modal.querySelector('#reply-modal-doc-id').value = orderDocId; 
-            modal.querySelector('#reply-modal-msg-id').value = messageId || ''; // May be null if from chat header
-            modal.querySelector('#reply-message-text').value = '';
-            
-            populateQuickReplies();
-            modal.classList.remove('hidden');
-        }
-        window.showSendReplyModal = showSendReplyModal;
-
-        function closeReplyModal() {
-            const modal = document.getElementById('reply-modal');
-            if (modal) modal.classList.add('hidden');
-        }
-        window.closeReplyModal = closeReplyModal;
-
-        function closeActiveChat() {
-            document.getElementById('chat-window').classList.remove('active');
-            
-            // [FIX v4.2] Close profile panel if it's open when closing chat
-            if (document.getElementById('main-layout').classList.contains('profile-open')) {
-                toggleProfilePanel();
-            }
-            
-            activeOrderId = null;
-            activeCustomerId = null;
-            if (chatUnsubscribe) chatUnsubscribe();
-            if (typingUnsubscribe) typingUnsubscribe(); // [NEW v4.3]
-            chatUnsubscribe = null;
-            typingUnsubscribe = null;
-            renderConversationList(); // To remove highlight
-        }
-        window.closeActiveChat = closeActiveChat;
-        
-        // [NEW] Populate quick replies
-        function populateQuickReplies() {
-            const container = document.getElementById('quick-reply-container');
-            container.innerHTML = ''; // Clear
-            
-            for (const [category, replies] of Object.entries(quickReplyCategories)) {
-                const catEl = document.createElement('span');
-                catEl.className = 'quick-reply-category';
-                catEl.innerText = category;
-                container.appendChild(catEl);
-                
-                replies.forEach(reply => {
-                    const btn = document.createElement('button');
-                    btn.className = 'quick-reply-btn';
-                    btn.innerText = reply;
-                    btn.onclick = () => {
-                        const textarea = document.getElementById('reply-message-text');
-                        textarea.value = reply;
-                        textarea.focus();
-                    };
-                    container.appendChild(btn);
-                });
-            }
-        }
-        
-        // [NEW v4.3] Filter tabs
-        function setConversationFilter(filter) {
-            currentConversationFilter = filter;
-            // Update active button
-            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
-            document.querySelector(`.tab-button[onclick="setConversationFilter('${filter}')"]`).classList.add('active');
-            renderConversationList(); // Re-render the list
-        }
-        window.setConversationFilter = setConversationFilter;
-
-        // --- Init ---
-        document.addEventListener('DOMContentLoaded', () => {
-            feather.replace();
-            document.getElementById('search-conversations').addEventListener('keyup', renderConversationList);
-            
-            // [NEW v4.3] Dark mode init
-            if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-                document.documentElement.classList.add('dark');
-            } else {
-                document.documentElement.classList.remove('dark');
+                const messagesRef = collection(db, "teamChats", TEAM_CHAT_ID, "messages");
+                await addDoc(messagesRef, messageData);
+                msgInput.value = ''; // נקה תיבה
+            } catch (err) {
+                console.error("Error sending message:", err);
+                alert('שגיאה בשליחת ההודעה');
             }
         });
+
     </script>
 </body>
 </html>
