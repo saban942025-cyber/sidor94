@@ -25,7 +25,6 @@
     <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700&display=swap" rel="stylesheet">
 
     <style>
-        /* [סגנונות CSS זהים לגרסה הקודמת, v55] */
         :root {
             --primary-color: #3b82f6; /* blue-500 */
             --primary-dark: #2563eb; /* blue-600 */
@@ -865,7 +864,7 @@
 
     <!-- 
     ======================================================
-    === 2. EMBEDDED JAVASCRIPT (v55.2 - FIXES)
+    === 2. EMBEDDED JAVASCRIPT (v55.5 - FIX)
     ======================================================
     -->
     <script type="module">
@@ -913,8 +912,11 @@
         const FIREBASE_CONFIG = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : fallbackConfig;
 
         // [תיקון] עדכון לכתובת הקטלוג החדשה שסיפקת
-        const CATALOG_API_URL = "https://script.google.com/macros/s/AKfycbzXTd7xKPR6MH9rtOEGxPr3-hrTCTfpuH0kKOzpRkMGOlmYbvKfjwL8d2fgwIa_3_UT/exec";
+        const CATALOG_API_URL = "https://script.google.com/macros/s/AKfycbxXX3Q-_QDl41SxxD-MqyucjIvm5rSOennP_Ld7xoOlYb91T0SrRHFHg2BRkQb3FH5v/exec";
         
+        // [NEW v55] מזהה חדר הצ'אט של הצוות (שאליו שולחים עותק)
+        const TEAM_CHAT_ID = "YOUR_TEAM_CHAT_ID_HERE"; // <--- !!! אחי, תחליף את זה !!!
+
         const CLIENT_ID = "zebulun_adiran"; // מזהה לקוח קבוע
 
         // --- Global App State ---
@@ -1040,6 +1042,7 @@
 
         async function signInUser() {
             try {
+                // [תיקון] ודא ש-token קיים לפני השימוש
                 if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                     await signInWithCustomToken(auth, __initial_auth_token);
                 } else {
@@ -1074,7 +1077,7 @@
                 // [תיקון] הוספת try-catch סביב response.json()
                 try {
                     const data = JSON.parse(text);
-                    // [תיקון] בודק את המבנה הנכון מה-API: {status: "success", data: [...]}
+                    // [תיקון] שינוי מ-data.items ל-data.data כדי להתאים ללוג שלך
                     if (data && data.status === 'success' && Array.isArray(data.data)) {
                         state.catalog = data.data; // [תיקון] משתמש ב-data.data
                         console.log(`Catalog loaded with ${state.catalog.length} items.`);
@@ -1173,9 +1176,12 @@
             
             // [NEW v55] Load projects from Firestore
             try {
-                const q = query(collection(db, "projects"), where("clientId", "==", CLIENT_ID), orderBy("name"));
+                // [תיקון] הסרת orderBy כדי למנוע שגיאת אינדקס. המיון יתבצע ב-JS.
+                const q = query(collection(db, "projects"), where("clientId", "==", CLIENT_ID));
                 const snapshot = await getDocs(q);
                 state.projects = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                // [תיקון] מיון בצד הלקוח
+                state.projects.sort((a, b) => a.name.localeCompare(b.name));
                 console.log(`Loaded ${state.projects.length} projects from Firestore.`);
             } catch (error) {
                 console.error("Failed to load projects:", error);
@@ -1184,9 +1190,12 @@
             
             // טעינת היסטוריית הזמנות
             try {
-                const q = query(collection(db, "orders"), where("clientId", "==", CLIENT_ID), orderBy("createdAt", "desc"), limit(20));
+                // [תיקון] הסרת orderBy כדי למנוע שגיאת אינדקס. המיון יתבצע ב-JS.
+                const q = query(collection(db, "orders"), where("clientId", "==", CLIENT_ID), limit(20));
                 const snapshot = await getDocs(q);
                 state.orderHistory = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                // [תיקון] מיון בצד הלקוח
+                state.orderHistory.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
             } catch (error) {
                 console.error("Failed to load order history:", error.message);
                 // הודעת השגיאה כבר מופיעה בלוג
@@ -1282,11 +1291,14 @@
         // --- [NEW v55] Pending Orders Logic ---
         function listenForPendingOrders() {
             console.log("Listening for pending orders...");
-            // [תיקון] היה חסר clientId
-            const q = query(collection(db, "pending_orders"), where("client_id", "==", CLIENT_ID), orderBy("timestamp", "desc"));
+            // [תיקון] הסרת orderBy כדי למנוע שגיאת אינדקס. המיון יתבצע ב-JS.
+            const q = query(collection(db, "pending_orders"), where("client_id", "==", CLIENT_ID));
             
             onSnapshot(q, (snapshot) => {
                 state.pendingOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                // [תיקון] מיון בצד הלקוח
+                state.pendingOrders.sort((a, b) => (b.timestamp?.toMillis() || 0) - (a.timestamp?.toMillis() || 0));
+                
                 console.log(`Found ${state.pendingOrders.length} pending orders.`);
                 updatePendingBadges();
                 
@@ -1548,11 +1560,18 @@
                 return;
             }
             
-            // הנחה ש-site_app.html נמצא באותה רמה
-            const installUrl = `${window.location.origin}${window.location.pathname.replace('index.html', 'site_app.html')}?setup_key=${project.setupKey}`;
+            // [תיקון] ודא שהנתיב נכון. הוא צריך להיות יחסי למיקום הנוכחי
+            const installUrl = `${window.location.origin}${window.location.pathname.replace('index.html', '../site_app.html')}?setup_key=${project.setupKey}`;
             
             try {
-                navigator.clipboard.writeText(installUrl);
+                // שימוש ב-document.execCommand('copy') כי navigator.clipboard עלול להיכשל ב-iFrame
+                const el = document.createElement('textarea');
+                el.value = installUrl;
+                document.body.appendChild(el);
+                el.select();
+                document.execCommand('copy');
+                document.body.removeChild(el);
+                
                 showToast("לינק התקנה למנהל האתר הועתק!", "success");
             } catch (e) {
                 console.error("Failed to copy link:", e);
@@ -1650,7 +1669,7 @@
             
             const lowerTerm = term.toLowerCase();
             const results = state.catalog.filter(item => 
-                item.name.toLowerCase().includes(lowerTerm) ||
+                (item.name && item.name.toLowerCase().includes(lowerTerm)) ||
                 (item.sku && item.sku.toString().includes(lowerTerm))
             ).slice(0, 5); // Limit to 5 results
             
@@ -1680,7 +1699,6 @@
             feather.replace();
         }
         
-        // [תיקון] היה חסר searchCatalogApproval
         function searchCatalogApproval(term, resultsElementId) {
             searchCatalog(term, resultsElementId);
         }
@@ -1869,7 +1887,12 @@
                 return;
             }
 
+            // [תיקון] הוספת בדיקה ותיקון ל-undefined
             const project = state.projects.find(p => p.id === projectId);
+            const projectName = project ? project.name : "לא שויך לפרויקט";
+            const projectAddress = project ? project.address : "כתובת לא צוינה";
+            const projectContact = project ? project.contact : "יוסי (ראשי)";
+
             const cartItems = getCartItems('main-order-cart');
             
             if (rawText.trim().length === 0 && state.filesToUpload.length === 0 && cartItems.length === 0) {
@@ -1894,9 +1917,9 @@
                 orderId: orderId,
                 clientId: CLIENT_ID,
                 projectId: projectId,
-                projectName: project.name,
-                address: project.address,
-                contactName: project.contact || "יוסי (ראשי)",
+                projectName: projectName, // [תיקון]
+                address: projectAddress, // [תיקון]
+                contactName: projectContact, // [תיקון]
                 contactPhone: "לא צוין", // [TODO] Add this field?
                 rawText: rawText,
                 cartItems: cartItems, // [NEW v55]
@@ -1907,6 +1930,7 @@
 
             try {
                 await sendOrderToFirestore(orderPayload);
+                await postOrderToTeamChat(orderPayload, "הזמנה חדשה (מיוסי)"); // [NEW] שליחת עותק לצ'אט
                 
                 showToast("ההזמנה נשלחה בהצלחה!", "success");
                 state.orderHistory.unshift(orderPayload);
@@ -1924,7 +1948,7 @@
         function getCartItems(cartId) {
             const cartContainer = document.getElementById(cartId);
             const items = [];
-            if (!cartContainer) return items;
+            if (!cartContainer) return items; // [תיקון] ודא שהקונטיינר קיים
             cartContainer.querySelectorAll('.order-cart-item').forEach(itemEl => {
                 items.push({
                     sku: itemEl.dataset.sku,
@@ -1944,8 +1968,13 @@
         function resetNewOrderForm() {
             document.getElementById('smart-paste-box').value = '';
             document.getElementById('project-select-main').value = '';
-            document.getElementById('catalog-results-main').innerHTML = '';
-            document.getElementById('main-order-cart').innerHTML = '';
+            
+            const catalogResults = document.getElementById('catalog-results-main');
+            if (catalogResults) catalogResults.innerHTML = '';
+            
+            const mainCart = document.getElementById('main-order-cart');
+            if (mainCart) mainCart.innerHTML = '';
+            
             state.filesToUpload = [];
             renderFilePreviews();
         }
@@ -1972,12 +2001,12 @@
             if (order.media_files && order.media_files.length > 0) {
                 mediaHTML = order.media_files.map(file => {
                     if (file.type.startsWith('image/')) {
-                        return `<li><a href="${file.url}" target="_blank" class="hover:underline">תמונה מצורפת</a></li>`;
+                        return `<li><a href="${file.url}" target="_blank" class="text-primary-color hover:underline">תמונה מצורפת</a></li>`;
                     }
                     if (file.type.startsWith('audio/')) {
                         return `<li><audio controls src="${file.url}" class="w-full">הקלטה</audio></li>`;
                     }
-                    return `<li><a href="${file.url}" target="_blank" class="hover:underline">קובץ מצורף</a></li>`;
+                    return `<li><a href="${file.url}" target="_blank" class="text-primary-color hover:underline">קובץ מצורף</a></li>`;
                 }).join('');
             }
             
@@ -2062,6 +2091,7 @@
                 showToast("חובה להוסיף פריטים להזמנה הרשמית", "error");
                 btn.disabled = false;
                 btn.innerHTML = '<i data-feather="check"></i> <span>אשר ושלח</span>';
+                feather.replace();
                 return;
             }
             
@@ -2070,6 +2100,7 @@
                  showToast("שגיאה: הפרויקט המשויך לבקשה זו לא נמצא.", "error");
                  btn.disabled = false;
                  btn.innerHTML = '<i data-feather="check"></i> <span>אשר ושלח</span>';
+                 feather.replace();
                  return;
             }
 
@@ -2079,7 +2110,6 @@
                 projectId: pendingOrder.project_id,
                 projectName: pendingOrder.project_name,
                 address: pendingOrder.location_address || project.address,
-                // [TODO] Add lat/lon from pending order
                 contactName: project.contact || pendingOrder.submitter_name,
                 rawText: `--- בקשה מקורית מהשטח ---\n${pendingOrder.raw_text}\n\n--- הערות מנהל ---\n${managerNotes}`,
                 cartItems: cartItems,
@@ -2094,7 +2124,10 @@
                 // 1. Send official order
                 await sendOrderToFirestore(orderPayload);
                 
-                // 2. Update pending order (mark as approved)
+                // 2. [NEW] Send copy to team chat
+                await postOrderToTeamChat(orderPayload, `הזמנה אושרה (מ: ${pendingOrder.submitter_name})`);
+
+                // 3. Update pending order (mark as approved)
                 const pendingRef = doc(db, "pending_orders", pendingOrderId);
                 await updateDoc(pendingRef, {
                     status: "approved",
@@ -2109,6 +2142,7 @@
                  showToast("שגיאה באישור ההזמנה", "error");
                  btn.disabled = false;
                  btn.innerHTML = '<i data-feather="check"></i> <span>אשר ושלח</span>';
+                 feather.replace();
             }
         }
         
@@ -2129,6 +2163,48 @@
             } catch (error) {
                 console.error("Error rejecting order:", error);
                 showToast("שגיאה בדחיית הבקשה", "error");
+            }
+        }
+
+        // [NEW] פונקציה לשליחת עותק לחדר הצ'אט של הצוות
+        async function postOrderToTeamChat(order, title) {
+            if (!TEAM_CHAT_ID || TEAM_CHAT_ID === "YOUR_TEAM_CHAT_ID_HERE") {
+                console.warn("TEAM_CHAT_ID is not set. Skipping chat message.");
+                return;
+            }
+            
+            try {
+                const chatRef = collection(db, "teamChats", TEAM_CHAT_ID, "messages");
+                
+                // יצירת טקסט ההודעה
+                let messageText = `*${title}*\n`;
+                messageText += `*פרויקט:* ${order.projectName}\n`;
+                messageText += `*כתובת:* ${order.address}\n`;
+                messageText += `*מזהה הזמנה:* ${order.orderId}\n\n`;
+                
+                if (order.cartItems && order.cartItems.length > 0) {
+                    messageText += "*פריטים:*\n";
+                    messageText += order.cartItems.map(item => `• ${item.quantity} x ${item.name} (מק"ט: ${item.sku})`).join("\n");
+                }
+                
+                if (order.rawText) {
+                    messageText += `\n\n*הערות נוספות:*\n${order.rawText}`;
+                }
+
+                const chatMessage = {
+                    senderId: currentUserId,
+                    senderName: "מערכת הזמנות (יוסי)",
+                    text: messageText,
+                    timestamp: serverTimestamp(),
+                    type: "text" // סוג הודעה רגיל
+                };
+                
+                await addDoc(chatRef, chatMessage);
+                console.log(`Order ${order.orderId} posted to team chat ${TEAM_CHAT_ID}`);
+
+            } catch (error) {
+                console.error("Failed to post order to team chat:", error);
+                // אל תציג שגיאה למשתמש, זו פעולת רקע
             }
         }
 
@@ -2172,7 +2248,7 @@
                     ? "https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg" 
                     : "https://actions.google.com/sounds/v1/alarms/beep_short.ogg";
                 const audio = new Audio(soundUrl);
-                audio.play().catch(e => console.warn("Audio playback blocked by browser."));
+                audio.play().catch(e => console.warn("Audio playback blocked by browser.", e));
             } catch (e) {
                 console.warn("Audio playback failed.", e);
             }
