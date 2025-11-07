@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Team Viewer - יוסי</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Rubik', sans-serif; background: #f9fafb; }
+        #feed { border: 1px solid #ddd; padding: 12px; height: 90vh; overflow:auto; background: #fff; border-radius: 8px; }
+        .item { margin:8px 0; padding:10px; border-radius:8px; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.1); border: 1px solid #e5e7eb; }
+        .orderId { font-weight:700; color: #1d4ed8; }
+        .notes { font-size:12px; color:#666; white-space: pre-wrap; }
+        .timestamp { font-size: 10px; color: #9ca3af; }
+    </style>
+</head>
+<body class="p-4">
+
+    <div class="flex justify-between items-center mb-3">
+        <h2 class="text-xl font-bold text-gray-800">Team Viewer — יוסי (פיד חי)</h2>
+        <span id="auth-status" class="text-xs font-medium text-gray-500 bg-gray-200 px-2 py-1 rounded-full">מתחבר...</span>
+    </div>
+
+    <div id="feed">
+        <p class="text-gray-400 text-center p-5">טוען חיבור ל-Firebase...</p>
+    </div>
+
+    <script type="module">
+        // --- ייבוא ספריות Firebase ---
+        import { initializeApp, getApp, getApps } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+        import { getFirestore, collection, doc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+
+        // --- הגדרות ---
+        const fallbackConfig = {
+            apiKey: "AIzaSyDq0oVwS6zbEfsgrYBRkeBq80dDUKMedzo", 
+            authDomain: "saban94-78949.firebaseapp.com", 
+            projectId: "saban94-78949",
+            storageBucket: "saban94-78949.appspot.com", 
+            messagingSenderId: "41553157903", 
+            appId: "1:41553157903:web:cc33d252cff023be97a87a"
+        };
+        const FIREBASE_CONFIG = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : fallbackConfig;
+        
+        // !!! זה חייב להיות *אותו* מזהה כמו בקובץ messages_viewer.html !!!
+        const TEAM_CHAT_ID = "saban94_main_chat"; 
+        
+        let db, auth;
+        let messagesUnsubscribe = null;
+        const feed = document.getElementById('feed');
+        const authStatus = document.getElementById('auth-status');
+
+        // --- אתחול ---
+        try {
+            const app = !getApps().length ? initializeApp(FIREBASE_CONFIG) : getApp();
+            db = getFirestore(app);
+            auth = getAuth(app);
+            authenticateUser();
+        } catch (error) {
+            console.error("Firebase Init Error:", error);
+            feed.innerHTML = `<p class="text-red-500 text-center p-5">שגיאה קריטית באתחול Firebase.</p>`;
+            authStatus.innerText = "שגיאת חיבור";
+            authStatus.classList.add('bg-red-200', 'text-red-700');
+        }
+
+        // --- אימות ---
+        function authenticateUser() {
+            onAuthStateChanged(auth, async (user) => {
+                if (user) {
+                    console.log(`User Authenticated: ${user.uid}`);
+                    authStatus.innerText = "מחובר";
+                    authStatus.classList.remove('bg-gray-200', 'text-gray-500');
+                    authStatus.classList.add('bg-green-200', 'text-green-700');
+                    listenToTeamChat();
+                } else {
+                    console.log("No user found. Signing in...");
+                    authStatus.innerText = "מאמת...";
+                    signInUser();
+                }
+            });
+        }
+
+        async function signInUser() {
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (error) {
+                console.error("Authentication Error:", error);
+                authStatus.innerText = "שגיאת אימות";
+                authStatus.classList.add('bg-red-200', 'text-red-700');
+            }
+        }
+
+        // --- פונקציית האזנה (במקום WebSocket) ---
+        function listenToTeamChat() {
+            if (messagesUnsubscribe) messagesUnsubscribe();
+
+            const messagesRef = collection(db, "teamChats", TEAM_CHAT_ID, "messages");
+            const q = query(messagesRef, orderBy("timestamp", "desc")); // מהחדש לישן
+
+            feed.innerHTML = ''; // נקה פיד קודם
+
+            messagesUnsubscribe = onSnapshot(q, (snapshot) => {
+                feed.innerHTML = ''; // נקה והצג מחדש בכל עדכון
+                if (snapshot.empty) {
+                    feed.innerHTML = `<p class="text-gray-400 text-center p-5">אין עדיין הודעות בחדר הצ'אט...</p>`;
+                    return;
+                }
+                snapshot.docs.forEach(doc => {
+                    appendMessage(doc.data());
+                });
+            }, (error) => {
+                console.error("Error listening to team chat:", error);
+                feed.innerHTML = `<p class="text-red-500 text-center p-5">שגיאה בהאזנה להודעות: ${error.message}</p>`;
+            });
+        }
+
+        // --- הצגת הודעה ---
+        function appendMessage(msg) {
+            const el = document.createElement('div');
+            el.className = 'item';
+            
+            const time = msg.timestamp ? new Date(msg.timestamp.toDate()).toLocaleString('he-IL') : 'לפני רגע';
+            const orderId = msg.orderId || 'הודעה כללית';
+            const customer = msg.customerName || msg.senderName || 'מערכת';
+            
+            el.innerHTML = `
+                <div class='orderId'>${orderId} (מאת: ${customer})</div>
+                <div class='notes'>${msg.text || '---'}</div>
+                <div class='timestamp text-right'>${time}</div>
+            `;
+            feed.appendChild(el); // שמור על סדר הפוך מהשאילתה
+        }
+    </script>
+</body>
+</html>
