@@ -3,6 +3,846 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Zebulun Site Portal</title>
+    
+    <!--
+      אפליקציית PWA למנהל אתר (v55.6)
+      ---------------------------------
+      - מתחברת ל-Firebase
+      - טוענת פרויקט לפי setup_key
+      - שולפת קטלוג מ-Apps Script
+      - שולחת בקשות הזמנה לאישור יוסי (לקולקציית pending_orders)
+      - מאזינה לשינויי סטטוס ומציגה מעקב חי
+      
+      תיקונים בגרסה זו (v55.6):
+      - [FIX] הוספת 'getDocs' לייבוא של Firestore (לתיקון שגיאת "getDocs is not defined")
+      - [FIX] תיקון נתיב המניפסט ל- '../site_manifest.json'
+      - [FIX] עדכון כתובת הקטלוג (CATALOG_API_URL) לגרסה הפעילה
+      - [FIX] עדכון לוגיקת fetchCatalogData לקריאת `data.data` (במקום `data.items`)
+    -->
+
+    <!-- PWA Manifest & Theme -->
+    <link rel="manifest" href="../site_manifest.json">
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="https://i.postimg.cc/ryPT3r29/image.png">
+    <link rel="icon" href="https://i.postimg.cc/ryPT3r29/image.png">
+
+    <!-- TailwindCSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Icons (Feather) -->
+    <script src="https://unpkg.com/feather-icons"></script>
+    
+    <!-- Google Font: Rubik -->
+    <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --primary-color: #3b82f6; /* blue-500 */
+            --primary-dark: #2563eb; /* blue-600 */
+            --primary-light: #eff6ff; /* blue-50 */
+            --bg-light: #f3f4f6; /* gray-100 */
+            --bg-white: #ffffff;
+            --border-color: #e5e7eb; /* gray-200 */
+            --text-dark: #1f2937; /* gray-800 */
+            --text-light: #6b7280; /* gray-500 */
+            --danger: #ef4444; /* red-500 */
+        }
+        
+        html.dark {
+            --primary-color: #60a5fa; /* blue-400 */
+            --primary-dark: #3b82f6; /* blue-500 */
+            --primary-light: #1e3a8a; /* blue-900 / slate-700 */
+            --bg-light: #0f172a; /* slate-900 */
+            --bg-white: #1e293b; /* slate-800 */
+            --border-color: #334155; /* slate-700 */
+            --text-dark: #f1f5f9; /* slate-100 */
+            --text-light: #94a3b8; /* slate-400 */
+            --danger: #f87171; /* red-400 */
+        }
+
+        html { -webkit-tap-highlight-color: transparent; }
+        body {
+            font-family: 'Rubik', sans-serif;
+            background-color: var(--bg-light);
+            color: var(--text-dark);
+            overscroll-behavior: none;
+            overflow: hidden; 
+        }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        #app-container {
+            display: grid;
+            grid-template-rows: auto 1fr auto;
+            height: 100vh;
+            height: -webkit-fill-available;
+        }
+
+        #app-header {
+            background-color: var(--bg-white);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            z-index: 10;
+            padding: 1rem 1.25rem;
+            padding-top: calc(1rem + env(safe-area-inset-top, 0));
+        }
+        .header-logos { display: flex; align-items: center; gap: 0.5rem; }
+        .header-logos img { max-height: 32px; width: auto; object-fit: contain; }
+        
+        #main-content {
+            overflow-y: auto;
+            position: relative;
+        }
+
+        .app-page {
+            padding: 1rem;
+            display: none; 
+        }
+        .app-page.active {
+            display: block;
+        }
+        
+        #bottom-nav {
+            display: grid;
+            grid-auto-flow: column;
+            background-color: var(--bg-white);
+            border-top: 1px solid var(--border-color);
+            box-shadow: 0 -1px 3px rgba(0,0,0,0.05);
+            z-index: 10;
+            padding-bottom: env(safe-area-inset-bottom, 0);
+        }
+        .nav-button {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 8px 4px;
+            color: var(--text-light);
+            font-size: 0.7rem;
+            font-weight: 500;
+            border-top: 3px solid transparent;
+            transition: all 0.2s ease;
+        }
+        .nav-button.active {
+            color: var(--primary-color);
+            border-top-color: var(--primary-color);
+            background-color: var(--primary-light);
+        }
+
+        /* --- Loader --- */
+        #app-loader {
+            position: fixed;
+            inset: 0;
+            background-color: var(--bg-light);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            transition: opacity 0.3s ease;
+        }
+        .loader {
+            border: 4px solid var(--border-color);
+            border-top: 4px solid var(--primary-color);
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+        }
+        .loader-small {
+            border: 2px solid var(--border-color);
+            border-top: 2px solid var(--primary-color);
+            border-radius: 50%;
+            width: 16px;
+            height: 16px;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* --- Global Alert (Toast) --- */
+        #global-alert-container {
+            position: fixed;
+            bottom: 80px; /* מעל הניווט */
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10000;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            width: 90%;
+            max-width: 400px;
+        }
+        .global-alert {
+            background: rgba(30, 41, 59, 0.85); /* slate-800 */
+            backdrop-filter: blur(5px);
+            color: #fff;
+            padding: 1rem 1.25rem;
+            border-radius: 0.75rem;
+            font-weight: 600;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            animation: popIn 0.3s ease-out;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        .global-alert.alert-success {
+            background: rgba(34, 197, 94, 0.85); /* green-500 */
+        }
+        .global-alert.alert-error {
+            background: rgba(239, 68, 68, 0.85); /* red-500 */
+        }
+        @keyframes popIn {
+          from { transform: translateY(20px) scale(0.9); opacity: 0; }
+          to { transform: translateY(0) scale(1); opacity: 1; }
+        }
+
+        /* --- Form Elements --- */
+        .form-label {
+            display: block;
+            font-weight: 500;
+            font-size: 0.9rem;
+            margin-bottom: 0.25rem;
+            color: var(--text-dark);
+        }
+        .form-input, .form-textarea, .form-select {
+            width: 100%;
+            padding: 0.6rem 0.9rem;
+            border: 1px solid var(--border-color);
+            border-radius: 0.5rem;
+            background-color: var(--bg-white);
+            color: var(--text-dark);
+        }
+        .form-input:focus, .form-textarea:focus, .form-select:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 2px var(--primary-light);
+        }
+        .btn {
+            padding: 0.6rem 1.25rem;
+            border: none;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+        .btn-primary {
+            background-color: var(--primary-color);
+            color: white;
+        }
+        .btn-primary:hover {
+            background-color: var(--primary-dark);
+        }
+        .btn-primary:disabled {
+            background-color: var(--text-light);
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+        
+        /* --- Catalog Styles --- */
+        .product-card {
+            background: var(--bg-white);
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+        }
+        .product-card img {
+            height: 120px;
+            width: 100%;
+            object-fit: cover;
+        }
+        .product-card-body {
+            padding: 0.75rem;
+        }
+        
+        /* --- Order Tracking Status --- */
+        .status-tracker { display: flex; justify-content: space-between; align-items: flex-start; position: relative; margin: 1rem 0; }
+        .status-tracker::before { content: ''; position: absolute; top: 12px; right: 0; left: 0; height: 3px; background-color: var(--border-color); z-index: 1; }
+        .status-tracker-progress { position: absolute; top: 12px; right: 0; height: 3px; background-color: var(--primary-color); z-index: 2; width: 0%; transition: width 0.5s ease; }
+        .status-step { display: flex; flex-direction: column; align-items: center; text-align: center; width: 60px; z-index: 3; }
+        .status-dot { width: 24px; height: 24px; border-radius: 50%; background-color: var(--bg-white); border: 3px solid var(--border-color); display: flex; align-items: center; justify-content: center; transition: all 0.3s ease; }
+        .status-label { font-size: 0.7rem; font-weight: 500; color: var(--text-light); margin-top: 0.5rem; line-height: 1.2; }
+        .status-step.completed .status-dot { background-color: var(--primary-color); border-color: var(--primary-color); }
+        .status-step.completed .status-label { color: var(--text-dark); }
+        .status-step.active .status-dot { border-color: var(--primary-color); transform: scale(1.1); }
+        .status-step.active .status-label { color: var(--primary-color); font-weight: 700; }
+        
+        /* --- Map --- */
+        #map-container {
+            height: 250px;
+            border-radius: 0.5rem;
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+            background-color: var(--border-color);
+        }
+        #map { height: 100%; width: 100%; z-index: 5; }
+    </style>
+</head>
+<body class="antialiased">
+
+    <!-- Global Loader -->
+    <div id="app-loader">
+        <div class="loader"></div>
+        <p class="mt-4 font-semibold text-lg" id="loader-text">טוען אפליקציית אתר...</p>
+    </div>
+
+    <!-- Global Alert (Toast) Container -->
+    <div id="global-alert-container"></div>
+    
+    <!-- Main App Container -->
+    <div id="app-container" class="hidden">
+        <!-- Header -->
+        <header id="app-header">
+            <div class="flex justify-between items-center">
+                <div class="header-logos">
+                    <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTcYS_xImwWt1fAYIK1UTXHtbCfmt5TOny5UQ&s" alt="Zebulun Logo" class="h-8">
+                    <img src="https://i.postimg.cc/ryPT3r29/image.png" alt="Saban Logo" class="h-8">
+                </div>
+                <div class="text-right">
+                    <h1 id="project-name-header" class="font-semibold text-sm">טוען פרויקט...</h1>
+                    <p id="user-name-header" class="text-xs text-light">מתחבר...</p>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content (Pages) -->
+        <main id="main-content" class="no-scrollbar">
+            
+            <!-- Page: Order (דף הזמנה) -->
+            <div id="page-order" class="app-page active">
+                <div class="space-y-4">
+                    <!-- שם מזמין (חדש) -->
+                    <div>
+                        <label class="form-label" for="submitter-name">שם המזמין (חובה)</label>
+                        <input type="text" id="submitter-name" class="form-input" placeholder="לדוגמה: עבד">
+                    </div>
+                
+                    <!-- עגלת קניות -->
+                    <div id="cart-container" class="space-y-2">
+                        <!-- פריטים יתווספו לכאן -->
+                    </div>
+                    
+                    <!-- טקסט חופשי -->
+                    <div>
+                        <label class="form-label" for="raw-text-input">הקלד הזמנה (טקסט חופשי)</label>
+                        <textarea id="raw-text-input" class="form-textarea" rows="3" placeholder="לדוגמה: 10 בלוק 20, 5 מלט..."></textarea>
+                    </div>
+
+                    <!-- כפתורי מדיה -->
+                    <div class="grid grid-cols-3 gap-2">
+                        <button class="btn bg-white border border-gray-300 text-gray-700 flex-col h-16">
+                            <i data-feather="camera" class="w-5 h-5"></i>
+                            <span class="text-xs mt-1">צלם תמונה</span>
+                        </button>
+                        <button class="btn bg-white border border-gray-300 text-gray-700 flex-col h-16">
+                            <i data-feather="mic" class="w-5 h-5"></i>
+                            <span class="text-xs mt-1">הקלט הודעה</span>
+                        </button>
+                        <button class="btn bg-white border border-gray-300 text-gray-700 flex-col h-16">
+                            <i data-feather="map-pin" class="w-5 h-5"></i>
+                            <span class="text-xs mt-1">שלח מיקום</span>
+                        </button>
+                    </div>
+                    
+                    <!-- כפתור שליחה ראשי -->
+                    <button id="submit-request-btn" class="btn btn-primary w-full text-lg py-3">
+                        <i data-feather="send" class="w-5 h-5"></i>
+                        <span>שלח לאישור יוסי</span>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Page: Catalog (קטלוג) -->
+            <div id="page-catalog" class="app-page">
+                <input type="text" id="catalog-search" class="form-input mb-4" placeholder="חפש מוצר או מק'ט...">
+                <div id="catalog-grid" class="grid grid-cols-2 gap-3">
+                    <!-- כרטיסי מוצר יטענו כאן -->
+                </div>
+            </div>
+
+            <!-- Page: Track (מעקב) -->
+            <div id="page-track" class="app-page">
+                <h2 class="text-xl font-bold mb-2">מעקב הזמנות</h2>
+                <div id="order-history-list" class="space-y-3">
+                    <!-- היסטוריית הזמנות תטען כאן -->
+                </div>
+            </div>
+            
+        </main>
+
+        <!-- Bottom Navigation -->
+        <nav id="bottom-nav">
+            <button class="nav-button active" onclick="navigate('order')">
+                <i data-feather="plus-circle" class="w-6 h-6"></i>
+                <span>הזמנה</span>
+            </button>
+            <button class="nav-button" onclick="navigate('catalog')">
+                <i data-feather="shopping-bag" class="w-6 h-6"></i>
+                <span>קטלוג</span>
+            </button>
+            <button class="nav-button" onclick="navigate('track')">
+                <i data-feather="truck" class="w-6 h-6"></i>
+                <span>מעקב</span>
+            </button>
+        </nav>
+    </div>
+
+    <!-- 
+    ======================================================
+    === EMBEDDED JAVASCRIPT
+    ======================================================
+    -->
+    <script type="module">
+        // --- Firebase SDK Imports ---
+        import { initializeApp, getApp, getApps } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+        // [תיקון v55.6] הוספת getDocs
+        import { 
+            getFirestore, collection, doc, onSnapshot, 
+            query, where, addDoc, serverTimestamp, 
+            deleteDoc, getDocs 
+        } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { 
+            getStorage, ref, uploadBytes, getDownloadURL 
+        } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-storage.js";
+
+        // --- Config ---
+        const fallbackConfig = {
+            apiKey: "AIzaSyDq0oVwS6zbEfsgrYBRkeBq80dDUKMedzo", 
+            authDomain: "saban94-78949.firebaseapp.com", 
+            projectId: "saban94-78949",
+            storageBucket: "saban94-78949.appspot.com", 
+            messagingSenderId: "41553157903", 
+            appId: "1:41553157903:web:cc33d252cff023be97a87a"
+        };
+        const FIREBASE_CONFIG = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : fallbackConfig;
+        
+        // [תיקון v55.6] עדכון כתובת הקטלוג
+        const CATALOG_API_URL = "https://script.google.com/macros/s/AKfycbzXTd7xKPR6MH9rtOEGxPr3-hrTCTfpuH0kKOzpRkMGOlmYbvKfjwL8d2fgwIa_3_UT/exec";
+        const CLIENT_ID = "zebulun_adiran"; 
+
+        // --- Global State ---
+        let db, auth, storage;
+        let currentUserId = null;
+        let appInitialized = false;
+
+        const state = {
+            currentView: 'order',
+            currentProject: null, // { id, name, address, setupKey }
+            catalog: [],
+            cart: [], // [{ sku, name, quantity }]
+            orderHistory: []
+        };
+        
+        // --- Initialization ---
+        document.addEventListener('DOMContentLoaded', initSiteApp);
+
+        function initSiteApp() {
+            console.log("DOM loaded. Initializing Site App...");
+            feather.replace();
+            initFirebase();
+            initEventListeners();
+        }
+
+        function initFirebase() {
+            try {
+                const app = !getApps().length ? initializeApp(FIREBASE_CONFIG) : getApp();
+                db = getFirestore(app);
+                auth = getAuth(app);
+                storage = getStorage(app);
+                console.log("Firebase Initialized.");
+                authenticateUser();
+            } catch (error) {
+                console.error("Firebase Init Error:", error);
+                showToast("שגיאת התחברות קריטית ל-Firebase", "error");
+                document.getElementById('loader-text').innerText = "שגיאת התחברות";
+            }
+        }
+
+        function initEventListeners() {
+            // חשיפת פונקציות גלובליות לחלון
+            window.navigate = navigate;
+            window.addToCart = addToCart;
+            window.removeFromCart = removeFromCart;
+            window.updateCartQuantity = updateCartQuantity;
+            
+            document.getElementById('catalog-search').addEventListener('keyup', debounce(searchCatalog, 300));
+            document.getElementById('submit-request-btn').addEventListener('click', submitPendingOrder);
+        }
+
+        function authenticateUser() {
+            onAuthStateChanged(auth, async (user) => {
+                if (user) {
+                    currentUserId = user.uid;
+                    console.log(`Site User Authenticated: ${currentUserId}`);
+                    document.getElementById('user-name-header').innerText = `מנהל אתר (מחובר)`;
+                    
+                    if (!appInitialized) {
+                        appInitialized = true;
+                        await loadProjectData();
+                        await fetchCatalogData();
+                        await loadOrderHistory();
+                        
+                        // הסתר טוען והצג אפליקציה
+                        document.getElementById('app-loader').style.display = 'none';
+                        document.getElementById('app-container').classList.remove('hidden');
+                    }
+                } else {
+                    console.log("No user. Signing in anonymously...");
+                    document.getElementById('user-name-header').innerText = `מתחבר...`;
+                    signInAnonymously(auth).catch(err => {
+                        console.error("Anonymous sign-in failed:", err);
+                        showToast("שגיאת התחברות למערכת", "error");
+                    });
+                }
+            });
+        }
+        
+        async function loadProjectData() {
+            const params = new URLSearchParams(window.location.search);
+            const setupKey = params.get('setup_key');
+            
+            if (!setupKey) {
+                showToast("שגיאה: לינק התקנה לא תקין. חסר מפתח.", "error");
+                document.getElementById('loader-text').innerText = "שגיאה בלינק";
+                return;
+            }
+            
+            try {
+                const q = query(collection(db, "projects"), where("setupKey", "==", setupKey), limit(1));
+                // [תיקון v55.6] שימוש ב-getDocs שהיה חסר
+                const querySnapshot = await getDocs(q);
+                
+                if (querySnapshot.empty) {
+                    throw new Error("Project not found for this setup key.");
+                }
+                
+                const projectDoc = querySnapshot.docs[0];
+                state.currentProject = { id: projectDoc.id, ...projectDoc.data() };
+                
+                document.getElementById('project-name-header').innerText = state.currentProject.name;
+                
+            } catch (error) {
+                console.error("Failed to load project:", error);
+                document.getElementById('loader-text').innerText = "פרויקט לא נמצא";
+                showToast("שגיאה בטעינת הפרויקט. ודא שהלינק תקין.", "error");
+            }
+        }
+        
+        async function loadOrderHistory() {
+            if (!currentUserId) return;
+            
+            try {
+                // שלוף בקשות ממתינות
+                const pendingQ = query(
+                    collection(db, "pending_orders"), 
+                    where("site_manager_uid", "==", currentUserId), 
+                    where("project_id", "==", state.currentProject.id)
+                );
+                const pendingSnapshot = await getDocs(pendingQ);
+                let history = pendingSnapshot.docs.map(doc => ({ id: doc.id, type: 'pending', ...doc.data() }));
+
+                // [TODO] שלוף הזמנות מאושרות
+                // נצטרך להוסיף האזנה גם ל-'orders' שמקושרים
+                
+                // [FIX v55.6] מיון בצד הלקוח
+                history.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+                
+                state.orderHistory = history;
+                renderOrderHistory();
+
+            } catch (error) {
+                console.error("Failed to load order history:", error);
+                showToast("שגיאה בטעינת היסטוריית הזמנות", "error");
+            }
+        }
+        
+        function renderOrderHistory() {
+            const container = document.getElementById('order-history-list');
+            if (state.orderHistory.length === 0) {
+                container.innerHTML = `<p class="text-light text-center p-4">אין עדיין הזמנות לפרויקט זה.</p>`;
+                return;
+            }
+            
+            container.innerHTML = state.orderHistory.map(order => {
+                let statusText, statusColor;
+                switch (order.status) {
+                    case 'pending':
+                        statusText = "ממתין לאישור יוסי";
+                        statusColor = "bg-yellow-100 text-yellow-800";
+                        break;
+                    case 'approved':
+                        statusText = "אושר (בטיפול)";
+                        statusColor = "bg-blue-100 text-blue-800";
+                        break;
+                    case 'rejected':
+                        statusText = "נדחה";
+                        statusColor = "bg-red-100 text-red-800";
+                        break;
+                    default:
+                        statusText = order.status || "לא ידוע";
+                        statusColor = "bg-gray-100 text-gray-800";
+                }
+
+                return `
+                    <div class="bg-white p-4 rounded-lg shadow-sm border">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="font-semibold">${order.project_name}</span>
+                            <span class="text-xs font-medium px-2 py-0.5 rounded-full ${statusColor}">
+                                ${statusText}
+                            </span>
+                        </div>
+                        <p class="text-sm text-gray-600 truncate">${order.raw_text || "פריטים מהקטלוג"}</p>
+                        <p class="text-xs text-gray-400 mt-1">${new Date(order.timestamp?.toDate()).toLocaleString('he-IL')}</p>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // --- Navigation ---
+        function navigate(viewId) {
+            state.currentView = viewId;
+            document.querySelectorAll('.app-page').forEach(page => page.classList.remove('active'));
+            document.querySelectorAll('.nav-button').forEach(btn => btn.classList.remove('active'));
+            
+            document.getElementById(`page-${viewId}`).classList.add('active');
+            document.querySelector(`.nav-button[onclick="navigate('${viewId}')"]`).classList.add('active');
+            
+            feather.replace();
+        }
+
+        // --- Catalog Logic ---
+        async function fetchCatalogData() {
+            if (state.catalog.length > 0) return;
+            console.log("Fetching catalog...");
+            
+            try {
+                const response = await fetch(CATALOG_API_URL);
+                if (!response.ok) {
+                    throw new Error(`Catalog API returned status ${response.status}`);
+                }
+                const text = await response.text();
+                
+                // [תיקון v55.6] הוספת try-catch ושינוי ל-data.data
+                try {
+                    const data = JSON.parse(text);
+                    if (data && data.status === 'success' && Array.isArray(data.data)) {
+                        state.catalog = data.data;
+                        console.log(`Catalog loaded with ${state.catalog.length} items.`);
+                        renderCatalog(); // רנדור ראשוני
+                    } else {
+                        throw new Error("Invalid JSON structure from catalog API");
+                    }
+                } catch (e) {
+                    console.error("========================================================");
+                    console.error(`אחי, שגיאה קריטית בטעינת הקטלוג (שגיאת JSON): ${e.message}`);
+                    console.error(`השרת החזיר טקסט שמתחיל ב: ${text.substring(0, 100)}...`);
+                    console.error("זו כנראה *לא* בעיה בקוד הזה, אלא בהגדרות ה-Deployment של ה-Apps Script שלך.");
+                    console.error("אנא ודא שהסקריפט שלך מוגדר לגישה: 'Anyone'.");
+                    console.error("========================================================");
+                    showToast("שגיאה חמורה בטעינת קטלוג. בדוק Console.", "error");
+                }
+            } catch (error) {
+                console.error("Failed to fetch catalog:", error);
+                // ההודעה למשתמש כבר מוצגת מה-catch הפנימי
+            }
+        }
+        
+        function searchCatalog() {
+            const term = document.getElementById('catalog-search').value.toLowerCase();
+            const filteredCatalog = state.catalog.filter(item => 
+                (item.name && item.name.toLowerCase().includes(term)) ||
+                (item.sku && item.sku.toString().includes(term))
+            );
+            renderCatalog(filteredCatalog);
+        }
+        
+        function renderCatalog(items = state.catalog) {
+            const grid = document.getElementById('catalog-grid');
+            if (items.length === 0) {
+                grid.innerHTML = `<p class="text-light col-span-2 text-center">לא נמצאו מוצרים.</p>`;
+                return;
+            }
+            
+            grid.innerHTML = items.slice(0, 50).map(item => `
+                <div class="product-card">
+                    <img src="${item.imageUrl || 'https://placehold.co/300x200/e2e8f0/94a3b8?text=N/A'}" alt="${item.name}">
+                    <div class="product-card-body">
+                        <h4 class="font-semibold text-sm truncate">${item.name}</h4>
+                        <p class="text-xs text-light">מק"ט: ${item.sku}</p>
+                        <button class="btn btn-primary w-full mt-2 text-sm py-1.5" onclick="addToCart('${item.sku}', '${item.name}')">
+                            <i data-feather="plus" class="w-4 h-4"></i>
+                            <span>הוסף</span>
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+            feather.replace();
+        }
+
+        // --- Cart Logic ---
+        function addToCart(sku, name) {
+            const existingItem = state.cart.find(item => item.sku === sku);
+            if (existingItem) {
+                existingItem.quantity++;
+            } else {
+                state.cart.push({ sku, name, quantity: 1 });
+            }
+            showToast(`"${name}" נוסף לעגלה`, "success");
+            renderCart();
+            navigate('order'); // חזור אוטומטית למסך ההזמנה
+        }
+        
+        function removeFromCart(sku) {
+            state.cart = state.cart.filter(item => item.sku !== sku);
+            renderCart();
+        }
+        
+        function updateCartQuantity(sku, change) {
+            const item = state.cart.find(item => item.sku === sku);
+            if (item) {
+                item.quantity += change;
+                if (item.quantity <= 0) {
+                    removeFromCart(sku);
+                } else {
+                    renderCart();
+                }
+            }
+        }
+        
+        function renderCart() {
+            const container = document.getElementById('cart-container');
+            if (state.cart.length === 0) {
+                container.innerHTML = '<p class="text-sm text-light text-center py-4">העגלה ריקה. הוסף פריטים מהקטלוג.</p>';
+                return;
+            }
+            
+            container.innerHTML = state.cart.map(item => `
+                <div class="flex items-center bg-white p-2 rounded-lg border">
+                    <div class="flex-grow">
+                        <p class="font-semibold text-sm">${item.name}</p>
+                        <p class="text-xs text-light">מק"ט: ${item.sku}</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button class="btn-icon bg-light" onclick="updateCartQuantity('${item.sku}', 1)"><i data-feather="plus" class="w-4 h-4"></i></button>
+                        <span class="font-bold w-6 text-center">${item.quantity}</span>
+                        <button class="btn-icon bg-light" onclick="updateCartQuantity('${item.sku}', -1)"><i data-feather="minus" class="w-4 h-4"></i></button>
+                    </div>
+                    <button class="btn-icon text-danger mr-2" onclick="removeFromCart('${item.sku}')"><i data-feather="x" class="w-4 h-4"></i></button>
+                </div>
+            `).join('');
+            feather.replace();
+        }
+
+        // --- Order Submission ---
+        async function submitPendingOrder() {
+            if (!state.currentProject || !currentUserId) {
+                showToast("שגיאה קריטית: אין פרטי פרויקט או משתמש.", "error");
+                return;
+            }
+            
+            const submitterName = document.getElementById('submitter-name').value.trim();
+            const rawText = document.getElementById('raw-text-input').value.trim();
+            
+            if (!submitterName) {
+                showToast("חובה להזין את שם המזמין", "error");
+                return;
+            }
+            
+            if (state.cart.length === 0 && rawText.length === 0) {
+                showToast("חובה להוסיף פריטים מהקטלוג או להקליד הזמנה", "error");
+                return;
+            }
+            
+            const btn = document.getElementById('submit-request-btn');
+            btn.disabled = true;
+            btn.innerHTML = '<div class="loader-small"></div> <span>שולח...</span>';
+
+            const payload = {
+                client_id: CLIENT_ID,
+                project_id: state.currentProject.id,
+                project_name: state.currentProject.name,
+                site_manager_uid: currentUserId,
+                submitter_name: submitterName,
+                timestamp: serverTimestamp(),
+                status: "pending",
+                raw_text: rawText,
+                cart_items: state.cart,
+                media_files: [], // [TODO] Add media upload logic
+                location_address: null // [TODO] Add location logic
+            };
+            
+            try {
+                const docRef = await addDoc(collection(db, "pending_orders"), payload);
+                showToast("הבקשה נשלחה לאישור יוסי!", "success");
+                
+                // אפס טופס
+                state.cart = [];
+                renderCart();
+                document.getElementById('submitter-name').value = '';
+                document.getElementById('raw-text-input').value = '';
+                
+                // עדכן היסטוריה
+                state.orderHistory.unshift({ id: docRef.id, ...payload, timestamp: new Date() }); // הוספה לוקאלית
+                renderOrderHistory();
+                navigate('track'); // עבור למעקב
+
+            } catch (error) {
+                console.error("Failed to submit pending order:", error);
+                showToast("שגיאה בשליחת הבקשה", "error");
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i data-feather="send" class="w-5 h-5"></i> <span>שלח לאישור יוסי</span>';
+                feather.replace();
+            }
+        }
+        
+        // --- Utils ---
+        function showToast(message, type = "info") {
+            const container = document.getElementById("global-alert-container");
+            const alertBox = document.createElement("div");
+            alertBox.className = `global-alert ${type === 'error' ? 'alert-error' : 'alert-success'}`;
+            
+            const icon = (type === "error") ? "alert-triangle" : 'check-circle';
+            alertBox.innerHTML = `<i data-feather="${icon}" class="w-5 h-5"></i><span>${message}</span>`;
+            
+            container.appendChild(alertBox);
+            feather.replace();
+            
+            setTimeout(() => {
+                alertBox.style.opacity = '0';
+                alertBox.style.transform = 'translateY(20px)';
+                setTimeout(() => alertBox.remove(), 300);
+            }, 3000);
+        }
+
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+    </script>
+</body>
+</html>
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Zebulun Site</title>
     
     <!-- PWA Manifest & Theme -->
