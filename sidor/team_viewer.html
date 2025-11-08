@@ -21,7 +21,7 @@
             flex-grow: 1;
             overflow-y: auto;
             display: flex;
-            flex-direction: column-reverse; /* Show new messages at the bottom, but reverse order */
+            flex-direction: column-reverse; /* מציג הודעות חדשות למטה, אבל הפוך */
         }
         .feed-item {
             padding: 1rem;
@@ -67,14 +67,14 @@
 
     <!-- Feed container -->
     <div id="team-feed">
-        <!-- Feed items will be prepended here by JS -->
+        <!-- פריטי פיד יוצגו כאן על ידי JS -->
     </div>
 
     <script type="module">
         // --- Firebase SDK Imports ---
         import { initializeApp, getApp, getApps } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
-        import { getFirestore, collection, doc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, doc, onSnapshot, query } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
         // --- Config ---
         const fallbackConfig = {
@@ -152,7 +152,7 @@
                 });
 
                 // Render all messages
-                feed.innerHTML = ''; // Clear feed before rendering
+                feed.innerHTML = ''; // נקה פיד לפני רינדור מחדש
                 messages.forEach(msg => {
                     appendFeedItem(msg);
                 });
@@ -163,6 +163,10 @@
             });
         }
 
+        /**
+         * מציג פריט חדש בפיד
+         * @param {object} msg - אובייקט ההודעה מ-Firestore
+         */
         function appendFeedItem(msg) {
             const el = document.createElement('div');
             el.className = 'feed-item';
@@ -191,13 +195,14 @@
                 `;
             }
             
-            feed.appendChild(el); // Changed from prepend to append because of flex-direction-reverse
+            feed.appendChild(el); // שונה מ-prepend ל-appendChild בגלל flex-direction-reverse
         }
 
         // --- Init ---
         document.addEventListener('DOMContentLoaded', () => {
             feather.replace();
             initApp();
+            console.log("פיד צוות נטען. מאזין להודעות...");
         });
     </script>
 </body>
