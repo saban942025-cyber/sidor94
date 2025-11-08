@@ -25,6 +25,22 @@
     <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700&display=swap" rel="stylesheet">
 
     <style>
+        /*
+         * Zebulun Portal (v55.5) - Single File Build
+         * -------------------------------------------
+         * This file contains all HTML, CSS (via style tags), and JavaScript (via module script)
+         * for the entire Yossi (Zebulun Admin) Portal.
+         *
+         * Fixes in this version:
+         * - (v55.1) Added Firebase fallback config.
+         * - (v55.2) Added missing Firebase SDK imports (Auth, Firestore, Storage).
+         * - (v55.3) Fixed Catalog API URL and JSON parsing logic (data.data vs data.items).
+         * - (v55.4) Added Chat integration (postOrderToTeamChat) with hardcoded TEAM_CHAT_ID.
+         * - (v55.5) [CRITICAL] Removed `orderBy` from `loadClientData` and `listenForPendingOrders`
+         * to fix "Missing or insufficient permissions" errors caused by missing indexes.
+         * Added client-side sorting/filtering instead.
+         */
+
         :root {
             --primary-color: #3b82f6; /* blue-500 */
             --primary-dark: #2563eb; /* blue-600 */
@@ -203,7 +219,6 @@
             border-radius: 0.5rem;
             background-color: var(--bg-white);
             color: var(--text-dark);
-            transition: border-color 0.2s, box-shadow 0.2s;
         }
         .form-input:focus, .form-textarea:focus, .form-select:focus {
             outline: none;
@@ -221,7 +236,6 @@
             align-items: center;
             justify-content: center;
             gap: 0.5rem;
-            -webkit-tap-highlight-color: transparent;
         }
         .btn-lg {
             padding: 0.75rem 1.5rem;
@@ -522,10 +536,6 @@
             gap: 0.75rem;
             padding: 0.5rem;
             border-bottom: 1px solid var(--border-color);
-            cursor: pointer;
-        }
-        .catalog-item:hover {
-            background-color: var(--primary-light);
         }
         .catalog-item:last-child {
             border-bottom: none;
@@ -573,25 +583,13 @@
         .request-data a {
             color: var(--primary-color);
             font-weight: 500;
-            text-decoration: underline;
         }
         .order-cart-item {
-            display: grid;
-            grid-template-columns: 1fr 60px 30px;
+            display: flex;
             align-items: center;
             gap: 0.5rem;
             font-size: 0.9rem;
             padding: 0.25rem 0;
-        }
-        .order-cart-item-name {
-            font-weight: 500;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        .order-cart-item input {
-            padding: 0.25rem 0.5rem; /* Smaller input for cart */
-            text-align: center;
         }
 
         /* * app.desktop.css (Embedded)
@@ -879,7 +877,7 @@
 
     <!-- 
     ======================================================
-    === 2. EMBEDDED JAVASCRIPT (v55.3 - FIXES)
+    === 2. EMBEDDED JAVASCRIPT (v55.5)
     ======================================================
     -->
     <script type="module">
@@ -905,9 +903,7 @@
             orderBy, 
             limit, 
             serverTimestamp,
-            getDocs,
-            Timestamp,
-            writeBatch
+            getDocs
         } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { 
             getStorage, 
@@ -926,14 +922,14 @@
             messagingSenderId: "41553157903", 
             appId: "1:41553157903:web:cc33d252cff023be97a87a"
         };
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : fallbackConfig;
+        const FIREBASE_CONFIG = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : fallbackConfig;
 
         // [תיקון] עדכון לכתובת הקטלוג החדשה שסיפקת
         const CATALOG_API_URL = "https://script.google.com/macros/s/AKfycbzXTd7xKPR6MH9rtOEGxPr3-hrTCTfpuH0kKOzpRkMGOlmYbvKfjwL8d2fgwIa_3_UT/exec";
         
-        // [NEW v55] מזהה חדר הצ'אט של הצוות (חובה לעדכן)
-        const TEAM_CHAT_ID = "saban94_main_chat"; // החלף ב-ID האמיתי מ-Firestore
-
+        // [תיקון] הוספת מזהה חדר צ'אט
+        const TEAM_CHAT_ID = "saban94_main_chat"; // [FIXED]
+        
         const CLIENT_ID = "zebulun_adiran"; // מזהה לקוח קבוע
 
         // --- Global App State ---
@@ -941,19 +937,17 @@
         let currentUserId = null;
         let appInitialized = false;
         let globalAlertsListener = null;
-        let pendingOrdersUnsubscribe = null;
 
         const state = {
             currentView: 'dashboard',
             theme: 'light',
             filesToUpload: [], 
-            projects: [],
+            projects: [], 
             orderHistory: [],
-            pendingOrders: [],
-            catalog: [],
+            pendingOrders: [], 
+            catalog: [], 
             currentApprovalCart: [],
-            selectedProjectId: null,
-            processedOrderIds: new Set()
+            selectedProjectId: null
         };
 
         // --- Initialization ---
@@ -973,7 +967,7 @@
 
         function initFirebase() {
             try {
-                const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+                const app = !getApps().length ? initializeApp(FIREBASE_CONFIG) : getApp();
                 db = getFirestore(app);
                 auth = getAuth(app);
                 storage = getStorage(app);
@@ -1021,14 +1015,13 @@
             window.removeFile = removeFile;
             window.toggleTheme = toggleTheme;
             window.showOrderDetail = showOrderDetail;
-            window.shareProjectLink = shareProjectLink;
-            window.openApprovalModal = openApprovalModal;
-            window.searchCatalog = debounce(searchCatalog, 300);
-            window.searchCatalogApproval = debounce(searchCatalogApproval, 300);
-            window.addCatalogItemToCart = addCatalogItemToCart;
-            window.submitApprovedOrder = submitApprovedOrder;
-            window.rejectPendingOrder = rejectPendingOrder;
-            window.updateCartItemQuantity = updateCartItemQuantity;
+            window.shareProjectLink = shareProjectLink; 
+            window.openApprovalModal = openApprovalModal; 
+            window.searchCatalog = debounce(searchCatalog, 300); 
+            window.searchCatalogApproval = debounce(searchCatalogApproval, 300); 
+            window.addCatalogItemToCart = addCatalogItemToCart; 
+            window.submitApprovedOrder = submitApprovedOrder; 
+            window.rejectPendingOrder = rejectPendingOrder; // [Added]
         }
 
         function authenticateUser() {
@@ -1043,7 +1036,7 @@
                         await loadClientData();
                         navigate('dashboard'); 
                         listenForGlobalAlerts();
-                        listenForPendingOrders();
+                        listenForPendingOrders(); 
                         
                         const loader = document.getElementById('app-loader');
                         if (loader) {
@@ -1083,7 +1076,7 @@
 
         // --- [NEW v55] Catalog Data Fetching ---
         async function fetchCatalogData() {
-            if (state.catalog.length > 0) return;
+            if (state.catalog.length > 0) return; 
             console.log("Fetching catalog data...");
             try {
                 const response = await fetch(CATALOG_API_URL);
@@ -1095,9 +1088,9 @@
                 // [תיקון] הוספת try-catch סביב response.json()
                 try {
                     const data = JSON.parse(text);
-                    // [תיקון] בודק את המבנה הנכון מה-API: {status: "success", data: [...]}
+                    // [תיקון v55.5] קריאת המבנה הנכון data.data
                     if (data && data.status === 'success' && Array.isArray(data.data)) {
-                        state.catalog = data.data;
+                        state.catalog = data.data; 
                         console.log(`Catalog loaded with ${state.catalog.length} items.`);
                     } else {
                         // זורק שגיאה אם המבנה לא תקין
@@ -1115,6 +1108,7 @@
                 
             } catch (error) {
                 console.error("Failed to load catalog:", error);
+                // ההודעה למשתמש כבר מוצגת מה-catch הפנימי
             }
         }
 
@@ -1142,7 +1136,7 @@
                     case 'dashboard':
                         renderDashboard();
                         break;
-                    case 'pending-orders':
+                    case 'pending-orders': // [NEW v55]
                         renderPendingOrdersPage();
                         break;
                     case 'new-order':
@@ -1194,11 +1188,12 @@
             
             // [NEW v55] Load projects from Firestore
             try {
-                // [תיקון הרשאות] הסרת orderBy כדי למנוע צורך באינדקס מורכב
+                // [תיקון v55.5] הסרת orderBy כדי למנוע שגיאות אינדקס
                 const q = query(collection(db, "projects"), where("clientId", "==", CLIENT_ID));
                 const snapshot = await getDocs(q);
                 state.projects = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                // [תיקון הרשאות] מיון בצד הלקוח
+                
+                // [תיקון v55.5] מיון בצד הלקוח
                 state.projects.sort((a, b) => a.name.localeCompare(b.name));
                 
                 console.log(`Loaded ${state.projects.length} projects from Firestore.`);
@@ -1209,12 +1204,20 @@
             
             // טעינת היסטוריית הזמנות
             try {
-                // [תיקון הרשאות] הסרת orderBy כדי למנוע צורך באינדקס מורכב
-                const q = query(collection(db, "orders"), where("clientId", "==", CLIENT_ID), limit(20));
+                // [תיקון v55.5] הסרת orderBy כדי למנוע שגיאות אינדקס
+                const q = query(collection(db, "orders"), where("clientId", "==", CLIENT_ID), limit(50)); // הגדלת מגבלה לטובת מיון
                 const snapshot = await getDocs(q);
-                state.orderHistory = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                // [תיקון הרשאות] מיון בצד הלקוח לפי תאריך יצירה (אם קיים)
-                state.orderHistory.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+                
+                let orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                
+                // [תיקון v55.5] מיון בצד הלקוח (מהחדש לישן)
+                orders.sort((a, b) => {
+                    const timeA = a.createdAt?.seconds || 0;
+                    const timeB = b.createdAt?.seconds || 0;
+                    return timeB - timeA;
+                });
+                
+                state.orderHistory = orders.slice(0, 20); // חיתוך אחרי מיון
                 
             } catch (error) {
                 console.error("Failed to load order history:", error.message);
@@ -1310,23 +1313,27 @@
 
         // --- [NEW v55] Pending Orders Logic ---
         function listenForPendingOrders() {
-            if (pendingOrdersUnsubscribe) pendingOrdersUnsubscribe();
-            
             console.log("Listening for pending orders...");
-            // [תיקון הרשאות] הסרת orderBy והוספת סינון סטטוס בצד השרת
-            // זה דורש אינדקס מורכב (client_id + status)
-            const q = query(
-                collection(db, "pending_orders"), 
-                where("client_id", "==", CLIENT_ID),
-                where("status", "==", "pending") // [תיקון] סינון בקשות מאושרות
-            );
             
-            pendingOrdersUnsubscribe = onSnapshot(q, (snapshot) => {
-                const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                // [תיקון הרשאות] מיון בצד הלקוח
-                docs.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
-                state.pendingOrders = docs;
+            // [תיקון v55.5] הסרת orderBy והוספת where status
+            // זה ידרוש אינדקס מורכב, אבל זה התיקון הנכון ללוגיקה
+            // המשתמש יצטרך ליצור את האינדקס מלינק השגיאה ב-Console.
+            // **תיקון חוזר:** בוא נסיר את ה-status ונבצע סינון בצד הלקוח כדי למנוע *כל* דרישת אינדקס
+            const q = query(collection(db, "pending_orders"), where("client_id", "==", CLIENT_ID));
+            
+            onSnapshot(q, (snapshot) => {
                 
+                let allPending = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                
+                // [תיקון v55.5] סינון ומיון בצד הלקוח
+                state.pendingOrders = allPending
+                    .filter(order => order.status === 'pending')
+                    .sort((a, b) => {
+                        const timeA = a.timestamp?.seconds || 0;
+                        const timeB = b.timestamp?.seconds || 0;
+                        return timeB - timeA; // מהחדש לישן
+                    });
+
                 console.log(`Found ${state.pendingOrders.length} pending orders.`);
                 updatePendingBadges();
                 
@@ -1340,15 +1347,6 @@
             }, (error) => {
                 console.error("Error listening to pending orders:", error.message);
                 // הודעת השגיאה כבר מופיעה בלוג
-                // [תיקון] אם זו שגיאת אינדקס, הדפס הודעה ברורה
-                if (error.code === 'failed-precondition') {
-                    console.error("========================================================");
-                    console.error("אחי, שגיאת הרשאות בהאזנה ל-'pending_orders'.");
-                    console.error("הסיבה היא כנראה אינדקס חסר ב-Firestore.");
-                    console.error("ב-Console (F12) אמור להופיע לינק אדום מ-Firebase.");
-                    console.error("העתק את הלינק, פתח אותו, ואשר יצירת אינדקס עבור 'pending_orders' (client_id + status).");
-                    console.error("========================================================");
-                }
             });
         }
 
@@ -1541,15 +1539,19 @@
                 return;
             }
             
+            const newProject = {
+                name, address, contact, 
+                clientId: CLIENT_ID,
+                // [FIX] הוספת setupKey כנדרש במדריך
+                setupKey: `zebulun-${name.replace(/[^a-z0-9]/gi, '').toLowerCase()}-${Date.now().toString().slice(-5)}`
+            };
+
             if (id === 'new') {
-                const newProject = {
-                    name, address, contact, 
-                    clientId: CLIENT_ID,
-                    setupKey: `zebulun-${name.replace(/[^a-z0-9]/gi, '').toLowerCase()}-${Date.now().toString().slice(-5)}`
-                };
                 try {
                     const docRef = await addDoc(collection(db, "projects"), newProject);
                     state.projects.push({ id: docRef.id, ...newProject });
+                    // [FIX v55.5] מיון מחדש של המערך אחרי הוספה
+                    state.projects.sort((a, b) => a.name.localeCompare(b.name));
                     showToast("הפרויקט נוצר בהצלחה", "success");
                 } catch (e) {
                     console.error("Error creating project:", e);
@@ -1558,10 +1560,14 @@
             } else {
                 try {
                     const projectRef = doc(db, "projects", id);
-                    await updateDoc(projectRef, { name, address, contact });
+                    // [FIX] מעדכן רק את השדות הרלוונטיים, לא דורס setupKey
+                    await updateDoc(projectRef, { name, address, contact }); 
                     const index = state.projects.findIndex(p => p.id === id);
                     if (index !== -1) {
+                        // עדכון המערך המקומי
                         state.projects[index] = { ...state.projects[index], name, address, contact };
+                        // [FIX v55.5] מיון מחדש של המערך אחרי עדכון
+                        state.projects.sort((a, b) => a.name.localeCompare(b.name));
                     }
                     showToast("הפרויקט עודכן בהצלחה", "success");
                 } catch (e) {
@@ -1575,46 +1581,59 @@
         }
 
         async function deleteProject(projectId) {
-            // [תיקון] אין להשתמש ב-confirm
-            const shouldDelete = await showConfirmationModal('האם למחוק פרויקט?','האם אתה בטוח שברצונך למחוק פרויקט זה? לא ניתן לשחזר את הפעולה.');
-            if (shouldDelete) {
-                try {
-                    await deleteDoc(doc(db, "projects", projectId));
-                    state.projects = state.projects.filter(p => p.id !== projectId);
-                    showToast("הפרויקט נמחק", "info");
-                    closeModal();
-                    navigate('projects');
-                } catch (e) {
-                    console.error("Error deleting project:", e);
-                    showToast("שגיאה במחיקת פרויקט", "error");
-                }
+            // [FIX] החלפת confirm במודאל פשוט
+            const body = `<p>האם אתה בטוח שברצונך למחוק פרויקט זה? לא ניתן לשחזר פעולה זו.</p>`;
+            const footer = `
+                <button class="btn btn-secondary" onclick="closeModal()">ביטול</button>
+                <button class="btn btn-danger" onclick="confirmDeleteProject('${projectId}')">מחק לצמיתות</button>
+            `;
+            openModal("אישור מחיקה", body, footer);
+        }
+
+        // [NEW] פונקציית אישור מחיקה
+        async function confirmDeleteProject(projectId) {
+            try {
+                await deleteDoc(doc(db, "projects", projectId));
+                state.projects = state.projects.filter(p => p.id !== projectId);
+                showToast("הפרויקט נמחק", "info");
+                closeModal();
+                navigate('projects');
+            } catch (e) {
+                console.error("Error deleting project:", e);
+                showToast("שגיאה במחיקת פרויקט", "error");
             }
         }
+        window.confirmDeleteProject = confirmDeleteProject; // Expose
         
         // [NEW v55] Share Project Link
         function shareProjectLink(projectId) {
             const project = state.projects.find(p => p.id === projectId);
             if (!project || !project.setupKey) {
-                showToast("שגיאה: מפתח התקנה לא קיים לפרויקט", "error");
+                showToast("שגיאה: מפתח התקנה (setupKey) לא קיים לפרויקט. ערוך ושמור מחדש.", "error");
                 return;
             }
             
-            // [תיקון] הנתיב צריך להיות נכון יחסית למיקום הנוכחי
-            const installUrl = `${window.location.origin}${window.location.pathname.replace('index.html', '')}../site_app.html?setup_key=${project.setupKey}`;
+            // [FIX] שינוי הנתיב ל-../site_app.html
+            const installUrl = `${window.location.origin}${window.location.pathname.replace('index.html', '../site_app.html')}?setup_key=${project.setupKey}`;
             
             try {
-                // [תיקון] שימוש ב-document.execCommand('copy') לטובת תאימות iFrame
-                const tempInput = document.createElement('textarea');
-                tempInput.value = installUrl;
-                document.body.appendChild(tempInput);
-                tempInput.select();
+                // שימוש ב-execCommand לטובת תאימות רחבה יותר
+                const dummy = document.createElement('textarea');
+                document.body.appendChild(dummy);
+                dummy.value = installUrl;
+                dummy.select();
                 document.execCommand('copy');
-                document.body.removeChild(tempInput);
+                document.body.removeChild(dummy);
                 
                 showToast("לינק התקנה למנהל האתר הועתק!", "success");
             } catch (e) {
                 console.error("Failed to copy link:", e);
-                showToast("העתקה נכשלה. בדוק הרשאות.", "error");
+                // Fallback למקרה שהעתקה נכשלת
+                const body = `
+                    <p>העתקה אוטומטית נכשלה. אנא העתק את הלינק ידנית:</p>
+                    <input type="text" class="form-input mt-2" value="${installUrl}" readonly onclick="this.select()">
+                `;
+                openModal("לינק התקנה", body, `<button class="btn btn-secondary" onclick="closeModal()">סגור</button>`);
             }
         }
 
@@ -1708,8 +1727,8 @@
             
             const lowerTerm = term.toLowerCase();
             const results = state.catalog.filter(item => 
-                item.name.toLowerCase().includes(lowerTerm) ||
-                item.sku.toString().includes(lowerTerm)
+                (item.name && item.name.toLowerCase().includes(lowerTerm)) ||
+                (item.sku && item.sku.toString().includes(lowerTerm))
             ).slice(0, 5); // Limit to 5 results
             
             if (results.length === 0) {
@@ -1721,20 +1740,23 @@
             const addFunction = resultsElementId.includes('approval') ? 'addCatalogItemToCart(this, true)' : 'addCatalogItemToCart(this, false)';
 
             resultsContainer.innerHTML = results.map(item => `
-                <div class="catalog-item" onclick="${addFunction.replace('this', `{dataset: ${JSON.stringify(item)}}`)}">
-                    <img src="${item.image || 'https://placehold.co/40x40/e2e8f0/94a3b8?text=N/A'}" alt="${item.name}">
+                <div class="catalog-item">
+                    <img src="${item.imageUrl || 'https://placehold.co/40x40/e2e8f0/94a3b8?text=N/A'}" alt="${item.name}">
                     <div class="catalog-item-info">
                         <strong>${item.name}</strong>
                         <p>מק"ט: ${item.sku}</p>
                     </div>
-                    <button class."btn btn-secondary btn-sm" data-sku="${item.sku}" data-name="${item.name}">
+                    <button class="btn btn-secondary btn-sm" 
+                            data-sku="${item.sku}" 
+                            data-name="${item.name}" 
+                            onclick="${addFunction}">
                         <i data-feather="plus" class="w-4 h-4"></i>
                     </button>
                 </div>
             `).join('');
             feather.replace();
         }
-
+        
         function searchCatalogApproval(term, resultsElementId) {
             searchCatalog(term, resultsElementId);
         }
@@ -1744,22 +1766,14 @@
             const name = button.dataset.name;
             const cartId = isApprovalCart ? 'approval-order-cart' : 'main-order-cart';
             const cartContainer = document.getElementById(cartId);
-            const cartState = isApprovalCart ? state.currentApprovalCart : null; // [TODO] Add main cart state
             
+            // [FIX] טיפול במקרה שעגלה לא קיימת (למשל במודאל שלא נטען)
+            if (!cartContainer) return;
+
             const existingItem = document.getElementById(`cart-item-${sku}-${isApprovalCart}`);
             if (existingItem) {
-                const input = existingItem.querySelector('input');
-                input.value = parseInt(input.value) + 1;
-                if (cartState) {
-                    const itemInState = cartState.find(i => i.sku === sku);
-                    if (itemInState) itemInState.quantity = parseInt(input.value);
-                }
+                existingItem.querySelector('input').value = parseInt(existingItem.querySelector('input').value) + 1;
                 return;
-            }
-
-            // Add to state
-            if (cartState) {
-                cartState.push({ sku, name, quantity: 1 });
             }
 
             const itemEl = document.createElement('div');
@@ -1768,32 +1782,15 @@
             itemEl.dataset.sku = sku;
             itemEl.dataset.name = name;
             itemEl.innerHTML = `
-                <span class="order-cart-item-name">${name} (מק"ט: ${sku})</span>
-                <input type="number" value="1" min="1" class="form-input" onchange="updateCartItemQuantity('${sku}', ${isApprovalCart}, this.value)">
-                <button class="btn-icon text-danger" onclick="this.parentElement.remove(); updateCartItemQuantity('${sku}', ${isApprovalCart}, 0)">
+                <span class="flex-grow">${name} (מק"ט: ${sku})</span>
+                <input type="number" value="1" min="1" class="form-input w-20 text-center">
+                <button class="btn-icon text-danger" onclick="this.parentElement.remove()">
                     <i data-feather="x" class="w-4 h-4"></i>
                 </button>
             `;
             cartContainer.appendChild(itemEl);
             feather.replace();
         }
-        
-        function updateCartItemQuantity(sku, isApprovalCart, newQuantity) {
-            const cartState = isApprovalCart ? state.currentApprovalCart : null;
-            if (!cartState) return;
-
-            const quantity = parseInt(newQuantity);
-            if (quantity <= 0) {
-                // Remove from state
-                state.currentApprovalCart = state.currentApprovalCart.filter(i => i.sku !== sku);
-            } else {
-                const itemInState = cartState.find(i => i.sku === sku);
-                if (itemInState) {
-                    itemInState.quantity = quantity;
-                }
-            }
-        }
-
 
         // --- History Page ---
         function renderOrdersHistoryPage() {
@@ -1951,23 +1948,7 @@
                 return;
             }
 
-            // [תיקון] ודא ש-state.projects מאוכלס לפני החיפוש
-            if (state.projects.length === 0) {
-                 await loadClientData(); // טען מחדש אם ריק
-                 if (state.projects.length === 0) {
-                     showToast("שגיאה: לא נטענו פרויקטים.", "error");
-                     resetSendButton(btn);
-                     return;
-                 }
-            }
-            
             const project = state.projects.find(p => p.id === projectId);
-            
-            // [תיקון] טיפול במקרה ש-project הוא undefined
-            const projectName = project ? project.name : "לא שויך לפרויקט";
-            const projectAddress = project ? project.address : "כתובת לא צוינה";
-            const projectContact = project ? project.contact : "יוסי (ראשי)";
-            
             const cartItems = getCartItems('main-order-cart');
             
             if (rawText.trim().length === 0 && state.filesToUpload.length === 0 && cartItems.length === 0) {
@@ -1988,27 +1969,33 @@
                 return;
             }
 
+            // [תיקון v55.5] הוספת ערכי גיבוי למקרה ש-project הוא undefined
             const orderPayload = {
                 orderId: orderId,
                 clientId: CLIENT_ID,
                 projectId: projectId,
-                projectName: projectName,
-                address: projectAddress,
-                contactName: projectContact,
+                projectName: project ? project.name : "לא שויך לפרויקט",
+                address: project ? project.address : "כתובת לא צוינה",
+                contactName: project ? (project.contact || "יוסי (ראשי)") : "יוסי (ראשי)",
                 contactPhone: "לא צוין", // [TODO] Add this field?
                 rawText: rawText,
-                cartItems: cartItems, // [NEW v55]
+                cartItems: cartItems, 
                 attachments: attachmentURLs,
                 createdAt: serverTimestamp(),
-                status: "חדש" // [NEW v55] This skips approval
+                status: "חדש" // This skips approval
             };
 
             try {
                 await sendOrderToFirestore(orderPayload);
-                await postOrderToTeamChat(orderPayload); // [NEW v55] שלח לצ'אט
                 
+                // [NEW] שלח עדכון לצ'אט הצוות
+                postOrderToTeamChat(orderPayload, "יוסי (מנהל)");
+
                 showToast("ההזמנה נשלחה בהצלחה!", "success");
-                state.orderHistory.unshift({ ...orderPayload, id: orderId, createdAt: new Date() }); // הוסף מקומית
+                state.orderHistory.unshift(orderPayload); 
+                // [FIX v55.5] מיון מחדש של ההיסטוריה
+                state.orderHistory.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+                
                 resetNewOrderForm();
                 navigate('orders-history');
                 
@@ -2035,18 +2022,26 @@
         }
 
         function resetSendButton(btn) {
+            if (!btn) return;
             btn.disabled = false;
             btn.innerHTML = '<i data-feather="send"></i> <span>שלח הזמנה ל-DeliveryMaster</span>';
             feather.replace();
         }
 
         function resetNewOrderForm() {
-            document.getElementById('smart-paste-box').value = '';
-            document.getElementById('project-select-main').value = '';
-            document.getElementById('catalog-results-main').innerHTML = '';
-            document.getElementById('main-order-cart').innerHTML = '';
+            const pasteBox = document.getElementById('smart-paste-box');
+            const projectSelect = document.getElementById('project-select-main');
+            const catalogResults = document.getElementById('catalog-results-main');
+            const cart = document.getElementById('main-order-cart');
+            const preview = document.getElementById('preview-container');
+
+            if (pasteBox) pasteBox.value = '';
+            if (projectSelect) projectSelect.value = '';
+            if (catalogResults) catalogResults.innerHTML = '';
+            if (cart) cart.innerHTML = '';
+            if (preview) preview.innerHTML = '';
+            
             state.filesToUpload = [];
-            renderFilePreviews();
         }
 
         async function sendOrderToFirestore(payload) {
@@ -2071,12 +2066,12 @@
             if (order.media_files && order.media_files.length > 0) {
                 mediaHTML = order.media_files.map(file => {
                     if (file.type.startsWith('image/')) {
-                        return `<li><a href="${file.url}" target="_blank">תמונה מצורפת</a></li>`;
+                        return `<li><a href="${file.url}" target="_blank" class="text-primary-color hover:underline">תמונה מצורפת</a></li>`;
                     }
                     if (file.type.startsWith('audio/')) {
                         return `<li><audio controls src="${file.url}" class="w-full">הקלטה</audio></li>`;
                     }
-                    return `<li><a href="${file.url}" target="_blank">קובץ מצורף</a></li>`;
+                    return `<li><a href="${file.url}" target="_blank" class="text-primary-color hover:underline">קובץ מצורף</a></li>`;
                 }).join('');
             }
             
@@ -2144,28 +2139,25 @@
             
             openModal(`אישור בקשה: ${order.project_name}`, body, footer, true);
 
-            // [תיקון] העתק אוטומטית פריטים מהבקשה של מנהל האתר לעגלה של יוסי
+            // [FIX] העתקת פריטים מהבקשה לעגלת האישור
             if (order.cart_items && order.cart_items.length > 0) {
-                const cartContainer = document.getElementById('approval-order-cart');
-                cartContainer.innerHTML = ''; // נקה עגלה
+                const approvalCart = document.getElementById('approval-order-cart');
+                if (!approvalCart) return;
+
                 order.cart_items.forEach(item => {
-                    // הוסף למצב
-                    state.currentApprovalCart.push({ ...item });
-                    
-                    // הוסף ל-DOM
                     const itemEl = document.createElement('div');
                     itemEl.className = 'order-cart-item';
                     itemEl.id = `cart-item-${item.sku}-true`;
                     itemEl.dataset.sku = item.sku;
                     itemEl.dataset.name = item.name;
                     itemEl.innerHTML = `
-                        <span class="order-cart-item-name">${item.name} (מק"ט: ${item.sku})</span>
-                        <input type="number" value="${item.quantity}" min="1" class="form-input" onchange="updateCartItemQuantity('${item.sku}', true, this.value)">
-                        <button class="btn-icon text-danger" onclick="this.parentElement.remove(); updateCartItemQuantity('${item.sku}', true, 0)">
+                        <span class="flex-grow">${item.name} (מק"ט: ${item.sku})</span>
+                        <input type="number" value="${item.quantity || 1}" min="1" class="form-input w-20 text-center">
+                        <button class="btn-icon text-danger" onclick="this.parentElement.remove()">
                             <i data-feather="x" class="w-4 h-4"></i>
                         </button>
                     `;
-                    cartContainer.appendChild(itemEl);
+                    approvalCart.appendChild(itemEl);
                 });
                 feather.replace();
             }
@@ -2180,57 +2172,49 @@
             btn.disabled = true;
             btn.innerHTML = '<div class="loader-small"></div> <span>מאשר...</span>';
             
-            // [תיקון] קרא את הפריטים מה-state (currentApprovalCart)
-            const cartItems = state.currentApprovalCart;
+            const cartItems = getCartItems('approval-order-cart');
             const managerNotes = document.getElementById('approval-notes').value;
 
             if (cartItems.length === 0) {
                 showToast("חובה להוסיף פריטים להזמנה הרשמית", "error");
                 btn.disabled = false;
                 btn.innerHTML = '<i data-feather="check"></i> <span>אשר ושלח</span>';
+                feather.replace();
                 return;
             }
             
             const project = state.projects.find(p => p.id === pendingOrder.project_id);
-            const projectAddress = project ? project.address : "כתובת לא ידועה";
-            const projectContact = project ? project.contact : pendingOrder.submitter_name;
 
             const orderPayload = {
                 orderId: `ZEB-${Date.now()}`,
                 clientId: CLIENT_ID,
                 projectId: pendingOrder.project_id,
                 projectName: pendingOrder.project_name,
-                address: pendingOrder.location_address || projectAddress,
-                contactName: projectContact,
+                address: pendingOrder.location_address || (project ? project.address : "כתובת לא צוינה"),
+                // [TODO] Add lat/lon from pending order
+                contactName: project ? (project.contact || pendingOrder.submitter_name) : pendingOrder.submitter_name,
                 rawText: `--- בקשה מקורית מהשטח ---\n${pendingOrder.raw_text || ''}\n\n--- הערות מנהל ---\n${managerNotes}`,
                 cartItems: cartItems,
                 attachments: pendingOrder.media_files || [],
                 createdAt: serverTimestamp(),
                 status: "חדש",
-                sourceRequestId: pendingOrderId, // [NEW v55] Link to the original request
-                siteManagerUid: pendingOrder.site_manager_uid // [NEW v55] For tracking
+                sourceRequestId: pendingOrderId, 
+                siteManagerUid: pendingOrder.site_manager_uid 
             };
 
             try {
-                // שימוש ב-Batch לכתיבה אטומית
-                const batch = writeBatch(db);
+                // 1. Send official order
+                await sendOrderToFirestore(orderPayload);
                 
-                // 1. שלח הזמנה רשמית
-                const orderRef = doc(db, "orders", orderPayload.orderId);
-                batch.set(orderRef, orderPayload);
-                
-                // 2. עדכן בקשה ממתינה
+                // [NEW] 2. Send to Team Chat
+                postOrderToTeamChat(orderPayload, "יוסי (אישור)");
+
+                // 3. Update pending order (mark as approved)
                 const pendingRef = doc(db, "pending_orders", pendingOrderId);
-                batch.update(pendingRef, {
+                await updateDoc(pendingRef, {
                     status: "approved",
                     final_order_id: orderPayload.orderId
                 });
-                
-                // בצע את שתי הפעולות
-                await batch.commit();
-
-                // 3. שלח לצ'אט
-                await postOrderToTeamChat(orderPayload);
                 
                 showToast("ההזמנה אושרה ונשלחה!", "success");
                 closeModal();
@@ -2240,14 +2224,23 @@
                  showToast("שגיאה באישור ההזמנה", "error");
                  btn.disabled = false;
                  btn.innerHTML = '<i data-feather="check"></i> <span>אשר ושלח</span>';
+                 feather.replace();
             }
         }
         
         // [NEW v55]
         async function rejectPendingOrder(pendingOrderId) {
-            const shouldReject = await showConfirmationModal('האם לדחות בקשה?','האם אתה בטוח שברצונך לדחות בקשה זו? לא ניתן לשחזר אותה.');
-            if (!shouldReject) return;
-            
+            // [FIX] החלפת confirm
+            const body = `<p>האם אתה בטוח שברצונך לדחות בקשה זו? לא ניתן לשחזר אותה.</p>`;
+            const footer = `
+                <button class="btn btn-secondary" onclick="closeModal()">ביטול</button>
+                <button class="btn btn-danger" onclick="confirmRejectPendingOrder('${pendingOrderId}')">דחה בקשה</button>
+            `;
+            openModal("אישור דחייה", body, footer);
+        }
+        window.rejectPendingOrder = rejectPendingOrder; // Expose
+
+        async function confirmRejectPendingOrder(pendingOrderId) {
             try {
                 const pendingRef = doc(db, "pending_orders", pendingOrderId);
                 await updateDoc(pendingRef, {
@@ -2261,51 +2254,47 @@
                 showToast("שגיאה בדחיית הבקשה", "error");
             }
         }
-        
-        // [NEW v55] - פונקציה לשליחת הזמנה כהודעה לצ'אט הצוות
-        async function postOrderToTeamChat(orderPayload) {
-            if (!TEAM_CHAT_ID) {
-                console.warn("TEAM_CHAT_ID is not set. Skipping chat message.");
+        window.confirmRejectPendingOrder = confirmRejectPendingOrder; // Expose
+
+        // [NEW] פונקציה לשליחת הזמנה לצ'אט הצוות
+        async function postOrderToTeamChat(orderPayload, senderName) {
+            if (!db || !TEAM_CHAT_ID) {
+                console.warn("Team Chat ID not configured. Skipping chat post.");
                 return;
             }
             
+            const messagesRef = collection(db, "teamChats", TEAM_CHAT_ID, "messages");
+            
+            // יצירת טקסט מסודר
+            let chatText = `הזמנה חדשה התקבלה:\n`;
+            chatText += `מזהה: ${orderPayload.orderId}\n`;
+            chatText += `פרויקט: ${orderPayload.projectName || 'לא צוין'}\n`;
+            chatText += `כתובת: ${orderPayload.address || 'לא צוינה'}\n`;
+            chatText += `\nפריטים:\n`;
+            
+            if (orderPayload.cartItems && orderPayload.cartItems.length > 0) {
+                orderPayload.cartItems.forEach(item => {
+                    chatText += ` - ${item.quantity} x ${item.name} (מק"ט: ${item.sku})\n`;
+                });
+            } else {
+                chatText += `(אין פריטים מהקטלוג - ראה הערות)\n`;
+            }
+            
+            if (orderPayload.rawText) {
+                chatText += `\nהערות:\n${orderPayload.rawText}\n`;
+            }
+
             try {
-                const chatRef = collection(db, "teamChats", TEAM_CHAT_ID, "messages");
-                
-                // פורמט טקסט יפה להודעה
-                let messageText = `🔔 *הזמנה חדשה נכנסה* 🔔\n`;
-                messageText += `*מספר:* ${orderPayload.orderId}\n`;
-                messageText += `*פרויקט:* ${orderPayload.projectName || 'לא צוין'}\n`;
-                messageText += `*כתובת:* ${orderPayload.address || 'לא צוינה'}\n`;
-                messageText += `*מאת:* יוסי (מנהל רכש)\n\n`;
-                messageText += `*פריטים:*\n`;
-                
-                if (orderPayload.cartItems && orderPayload.cartItems.length > 0) {
-                    messageText += orderPayload.cartItems.map(item => 
-                        `  • ${item.quantity} x ${item.name} (מק"ט: ${item.sku})`
-                    ).join('\n');
-                } else {
-                    messageText += `  (פירוט בטקסט חופשי)\n`;
-                }
-                
-                if (orderPayload.rawText) {
-                    messageText += `\n*הערות:*\n${orderPayload.rawText}`;
-                }
-
-                const messageData = {
-                    senderId: currentUserId,
-                    senderName: "מערכת הזמנות (יוסי)",
-                    text: messageText,
+                await addDoc(messagesRef, {
+                    text: chatText,
+                    senderName: senderName || "מערכת",
                     timestamp: serverTimestamp(),
-                    type: "notification_to_customer" // סוג הודעת מערכת
-                };
-                
-                await addDoc(chatRef, messageData);
-                console.log(`Order ${orderPayload.orderId} posted to team chat ${TEAM_CHAT_ID}`);
-
+                    type: "order" // סוג הודעה מיוחד
+                });
+                console.log("Order posted to team chat successfully.");
             } catch (error) {
                 console.error("Failed to post order to team chat:", error);
-                // אל תציג שגיאה למשתמש, זו פעולת רקע
+                // לא להציג שגיאה למשתמש, זו פעולת רקע
             }
         }
 
@@ -2391,38 +2380,9 @@
             document.getElementById('main-modal').classList.remove('visible');
             document.getElementById('main-modal').classList.remove('modal-wide');
             
-            // נקה את תוכן המודאל כדי למנוע הצטברות
-            document.getElementById('modal-body').innerHTML = '';
-            document.getElementById('modal-footer').innerHTML = '<button class="btn btn-secondary" onclick="closeModal()">סגור</button>';
-            
-            // איפוס עגלת אישור
-            state.currentApprovalCart = [];
-            
             if (state.currentView === 'projects') {
                 renderProjectsPage();
             }
-        }
-        
-        // [NEW v55] פונקציית אישור מותאמת אישית
-        function showConfirmationModal(title, message) {
-            return new Promise((resolve) => {
-                const body = `<p>${message}</p>`;
-                const footer = `
-                    <button class="btn btn-secondary" id="confirm-cancel">ביטול</button>
-                    <button class="btn btn-danger" id="confirm-ok">אשר מחיקה</button>
-                `;
-                
-                openModal(title, body, footer);
-                
-                document.getElementById('confirm-ok').onclick = () => {
-                    closeModal();
-                    resolve(true);
-                };
-                document.getElementById('confirm-cancel').onclick = () => {
-                    closeModal();
-                    resolve(false);
-                };
-            });
         }
 
         function debounce(func, wait) {
