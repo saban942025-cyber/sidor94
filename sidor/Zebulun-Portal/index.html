@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Zebulun Delivery Portal – Powered by H.Saban Materials</title>
     
-    <!-- PWA Manifest & Theme -->
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
@@ -15,31 +14,33 @@
     <link rel="apple-touch-icon" href="https://i.postimg.cc/ryPT3r29/image.png">
     <link rel="icon" href="https://i.postimg.cc/ryPT3r29/image.png">
 
-    <!-- TailwindCSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- Icons (Feather) -->
     <script src="https://unpkg.com/feather-icons"></script>
-    
-    <!-- Google Font: Rubik -->
     <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700&display=swap" rel="stylesheet">
 
     <style>
-        /*
-         * Zebulun Portal (v55.5) - Single File Build
-         * -------------------------------------------
-         * This file contains all HTML, CSS (via style tags), and JavaScript (via module script)
-         * for the entire Yossi (Zebulun Admin) Portal.
-         *
-         * Fixes in this version:
-         * - (v55.1) Added Firebase fallback config.
-         * - (v55.2) Added missing Firebase SDK imports (Auth, Firestore, Storage).
-         * - (v55.3) Fixed Catalog API URL and JSON parsing logic (data.data vs data.items).
-         * - (v55.4) Added Chat integration (postOrderToTeamChat) with hardcoded TEAM_CHAT_ID.
-         * - (v55.5) [CRITICAL] Removed `orderBy` from `loadClientData` and `listenForPendingOrders`
-         * to fix "Missing or insufficient permissions" errors caused by missing indexes.
-         * Added client-side sorting/filtering instead.
-         */
+        /* ... [גרסה 55.9] ... */
+        /* [תיקון] הוספת סגנון למודאל ההדרכה */
+        .help-modal-content h3 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-top: 1rem;
+            margin-bottom: 0.5rem;
+            color: var(--primary-dark);
+        }
+        html.dark .help-modal-content h3 {
+            color: var(--primary-color);
+        }
+        .help-modal-content p {
+            margin-bottom: 0.5rem;
+            line-height: 1.6;
+        }
+        .help-modal-content ol {
+            list-style-type: decimal;
+            margin-right: 1.5rem;
+            margin-bottom: 1rem;
+            space-y: 0.5rem;
+        }
 
         :root {
             --primary-color: #3b82f6; /* blue-500 */
@@ -65,19 +66,17 @@
             --danger: #f87171; /* red-400 */
         }
 
-        /* --- Global Styles --- */
         html { -webkit-tap-highlight-color: transparent; }
         body {
             font-family: 'Rubik', sans-serif;
             background-color: var(--bg-light);
             color: var(--text-dark);
             overscroll-behavior: none;
-            overflow: hidden; /* מניעת גלילה ברמת ה-BODY */
+            overflow: hidden;
         }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-        /* --- Loader --- */
         #app-loader {
             position: fixed;
             inset: 0;
@@ -107,7 +106,6 @@
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         
-        /* --- Global Alert (Toast) --- */
         #global-alert-container {
             position: fixed;
             bottom: 20px;
@@ -133,21 +131,14 @@
             align-items: center;
             gap: 0.75rem;
         }
-        .global-alert.alert-info {
-            background: rgba(59, 130, 246, 0.85); /* blue-500 */
-        }
-        .global-alert.alert-success {
-            background: rgba(34, 197, 94, 0.85); /* green-500 */
-        }
-        .global-alert.alert-error {
-            background: rgba(239, 68, 68, 0.85); /* red-500 */
-        }
+        .global-alert.alert-info { background: rgba(59, 130, 246, 0.85); }
+        .global-alert.alert-success { background: rgba(34, 197, 94, 0.85); }
+        .global-alert.alert-error { background: rgba(239, 68, 68, 0.85); }
         @keyframes popIn {
           from { transform: translateY(20px) scale(0.9); opacity: 0; }
           to { transform: translateY(0) scale(1); opacity: 1; }
         }
 
-        /* --- Modal (Popup) --- */
         .modal-overlay {
             position: fixed;
             inset: 0;
@@ -158,10 +149,7 @@
             transition: opacity 0.2s ease;
             pointer-events: none;
         }
-        .modal-overlay.visible {
-            opacity: 1;
-            pointer-events: auto;
-        }
+        .modal-overlay.visible { opacity: 1; pointer-events: auto; }
         .modal-container {
             position: fixed;
             top: 50%;
@@ -177,10 +165,7 @@
             transition: all 0.2s ease-out;
             pointer-events: none;
         }
-        /* [NEW v55] Wide modal for approval */
-        .modal-container.modal-wide {
-            max-width: 800px;
-        }
+        .modal-container.modal-wide { max-width: 800px; }
         .modal-container.visible {
             opacity: 1;
             transform: translate(-50%, -50%) scale(1);
@@ -204,7 +189,6 @@
             border-bottom-right-radius: 0.75rem;
         }
         
-        /* --- General Form Elements --- */
         .form-label {
             display: block;
             font-weight: 500;
@@ -237,17 +221,9 @@
             justify-content: center;
             gap: 0.5rem;
         }
-        .btn-lg {
-            padding: 0.75rem 1.5rem;
-            font-size: 1rem;
-        }
-        .btn-primary {
-            background-color: var(--primary-color);
-            color: white;
-        }
-        .btn-primary:hover {
-            background-color: var(--primary-dark);
-        }
+        .btn-lg { padding: 0.75rem 1.5rem; font-size: 1rem; }
+        .btn-primary { background-color: var(--primary-color); color: white; }
+        .btn-primary:hover { background-color: var(--primary-dark); }
         .btn-primary:disabled {
             background-color: var(--text-light);
             cursor: not-allowed;
@@ -258,13 +234,8 @@
             color: var(--text-dark);
             border: 1px solid var(--border-color);
         }
-        .btn-secondary:hover {
-            background-color: var(--border-color);
-        }
-        .btn-danger {
-            background-color: var(--danger);
-            color: white;
-        }
+        .btn-secondary:hover { background-color: var(--border-color); }
+        .btn-danger { background-color: var(--danger); color: white; }
         .btn-icon {
             padding: 0.5rem;
             border-radius: 0.5rem;
@@ -277,7 +248,6 @@
             color: var(--text-dark);
         }
         
-        /* --- Card Styles --- */
         .glass-card {
             background: var(--bg-white);
             border-radius: 0.75rem;
@@ -301,21 +271,9 @@
             border-color: var(--primary-color);
             background-color: var(--primary-light);
         }
-        .list-item-card h4 {
-            font-weight: 600;
-            color: var(--text-dark);
-        }
-        .list-item-card p {
-            font-size: 0.9rem;
-            color: var(--text-light);
-        }
+        .list-item-card h4 { font-weight: 600; color: var(--text-dark); }
+        .list-item-card p { font-size: 0.9rem; color: var(--text-light); }
 
-        /* --- DESKTOP CRM LAYOUT (v53) --- */
-        #desktop-crm-layout {
-            display: none; /* Hidden by default */
-        }
-        
-        /* --- MOBILE PWA LAYOUT (v53) --- */
         #mobile-pwa-layout {
             display: grid;
             grid-template-rows: auto 1fr auto;
@@ -340,10 +298,7 @@
             background-color: var(--border-color);
         }
         
-        #mobile-main-content {
-            overflow-y: auto;
-            position: relative;
-        }
+        #mobile-main-content { overflow-y: auto; position: relative; }
         
         #bottom-nav {
             display: grid;
@@ -365,14 +320,13 @@
             font-weight: 500;
             border-top: 3px solid transparent;
             transition: all 0.2s ease;
-            position: relative; /* [NEW v55] For badge */
+            position: relative;
         }
         .nav-button.active {
             color: var(--primary-color);
             border-top-color: var(--primary-color);
             background-color: var(--primary-light);
         }
-        /* [NEW v55] Notification Badge */
         .notification-badge {
             position: absolute;
             top: 4px;
@@ -388,22 +342,13 @@
             line-height: 18px;
             text-align: center;
             border: 2px solid var(--bg-white);
-            display: none; /* Hidden by default */
+            display: none;
         }
-        .nav-button.active .notification-badge {
-            border-color: var(--primary-light);
-        }
+        .nav-button.active .notification-badge { border-color: var(--primary-light); }
 
-        /* --- Main Content Pages (App-like navigation) --- */
-        .app-page {
-            padding: 1rem;
-            display: none; /* Hidden by default */
-        }
-        .app-page.active {
-            display: block;
-        }
+        .app-page { padding: 1rem; display: none; }
+        .app-page.active { display: block; }
         
-        /* --- Dashboard Page (Mobile) --- */
         .project-grid {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
@@ -422,13 +367,8 @@
             border-color: var(--primary-color);
             color: var(--primary-color);
         }
-        .project-card h4 {
-            font-weight: 600;
-        }
-        .project-card p {
-            font-size: 0.8rem;
-            color: var(--text-light);
-        }
+        .project-card h4 { font-weight: 600; }
+        .project-card p { font-size: 0.8rem; color: var(--text-light); }
         .add-project-card {
             display: flex;
             flex-direction: column;
@@ -437,7 +377,6 @@
             color: var(--text-light);
             border-style: dashed;
         }
-        /* [NEW v55] Share button in project card */
         .project-share-btn {
             margin-top: 0.75rem;
             padding: 0.3rem 0.6rem;
@@ -449,7 +388,6 @@
             font-weight: 500;
         }
 
-        /* --- Smart Paste Box --- */
         #smart-paste-box {
             width: 100%;
             height: 150px;
@@ -494,11 +432,7 @@
             overflow: hidden;
             border: 1px solid var(--border-color);
         }
-        .file-preview img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
+        .file-preview img { width: 100%; height: 100%; object-fit: cover; }
         .file-preview .file-icon {
             width: 100%;
             height: 100%;
@@ -522,7 +456,6 @@
             cursor: pointer;
         }
         
-        /* [NEW v55] Catalog Search */
         .catalog-search-results {
             max-height: 300px;
             overflow-y: auto;
@@ -537,9 +470,7 @@
             padding: 0.5rem;
             border-bottom: 1px solid var(--border-color);
         }
-        .catalog-item:last-child {
-            border-bottom: none;
-        }
+        .catalog-item:last-child { border-bottom: none; }
         .catalog-item img {
             width: 40px;
             height: 40px;
@@ -547,18 +478,12 @@
             border-radius: 0.375rem;
             border: 1px solid var(--border-color);
         }
-        .catalog-item-info {
-            flex-grow: 1;
-        }
-        .catalog-item-info p {
-            font-size: 0.8rem;
-            color: var(--text-light);
-        }
+        .catalog-item-info { flex-grow: 1; }
+        .catalog-item-info p { font-size: 0.8rem; color: var(--text-light); }
         
-        /* [NEW v55] Approval Workbench */
         .approval-grid {
             display: grid;
-            grid-template-columns: 1fr; /* Stack on mobile */
+            grid-template-columns: 1fr;
             gap: 1rem;
         }
         .approval-col h4 {
@@ -576,14 +501,8 @@
             border: 1px solid var(--border-color);
             word-wrap: break-word;
         }
-        .request-data pre {
-            white-space: pre-wrap;
-            font-family: inherit;
-        }
-        .request-data a {
-            color: var(--primary-color);
-            font-weight: 500;
-        }
+        .request-data pre { white-space: pre-wrap; font-family: inherit; }
+        .request-data a { color: var(--primary-color); font-weight: 500; }
         .order-cart-item {
             display: flex;
             align-items: center;
@@ -591,23 +510,19 @@
             font-size: 0.9rem;
             padding: 0.25rem 0;
         }
+        .order-cart-item input { padding: 0.25rem 0.5rem; }
 
-        /* * app.desktop.css (Embedded)
-         * סגנונות הדורסים ומשנים את הפריסה עבור מסכי מחשב
-         */
         @media (min-width: 768px) {
             #desktop-crm-layout {
                 display: grid;
-                grid-template-columns: 260px 1fr; /* Nav | Main Area */
+                grid-template-columns: 260px 1fr;
                 height: 100vh;
             }
-            #mobile-pwa-layout {
-                display: none;
-            }
+            #mobile-pwa-layout { display: none; }
             
             #desktop-nav {
                 background-color: var(--bg-white);
-                border-left: 1px solid var(--border-color); /* RTL */
+                border-left: 1px solid var(--border-color);
                 display: flex;
                 flex-direction: column;
                 padding: 1rem;
@@ -643,7 +558,7 @@
                 color: var(--text-light);
                 transition: all 0.2s;
                 cursor: pointer;
-                position: relative; /* [NEW v55] For badge */
+                position: relative;
             }
             .desktop-nav-link:hover {
                 background-color: var(--bg-light);
@@ -654,18 +569,12 @@
                 color: var(--primary-dark);
                 font-weight: 600;
             }
-            /* [NEW v55] Desktop Badge */
-            .desktop-nav-link .notification-badge {
-                top: 8px;
-                right: 8px;
-            }
-            .desktop-nav-link.active .notification-badge {
-                border-color: var(--primary-light);
-            }
+            .desktop-nav-link .notification-badge { top: 8px; right: 8px; }
+            .desktop-nav-link.active .notification-badge { border-color: var(--primary-light); }
             
             #desktop-main-area {
                 display: grid;
-                grid-template-columns: 400px 1fr; /* List | Details */
+                grid-template-columns: 400px 1fr;
                 height: 100vh;
                 overflow: hidden;
             }
@@ -691,15 +600,8 @@
                 overflow-y: auto;
             }
             
-            .modal-container {
-                /* במצב דסקטופ, המודאלים יכולים להיות רחבים יותר */
-                max-width: 600px;
-            }
-            
-            /* [NEW v55] Desktop approval grid */
-            .approval-grid {
-                grid-template-columns: 1fr 1fr;
-            }
+            .modal-container { max-width: 600px; }
+            .approval-grid { grid-template-columns: 1fr 1fr; }
         }
     </style>
 </head>
@@ -765,6 +667,11 @@
                 <i data-feather="archive"></i> <span>היסטוריית הזמנות</span>
             </a>
             
+            <!-- [תיקון] הוספת כפתור הדרכה -->
+            <a id="nav-desktop-help" class="desktop-nav-link" onclick="showHelpModal('yossi')">
+                <i data-feather="help-circle"></i> <span>הדרכה</span>
+            </a>
+            
             <div class="mt-auto"> <!-- Footer -->
                 <button id="desktop-theme-toggle" class="btn-icon w-full justify-start gap-2 px-3 py-2">
                     <i data-feather="moon"></i> <span>מצב לילה</span>
@@ -790,18 +697,44 @@
             
             <!-- Detail Panel (Editor, Viewer, etc.) -->
             <div id="desktop-detail-panel" class="no-scrollbar">
-                <!-- Content Injected by JS based on selection -->
-                <div id="desktop-detail-content">
-                    <h2 class="text-2xl font-bold mb-4">ברוך הבא לפורטל ה-CRM</h2>
-                    <p>בחר פריט מהרשימה בצד ימין כדי לראות פרטים, או לחץ על "הזמנה חדשה" כדי להתחיל.</p>
+                
+                <!-- Page: Dashboard (Default) -->
+                <div id="page-desktop-dashboard" class="app-page active">
+                    <h1 class="text-3xl font-bold mb-6">ברוך שובך, יוסי</h1>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div class="glass-card">
+                            <h3 class="font-semibold text-lg mb-2 flex items-center gap-2"><i data-feather="inbox" class="text-blue-500"></i>הזמנות לאישור</h3>
+                            <p class="text-3xl font-bold" id="stat-pending-orders">0</p>
+                        </div>
+                        <div class="glass-card">
+                            <h3 class="font-semibold text-lg mb-2 flex items-center gap-2"><i data-feather="check-circle" class="text-green-500"></i>הזמנות שאושרו היום</h3>
+                            <p class="text-3xl font-bold" id="stat-approved-today">0</p>
+                        </div>
+                        <div class="glass-card">
+                            <h3 class="font-semibold text-lg mb-2 flex items-center gap-2"><i data-feather="briefcase" class="text-purple-500"></i>פרויקטים פעילים</h3>
+                            <p class="text-3xl font-bold" id="stat-active-projects">0</p>
+                        </div>
+                    </div>
                 </div>
+
+                <!-- Page: New Order / Order Details (Injected by JS) -->
+                <div id="page-desktop-new-order" class="app-page">
+                    <!-- תוכן דף הזמנה חדשה יוטען כאן -->
+                </div>
+                
+                <!-- Other pages will be hidden -->
+                <div id="page-desktop-projects" class="app-page"></div>
+                <div id="page-desktop-pending-orders" class="app-page"></div>
+                <div id="page-desktop-orders-history" class="app-page"></div>
+                <div id="page-desktop-help" class="app-page"></div> <!-- Placeholder for help if needed -->
+                
             </div>
         </main>
     </div>
 
 
     <!-- ====================================================== -->
-    <!-- ===       MOBILE PWA LAYOUT (v55) - Default      === -->
+    <!-- ===      MOBILE PWA LAYOUT (v55) - Default     === -->
     <!-- ====================================================== -->
     <div id="mobile-pwa-layout">
         <!-- Mobile Header -->
@@ -811,1592 +744,1531 @@
                 <div class="logo-divider"></div>
                 <img src="https://i.postimg.cc/ryPT3r29/image.png" alt="Saban Logo">
             </div>
-            <div class="flex items-center gap-2">
-                <p id="auth-status" class="text-xs text-gray-500 hidden">מתחבר...</p>
-                <button id="mobile-theme-toggle" class="btn-icon">
-                    <i data-feather="moon"></i>
-                </button>
-            </div>
+            <button id="mobile-theme-toggle" class="btn-icon">
+                <i data-feather="moon"></i>
+            </button>
         </header>
 
-        <!-- Mobile Main Content (Pages) -->
+        <!-- Mobile Main Content (Scrollable) -->
         <main id="mobile-main-content" class="no-scrollbar">
             
-            <!-- Page: Dashboard (Home) -->
+            <!-- Page: Dashboard -->
             <div id="page-dashboard" class="app-page active">
-                <!-- Content Injected by JS: renderDashboard() -->
+                <h1 class="text-2xl font-bold mb-4">דשבורד</h1>
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="glass-card text-center">
+                        <h3 class="font-semibold mb-1">לאישור</h3>
+                        <p class="text-3xl font-bold" id="mobile-stat-pending">0</p>
+                    </div>
+                    <div class="glass-card text-center">
+                        <h3 class="font-semibold mb-1">פרויקטים</h3>
+                        <p class="text-3xl font-bold" id="mobile-stat-projects">0</p>
+                    </div>
+                </div>
+                <h2 class="text-xl font-semibold mt-6 mb-3">פעולות מהירות</h2>
+                <div class="grid grid-cols-1 gap-3">
+                    <button class="btn btn-lg btn-primary w-full" onclick="navigate('new-order')">
+                        <i data-feather="plus-circle"></i>
+                        <span>צור הזמנה מהירה</span>
+                    </button>
+                    <button class="btn btn-lg btn-secondary w-full" onclick="navigate('pending-orders')">
+                        <i data-feather="inbox"></i>
+                        <span>עבור להזמנות לאישור</span>
+                    </button>
+                </div>
             </div>
-            
-            <!-- [NEW v55] Page: Pending Orders -->
+
+            <!-- Page: Pending Orders -->
             <div id="page-pending-orders" class="app-page">
-                <h2 class="text-xl font-bold mb-4">הזמנות ממתינות לאישור</h2>
-                <div id="pending-orders-list-mobile" class="flex flex-col gap-3">
-                    <!-- Injected by renderPendingOrdersPage() -->
+                <h1 class="text-2xl font-bold mb-4">הזמנות לאישור</h1>
+                <div id="pending-list-container" class="space-y-3">
+                    <!-- Injected by JS -->
                 </div>
             </div>
             
-            <!-- Page: New Order (Smart Paste) -->
+            <!-- Page: New Order -->
             <div id="page-new-order" class="app-page">
-                <!-- Content Injected by JS: renderNewOrderPage() -->
-            </div>
+                <h1 class="text-2xl font-bold mb-4">הזמנה מהירה</h1>
+                <form id="smart-order-form" class="space-y-4">
+                    <div>
+                        <label for="project-select-main" class="form-label">שייך לפרויקט (חובה)</label>
+                        <select id="project-select-main" class_name="form-select" required>
+                            <option value="">טוען פרויקטים...</option>
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label for="smart-paste-box" class="form-label">הדבק הזמנה או הקלד</label>
+                        <textarea id="smart-paste-box" placeholder="לדוגמה:
+50 מלט 25 קילו
+20 רשת ברזל 8
+10 בלוק 20"></textarea>
+                    </div>
+                    
+                    <!-- [NEW v55] Catalog Search -->
+                    <div>
+                        <label for="catalog-search-main" class="form-label">חפש והוסף פריטים</label>
+                        <input type="text" id="catalog-search-main" class="form-input" placeholder="חפש מק''ט, שם מוצר...">
+                        <div id="catalog-results-main" class="catalog-search-results mt-2 hidden"></div>
+                        <div id="cart-main" class="space-y-2 mt-3">
+                            <!-- Cart items injected here -->
+                        </div>
+                    </div>
 
+                    <div>
+                        <label for="file-drop-area" class="form-label">צרף תמונות / קבצים</label>
+                        <div id="file-drop-area">
+                            <i data-feather="upload-cloud" class="w-10 h-10 mx-auto"></i>
+                            <p>גרור קבצים לכאן או <span class="text-blue-500 font-semibold">לחץ לבחירה</span></p>
+                            <input type="file" id="file-input" class="hidden" multiple>
+                        </div>
+                        <div id="preview-container">
+                            <!-- File previews injected here -->
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <button type="submit" id="submit-smart-order" class="btn btn-lg btn-primary w-full">
+                            <span id="submit-smart-order-text">שלח הזמנה ל-DeliveryMaster</span>
+                            <div id="submit-smart-order-loader" class="loader-small hidden"></div>
+                        </button>
+                    </div>
+                </form>
+            </div>
+            
             <!-- Page: Projects -->
             <div id="page-projects" class="app-page">
-                <!-- Content Injected by JS: renderProjectsPage() -->
+                <h1 class="text-2xl font-bold mb-4">ניהול פרויקטים</h1>
+                <div id="project-list-container" class="project-grid">
+                    <div class="add-project-card" onclick="openAddProjectModal()">
+                        <i data-feather="plus" class="w-10 h-10"></i>
+                        <span>הוסף פרויקט חדש</span>
+                    </div>
+                    <!-- Projects Injected by JS -->
+                </div>
             </div>
             
             <!-- Page: Orders History -->
             <div id="page-orders-history" class="app-page">
-                <!-- Content Injected by JS: renderOrdersHistoryPage() -->
+                <h1 class="text-2xl font-bold mb-4">היסטוריית הזמנות</h1>
+                <div id="history-list-container" class="space-y-3">
+                    <!-- Injected by JS -->
+                </div>
             </div>
-            
+
+            <!-- [תיקון] הוספת דף הדרכה -->
+            <div id="page-help" class="app-page help-modal-content">
+                <h1 class="text-2xl font-bold mb-4">הדרכה: פורטל מנהל רכש</h1>
+                <!-- התוכן יטען על ידי showHelpModal('yossi') -->
+            </div>
+
         </main>
 
         <!-- Mobile Bottom Navigation -->
         <nav id="bottom-nav">
-            <button id="nav-mobile-dashboard" class="nav-button active" onclick="navigate('dashboard')">
-                <i data-feather="home" class="w-6 h-6"></i>
+            <button id="nav-dashboard" class="nav-button active" onclick="navigate('dashboard')">
+                <i data-feather="home"></i>
                 <span>דשבורד</span>
             </button>
-            <button id="nav-mobile-pending-orders" class="nav-button" onclick="navigate('pending-orders')">
-                <i data-feather="inbox" class="w-6 h-6"></i>
+            <button id="nav-pending-orders" class="nav-button" onclick="navigate('pending-orders')">
+                <i data-feather="inbox"></i>
                 <span>לאישור</span>
                 <span id="mobile-pending-badge" class="notification-badge">0</span>
             </button>
-            <button id="nav-mobile-new-order" class="nav-button" onclick="navigate('new-order')">
-                <i data-feather="plus-circle" class="w-6 h-6"></i>
+            <button id="nav-new-order" class="nav-button" onclick="navigate('new-order')">
+                <i data-feather="plus-circle"></i>
                 <span>חדשה</span>
             </button>
-            <button id="nav-mobile-projects" class="nav-button" onclick="navigate('projects')">
-                <i data-feather="briefcase" class="w-6 h-6"></i>
+            <button id="nav-projects" class="nav-button" onclick="navigate('projects')">
+                <i data-feather="briefcase"></i>
                 <span>פרויקטים</span>
+            </button>
+            <!-- [תיקון] הוספת כפתור הדרכה -->
+            <button id="nav-help" class="nav-button" onclick="navigate('help')">
+                <i data-feather="help-circle"></i>
+                <span>הדרכה</span>
             </button>
         </nav>
     </div>
 
-
-    <!-- 
-    ======================================================
-    === 2. EMBEDDED JAVASCRIPT (v55.5)
-    ======================================================
-    -->
+    <!-- ====================================================== -->
+    <!-- ===              JAVASCRIPT MODULE             === -->
+    <!-- ====================================================== -->
     <script type="module">
-        // [תיקון] הוספת ייבוא מלא של כל הפונקציות הנדרשות
-        import { initializeApp, getApp, getApps } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        // Firebase SDKs
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { 
             getAuth, 
-            signInAnonymously, 
             onAuthStateChanged, 
-            signInWithCustomToken 
-        } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+            signInAnonymously,
+            signInWithCustomToken
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { 
             getFirestore, 
-            collection, 
             doc, 
-            addDoc, 
             setDoc, 
-            updateDoc, 
+            getDoc, 
+            getDocs,
+            addDoc,
+            updateDoc,
             deleteDoc,
-            onSnapshot, 
+            collection, 
             query, 
             where, 
-            orderBy, 
-            limit, 
+            onSnapshot,
             serverTimestamp,
-            getDocs
-        } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+            writeBatch
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { 
             getStorage, 
             ref, 
             uploadBytes, 
-            getDownloadURL 
-        } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-storage.js";
-
-        // --- Configuration Placeholders ---
-        // [תיקון] הוספת אובייקט גיבוי (fallback) למקרה ש-__firebase_config לא קיים
-        const fallbackConfig = {
-            apiKey: "AIzaSyDq0oVwS6zbEfsgrYBRkeBq80dDUKMedzo", 
-            authDomain: "saban94-78949.firebaseapp.com", 
-            projectId: "saban94-78949",
-            storageBucket: "saban94-78949.appspot.com", 
-            messagingSenderId: "41553157903", 
-            appId: "1:41553157903:web:cc33d252cff023be97a87a"
-        };
-        const FIREBASE_CONFIG = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : fallbackConfig;
-
-        // [תיקון] עדכון לכתובת הקטלוג החדשה שסיפקת
+            getDownloadURL,
+            deleteObject
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
+        
+        // --- Global Config & State ---
+        
+        // [תיקון v55.3] API URL
         const CATALOG_API_URL = "https://script.google.com/macros/s/AKfycbzXTd7xKPR6MH9rtOEGxPr3-hrTCTfpuH0kKOzpRkMGOlmYbvKfjwL8d2fgwIa_3_UT/exec";
         
-        // [תיקון] הוספת מזהה חדר צ'אט
-        const TEAM_CHAT_ID = "saban94_main_chat"; // [FIXED]
+        // [תיקון v55.7] ID של הצ'אט
+        const TEAM_CHAT_ID = "saban94_main_chat"; // קבוע, לפי ההגדרה שלך
         
-        const CLIENT_ID = "zebulun_adiran"; // מזהה לקוח קבוע
+        const CLIENT_ID = "zebulun_adiran"; // מזהה ייחודי של הלקוח (זבולון עדירן)
 
-        // --- Global App State ---
         let db, auth, storage;
         let currentUserId = null;
-        let appInitialized = false;
-        let globalAlertsListener = null;
-
+        let unsubscribePendingOrders = null;
+        let unsubscribeOrdersHistory = null;
+        
         const state = {
-            currentView: 'dashboard',
-            theme: 'light',
-            filesToUpload: [], 
-            projects: [], 
-            orderHistory: [],
-            pendingOrders: [], 
-            catalog: [], 
-            currentApprovalCart: [],
-            selectedProjectId: null
+            isDesktop: false,
+            currentPage: 'dashboard',
+            projects: [],
+            pendingOrders: [],
+            ordersHistory: [],
+            catalog: [],
+            catalogSearchCache: {},
+            uploadedFiles: [], // For 'new-order' page
+            cart: {}, // For 'new-order' page { "sku": { name, qty } }
+            
+            // State for approval workbench
+            approval: {
+                currentOrder: null,
+                cart: {}, // { "sku": { name, qty } }
+                uploadedFiles: []
+            }
         };
 
-        // --- Initialization ---
+        // --- Core App Initialization ---
+        
         document.addEventListener('DOMContentLoaded', initApp);
 
         function initApp() {
-            console.log("DOM loaded. Initializing app v55...");
-            feather.replace();
+            console.log(`DOM loaded. Initializing app v55.9...`);
+            setupTheme();
+            setupLayout();
             initFirebase();
-            initEventListeners();
-            
-            const storedTheme = localStorage.getItem('theme');
-            setTheme(storedTheme || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
-            
-            navigate('dashboard'); // קבע דף ראשוני
+            feather.replace();
         }
 
-        function initFirebase() {
+        async function initFirebase() {
             try {
-                const app = !getApps().length ? initializeApp(FIREBASE_CONFIG) : getApp();
-                db = getFirestore(app);
+                // [תיקון v55.1] Fallback config
+                const firebaseConfig = typeof __firebase_config !== 'undefined' 
+                    ? JSON.parse(__firebase_config)
+                    : {
+                        apiKey: "YOUR_FALLBACK_API_KEY",
+                        authDomain: "YOUR_FALLBACK_AUTH_DOMAIN",
+                        projectId: "saban94-78949",
+                        storageBucket: "YOUR_FALLBACK_STORAGE_BUCKET",
+                        messagingSenderId: "YOUR_FALLBACK_SENDER_ID",
+                        appId: "YOUR_FALLBACK_APP_ID"
+                    };
+
+                const app = initializeApp(firebaseConfig);
                 auth = getAuth(app);
+                db = getFirestore(app);
                 storage = getStorage(app);
                 console.log("Firebase Initialized.");
                 authenticateUser();
             } catch (error) {
-                console.error("Firebase Init Error:", error);
-                showToast("שגיאת התחברות קריטית ל-Firebase", "error");
-                document.getElementById('loader-text').innerText = "שגיאת התחברות";
+                console.error("Firebase Init Failed:", error);
+                document.getElementById('loader-text').textContent = "שגיאת התחברות ל-Firebase";
             }
         }
 
-        function initEventListeners() {
-            // כפתורי ניווט (דסקטופ)
-            document.getElementById('nav-desktop-dashboard').addEventListener('click', () => navigate('dashboard'));
-            document.getElementById('nav-desktop-pending-orders').addEventListener('click', () => navigate('pending-orders'));
-            document.getElementById('nav-desktop-new-order').addEventListener('click', () => navigate('new-order'));
-            document.getElementById('nav-desktop-projects').addEventListener('click', () => navigate('projects'));
-            document.getElementById('nav-desktop-history').addEventListener('click', () => navigate('orders-history'));
-
-            // כפתורי ניווט (מובייל)
-            document.getElementById('nav-mobile-dashboard').addEventListener('click', () => navigate('dashboard'));
-            document.getElementById('nav-mobile-pending-orders').addEventListener('click', () => navigate('pending-orders'));
-            document.getElementById('nav-mobile-new-order').addEventListener('click', () => navigate('new-order'));
-            document.getElementById('nav-mobile-projects').addEventListener('click', () => navigate('projects'));
-
-            // כפתורי ערכת נושא
-            document.getElementById('desktop-theme-toggle').addEventListener('click', toggleTheme);
-            document.getElementById('mobile-theme-toggle').addEventListener('click', toggleTheme);
-            
-            // חשיפת פונקציות גלובליות לחלון
-            window.navigate = navigate;
-            window.openProjectModal = openProjectModal;
-            window.openNewProjectModal = openNewProjectModal;
-            window.saveProject = saveProject;
-            window.deleteProject = deleteProject;
-            window.closeModal = closeModal;
-            window.sendSmartOrder = debounce(sendSmartOrder, 1000);
-            window.handlePaste = handlePaste;
-            window.triggerFileInput = triggerFileInput;
-            window.handleFileSelect = handleFileSelect;
-            window.handleDragOver = handleDragOver;
-            window.handleDragLeave = handleDragLeave;
-            window.handleFileDrop = handleFileDrop;
-            window.removeFile = removeFile;
-            window.toggleTheme = toggleTheme;
-            window.showOrderDetail = showOrderDetail;
-            window.shareProjectLink = shareProjectLink; 
-            window.openApprovalModal = openApprovalModal; 
-            window.searchCatalog = debounce(searchCatalog, 300); 
-            window.searchCatalogApproval = debounce(searchCatalogApproval, 300); 
-            window.addCatalogItemToCart = addCatalogItemToCart; 
-            window.submitApprovedOrder = submitApprovedOrder; 
-            window.rejectPendingOrder = rejectPendingOrder; // [Added]
-        }
-
-        function authenticateUser() {
+        async function authenticateUser() {
             onAuthStateChanged(auth, async (user) => {
                 if (user) {
+                    console.log(`User Authenticated: ${user.uid}`);
                     currentUserId = user.uid;
-                    console.log(`User Authenticated: ${currentUserId}`);
-                    updateAuthStatus(`מחובר (משתמש: ${currentUserId.slice(0, 6)})`);
+                    document.getElementById('loader-text').textContent = "טוען נתונים...";
                     
-                    if (!appInitialized) {
-                        appInitialized = true;
-                        await loadClientData();
-                        navigate('dashboard'); 
-                        listenForGlobalAlerts();
-                        listenForPendingOrders(); 
-                        
-                        const loader = document.getElementById('app-loader');
-                        if (loader) {
-                            loader.style.opacity = '0';
-                            setTimeout(() => loader.style.display = 'none', 300);
+                    // User is logged in, fetch data
+                    await loadClientData();
+                    listenForPendingOrders();
+                    
+                    if (state.isDesktop) {
+                        document.getElementById('desktop-auth-status').textContent = `מחובר: ${user.uid.substring(0, 6)}`;
+                    }
+                    
+                    // Hide loader
+                    document.getElementById('app-loader').style.opacity = '0';
+                    setTimeout(() => document.getElementById('app-loader').style.display = 'none', 300);
+                    
+                } else {
+                    // User is signed out, try to sign in
+                    console.log("No user. Attempting anonymous/custom sign in...");
+                    try {
+                        if (typeof __initial_auth_token !== 'undefined') {
+                            await signInWithCustomToken(auth, __initial_auth_token);
+                        } else {
+                            await signInAnonymously(auth);
                         }
+                    } catch (error) {
+                        console.error("Sign in failed:", error);
+                        document.getElementById('loader-text').textContent = "שגיאת אימות";
                     }
-                } else {
-                    console.log("No user found. Signing in...");
-                    updateAuthStatus("מתחבר...");
-                    signInUser();
                 }
             });
-        }
-
-        async function signInUser() {
-            try {
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                    await signInAnonymously(auth);
-                }
-            } catch (error) {
-                console.error("Authentication Error:", error);
-                updateAuthStatus("שגיאת התחברות");
-                showToast("שגיאת התחברות. בדוק חיבור רשת.", "error");
-            }
-        }
-
-        function updateAuthStatus(message) {
-            const statusElements = [
-                document.getElementById('desktop-auth-status'),
-                document.getElementById('auth-status')
-            ];
-            statusElements.forEach(el => { if (el) el.innerText = message; });
-        }
-
-        // --- [NEW v55] Catalog Data Fetching ---
-        async function fetchCatalogData() {
-            if (state.catalog.length > 0) return; 
-            console.log("Fetching catalog data...");
-            try {
-                const response = await fetch(CATALOG_API_URL);
-                if (!response.ok) {
-                    throw new Error(`Catalog API returned status ${response.status}`);
-                }
-                const text = await response.text();
-                
-                // [תיקון] הוספת try-catch סביב response.json()
-                try {
-                    const data = JSON.parse(text);
-                    // [תיקון v55.5] קריאת המבנה הנכון data.data
-                    if (data && data.status === 'success' && Array.isArray(data.data)) {
-                        state.catalog = data.data; 
-                        console.log(`Catalog loaded with ${state.catalog.length} items.`);
-                    } else {
-                        // זורק שגיאה אם המבנה לא תקין
-                        throw new Error("Invalid JSON structure from catalog API");
-                    }
-                } catch (e) {
-                    console.error("========================================================");
-                    console.error(`אחי, שגיאה קריטית בטעינת הקטלוג (שגיאת JSON): ${e.message}`);
-                    console.error(`השרת החזיר טקסט שמתחיל ב: ${text.substring(0, 100)}...`);
-                    console.error("זו כנראה *לא* בעיה בקוד הזה, אלא בהגדרות ה-Deployment של ה-Apps Script שלך.");
-                    console.error("אנא ודא שהסקריפט שלך מוגדר לגישה: 'Anyone'.");
-                    console.error("========================================================");
-                    showToast("שגיאה חמורה בטעינת קטלוג. בדוק Console.", "error");
-                }
-                
-            } catch (error) {
-                console.error("Failed to load catalog:", error);
-                // ההודעה למשתמש כבר מוצגת מה-catch הפנימי
-            }
-        }
-
-        // --- Navigation Engine ---
-        function navigate(viewId) {
-            console.log(`Navigating to: ${viewId}`);
-            state.currentView = viewId;
-            
-            document.querySelectorAll('#mobile-main-content .app-page').forEach(page => page.classList.remove('active'));
-            document.getElementById('desktop-detail-content').innerHTML = '';
-            document.getElementById('desktop-list-content').innerHTML = '';
-
-            document.querySelectorAll('#desktop-nav .desktop-nav-link').forEach(link => {
-                link.classList.remove('active');
-                if (link.id.includes(viewId)) link.classList.add('active');
-            });
-
-            document.querySelectorAll('#bottom-nav .nav-button').forEach(btn => {
-                btn.classList.remove('active');
-                if (btn.id.includes(viewId)) btn.classList.add('active');
-            });
-
-            try {
-                switch (viewId) {
-                    case 'dashboard':
-                        renderDashboard();
-                        break;
-                    case 'pending-orders': // [NEW v55]
-                        renderPendingOrdersPage();
-                        break;
-                    case 'new-order':
-                        renderNewOrderPage();
-                        break;
-                    case 'projects':
-                        renderProjectsPage();
-                        break;
-                    case 'orders-history':
-                        renderOrdersHistoryPage();
-                        break;
-                }
-            } catch (error) {
-                console.error(`Failed to render page ${viewId}:`, error);
-                showToast(`שגיאה בטעינת עמוד: ${viewId}`, 'error');
-            }
-            
-            const mobilePage = document.getElementById(`page-${viewId}`);
-            if (mobilePage) mobilePage.classList.add('active');
-            
-            feather.replace();
-        }
-
-        // --- Theme Toggle ---
-        function toggleTheme() {
-            state.theme = document.documentElement.classList.toggle('dark') ? 'dark' : 'light';
-            localStorage.setItem('theme', state.theme);
-            setThemeUI(state.theme);
-        }
-
-        function setTheme(theme) {
-            document.documentElement.classList.toggle('dark', theme === 'dark');
-            state.theme = theme;
-            setThemeUI(theme);
         }
         
-        function setThemeUI(theme) {
-            const icon = theme === 'dark' ? 'sun' : 'moon';
-            document.querySelectorAll('#desktop-theme-toggle i, #mobile-theme-toggle i').forEach(el => el.setAttribute('data-feather', icon));
-            const textEl = document.querySelector('#desktop-theme-toggle span');
-            if(textEl) textEl.innerText = theme === 'dark' ? 'מצב יום' : 'מצב לילה';
-            feather.replace();
-        }
+        // --- Data Loading Functions ---
 
-        // --- Data Loading & Rendering ---
         async function loadClientData() {
-            // טען קטלוג במקביל
-            fetchCatalogData();
-            
-            // [NEW v55] Load projects from Firestore
             try {
+                // Fetch Projects
+                const projectsQuery = query(collection(db, "projects"), where("clientId", "==", CLIENT_ID));
+                const projectSnapshot = await getDocs(projectsQuery);
+                state.projects = projectSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                console.log(`Loaded ${state.projects.length} projects from Firestore.`);
+                
+                // Fetch Orders History
                 // [תיקון v55.5] הסרת orderBy כדי למנוע שגיאות אינדקס
-                const q = query(collection(db, "projects"), where("clientId", "==", CLIENT_ID));
-                const snapshot = await getDocs(q);
-                state.projects = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                const historyQuery = query(collection(db, "orders"), where("client_id", "==", CLIENT_ID));
+                const historySnapshot = await getDocs(historyQuery);
+                let history = historySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 
                 // [תיקון v55.5] מיון בצד הלקוח
-                state.projects.sort((a, b) => a.name.localeCompare(b.name));
+                history.sort((a, b) => (b.timestamp?.toDate() || 0) - (a.timestamp?.toDate() || 0));
                 
-                console.log(`Loaded ${state.projects.length} projects from Firestore.`);
+                state.ordersHistory = history;
+                console.log(`Loaded ${state.ordersHistory.length} orders from history.`);
+
+                // Fetch Catalog
+                await fetchCatalogData();
+
+                // Render initial data
+                updateDashboardStats();
+                renderProjects();
+                renderHistoryList();
+                populateProjectSelects();
+                
             } catch (error) {
-                console.error("Failed to load projects:", error);
-                showToast("שגיאה בטעינת פרויקטים", "error");
+                console.error("Failed to load client data:", error);
+                if (error.code === 'permission-denied' || error.code === 'failed-precondition') {
+                    showGlobalAlert("שגיאת הרשאות בטעינת נתונים. ודא שהגדרת אינדקסים ב-Firestore.", "error");
+                } else {
+                    showGlobalAlert("שגיאה בטעינת נתוני לקוח.", "error");
+                }
             }
+        }
+        
+        function listenForPendingOrders() {
+            if (unsubscribePendingOrders) unsubscribePendingOrders();
             
-            // טעינת היסטוריית הזמנות
-            try {
-                // [תיקון v55.5] הסרת orderBy כדי למנוע שגיאות אינדקס
-                const q = query(collection(db, "orders"), where("clientId", "==", CLIENT_ID), limit(50)); // הגדלת מגבלה לטובת מיון
-                const snapshot = await getDocs(q);
-                
-                let orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                
-                // [תיקון v55.5] מיון בצד הלקוח (מהחדש לישן)
-                orders.sort((a, b) => {
-                    const timeA = a.createdAt?.seconds || 0;
-                    const timeB = b.createdAt?.seconds || 0;
-                    return timeB - timeA;
+            // [תיקון v55.9] הוספת פילטור סטטוס
+            const pendingQuery = query(
+                collection(db, "pending_orders"), 
+                where("client_id", "==", CLIENT_ID),
+                where("status", "==", "pending") // הצג רק את מה שבאמת ממתין
+            );
+
+            unsubscribePendingOrders = onSnapshot(pendingQuery, (snapshot) => {
+                let pending = [];
+                snapshot.forEach(doc => {
+                    pending.push({ id: doc.id, ...doc.data() });
                 });
                 
-                state.orderHistory = orders.slice(0, 20); // חיתוך אחרי מיון
+                // [תיקון v55.5] מיון בצד הלקוח
+                pending.sort((a, b) => (b.timestamp?.toDate() || 0) - (a.timestamp?.toDate() || 0));
                 
+                state.pendingOrders = pending;
+                console.log(`Found ${state.pendingOrders.length} pending orders.`);
+                updatePendingBadges(state.pendingOrders.length);
+                renderPendingList();
+            }, (error) => {
+                console.error("Error listening to pending orders:", error);
+                if (error.code === 'permission-denied' || error.code === 'failed-precondition') {
+                    showGlobalAlert("שגיאת הרשאות בהאזנה להזמנות. נדרש אינדקס ב-Firestore.", "error");
+                    console.error("CRITICAL: Firestore index missing for 'pending_orders' collection. Query: (client_id == CLIENT_ID) AND (status == 'pending'). Please create this composite index in your Firebase console.");
+                }
+            });
+        }
+        
+        async function fetchCatalogData() {
+            try {
+                const response = await fetch(CATALOG_API_URL);
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                
+                // [תיקון v55.3] API מחזיר JSON במבנה { status: "success", data: [...] }
+                const result = await response.json();
+                
+                if (result.status === "success" && Array.isArray(result.data)) {
+                    state.catalog = result.data.map(item => ({
+                        sku: item.sku || "N/A",
+                        name: item.name || "Unnamed Item",
+                        price: item.price || 0,
+                        unit: item.unit || "יחידה",
+                        img: item.img || "https://placehold.co/100x100/eef4ff/cbd5e1?text=מוצר"
+                    }));
+                    console.log(`Catalog loaded with ${state.catalog.length} items.`);
+                } else {
+                    throw new Error("Invalid JSON structure from catalog API");
+                }
             } catch (error) {
-                console.error("Failed to load order history:", error.message);
-                // הודעת השגיאה כבר מופיעה בלוג
+                console.error("Failed to fetch catalog:", error);
+                showGlobalAlert("שגיאה חמורה בטעינת קטלוג. בדוק Console.", "error");
             }
         }
 
-        function renderDashboard() {
-            const greeting = getGreeting();
+        // --- UI Rendering Functions ---
+
+        function updateDashboardStats() {
+            const pendingCount = state.pendingOrders.length;
+            const projectCount = state.projects.length;
             
-            // תוכן מובייל
-            const mobileContainer = document.getElementById('page-dashboard');
-            mobileContainer.innerHTML = `
-                <div class="glass-card mb-4">
-                    <h2 class="text-xl font-bold">${greeting}, יוסי!</h2>
-                    <p class="text-sm text-light">ברוך הבא לפורטל ההזמנות האישי שלך.</p>
-                </div>
-                
-                <h3 class="text-lg font-semibold mb-3">סקירה מהירה</h3>
-                <div class="grid grid-cols-2 gap-3">
-                    <div class="glass-card text-center">
-                        <h4 class="text-3xl font-bold text-primary-color">${state.pendingOrders.length}</h4>
-                        <p class="font-semibold">ממתין לאישור</p>
-                    </div>
-                    <div class="glass-card text-center">
-                        <h4 class="text-3xl font-bold">${state.projects.length}</h4>
-                        <p class="font-semibold">פרויקטים פעילים</p>
-                    </div>
-                </div>
-                
-                <div class="glass-card mt-6">
-                    <h4 class="font-semibold mb-2">הדרכה קולית</h4>
-                    <p class="text-sm text-light mb-3">לחץ לשמיעת הסבר קצר על הפורטל.</p>
-                    <button class="btn btn-secondary w-full" disabled>
-                        <i data-feather="play-circle"></i>
-                        <span>"היי יוסי, ברוך הבא..." (בקרוב)</span>
-                    </button>
-                </div>
-            `;
+            // Mobile
+            document.getElementById('mobile-stat-pending').textContent = pendingCount;
+            document.getElementById('mobile-stat-projects').textContent = projectCount;
             
-            // תוכן דסקטופ
-            document.getElementById('desktop-list-content').innerHTML = `
-                <div class="p-4">
-                    <h3 class="text-lg font-semibold mb-3">הזמנות אחרונות</h3>
-                    ${renderOrderHistoryList(5)}
-                </div>
-            `;
-            document.getElementById('desktop-detail-content').innerHTML = `
-                <h2 class="text-2xl font-bold mb-2">${greeting}, יוסי!</h2>
-                <p class="text-lg text-light mb-6">ברוך הבא לפורטל הניהול של זבולון עדירן.</p>
-                <div class="glass-card">
-                    <h3 class="text-xl font-semibold mb-4">סקירה מהירה</h3>
-                    <div class="grid grid-cols-2 gap-4">
-                         <div class="glass-card text-center shadow-inner">
-                            <h4 class="text-4xl font-bold text-primary-color">${state.pendingOrders.length}</h4>
-                            <p class="font-semibold mt-2">הזמנות ממתינות לאישור</p>
-                        </div>
-                        <div class="glass-card text-center shadow-inner">
-                            <h4 class="text-4xl font-bold">${state.projects.length}</h4>
-                            <p class="font-semibold mt-2">פרויקטים פעילים</p>
-                        </div>
-                    </div>
-                </div>
-            `;
+            // Desktop
+            document.getElementById('stat-pending-orders').textContent = pendingCount;
+            document.getElementById('stat-active-projects').textContent = projectCount;
             
-            feather.replace();
+            // TODO: Add 'approved today' logic
+            document.getElementById('stat-approved-today').textContent = "0"; 
         }
 
-        function getGreeting() {
-            const hour = new Date().getHours();
-            if (hour < 12) return "בוקר טוב";
-            if (hour < 18) return "צהריים טובים";
-            return "ערב טוב";
-        }
-
-        function createProjectCard(project) {
-            // [MODIFIED v55] Added share button
-            return `
-                <div class="project-card">
-                    <h4 class="truncate">${project.name}</h4>
-                    <p class="truncate">${project.address}</p>
-                    <div class="flex justify-center gap-2 mt-3">
-                         <button class="btn-icon" onclick="openProjectModal('${project.id}')">
-                            <i data-feather="edit-2" class="w-5 h-5"></i>
-                         </button>
-                         <button class="btn-icon text-primary-color" onclick="shareProjectLink('${project.id}')">
-                            <i data-feather="share-2" class="w-5 h-5"></i>
-                         </button>
-                    </div>
-                </div>
-            `;
-        }
-
-        // --- [NEW v55] Pending Orders Logic ---
-        function listenForPendingOrders() {
-            console.log("Listening for pending orders...");
-            
-            // [תיקון v55.5] הסרת orderBy והוספת where status
-            // זה ידרוש אינדקס מורכב, אבל זה התיקון הנכון ללוגיקה
-            // המשתמש יצטרך ליצור את האינדקס מלינק השגיאה ב-Console.
-            // **תיקון חוזר:** בוא נסיר את ה-status ונבצע סינון בצד הלקוח כדי למנוע *כל* דרישת אינדקס
-            const q = query(collection(db, "pending_orders"), where("client_id", "==", CLIENT_ID));
-            
-            onSnapshot(q, (snapshot) => {
-                
-                let allPending = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                
-                // [תיקון v55.5] סינון ומיון בצד הלקוח
-                state.pendingOrders = allPending
-                    .filter(order => order.status === 'pending')
-                    .sort((a, b) => {
-                        const timeA = a.timestamp?.seconds || 0;
-                        const timeB = b.timestamp?.seconds || 0;
-                        return timeB - timeA; // מהחדש לישן
-                    });
-
-                console.log(`Found ${state.pendingOrders.length} pending orders.`);
-                updatePendingBadges();
-                
-                // Refresh view if active
-                if (state.currentView === 'pending-orders') {
-                    renderPendingOrdersPage();
-                }
-                if (state.currentView === 'dashboard') {
-                    renderDashboard();
-                }
-            }, (error) => {
-                console.error("Error listening to pending orders:", error.message);
-                // הודעת השגיאה כבר מופיעה בלוג
-            });
-        }
-
-        function updatePendingBadges() {
-            const count = state.pendingOrders.length;
+        function updatePendingBadges(count) {
             const badges = [
-                document.getElementById('mobile-pending-badge'),
+                document.getElementById('mobile-pending-badge'), 
                 document.getElementById('desktop-pending-badge')
             ];
-            
             badges.forEach(badge => {
-                if (badge) {
-                    badge.innerText = count;
-                    badge.style.display = count > 0 ? 'block' : 'none';
+                if (count > 0) {
+                    badge.textContent = count;
+                    badge.style.display = 'block';
+                } else {
+                    badge.style.display = 'none';
                 }
             });
+            updateDashboardStats();
         }
 
-        function renderPendingOrdersPage() {
-            const listMobile = document.getElementById('pending-orders-list-mobile');
-            const listDesktop = document.getElementById('desktop-list-content');
+        function renderProjects() {
+            const container = document.getElementById('project-list-container');
+            // Clear existing projects, but keep the "Add" card
+            container.querySelectorAll('.project-card').forEach(el => el.remove());
             
-            let html = '';
+            state.projects.forEach(project => {
+                const card = createProjectCard(project);
+                container.appendChild(card);
+            });
+            
+            // Also render for desktop list view
+            if (state.currentPage === 'projects' && state.isDesktop) {
+                renderDesktopList('projects');
+            }
+        }
+        
+        function createProjectCard(project) {
+            const card = document.createElement('div');
+            card.className = 'project-card';
+            card.innerHTML = `
+                <i data-feather="briefcase" class="w-10 h-10 mx-auto mb-2 text-blue-500"></i>
+                <h4 class="truncate">${project.name}</h4>
+                <p class="truncate">${project.address || 'לא צוינה כתובת'}</p>
+                <button class="project-share-btn" data-key="${project.setupKey || ''}" data-id="${project.id}">
+                    <i data-feather="share-2" class="w-3 h-3 inline-block ml-1"></i>
+                    שתף לינק התקנה
+                </button>
+            `;
+            card.querySelector('.project-share-btn').onclick = (e) => {
+                e.stopPropagation();
+                shareProjectLink(e.currentTarget.dataset.key, project.name);
+            };
+            card.onclick = () => openEditProjectModal(project);
+            return card;
+        }
+
+        function renderPendingList() {
+            const mobileContainer = document.getElementById('pending-list-container');
+            mobileContainer.innerHTML = '';
+            
             if (state.pendingOrders.length === 0) {
-                html = `<p class="text-light text-center p-4">אין הזמנות שממתינות לאישור.</p>`;
+                mobileContainer.innerHTML = `<p class="text-center text-gray-500 mt-8">אין הזמנות הממתינות לאישור.</p>`;
             } else {
-                html = state.pendingOrders.map(order => `
-                    <div class="list-item-card" onclick="openApprovalModal('${order.id}')">
-                        <h4>בקשה מפרויקט: ${order.project_name || 'לא ידוע'}</h4>
-                        <p>מאת: ${order.submitter_name || 'מנהל אתר'} | ${new Date(order.timestamp?.toDate()).toLocaleString('he-IL')}</p>
-                        <p class="mt-2 text-sm text-dark truncate">"${order.raw_text || 'מצורפים פריטים/מדיה'}"</p>
-                    </div>
-                `).join('');
+                state.pendingOrders.forEach(order => {
+                    const card = createPendingOrderCard(order);
+                    mobileContainer.appendChild(card);
+                });
             }
             
-            if (listMobile) listMobile.innerHTML = html;
-            if (listDesktop) listDesktop.innerHTML = `<div class="flex flex-col gap-2 p-2">${html}</div>`;
+            if (state.isDesktop) {
+                renderDesktopList('pending-orders');
+            }
+        }
+
+        function createPendingOrderCard(order) {
+            const card = document.createElement('div');
+            card.className = 'list-item-card';
+            const projectName = state.projects.find(p => p.id === order.project_id)?.name || 'לא שויך לפרויקט';
+            const timestamp = order.timestamp ? new Date(order.timestamp.toDate()).toLocaleString('he-IL') : 'ללא תאריך';
             
-            document.getElementById('desktop-detail-content').innerHTML = `
-                <div class="flex flex-col items-center justify-center h-full text-center">
-                    <i data-feather="inbox" class="w-16 h-16 text-light"></i>
-                    <h3 class="text-lg font-semibold mt-4">הזמנות לאישור</h3>
-                    <p class="text-light">בחר בקשה מהרשימה כדי לבדוק ולאשר אותה.</p>
-                </div>
+            card.innerHTML = `
+                <h4>בקשה מ: ${projectName}</h4>
+                <p>מאת: ${order.user_name || 'מנהל אתר'} | ${timestamp}</p>
+                <p class="mt-2 font-medium text-gray-700 dark:text-gray-300 truncate">
+                    ${order.raw_text || 'ללא טקסט חופשי'}
+                </p>
             `;
+            card.onclick = () => openApprovalModal(order);
+            return card;
+        }
+
+        function renderHistoryList() {
+            const mobileContainer = document.getElementById('history-list-container');
+            mobileContainer.innerHTML = '';
             
+            if (state.ordersHistory.length === 0) {
+                mobileContainer.innerHTML = `<p class="text-center text-gray-500 mt-8">אין היסטוריית הזמנות.</p>`;
+            } else {
+                state.ordersHistory.forEach(order => {
+                    const card = createHistoryOrderCard(order);
+                    mobileContainer.appendChild(card);
+                });
+            }
+            
+            if (state.isDesktop) {
+                renderDesktopList('orders-history');
+            }
+        }
+
+        function createHistoryOrderCard(order) {
+            const card = document.createElement('div');
+            card.className = 'list-item-card';
+            const timestamp = order.timestamp ? new Date(order.timestamp.toDate()).toLocaleString('he-IL') : 'ללא תאריך';
+            
+            card.innerHTML = `
+                <h4>${order.order_id || 'ללא מזהה'}</h4>
+                <p>${order.project_name || 'לא שויך לפרויקט'} | ${timestamp}</p>
+                <p class="mt-2 font-medium text-gray-700 dark:text-gray-300">
+                    סטטוס: <span class="font-bold">${order.status || 'לא ידוע'}</span>
+                </p>
+            `;
+            // card.onclick = () => openHistoryModal(order); // TODO: Create history viewer modal
+            return card;
+        }
+
+        function populateProjectSelects() {
+            const selects = [
+                document.getElementById('project-select-main'),
+                // document.getElementById('project-select-desktop') // Add if/when desktop form is built
+            ];
+            
+            selects.forEach(select => {
+                if (!select) return;
+                select.innerHTML = '<option value="">בחר פרויקט...</option>';
+                state.projects.forEach(project => {
+                    const option = document.createElement('option');
+                    option.value = project.id;
+                    option.textContent = `${project.name} (${project.address || '...'})`;
+                    select.appendChild(option);
+                });
+            });
+        }
+        
+        // --- Desktop List Panel Renderer ---
+        function renderDesktopList(page) {
+            const listContent = document.getElementById('desktop-list-content');
+            listContent.innerHTML = ''; // Clear list
+            
+            let items = [];
+            let cardCreator;
+            
+            switch(page) {
+                case 'pending-orders':
+                    items = state.pendingOrders;
+                    cardCreator = createPendingOrderCard;
+                    break;
+                case 'projects':
+                    items = state.projects;
+                    cardCreator = createProjectCard;
+                    // Add "Add Project" card for desktop
+                    const addCard = document.createElement('div');
+                    addCard.className = 'add-project-card m-2';
+                    addCard.innerHTML = `<i data-feather="plus" class="w-10 h-10"></i><span>הוסף פרויקט חדש</span>`;
+                    addCard.onclick = openAddProjectModal;
+                    listContent.appendChild(addCard);
+                    break;
+                case 'orders-history':
+                    items = state.ordersHistory;
+                    cardCreator = createHistoryOrderCard;
+                    break;
+                default:
+                    listContent.innerHTML = `<p class="p-4 text-center">אין תוכן להצגה.</p>`;
+                    return;
+            }
+            
+            if (items.length === 0 && page !== 'projects') {
+                 listContent.innerHTML = `<p class="p-4 text-center">אין פריטים להצגה.</p>`;
+            } else {
+                items.forEach(item => {
+                    const card = cardCreator(item);
+                    card.classList.add('m-2'); // Add margin for desktop list
+                    listContent.appendChild(card);
+                });
+            }
             feather.replace();
         }
 
-        // --- Project Management ---
-        function renderProjectsPage() {
-            const projectListHTML = state.projects.map(p => `
-                <div class="list-item-card ${state.selectedProjectId === p.id ? 'active' : ''}" onclick="openProjectModal('${p.id}', true)">
-                    <h4>${p.name}</h4>
-                    <p>${p.address}</p>
-                </div>
-            `).join('');
-            
-            document.getElementById('page-projects').innerHTML = `
-                <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-xl font-bold">ניהול פרויקטים</h2>
-                    <button class="btn btn-primary" onclick="openNewProjectModal()">
-                        <i data-feather="plus" class="w-5 h-5"></i>
-                        <span>חדש</span>
-                    </button>
-                </div>
-                <div class="project-grid">
-                    ${state.projects.map(p => createProjectCard(p)).join('')}
-                </div>
-            `;
-            
-            document.getElementById('desktop-list-content').innerHTML = `
-                <div class="p-4">
-                    <button class="btn btn-primary w-full" onclick="openNewProjectModal()">
-                        <i data-feather="plus"></i>
-                        <span>צור פרויקט חדש</span>
-                    </button>
-                </div>
-                <div class="flex flex-col gap-2 p-2">${projectListHTML}</div>
-            `;
-            
-            document.getElementById('desktop-detail-content').innerHTML = `
-                <div class="flex flex-col items-center justify-center h-full text-center">
-                    <i data-feather="briefcase" class="w-16 h-16 text-light"></i>
-                    <h3 class="text-lg font-semibold mt-4">ניהול פרויקטים</h3>
-                    <p class="text-light">בחר פרויקט מהרשימה לעריכה, או צור פרויקט חדש.</p>
-                </div>
-            `;
-            feather.replace();
-        }
+        // --- UI Event Handlers ---
 
-        function openProjectModal(projectId, isDesktop = false) {
-            const project = state.projects.find(p => p.id === projectId);
-            if (!project) return;
-            
-            state.selectedProjectId = projectId;
-            
-            const contentHTML = `
-                <form id="project-form" class="space-y-4">
-                    <input type="hidden" id="project-id" value="${project.id}">
-                    <div>
-                        <label class="form-label" for="project-name">שם פרויקט</label>
-                        <input type="text" id="project-name" class="form-input" value="${project.name}" required>
-                    </div>
-                    <div>
-                        <label class="form-label" for="project-address">כתובת אספקה</label>
-                        <input type="text" id="project-address" class="form-input" value="${project.address}" required>
-                    </div>
-                    <div>
-                        <label class="form-label" for="project-contact">איש קשר (כולל טלפון)</label>
-                        <input type="text" id="project-contact" class="form-input" value="${project.contact || ''}">
-                    </div>
-                </form>
-            `;
-            
-            const footerHTML = `
-                <button class="btn btn-secondary" onclick="closeModal()">ביטול</button>
-                <button class="btn btn-primary" onclick="saveProject()">
-                    <i data-feather="save"></i> <span>שמור שינויים</span>
-                </button>
-                <button class="btn btn-danger ml-auto" onclick="deleteProject('${project.id}')">
-                    <i data-feather="trash-2"></i>
-                </button>
-            `;
+        function setupTheme() {
+            const mobileToggle = document.getElementById('mobile-theme-toggle');
+            const desktopToggle = document.getElementById('desktop-theme-toggle');
+            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)');
 
-            if (isDesktop && window.innerWidth >= 768) {
-                document.getElementById('desktop-detail-content').innerHTML = `
-                    <h2 class="text-2xl font-bold mb-4">עריכת פרויקט</h2>
-                    ${contentHTML}
-                    <div class="mt-6 pt-4 border-t border-border-color flex gap-2">
-                        ${footerHTML}
-                    </div>
-                `;
-                document.querySelectorAll('#desktop-list-content .list-item-card').forEach(el => el.classList.remove('active'));
-                document.querySelector(`#desktop-list-content .list-item-card[onclick*="'${projectId}'"]`).classList.add('active');
+            const applyTheme = (isDark) => {
+                if (isDark) {
+                    document.documentElement.classList.add('dark');
+                    desktopToggle.innerHTML = `<i data-feather="sun"></i> <span>מצב יום</span>`;
+                } else {
+                    document.documentElement.classList.remove('dark');
+                    desktopToggle.innerHTML = `<i data-feather="moon"></i> <span>מצב לילה</span>`;
+                }
                 feather.replace();
-            } else {
-                openModal(`עריכת פרויקט: ${project.name}`, contentHTML, footerHTML);
-            }
-        }
-
-        function openNewProjectModal() {
-            const contentHTML = `
-                <form id="project-form" class="space-y-4">
-                    <input type="hidden" id="project-id" value="new">
-                    <div>
-                        <label class="form-label" for="project-name">שם פרויקט</label>
-                        <input type="text" id="project-name" class="form-input" placeholder="לדוגמה: בניין חדד" required>
-                    </div>
-                    <div>
-                        <label class="form-label" for="project-address">כתובת אספקה</label>
-                        <input type="text" id="project-address" class="form-input" placeholder="כתובת מלאה" required>
-                    </div>
-                    <div>
-                        <label class="form-label" for="project-contact">איש קשר (כולל טלפון)</label>
-                        <input type="text" id="project-contact" class="form-input" placeholder="לדוגמה: עבד (050-1234567)">
-                    </div>
-                </form>
-            `;
-            
-            const footerHTML = `
-                <button class="btn btn-secondary" onclick="closeModal()">ביטול</button>
-                <button class="btn btn-primary" onclick="saveProject()">
-                    <i data-feather="save"></i> <span>שמור פרויקט</span>
-                </button>
-            `;
-            
-            if (window.innerWidth >= 768) {
-                document.getElementById('desktop-detail-content').innerHTML = `
-                    <h2 class="text-2xl font-bold mb-4">פרויקט חדש</h2>
-                    ${contentHTML}
-                    <div class="mt-6 pt-4 border-t border-border-color flex gap-2">
-                        ${footerHTML}
-                    </div>
-                `;
-                feather.replace();
-            } else {
-                openModal("פרויקט חדש", contentHTML, footerHTML);
-            }
-        }
-
-        async function saveProject() {
-            const id = document.getElementById('project-id').value;
-            const name = document.getElementById('project-name').value;
-            const address = document.getElementById('project-address').value;
-            const contact = document.getElementById('project-contact').value;
-            
-            if (!name || !address) {
-                showToast("שם פרויקט וכתובת הם שדות חובה", "error");
-                return;
-            }
-            
-            const newProject = {
-                name, address, contact, 
-                clientId: CLIENT_ID,
-                // [FIX] הוספת setupKey כנדרש במדריך
-                setupKey: `zebulun-${name.replace(/[^a-z0-9]/gi, '').toLowerCase()}-${Date.now().toString().slice(-5)}`
             };
 
-            if (id === 'new') {
-                try {
-                    const docRef = await addDoc(collection(db, "projects"), newProject);
-                    state.projects.push({ id: docRef.id, ...newProject });
-                    // [FIX v55.5] מיון מחדש של המערך אחרי הוספה
-                    state.projects.sort((a, b) => a.name.localeCompare(b.name));
-                    showToast("הפרויקט נוצר בהצלחה", "success");
-                } catch (e) {
-                    console.error("Error creating project:", e);
-                    showToast("שגיאה ביצירת פרויקט", "error");
+            const toggleTheme = () => {
+                const isDark = document.documentElement.classList.toggle('dark');
+                localStorage.setItem('theme', isDark ? 'dark' : 'light');
+                applyTheme(isDark);
+            };
+
+            mobileToggle.onclick = toggleTheme;
+            desktopToggle.onclick = toggleTheme;
+            
+            // Load saved theme or use system preference
+            const savedTheme = localStorage.getItem('theme');
+            applyTheme(savedTheme ? savedTheme === 'dark' : prefersDark.matches);
+            prefersDark.addEventListener('change', (e) => {
+                if (!localStorage.getItem('theme')) {
+                    applyTheme(e.matches);
                 }
-            } else {
-                try {
-                    const projectRef = doc(db, "projects", id);
-                    // [FIX] מעדכן רק את השדות הרלוונטיים, לא דורס setupKey
-                    await updateDoc(projectRef, { name, address, contact }); 
-                    const index = state.projects.findIndex(p => p.id === id);
-                    if (index !== -1) {
-                        // עדכון המערך המקומי
-                        state.projects[index] = { ...state.projects[index], name, address, contact };
-                        // [FIX v55.5] מיון מחדש של המערך אחרי עדכון
-                        state.projects.sort((a, b) => a.name.localeCompare(b.name));
-                    }
-                    showToast("הפרויקט עודכן בהצלחה", "success");
-                } catch (e) {
-                    console.error("Error updating project:", e);
-                    showToast("שגיאה בעדכון פרויקט", "error");
-                }
-            }
-            
-            closeModal();
-            renderProjectsPage();
-        }
-
-        async function deleteProject(projectId) {
-            // [FIX] החלפת confirm במודאל פשוט
-            const body = `<p>האם אתה בטוח שברצונך למחוק פרויקט זה? לא ניתן לשחזר פעולה זו.</p>`;
-            const footer = `
-                <button class="btn btn-secondary" onclick="closeModal()">ביטול</button>
-                <button class="btn btn-danger" onclick="confirmDeleteProject('${projectId}')">מחק לצמיתות</button>
-            `;
-            openModal("אישור מחיקה", body, footer);
-        }
-
-        // [NEW] פונקציית אישור מחיקה
-        async function confirmDeleteProject(projectId) {
-            try {
-                await deleteDoc(doc(db, "projects", projectId));
-                state.projects = state.projects.filter(p => p.id !== projectId);
-                showToast("הפרויקט נמחק", "info");
-                closeModal();
-                navigate('projects');
-            } catch (e) {
-                console.error("Error deleting project:", e);
-                showToast("שגיאה במחיקת פרויקט", "error");
-            }
-        }
-        window.confirmDeleteProject = confirmDeleteProject; // Expose
-        
-        // [NEW v55] Share Project Link
-        function shareProjectLink(projectId) {
-            const project = state.projects.find(p => p.id === projectId);
-            if (!project || !project.setupKey) {
-                showToast("שגיאה: מפתח התקנה (setupKey) לא קיים לפרויקט. ערוך ושמור מחדש.", "error");
-                return;
-            }
-            
-            // [FIX] שינוי הנתיב ל-../site_app.html
-            const installUrl = `${window.location.origin}${window.location.pathname.replace('index.html', '../site_app.html')}?setup_key=${project.setupKey}`;
-            
-            try {
-                // שימוש ב-execCommand לטובת תאימות רחבה יותר
-                const dummy = document.createElement('textarea');
-                document.body.appendChild(dummy);
-                dummy.value = installUrl;
-                dummy.select();
-                document.execCommand('copy');
-                document.body.removeChild(dummy);
-                
-                showToast("לינק התקנה למנהל האתר הועתק!", "success");
-            } catch (e) {
-                console.error("Failed to copy link:", e);
-                // Fallback למקרה שהעתקה נכשלת
-                const body = `
-                    <p>העתקה אוטומטית נכשלה. אנא העתק את הלינק ידנית:</p>
-                    <input type="text" class="form-input mt-2" value="${installUrl}" readonly onclick="this.select()">
-                `;
-                openModal("לינק התקנה", body, `<button class="btn btn-secondary" onclick="closeModal()">סגור</button>`);
-            }
-        }
-
-        // --- Smart Paste Order ---
-        function renderNewOrderPage() {
-            const pageContent = `
-                <div class="glass-card">
-                    <h2 class="text-xl font-bold mb-2">הזמנה חדשה (מנהל)</h2>
-                    <p class="text-sm text-light mb-4">
-                        יוסי, כאן תוכל ליצור הזמנה מהירה שתשלח ישירות למערכת DeliveryMaster (ללא צורך באישור).
-                    </p>
-                    
-                    <form id="smart-order-form" onsubmit="event.preventDefault(); sendSmartOrder();">
-                        <!-- 1. Catalog Search -->
-                        <div class="mb-4">
-                             <label class="form-label" for="product-search-main">חפש פריט בקטלוג</label>
-                             <input type="text" id="product-search-main" class="form-input" placeholder="הקלד מק'ט, שם מוצר..." onkeyup="searchCatalog(this.value, 'catalog-results-main')">
-                             <div id="catalog-results-main" class="catalog-search-results mt-2"></div>
-                             <div id="main-order-cart" class="mt-4 space-y-2">
-                                <!-- Cart items will be injected here -->
-                             </div>
-                        </div>
-
-                        <!-- 2. תיבת הדבקה -->
-                        <div>
-                            <label class="form-label" for="smart-paste-box">הדבק טקסט חופשי (אופציונלי)</label>
-                            <textarea id="smart-paste-box" onpaste="handlePaste(event)" placeholder="...הדבק כאן תוכן נוסף..."></textarea>
-                        </div>
-                        
-                        <!-- 3. שיוך לפרויקט -->
-                        <div class="mt-4">
-                            <label class="form-label" for="project-select-main">שייך לפרויקט (חובה)</label>
-                            <select id="project-select-main" class="form-select">
-                                <option value="">בחר פרויקט...</option>
-                                ${state.projects.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}
-                            </select>
-                        </div>
-                        
-                        <!-- 4. צירוף קבצים -->
-                        <div class="mt-4">
-                            <label class="form-label">צרף קבצים (אופציונלי)</label>
-                            <div id="file-drop-area">
-                                גרור קבצים לכאן או 
-                                <span class="text-primary-color font-semibold cursor-pointer" onclick="triggerFileInput()">
-                                    בחר קבצים
-                                </span>
-                                <input type="file" id="file-input" multiple onchange="handleFileSelect(event)" class="hidden">
-                            </div>
-                            <div id="preview-container"></div>
-                        </div>
-                        
-                        <!-- 5. שליחה -->
-                        <div class="mt-6 text-left">
-                            <button type="submit" id="send-order-btn" class="btn btn-primary btn-lg w-full md:w-auto">
-                                <i data-feather="send"></i>
-                                <span>שלח הזמנה ל-DeliveryMaster</span>
-                            </button>
-                        </div>
-                    </form>
-                </div>
-            `;
-
-            document.getElementById('page-new-order').innerHTML = pageContent;
-            document.getElementById('desktop-list-content').innerHTML = `
-                <div class="p-4">
-                    <h3 class="text-lg font-semibold mb-3">הזמנות אחרונות</h3>
-                    ${renderOrderHistoryList(10)}
-                </div>
-            `;
-            document.getElementById('desktop-detail-content').innerHTML = pageContent;
-            
-            const dropArea = document.getElementById('file-drop-area');
-            if (dropArea) {
-                dropArea.addEventListener('dragover', handleDragOver, false);
-                dropArea.addEventListener('dragleave', handleDragLeave, false);
-                dropArea.addEventListener('drop', handleFileDrop, false);
-            }
-            
-            feather.replace();
-        }
-
-        // --- [NEW v55] Catalog Search Logic ---
-        function searchCatalog(term, resultsElementId) {
-            const resultsContainer = document.getElementById(resultsElementId);
-            if (!resultsContainer) return;
-            
-            if (term.length < 2) {
-                resultsContainer.innerHTML = '';
-                return;
-            }
-            
-            const lowerTerm = term.toLowerCase();
-            const results = state.catalog.filter(item => 
-                (item.name && item.name.toLowerCase().includes(lowerTerm)) ||
-                (item.sku && item.sku.toString().includes(lowerTerm))
-            ).slice(0, 5); // Limit to 5 results
-            
-            if (results.length === 0) {
-                resultsContainer.innerHTML = '<p class="p-3 text-light text-sm">לא נמצאו פריטים.</p>';
-                return;
-            }
-            
-            // Check which cart we are adding to
-            const addFunction = resultsElementId.includes('approval') ? 'addCatalogItemToCart(this, true)' : 'addCatalogItemToCart(this, false)';
-
-            resultsContainer.innerHTML = results.map(item => `
-                <div class="catalog-item">
-                    <img src="${item.imageUrl || 'https://placehold.co/40x40/e2e8f0/94a3b8?text=N/A'}" alt="${item.name}">
-                    <div class="catalog-item-info">
-                        <strong>${item.name}</strong>
-                        <p>מק"ט: ${item.sku}</p>
-                    </div>
-                    <button class="btn btn-secondary btn-sm" 
-                            data-sku="${item.sku}" 
-                            data-name="${item.name}" 
-                            onclick="${addFunction}">
-                        <i data-feather="plus" class="w-4 h-4"></i>
-                    </button>
-                </div>
-            `).join('');
-            feather.replace();
+            });
         }
         
-        function searchCatalogApproval(term, resultsElementId) {
-            searchCatalog(term, resultsElementId);
-        }
-        
-        function addCatalogItemToCart(button, isApprovalCart) {
-            const sku = button.dataset.sku;
-            const name = button.dataset.name;
-            const cartId = isApprovalCart ? 'approval-order-cart' : 'main-order-cart';
-            const cartContainer = document.getElementById(cartId);
-            
-            // [FIX] טיפול במקרה שעגלה לא קיימת (למשל במודאל שלא נטען)
-            if (!cartContainer) return;
-
-            const existingItem = document.getElementById(`cart-item-${sku}-${isApprovalCart}`);
-            if (existingItem) {
-                existingItem.querySelector('input').value = parseInt(existingItem.querySelector('input').value) + 1;
-                return;
-            }
-
-            const itemEl = document.createElement('div');
-            itemEl.className = 'order-cart-item';
-            itemEl.id = `cart-item-${sku}-${isApprovalCart}`;
-            itemEl.dataset.sku = sku;
-            itemEl.dataset.name = name;
-            itemEl.innerHTML = `
-                <span class="flex-grow">${name} (מק"ט: ${sku})</span>
-                <input type="number" value="1" min="1" class="form-input w-20 text-center">
-                <button class="btn-icon text-danger" onclick="this.parentElement.remove()">
-                    <i data-feather="x" class="w-4 h-4"></i>
-                </button>
-            `;
-            cartContainer.appendChild(itemEl);
-            feather.replace();
-        }
-
-        // --- History Page ---
-        function renderOrdersHistoryPage() {
-            const historyHTML = renderOrderHistoryList();
-            document.getElementById('page-orders-history').innerHTML = `
-                <h2 class="text-xl font-bold mb-4">היסטוריית הזמנות</h2>
-                ${historyHTML}
-            `;
-            
-            document.getElementById('desktop-list-content').innerHTML = `<div class="flex flex-col gap-2 p-2">${historyHTML}</div>`;
-            document.getElementById('desktop-detail-content').innerHTML = `
-                <div class="flex flex-col items-center justify-center h-full text-center">
-                    <i data-feather="archive" class="w-16 h-16 text-light"></i>
-                    <h3 class="text-lg font-semibold mt-4">היסטוריית הזמנות</h3>
-                    <p class="text-light">בחר הזמנה מהרשימה כדי לראות פרטים מלאים.</p>
-                </div>
-            `;
-            feather.replace();
-        }
-
-        function renderOrderHistoryList(count = state.orderHistory.length) {
-            if (state.orderHistory.length === 0) {
-                return '<p class="text-light text-center p-4">אין היסטוריית הזמנות.</p>';
-            }
-            
-            return state.orderHistory.slice(0, count).map(order => `
-                <div class="list-item-card" onclick="showOrderDetail('${order.id}')">
-                    <h4>${order.projectName || 'הזמנה כללית'}</h4>
-                    <p>${order.status || 'חדש'} - ${new Date(order.createdAt?.toDate ? order.createdAt.toDate() : Date.now()).toLocaleDateString('he-IL')}</p>
-                </div>
-            `).join('');
-        }
-
-        function showOrderDetail(orderId) {
-            const order = state.orderHistory.find(o => o.id === orderId);
-            if (!order) return;
-
-            document.getElementById('desktop-detail-content').innerHTML = `
-                <h2 class="text-2xl font-bold mb-4">${order.projectName || 'הזמנה'}</h2>
-                <p><strong>סטטוס:</strong> ${order.status}</p>
-                <p><strong>תאריך:</strong> ${new Date(order.createdAt?.toDate()).toLocaleString('he-IL')}</p>
-                <p><strong>איש קשר:</strong> ${order.contactName || 'לא צוין'}</p>
-                <p><strong>טלפון:</strong> ${order.contactPhone || 'לא צוין'}</p>
-                
-                <h3 class="text-xl font-semibold mt-6 mb-2">תוכן ההזמנה</h3>
-                <pre class="glass-card p-4 text-sm whitespace-pre-wrap">${order.rawText || 'אין תוכן'}</pre>
-                
-                <h3 class="text-xl font-semibold mt-6 mb-2">קבצים מצורפים</h3>
-                ${(order.attachments && order.attachments.length > 0) 
-                    ? order.attachments.map(f => `<a href="${f.url}" target="_blank" class="block text-primary-color">${f.name}</a>`).join('')
-                    : '<p>אין קבצים מצורפים.</p>'
-                }
-            `;
-        }
-
-        // --- Smart Paste Logic ---
-        function handlePaste(event) {
-            const paste = (event.clipboardData || window.clipboardData).getData('text');
-            if (paste) {
-                console.log("Pasted content:", paste);
-            }
-        }
-
-        // --- File Handling Logic ---
-        function triggerFileInput() { document.getElementById('file-input').click(); }
-        function handleFileSelect(event) { addFiles(event.target.files); }
-        function handleDragOver(event) { event.preventDefault(); event.currentTarget.classList.add('dragover'); }
-        function handleDragLeave(event) { event.currentTarget.classList.remove('dragover'); }
-        function handleFileDrop(event) { event.preventDefault(); event.currentTarget.classList.remove('dragover'); addFiles(event.dataTransfer.files); }
-
-        function addFiles(files) {
-            for (const file of files) {
-                if (state.filesToUpload.length >= 5) {
-                    showToast("ניתן להעלות עד 5 קבצים", "error");
-                    break;
-                }
-                state.filesToUpload.push(file);
-            }
-            renderFilePreviews();
-        }
-
-        function renderFilePreviews() {
-            const container = document.getElementById('preview-container');
-            if (!container) return;
-            container.innerHTML = '';
-            
-            state.filesToUpload.forEach((file, index) => {
-                const previewEl = document.createElement('div');
-                previewEl.className = 'file-preview';
-                
-                if (file.type.startsWith('image/')) {
-                    const reader = new FileReader();
-                    reader.onload = (e) => {
-                        previewEl.innerHTML = `
-                            <img src="${e.target.result}" alt="${file.name}">
-                            <div class="remove-file" onclick="removeFile(${index})"><i data-feather="x" class="w-4 h-4"></i></div>
-                        `;
-                        feather.replace();
-                    };
-                    reader.readAsDataURL(file);
+        function setupLayout() {
+            const mq = window.matchMedia('(min-width: 768px)');
+            const handleLayoutChange = (e) => {
+                state.isDesktop = e.matches;
+                if (state.isDesktop) {
+                    // Switched to Desktop
+                    document.getElementById('mobile-pwa-layout').style.display = 'none';
+                    document.getElementById('desktop-crm-layout').style.display = 'grid';
+                    // Ensure the correct desktop page is shown
+                    navigate(state.currentPage); 
                 } else {
-                    previewEl.innerHTML = `
-                        <div class="file-icon">
-                            <i data-feather="file-text" class="w-8 h-8 text-light"></i>
+                    // Switched to Mobile
+                    document.getElementById('mobile-pwa-layout').style.display = 'grid';
+                    document.getElementById('desktop-crm-layout').style.display = 'none';
+                    // Ensure the correct mobile page is shown
+                    navigate(state.currentPage);
+                }
+            };
+            mq.addEventListener('change', handleLayoutChange);
+            handleLayoutChange(mq); // Initial check
+        }
+        
+        // Make navigation global
+        window.navigate = (pageId) => {
+            state.currentPage = pageId;
+            
+            if (state.isDesktop) {
+                // --- Desktop Navigation ---
+                document.querySelectorAll('.desktop-nav-link').forEach(btn => btn.classList.remove('active'));
+                document.getElementById(`nav-desktop-${pageId}`)?.classList.add('active');
+                
+                // On desktop, some pages just change the list panel, others change the detail panel
+                const detailPanel = document.getElementById('desktop-detail-panel');
+                detailPanel.innerHTML = ''; // Clear detail panel
+                
+                switch(pageId) {
+                    case 'dashboard':
+                        renderDesktopList(null); // Clear list
+                        detailPanel.innerHTML = document.getElementById('page-desktop-dashboard').innerHTML;
+                        updateDashboardStats(); // Re-run stats
+                        break;
+                    case 'new-order':
+                        renderDesktopList(null); // Clear list
+                        // Inject mobile form into desktop view
+                        detailPanel.innerHTML = document.getElementById('page-new-order').innerHTML;
+                        // Re-attach listeners for the new form
+                        attachFormListeners('desktop-detail-panel');
+                        break;
+                    case 'pending-orders':
+                        renderDesktopList('pending-orders');
+                        detailPanel.innerHTML = `<p class="p-4 text-center">בחר בקשה מהרשימה כדי לאשר אותה.</p>`;
+                        break;
+                    case 'projects':
+                        renderDesktopList('projects');
+                        detailPanel.innerHTML = `<p class="p-4 text-center">בחר פרויקט מהרשימה כדי לערוך אותו.</p>`;
+                        break;
+                    case 'orders-history':
+                        renderDesktopList('orders-history');
+                        detailPanel.innerHTML = `<p class="p-4 text-center">בחר הזמנה מהרשימה לצפייה בפרטים.</p>`;
+                        break;
+                    // [תיקון] הוספת ניווט הדרכה
+                    case 'help':
+                        renderDesktopList(null);
+                        const helpContent = getHelpContent('yossi');
+                        detailPanel.innerHTML = `<div class="help-modal-content p-4">${helpContent}</div>`;
+                        break;
+                }
+                
+            } else {
+                // --- Mobile Navigation ---
+                document.querySelectorAll('.nav-button').forEach(btn => btn.classList.remove('active'));
+                document.getElementById(`nav-${pageId}`)?.classList.add('active');
+                
+                document.querySelectorAll('.app-page').forEach(page => page.classList.remove('active'));
+                
+                let targetPage = document.getElementById(`page-${pageId}`);
+                if (targetPage) {
+                    targetPage.classList.add('active');
+                } else {
+                    // Fallback to dashboard
+                    document.getElementById('page-dashboard').classList.add('active');
+                    document.getElementById('nav-dashboard').classList.add('active');
+                }
+
+                // [תיקון] טעינת תוכן הדרכה בדף הנייד
+                if (pageId === 'help') {
+                    targetPage.innerHTML = getHelpContent('yossi');
+                }
+            }
+            feather.replace();
+        }
+
+        // --- 'New Order' Page Logic ---
+
+        function attachFormListeners(containerId) {
+            const container = document.getElementById(containerId);
+            if (!container) return;
+
+            // Form submission
+            const form = container.querySelector('#smart-order-form');
+            if(form) form.onsubmit = sendSmartOrder;
+            
+            // Catalog search
+            const searchInput = container.querySelector('#catalog-search-main');
+            if(searchInput) searchInput.onkeyup = handleCatalogSearch;
+            
+            // File Drop Area
+            const dropArea = container.querySelector('#file-drop-area');
+            const fileInput = container.querySelector('#file-input');
+            if(dropArea) {
+                dropArea.onclick = () => fileInput.click();
+                dropArea.ondragover = (e) => { e.preventDefault(); dropArea.classList.add('dragover'); };
+                dropArea.ondragleave = () => dropArea.classList.remove('dragover');
+                dropArea.ondrop = (e) => {
+                    e.preventDefault();
+                    dropArea.classList.remove('dragover');
+                    handleFiles(e.dataTransfer.files, 'main');
+                };
+            }
+            if(fileInput) fileInput.onchange = (e) => handleFiles(e.target.files, 'main');
+        }
+        
+        // Attach listeners for mobile view initially
+        attachFormListeners('page-new-order');
+
+        function handleCatalogSearch(event) {
+            const query = event.target.value.toLowerCase();
+            const resultsContainer = event.target.nextElementSibling; // #catalog-results-main
+            
+            if (query.length < 2) {
+                resultsContainer.classList.add('hidden');
+                return;
+            }
+            
+            const results = state.catalog.filter(item => 
+                item.name.toLowerCase().includes(query) || item.sku.includes(query)
+            ).slice(0, 10); // Limit to 10 results
+            
+            resultsContainer.innerHTML = '';
+            if (results.length > 0) {
+                results.forEach(item => {
+                    const itemEl = document.createElement('div');
+                    itemEl.className = 'catalog-item';
+                    itemEl.innerHTML = `
+                        <img src="${item.img}" alt="${item.name}">
+                        <div class="catalog-item-info">
+                            <h5 class="font-semibold">${item.name}</h5>
+                            <p>מק"ט: ${item.sku} | ${item.unit}</p>
                         </div>
-                        <div class="remove-file" onclick="removeFile(${index})"><i data-feather="x" class="w-4 h-4"></i></div>
+                        <button class="btn btn-primary btn-sm p-2">
+                            <i data-feather="plus" class="w-4 h-4"></i>
+                        </button>
                     `;
-                    feather.replace();
-                }
-                container.appendChild(previewEl);
+                    itemEl.querySelector('button').onclick = () => {
+                        addItemToCart(item, 'main');
+                        event.target.value = '';
+                        resultsContainer.classList.add('hidden');
+                    };
+                    resultsContainer.appendChild(itemEl);
+                });
+                resultsContainer.classList.remove('hidden');
+                feather.replace();
+            } else {
+                resultsContainer.classList.add('hidden');
+            }
+        }
+        
+        function addItemToCart(item, cartType) {
+            const cart = (cartType === 'main') ? state.cart : state.approval.cart;
+            const cartContainerId = (cartType === 'main') ? '#cart-main' : '#cart-approval';
+            
+            if (cart[item.sku]) {
+                cart[item.sku].qty++;
+            } else {
+                cart[item.sku] = { ...item, qty: 1 };
+            }
+            renderCart(cartType);
+        }
+
+        function renderCart(cartType) {
+            const cart = (cartType === 'main') ? state.cart : state.approval.cart;
+            const containerSelector = (cartType === 'main') ? '#cart-main' : '#cart-approval';
+            
+            // Find the correct container (could be in mobile or desktop view)
+            const containers = document.querySelectorAll(containerSelector);
+            
+            containers.forEach(container => {
+                if (!container) return;
+                container.innerHTML = '';
+                
+                Object.values(cart).forEach(item => {
+                    const itemEl = document.createElement('div');
+                    itemEl.className = 'order-cart-item glass-card p-2';
+                    itemEl.innerHTML = `
+                        <img src="${item.img}" alt="${item.name}" class="w-10 h-10 rounded border border-gray-200">
+                        <div class="flex-grow">
+                            <p class="font-semibold text-sm">${item.name}</p>
+                            <p class="text-xs text-gray-500">מק"ט: ${item.sku}</p>
+                        </div>
+                        <input type="number" value="${item.qty}" min="1" class="form-input w-16 text-center" data-sku="${item.sku}">
+                        <button class="btn-icon text-red-500" data-sku="${item.sku}">
+                            <i data-feather="trash-2" class="w-4 h-4"></i>
+                        </button>
+                    `;
+                    
+                    itemEl.querySelector('input').onchange = (e) => updateCartQty(e.target.dataset.sku, e.target.value, cartType);
+                    itemEl.querySelector('button').onclick = (e) => removeFromCart(e.currentTarget.dataset.sku, cartType);
+                    
+                    container.appendChild(itemEl);
+                });
+                feather.replace();
+            });
+        }
+        
+        function updateCartQty(sku, qty, cartType) {
+            const cart = (cartType === 'main') ? state.cart : state.approval.cart;
+            if (cart[sku]) {
+                cart[sku].qty = parseInt(qty) || 1;
+            }
+        }
+
+        function removeFromCart(sku, cartType) {
+            const cart = (cartType === 'main') ? state.cart : state.approval.cart;
+            delete cart[sku];
+            renderCart(cartType);
+        }
+
+        function handleFiles(files, type) {
+            const fileList = (type === 'main') ? state.uploadedFiles : state.approval.uploadedFiles;
+            const containerSelector = (type === 'main') ? '#preview-container' : '#preview-container-approval';
+            
+            for (const file of files) {
+                fileList.push(file);
+            }
+            renderFilePreviews(type);
+        }
+        
+        function renderFilePreviews(type) {
+            const fileList = (type === 'main') ? state.uploadedFiles : state.approval.uploadedFiles;
+            const containerSelector = (type === 'main') ? '#preview-container' : '#preview-container-approval';
+            const containers = document.querySelectorAll(containerSelector);
+            
+            containers.forEach(container => {
+                if(!container) return;
+                container.innerHTML = '';
+                
+                fileList.forEach((file, index) => {
+                    const previewEl = document.createElement('div');
+                    previewEl.className = 'file-preview';
+                    
+                    if (file.type.startsWith('image/')) {
+                        const reader = new FileReader();
+                        reader.onload = (e) => {
+                            previewEl.innerHTML = `
+                                <img src="${e.target.result}" alt="${file.name}">
+                                <div class="remove-file" data-index="${index}"><i data-feather="x" class="w-4 h-4"></i></div>
+                            `;
+                        };
+                        reader.readAsDataURL(file);
+                    } else {
+                        previewEl.innerHTML = `
+                            <div class="file-icon">
+                                <i data-feather="file-text" class="w-8 h-8 text-gray-500"></i>
+                            </div>
+                            <div class="remove-file" data-index="${index}"><i data-feather="x" class="w-4 h-4"></i></div>
+                        `;
+                    }
+                    
+                    previewEl.onclick = (e) => {
+                        if (e.target.closest('.remove-file')) {
+                            const i = e.target.closest('.remove-file').dataset.index;
+                            fileList.splice(i, 1);
+                            renderFilePreviews(type);
+                        }
+                    };
+                    container.appendChild(previewEl);
+                });
+                feather.replace();
             });
         }
 
-        function removeFile(index) {
-            state.filesToUpload.splice(index, 1);
-            renderFilePreviews();
-        }
-
-        async function uploadFiles(orderId) {
-            if (state.filesToUpload.length === 0) return [];
-            
-            const uploadPromises = state.filesToUpload.map(async (file) => {
-                try {
-                    const fileRef = ref(storage, `zebulun_orders/${orderId}/${file.name}`);
-                    const snapshot = await uploadBytes(fileRef, file);
-                    const url = await getDownloadURL(snapshot.ref);
-                    
-                    console.log(`File uploaded: ${file.name} -> ${url}`);
-                    return { name: file.name, url: url };
-                    
-                } catch (error) {
-                    console.error(`Failed to upload file ${file.name}:`, error);
-                    showToast(`שגיאה בהעלאת קובץ: ${file.name}`, 'error');
-                    return null;
-                }
+        async function uploadFiles(files, orderId) {
+            const uploadPromises = files.map(file => {
+                const storageRef = ref(storage, `orders/${CLIENT_ID}/${orderId}/${file.name}`);
+                return uploadBytes(storageRef, file).then(snapshot => getDownloadURL(snapshot.ref));
             });
-
-            const results = await Promise.all(uploadPromises);
-            return results.filter(result => result !== null);
+            return Promise.all(uploadPromises);
         }
 
+        async function sendSmartOrder(event) {
+            event.preventDefault();
+            const form = event.target;
+            const submitBtn = form.querySelector('#submit-smart-order');
+            const btnText = form.querySelector('#submit-smart-order-text');
+            const btnLoader = form.querySelector('#submit-smart-order-loader');
 
-        // --- Order Sending Logic ---
-        async function sendSmartOrder() {
-            const btn = document.getElementById('send-order-btn');
-            btn.disabled = true;
-            btn.innerHTML = '<div class="loader-small"></div> <span>שולח...</span>';
-            
-            const rawText = document.getElementById('smart-paste-box').value;
-            const projectId = document.getElementById('project-select-main').value;
+            // Find the correct project select (could be mobile or desktop)
+            const projectSelect = document.querySelector('#project-select-main:not(:disabled)') || document.querySelector('#desktop-detail-panel #project-select-main');
+            const projectId = projectSelect.value;
             
             if (!projectId) {
-                showToast("חובה לשייך הזמנה לפרויקט", "error");
-                resetSendButton(btn);
+                showGlobalAlert("חובה לבחור פרויקט", "error");
                 return;
             }
 
-            const project = state.projects.find(p => p.id === projectId);
-            const cartItems = getCartItems('main-order-cart');
+            // Disable button
+            submitBtn.disabled = true;
+            btnText.classList.add('hidden');
+            btnLoader.classList.remove('hidden');
             
-            if (rawText.trim().length === 0 && state.filesToUpload.length === 0 && cartItems.length === 0) {
-                showToast("חובה להוסיף פריטים, טקסט או קבצים להזמנה", "error");
-                resetSendButton(btn);
-                return;
-            }
-            
-            const orderId = `ZEB-${Date.now()}`;
-            
-            let attachmentURLs = [];
             try {
-                attachmentURLs = await uploadFiles(orderId);
-            } catch (error) {
-                console.error("File upload failed:", error);
-                showToast("שגיאה קריטית בהעלאת קבצים. ההזמנה לא נשלחה.", "error");
-                resetSendButton(btn);
-                return;
-            }
-
-            // [תיקון v55.5] הוספת ערכי גיבוי למקרה ש-project הוא undefined
-            const orderPayload = {
-                orderId: orderId,
-                clientId: CLIENT_ID,
-                projectId: projectId,
-                projectName: project ? project.name : "לא שויך לפרויקט",
-                address: project ? project.address : "כתובת לא צוינה",
-                contactName: project ? (project.contact || "יוסי (ראשי)") : "יוסי (ראשי)",
-                contactPhone: "לא צוין", // [TODO] Add this field?
-                rawText: rawText,
-                cartItems: cartItems, 
-                attachments: attachmentURLs,
-                createdAt: serverTimestamp(),
-                status: "חדש" // This skips approval
-            };
-
-            try {
-                await sendOrderToFirestore(orderPayload);
+                const project = state.projects.find(p => p.id === projectId);
+                // [תיקון v55.6] הוספת Fallback
+                const projectName = project?.name || "לא שויך לפרויקט";
+                const projectAddress = project?.address || "לא צוינה כתובת";
                 
-                // [NEW] שלח עדכון לצ'אט הצוות
-                postOrderToTeamChat(orderPayload, "יוסי (מנהל)");
-
-                showToast("ההזמנה נשלחה בהצלחה!", "success");
-                state.orderHistory.unshift(orderPayload); 
-                // [FIX v55.5] מיון מחדש של ההיסטוריה
-                state.orderHistory.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+                const orderId = `ZEB-${Date.now()}`;
                 
-                resetNewOrderForm();
-                navigate('orders-history');
+                // 1. Upload files
+                const fileUrls = await uploadFiles(state.uploadedFiles, orderId);
+                
+                // 2. Prepare payload
+                const orderPayload = {
+                    client_id: CLIENT_ID,
+                    order_id: orderId,
+                    project_id: projectId,
+                    project_name: projectName,
+                    address: projectAddress,
+                    user_id: currentUserId,
+                    user_name: "יוסי (מנהל רכש)",
+                    raw_text: form.querySelector('#smart-paste-box').value,
+                    cart_items: Object.values(state.cart),
+                    media_files: fileUrls,
+                    status: "מאושר", // Sent directly by Yossi, so it's auto-approved
+                    timestamp: serverTimestamp(),
+                    created_by: "portal"
+                };
+
+                // 3. Save to Firestore 'orders' collection
+                await setDoc(doc(db, "orders", orderId), orderPayload);
+                
+                // [תיקון v55.7] 4. Post to team chat
+                await postOrderToTeamChat(orderPayload);
+
+                showGlobalAlert("הזמנה נשלחה בהצלחה!", "success");
+                
+                // 5. Reset form
+                form.reset();
+                state.cart = {};
+                state.uploadedFiles = [];
+                renderCart('main');
+                renderFilePreviews('main');
+                navigate('dashboard');
                 
             } catch (error) {
                 console.error("Firestore send failed:", error);
-                showToast("שגיאה בשליחה ל-Firestore.", "error");
+                showGlobalAlert("שגיאה בשליחה ל-Firestore.", "error");
             } finally {
-                resetSendButton(btn);
+                // Re-enable button
+                submitBtn.disabled = false;
+                btnText.classList.remove('hidden');
+                btnLoader.classList.add('hidden');
             }
         }
         
-        function getCartItems(cartId) {
-            const cartContainer = document.getElementById(cartId);
-            const items = [];
-            if (!cartContainer) return items;
-            cartContainer.querySelectorAll('.order-cart-item').forEach(itemEl => {
-                items.push({
-                    sku: itemEl.dataset.sku,
-                    name: itemEl.dataset.name,
-                    quantity: parseInt(itemEl.querySelector('input').value)
-                });
+        // --- Project Management Modals ---
+
+        window.openAddProjectModal = () => {
+            showModal({
+                title: "הוספת פרויקט חדש",
+                body: `
+                    <form id="add-project-form" class="space-y-4">
+                        <div>
+                            <label class="form-label" for="project-name">שם הפרויקט</label>
+                            <input type="text" id="project-name" class="form-input" required>
+                        </div>
+                        <div>
+                            <label class="form-label" for="project-address">כתובת מלאה</label>
+                            <input type="text" id="project-address" class="form-input" required>
+                        </div>
+                        <div>
+                            <label class="form-label" for="project-contact">איש קשר באתר</label>
+                            <input type="text" id="project-contact" class="form-input" placeholder="לדוגמה: עבד (050-1234567)">
+                        </div>
+                        <div>
+                            <label class="form-label" for="project-setup-key">מפתח התקנה (למנהל האתר)</label>
+                            <input type="text" id="project-setup-key" class="form-input" required>
+                            <p class="text-xs text-gray-500 mt-1">
+                                צור מפתח ייחודי (באנגלית) לשליחה למנהל האתר.
+                                לדוגמה: <code>zebulun-hofman-123</code>
+                            </p>
+                        </div>
+                    </form>
+                `,
+                footer: `
+                    <button class="btn btn-secondary" onclick="closeModal()">ביטול</button>
+                    <button class="btn btn-primary" onclick="handleSaveProject()">שמור פרויקט</button>
+                `
             });
-            return items;
+        }
+        
+        window.openEditProjectModal = (project) => {
+             showModal({
+                title: "עריכת פרויקט",
+                body: `
+                    <form id="edit-project-form" class="space-y-4" data-id="${project.id}">
+                        <div>
+                            <label class="form-label" for="project-name-edit">שם הפרויקט</label>
+                            <input type="text" id="project-name-edit" class="form-input" value="${project.name || ''}" required>
+                        </div>
+                        <div>
+                            <label class="form-label" for="project-address-edit">כתובת מלאה</label>
+                            <input type="text" id="project-address-edit" class="form-input" value="${project.address || ''}" required>
+                        </div>
+                        <div>
+                            <label class="form-label" for="project-contact-edit">איש קשר באתר</label>
+                            <input type="text" id="project-contact-edit" class="form-input" value="${project.contact || ''}">
+                        </div>
+                        <div>
+                            <label class="form-label" for="project-setup-key-edit">מפתח התקנה (למנהל האתר)</label>
+                            <input type="text" id="project-setup-key-edit" class="form-input" value="${project.setupKey || ''}" required>
+                        </div>
+                    </form>
+                `,
+                footer: `
+                    <button class="btn btn-danger" onclick="handleDeleteProject('${project.id}')">מחק פרויקט</button>
+                    <button class="btn btn-secondary" onclick="closeModal()">ביטול</button>
+                    <button class="btn btn-primary" onclick="handleSaveProject(true)">שמור שינויים</button>
+                `
+            });
         }
 
-        function resetSendButton(btn) {
-            if (!btn) return;
-            btn.disabled = false;
-            btn.innerHTML = '<i data-feather="send"></i> <span>שלח הזמנה ל-DeliveryMaster</span>';
-            feather.replace();
-        }
-
-        function resetNewOrderForm() {
-            const pasteBox = document.getElementById('smart-paste-box');
-            const projectSelect = document.getElementById('project-select-main');
-            const catalogResults = document.getElementById('catalog-results-main');
-            const cart = document.getElementById('main-order-cart');
-            const preview = document.getElementById('preview-container');
-
-            if (pasteBox) pasteBox.value = '';
-            if (projectSelect) projectSelect.value = '';
-            if (catalogResults) catalogResults.innerHTML = '';
-            if (cart) cart.innerHTML = '';
-            if (preview) preview.innerHTML = '';
-            
-            state.filesToUpload = [];
-        }
-
-        async function sendOrderToFirestore(payload) {
-            if (!db) throw new Error("Firestore is not initialized");
-            const orderRef = doc(db, "orders", payload.orderId);
-            await setDoc(orderRef, payload);
-            console.log("Order sent to Firestore with ID:", payload.orderId);
-        }
-
-        // --- [NEW v55] Approval Workbench Logic ---
-        function openApprovalModal(pendingOrderId) {
-            const order = state.pendingOrders.find(o => o.id === pendingOrderId);
-            if (!order) {
-                showToast("הבקשה לא נמצאה", "error");
+        window.handleSaveProject = async (isEdit = false) => {
+            const formId = isEdit ? '#edit-project-form' : '#add-project-form';
+            const form = document.querySelector(formId);
+            if (!form.checkValidity()) {
+                form.reportValidity();
                 return;
             }
-
-            // איפוס עגלת אישור
-            state.currentApprovalCart = [];
             
-            let mediaHTML = '';
-            if (order.media_files && order.media_files.length > 0) {
-                mediaHTML = order.media_files.map(file => {
-                    if (file.type.startsWith('image/')) {
-                        return `<li><a href="${file.url}" target="_blank" class="text-primary-color hover:underline">תמונה מצורפת</a></li>`;
-                    }
-                    if (file.type.startsWith('audio/')) {
-                        return `<li><audio controls src="${file.url}" class="w-full">הקלטה</audio></li>`;
-                    }
-                    return `<li><a href="${file.url}" target="_blank" class="text-primary-color hover:underline">קובץ מצורף</a></li>`;
-                }).join('');
+            const payload = {
+                clientId: CLIENT_ID,
+                name: form.querySelector(isEdit ? '#project-name-edit' : '#project-name').value,
+                address: form.querySelector(isEdit ? '#project-address-edit' : '#project-address').value,
+                contact: form.querySelector(isEdit ? '#project-contact-edit' : '#project-contact').value,
+                setupKey: form.querySelector(isEdit ? '#project-setup-key-edit' : '#project-setup-key').value,
+            };
+            
+            try {
+                let docRef;
+                if (isEdit) {
+                    const docId = form.dataset.id;
+                    docRef = doc(db, "projects", docId);
+                    await updateDoc(docRef, payload);
+                } else {
+                    docRef = collection(db, "projects");
+                    await addDoc(docRef, payload);
+                }
+                showGlobalAlert(`פרויקט ${isEdit ? 'עודכן' : 'נוצר'} בהצלחה!`, "success");
+                closeModal();
+                await loadClientData(); // Refresh all data
+            } catch (error) {
+                console.error("Failed to save project:", error);
+                showGlobalAlert("שגיאה בשמירת הפרויקט.", "error");
+            }
+        }
+        
+        window.handleDeleteProject = async (projectId) => {
+            if (!confirm("האם אתה בטוח שברצונך למחוק את הפרויקט? פעולה זו אינה הפיכה.")) {
+                return;
             }
             
-            const cartItemsHTML = (order.cart_items && order.cart_items.length > 0)
-                ? order.cart_items.map(item => `<li>${item.quantity} x ${item.name} (מק"ט: ${item.sku})</li>`).join('')
-                : '<li>אין פריטים מהקטלוג</li>';
+            try {
+                await deleteDoc(doc(db, "projects", projectId));
+                showGlobalAlert("פרויקט נמחק בהצלחה", "success");
+                closeModal();
+                await loadClientData(); // Refresh all data
+            } catch (error) {
+                console.error("Failed to delete project:", error);
+                showGlobalAlert("שגיאה במחיקת הפרויקט.", "error");
+            }
+        }
 
-            const body = `
-                <div class="approval-grid">
-                    <!-- Column 1: Request from Site -->
-                    <div class="approval-col">
-                        <h4>בקשה מפרויקט: ${order.project_name}</h4>
-                        <div class="request-data space-y-3">
-                            <p><strong>מנהל אתר:</strong> ${order.submitter_name}</p>
-                            <p><strong>מיקום מבוקש:</strong> ${order.location_address || 'לא צוין'}</p>
-                            <div>
-                                <strong>טקסט חופשי:</strong>
-                                <pre>${order.raw_text || "---"}</pre>
-                            </div>
-                            <div>
-                                <strong>פריטים מהקטלוג (שטח):</strong>
-                                <ul class="list-disc pr-4">${cartItemsHTML}</ul>
-                            </div>
-                            <div>
-                                <strong>מדיה מצורפת:</strong>
-                                <ul class="list-disc pr-4">${mediaHTML || '<li>אין מדיה</li>'}</ul>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Column 2: Official Order (Yossi's Workbench) -->
-                    <div class="approval-col">
-                        <h4>בניית הזמנה רשמית</h4>
-                        <div class="space-y-4">
-                            <div>
-                                <label class="form-label" for="product-search-approval">חפש והוסף פריטים</label>
-                                <input type="text" id="product-search-approval" class="form-input" placeholder="הקלד מק'ט או שם..." onkeyup="searchCatalogApproval(this.value, 'catalog-results-approval')">
-                                <div id="catalog-results-approval" class="catalog-search-results mt-2"></div>
-                            </div>
-                            <div>
-                                <label class="form-label">עגלת הזמנה רשמית</label>
-                                <div id="approval-order-cart" class="mt-2 space-y-2 p-3 bg-light rounded-md border min-h-[100px]">
-                                    <!-- Approval cart items will be injected here -->
+        window.shareProjectLink = (setupKey, projectName) => {
+            if (!setupKey) {
+                showGlobalAlert("לפרויקט זה אין מפתח התקנה. ערוך את הפרויקט והוסף מפתח.", "error");
+                return;
+            }
+            
+            // Construct the full URL to site_app.html
+            const currentUrl = new URL(window.location.href);
+            const appPath = `${currentUrl.origin}${currentUrl.pathname.substring(0, currentUrl.pathname.lastIndexOf('/'))}/site_app.html`;
+            const shareUrl = `${appPath}?setup_key=${setupKey}`;
+            
+            const shareText = `
+היי,
+הכנתי לך לינק להתקנת אפליקציית ההזמנות עבור פרויקט "${projectName}".
+אנא פתח את הלינק הבא מהטלפון הנייד שלך והתקן את האפליקציה למסך הבית:
+
+${shareUrl}
+
+תודה,
+יוסי
+            `;
+            
+            // Try to use Web Share API first
+            if (navigator.share) {
+                navigator.share({
+                    title: `התקנת אפליקציה: ${projectName}`,
+                    text: shareText,
+                    url: shareUrl,
+                })
+                .then(() => console.log('Successful share'))
+                .catch((error) => console.log('Error sharing', error));
+            } else {
+                // Fallback to clipboard
+                navigator.clipboard.writeText(shareText).then(() => {
+                    showGlobalAlert("לינק וטקסט שיתוף הועתקו ללוח!", "success");
+                }, (err) => {
+                    console.error('Failed to copy text: ', err);
+                    showGlobalAlert("שגיאה בהעתקת הלינק.", "error");
+                });
+            }
+        }
+
+        // --- Approval Workbench Modal ---
+        
+        window.openApprovalModal = (order) => {
+            state.approval.currentOrder = order;
+            state.approval.cart = {}; // Reset cart
+            
+            const projectName = state.projects.find(p => p.id === order.project_id)?.name || 'לא שויך';
+            const timestamp = order.timestamp ? new Date(order.timestamp.toDate()).toLocaleString('he-IL') : 'N/A';
+            
+            // Auto-populate cart from request [v55.8 Fix]
+            if (order.cart_items && Array.isArray(order.cart_items)) {
+                order.cart_items.forEach(item => {
+                    // We need to find the full item details from the catalog
+                    const catalogItem = state.catalog.find(ci => ci.sku === item.sku);
+                    if (catalogItem) {
+                        state.approval.cart[item.sku] = { ...catalogItem, qty: item.qty };
+                    } else {
+                        // Fallback if item not in catalog
+                        state.approval.cart[item.sku] = { ...item, name: item.name || item.sku, qty: item.qty, img: "https://placehold.co/100x100/eef4ff/cbd5e1?text=?" };
+                    }
+                });
+            }
+
+            let mediaHTML = order.media_files?.map(file => `
+                <a href="${file.url}" target="_blank" class="block underline">
+                    ${file.type.startsWith("image/") ? 
+                        `<img src="${file.url}" class="w-20 h-20 rounded object-cover border">` : 
+                        `<i data-feather="file-text"></i> ${file.name}`}
+                </a>
+            `).join('') || '<p class="text-gray-500">אין</p>';
+            
+            let audioHTML = order.audio_files?.map(file => `
+                <audio controls src="${file.url}" class="w-full"></audio>
+            `).join('') || '<p class="text-gray-500">אין</p>';
+            
+            let cartHTML = order.cart_items?.map(item => `
+                <p>• ${item.qty} x ${item.name} (מק"ט: ${item.sku})</p>
+            `).join('') || '<p class="text-gray-500">אין</p>';
+
+            showModal({
+                title: `אישור בקשה: ${projectName}`,
+                wide: true,
+                body: `
+                    <div class="approval-grid">
+                        <!-- Column 1: Request Data -->
+                        <div class="approval-col">
+                            <h4><i data-feather="smartphone" class="w-5 h-5 inline-block ml-1"></i>בקשה מהשטח</h4>
+                            <div class="request-data space-y-3">
+                                <p><strong>מאת:</strong> ${order.user_name || 'מנהל אתר'}</p>
+                                <p><strong>בתאריך:</strong> ${timestamp}</p>
+                                <p><strong>מיקום:</strong> ${order.location ? `<a href="https://www.google.com/maps?q=${order.location.lat},${order.location.lng}" target="_blank">פתח במפות גוגל</a>` : 'לא סופק'}</p>
+                                
+                                <div>
+                                    <strong>טקסט חופשי:</strong>
+                                    <pre class="mt-1 bg-white p-2 rounded">${order.raw_text || 'אין'}</pre>
+                                </div>
+                                
+                                <div>
+                                    <strong>פריטים מהקטלוג:</strong>
+                                    <div class="mt-1 bg-white p-2 rounded">${cartHTML}</div>
+                                </div>
+                                
+                                <div>
+                                    <strong>הקלטות קוליות:</strong>
+                                    <div class="mt-1 space-y-2">${audioHTML}</div>
+                                </div>
+                                
+                                <div>
+                                    <strong>תמונות וקבצים:</strong>
+                                    <div class="mt-1 flex gap-2 flex-wrap">${mediaHTML}</div>
                                 </div>
                             </div>
-                             <div>
-                                <label class="form-label" for="approval-notes">הערות נוספות (מנהל)</label>
-                                <textarea id="approval-notes" class="form-input" rows="2"></textarea>
+                        </div>
+                        
+                        <!-- Column 2: Official Order -->
+                        <div class="approval-col">
+                            <h4><i data-feather="edit" class="w-5 h-5 inline-block ml-1"></i>הזמנה רשמית (לביצוע)</h4>
+                            <div class="space-y-4">
+                                <div>
+                                    <label for="catalog-search-approval" class="form-label">חפש והוסף פריטים</label>
+                                    <input type="text" id="catalog-search-approval" class="form-input" placeholder="חפש מק''ט, שם מוצר...">
+                                    <div id="catalog-results-approval" class="catalog-search-results mt-2 hidden"></div>
+                                </div>
+                                
+                                <div id="cart-approval" class="space-y-2 mt-3 max-h-60 overflow-y-auto no-scrollbar">
+                                    <!-- Approval cart items injected here -->
+                                </div>
+                                
+                                <div>
+                                    <label for="approval-notes" class="form-label">הערות למנהל המשלוח</label>
+                                    <textarea id="approval-notes" class="form-textarea" rows="3" placeholder="לדוגמה: אספקה למחר ב-07:00, שער ראשי"></textarea>
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
-            `;
+                `,
+                footer: `
+                    <button class="btn btn-danger" onclick="rejectPendingOrder()">דחה בקשה</button>
+                    <button class="btn btn-secondary" onclick="closeModal()">סגור</button>
+                    <button id="approval-submit-btn" class="btn btn-primary" onclick="submitApprovedOrder()">
+                        <span id="approval-submit-text">אשר ושלח ל-DeliveryMaster</span>
+                        <div id="approval-submit-loader" class="loader-small hidden"></div>
+                    </button>
+                `
+            });
             
-            const footer = `
-                <button class="btn btn-danger" onclick="rejectPendingOrder('${order.id}')">
-                    <i data-feather="x"></i> <span>דחה בקשה</span>
-                </button>
-                <div class="flex-grow"></div>
-                <button class="btn btn-secondary" onclick="closeModal()">ביטול</button>
-                <button class="btn btn-primary btn-lg" onclick="submitApprovedOrder('${order.id}')">
-                    <i data-feather="check"></i> <span>אשר ושלח ל-DeliveryMaster</span>
-                </button>
-            `;
-            
-            openModal(`אישור בקשה: ${order.project_name}`, body, footer, true);
-
-            // [FIX] העתקת פריטים מהבקשה לעגלת האישור
-            if (order.cart_items && order.cart_items.length > 0) {
-                const approvalCart = document.getElementById('approval-order-cart');
-                if (!approvalCart) return;
-
-                order.cart_items.forEach(item => {
-                    const itemEl = document.createElement('div');
-                    itemEl.className = 'order-cart-item';
-                    itemEl.id = `cart-item-${item.sku}-true`;
-                    itemEl.dataset.sku = item.sku;
-                    itemEl.dataset.name = item.name;
-                    itemEl.innerHTML = `
-                        <span class="flex-grow">${item.name} (מק"ט: ${item.sku})</span>
-                        <input type="number" value="${item.quantity || 1}" min="1" class="form-input w-20 text-center">
-                        <button class="btn-icon text-danger" onclick="this.parentElement.remove()">
-                            <i data-feather="x" class="w-4 h-4"></i>
-                        </button>
-                    `;
-                    approvalCart.appendChild(itemEl);
-                });
-                feather.replace();
-            }
+            // Attach listeners for the approval modal's form
+            document.getElementById('catalog-search-approval').onkeyup = handleCatalogSearch;
+            renderCart('approval'); // Render auto-populated cart
         }
-        
-        // [NEW v55]
-        async function submitApprovedOrder(pendingOrderId) {
-            const pendingOrder = state.pendingOrders.find(o => o.id === pendingOrderId);
-            if (!pendingOrder) return;
 
-            const btn = document.querySelector('.modal-footer .btn-primary');
-            btn.disabled = true;
-            btn.innerHTML = '<div class="loader-small"></div> <span>מאשר...</span>';
+        window.submitApprovedOrder = async () => {
+            const order = state.approval.currentOrder;
+            if (!order) return;
             
-            const cartItems = getCartItems('approval-order-cart');
-            const managerNotes = document.getElementById('approval-notes').value;
+            const submitBtn = document.getElementById('approval-submit-btn');
+            const btnText = document.getElementById('approval-submit-text');
+            const btnLoader = document.getElementById('approval-submit-loader');
 
-            if (cartItems.length === 0) {
-                showToast("חובה להוסיף פריטים להזמנה הרשמית", "error");
-                btn.disabled = false;
-                btn.innerHTML = '<i data-feather="check"></i> <span>אשר ושלח</span>';
-                feather.replace();
-                return;
-            }
+            // Disable button
+            submitBtn.disabled = true;
+            btnText.classList.add('hidden');
+            btnLoader.classList.remove('hidden');
             
-            const project = state.projects.find(p => p.id === pendingOrder.project_id);
-
-            const orderPayload = {
-                orderId: `ZEB-${Date.now()}`,
-                clientId: CLIENT_ID,
-                projectId: pendingOrder.project_id,
-                projectName: pendingOrder.project_name,
-                address: pendingOrder.location_address || (project ? project.address : "כתובת לא צוינה"),
-                // [TODO] Add lat/lon from pending order
-                contactName: project ? (project.contact || pendingOrder.submitter_name) : pendingOrder.submitter_name,
-                rawText: `--- בקשה מקורית מהשטח ---\n${pendingOrder.raw_text || ''}\n\n--- הערות מנהל ---\n${managerNotes}`,
-                cartItems: cartItems,
-                attachments: pendingOrder.media_files || [],
-                createdAt: serverTimestamp(),
-                status: "חדש",
-                sourceRequestId: pendingOrderId, 
-                siteManagerUid: pendingOrder.site_manager_uid 
-            };
-
             try {
-                // 1. Send official order
-                await sendOrderToFirestore(orderPayload);
+                const project = state.projects.find(p => p.id === order.project_id);
+                const orderId = `ZEB-${Date.now()}`;
                 
-                // [NEW] 2. Send to Team Chat
-                postOrderToTeamChat(orderPayload, "יוסי (אישור)");
-
-                // 3. Update pending order (mark as approved)
-                const pendingRef = doc(db, "pending_orders", pendingOrderId);
-                await updateDoc(pendingRef, {
-                    status: "approved",
-                    final_order_id: orderPayload.orderId
-                });
-                
-                showToast("ההזמנה אושרה ונשלחה!", "success");
-                closeModal();
-                
-            } catch (error) {
-                 console.error("Error approving order:", error);
-                 showToast("שגיאה באישור ההזמנה", "error");
-                 btn.disabled = false;
-                 btn.innerHTML = '<i data-feather="check"></i> <span>אשר ושלח</span>';
-                 feather.replace();
-            }
-        }
-        
-        // [NEW v55]
-        async function rejectPendingOrder(pendingOrderId) {
-            // [FIX] החלפת confirm
-            const body = `<p>האם אתה בטוח שברצונך לדחות בקשה זו? לא ניתן לשחזר אותה.</p>`;
-            const footer = `
-                <button class="btn btn-secondary" onclick="closeModal()">ביטול</button>
-                <button class="btn btn-danger" onclick="confirmRejectPendingOrder('${pendingOrderId}')">דחה בקשה</button>
-            `;
-            openModal("אישור דחייה", body, footer);
-        }
-        window.rejectPendingOrder = rejectPendingOrder; // Expose
-
-        async function confirmRejectPendingOrder(pendingOrderId) {
-            try {
-                const pendingRef = doc(db, "pending_orders", pendingOrderId);
-                await updateDoc(pendingRef, {
-                    status: "rejected"
-                    // [TODO] Add a rejection note?
-                });
-                showToast("הבקשה נדחתה", "info");
-                closeModal();
-            } catch (error) {
-                console.error("Error rejecting order:", error);
-                showToast("שגיאה בדחיית הבקשה", "error");
-            }
-        }
-        window.confirmRejectPendingOrder = confirmRejectPendingOrder; // Expose
-
-        // [NEW] פונקציה לשליחת הזמנה לצ'אט הצוות
-        async function postOrderToTeamChat(orderPayload, senderName) {
-            if (!db || !TEAM_CHAT_ID) {
-                console.warn("Team Chat ID not configured. Skipping chat post.");
-                return;
-            }
-            
-            const messagesRef = collection(db, "teamChats", TEAM_CHAT_ID, "messages");
-            
-            // יצירת טקסט מסודר
-            let chatText = `הזמנה חדשה התקבלה:\n`;
-            chatText += `מזהה: ${orderPayload.orderId}\n`;
-            chatText += `פרויקט: ${orderPayload.projectName || 'לא צוין'}\n`;
-            chatText += `כתובת: ${orderPayload.address || 'לא צוינה'}\n`;
-            chatText += `\nפריטים:\n`;
-            
-            if (orderPayload.cartItems && orderPayload.cartItems.length > 0) {
-                orderPayload.cartItems.forEach(item => {
-                    chatText += ` - ${item.quantity} x ${item.name} (מק"ט: ${item.sku})\n`;
-                });
-            } else {
-                chatText += `(אין פריטים מהקטלוג - ראה הערות)\n`;
-            }
-            
-            if (orderPayload.rawText) {
-                chatText += `\nהערות:\n${orderPayload.rawText}\n`;
-            }
-
-            try {
-                await addDoc(messagesRef, {
-                    text: chatText,
-                    senderName: senderName || "מערכת",
+                // 1. Prepare payload
+                const orderPayload = {
+                    client_id: CLIENT_ID,
+                    order_id: orderId,
+                    project_id: order.project_id,
+                    project_name: project?.name || "לא שויך",
+                    address: project?.address || "לא צוינה כתובת", // Use project address
+                    location: order.location, // Use location from site app
+                    user_id: currentUserId,
+                    user_name: "יוסי (אישור)",
+                    raw_text: order.raw_text, // Keep original raw text
+                    cart_items: Object.values(state.approval.cart), // Use the *approved* cart
+                    media_files: order.media_files || [], // Keep original media
+                    audio_files: order.audio_files || [], // Keep original audio
+                    notes: document.getElementById('approval-notes').value,
+                    status: "מאושר",
                     timestamp: serverTimestamp(),
-                    type: "order" // סוג הודעה מיוחד
+                    created_by: "portal-approval",
+                    original_request_id: order.id // Link to the original request
+                };
+                
+                // 2. Use a batch write to ensure atomicity
+                const batch = writeBatch(db);
+                
+                // 2a. Create the new official order in 'orders'
+                const newOrderRef = doc(db, "orders", orderId);
+                batch.set(newOrderRef, orderPayload);
+                
+                // 2b. Update the original pending order
+                const pendingOrderRef = doc(db, "pending_orders", order.id);
+                batch.update(pendingOrderRef, { 
+                    status: "approved",
+                    approved_order_id: orderId,
+                    approved_by: currentUserId,
+                    approved_at: serverTimestamp()
                 });
+                
+                // 3. Commit the batch
+                await batch.commit();
+                
+                // [תיקון v55.7] 4. Post to team chat
+                await postOrderToTeamChat(orderPayload);
+                
+                showGlobalAlert("הבקשה אושרה ונשלחה לביצוע!", "success");
+                closeModal();
+                
+            } catch (error) {
+                console.error("Failed to approve order:", error);
+                showGlobalAlert("שגיאה באישור ההזמנה.", "error");
+            } finally {
+                // Re-enable button
+                submitBtn.disabled = false;
+                btnText.classList.remove('hidden');
+                btnLoader.classList.add('hidden');
+            }
+        }
+        
+        window.rejectPendingOrder = async () => {
+             const order = state.approval.currentOrder;
+            if (!order) return;
+            
+            const reason = prompt("אנא הזן סיבת דחייה (יוצג למנהל האתר):");
+            if (!reason) return; // User cancelled
+            
+            try {
+                const pendingOrderRef = doc(db, "pending_orders", order.id);
+                await updateDoc(pendingOrderRef, {
+                    status: "rejected",
+                    rejection_reason: reason,
+                    rejected_by: currentUserId,
+                    rejected_at: serverTimestamp()
+                });
+                
+                showGlobalAlert("הבקשה נדחתה", "info");
+                closeModal();
+                
+            } catch (error) {
+                console.error("Failed to reject order:", error);
+                showGlobalAlert("שגיאה בדחיית הבקשה.", "error");
+            }
+        }
+        
+        /**
+         * [NEW v55.7] Posts an order summary to the team chat
+         * @param {object} orderPayload - The official order payload
+         */
+        async function postOrderToTeamChat(orderPayload) {
+            if (!TEAM_CHAT_ID) {
+                console.warn("TEAM_CHAT_ID is not set. Skipping chat post.");
+                return;
+            }
+            
+            try {
+                const chatMessagesRef = collection(db, "teamChats", TEAM_CHAT_ID, "messages");
+                
+                // Create a formatted message
+                let messageText = `
+                    <div style="font-weight: 600; color: #3b82f6;">
+                        🔔 הזמנה חדשה אושרה: ${orderPayload.order_id}
+                    </div>
+                    <div><strong>פרויקט:</strong> ${orderPayload.project_name}</div>
+                    <div><strong>כתובת:</strong> ${orderPayload.address}</div>
+                    <div><strong>פריטים:</strong></div>
+                    <ul>
+                        ${orderPayload.cart_items.map(item => `<li>&bull; ${item.qty} x ${item.name}</li>`).join('')}
+                    </ul>
+                `;
+                if (orderPayload.notes) {
+                    messageText += `<div><strong>הערות:</strong> ${orderPayload.notes}</div>`;
+                }
+
+                const chatPayload = {
+                    text: messageText,
+                    type: "order_notification",
+                    senderId: "system",
+                    senderName: "מערכת זבולון",
+                    timestamp: serverTimestamp(),
+                    orderId: orderPayload.order_id,
+                    projectId: orderPayload.project_id
+                };
+                
+                await addDoc(chatMessagesRef, chatPayload);
                 console.log("Order posted to team chat successfully.");
+                
             } catch (error) {
                 console.error("Failed to post order to team chat:", error);
-                // לא להציג שגיאה למשתמש, זו פעולת רקע
+                // Don't bother the user with this, just log it
             }
         }
 
+        // --- Modal & Alert System ---
+        
+        const modal = {
+            overlay: document.getElementById('modal-overlay'),
+            container: document.getElementById('main-modal'),
+            title: document.getElementById('modal-title'),
+            body: document.getElementById('modal-body'),
+            footer: document.getElementById('modal-footer'),
+        };
 
-        // --- Global Alerts & Utils ---
-        function listenForGlobalAlerts() {
-            try {
-                const q = query(
-                    collection(db, "globalAlerts"),
-                    orderBy("timestamp", "desc"),
-                    limit(1)
-                );
-                
-                let initialLoad = true;
-                globalAlertsListener = onSnapshot(q, (snapshot) => {
-                    if (initialLoad) {
-                        initialLoad = false;
-                        return;
-                    }
-                    
-                    snapshot.docChanges().forEach((change) => {
-                        if (change.type === "added") {
-                            const alert = change.doc.data();
-                            playAlert(alert.title, alert.type || 'info');
-                        }
-                    });
-                }, (error) => {
-                    console.error("Failed to listen for global alerts:", error.message);
-                });
-                
-            } catch (error) {
-                console.error("Error setting up alert listener:", error);
-            }
-        }
-
-        function playAlert(message, type = "info") {
-            console.log(`Playing Alert: ${message} (Type: ${type})`);
+        window.showModal = ({ title, body, footer, wide = false }) => {
+            modal.title.innerHTML = title;
+            modal.body.innerHTML = body;
+            modal.footer.innerHTML = footer;
             
-            try {
-                const soundUrl = (type === "error" || type === "broadcast")
-                    ? "https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg" 
-                    : "https://actions.google.com/sounds/v1/alarms/beep_short.ogg";
-                const audio = new Audio(soundUrl);
-                audio.play().catch(e => console.warn("Audio playback blocked by browser."));
-            } catch (e) {
-                console.warn("Audio playback failed.", e);
+            if (wide) {
+                modal.container.classList.add('modal-wide');
+            } else {
+                modal.container.classList.remove('modal-wide');
             }
 
-            const container = document.getElementById("global-alert-container");
-            const alertBox = document.createElement("div");
-            alertBox.className = `global-alert ${type === 'error' ? 'alert-error' : (type === 'success' ? 'alert-success' : 'alert-info')}`;
-            
-            const icon = (type === "error") ? "alert-triangle" : (type === 'success' ? 'check-circle' : 'info');
-            alertBox.innerHTML = `<i data-feather="${icon}" class="w-5 h-5"></i><span>${message}</span>`;
-            
-            container.appendChild(alertBox);
+            modal.overlay.classList.add('visible');
+            modal.container.classList.add('visible');
             feather.replace();
+        }
+
+        window.closeModal = () => {
+            modal.overlay.classList.remove('visible');
+            modal.container.classList.remove('visible');
+            // Clean up
+            modal.container.classList.remove('modal-wide');
+            modal.title.innerHTML = '';
+            modal.body.innerHTML = '';
+            modal.footer.innerHTML = '';
+            // Clear approval state
+            state.approval.currentOrder = null;
+            state.approval.cart = {};
+            state.approval.uploadedFiles = [];
+        }
+
+        window.showGlobalAlert = (message, type = "info", duration = 3000) => {
+            const container = document.getElementById('global-alert-container');
+            const alert = document.createElement('div');
+            alert.className = `global-alert alert-${type}`;
             
+            let icon = "info";
+            if (type === "success") icon = "check-circle";
+            if (type === "error") icon = "alert-triangle";
+            
+            alert.innerHTML = `<i data-feather="${icon}"></i> <span>${message}</span>`;
+            
+            container.appendChild(alert);
+            feather.replace();
+
             setTimeout(() => {
-                alertBox.style.opacity = '0';
-                alertBox.style.transform = 'translateY(20px)';
-                setTimeout(() => alertBox.remove(), 300);
-            }, 4000);
+                alert.style.transition = "opacity 0.3s ease";
+                alert.style.opacity = "0";
+                setTimeout(() => alert.remove(), 300);
+            }, duration);
         }
 
-        function showToast(message, type = "info") {
-            playAlert(message, type);
+        // --- [תיקון] הוספת מערכת הדרכה ---
+        const helpContent = {
+            'yossi': `
+                <h1 class="text-2xl font-bold mb-4">הדרכה: פורטל מנהל רכש (יוסי)</h1>
+                <p>ברוך הבא לפורטל הניהול. התפקיד שלך הוא "בקר האיכות" של המערכת.</p>
+
+                <h3><i data-feather="inbox" class="w-5 h-5 inline-block ml-1"></i>הזמנות לאישור</h3>
+                <p>כאן מגיעות כל הבקשות הגולמיות ממנהלי האתרים (כמו עבד). בקשה מכילה טקסט חופשי, הקלטות קוליות, ופריטי קטלוג שהם ניסו לבחור.</p>
+                <ol>
+                    <li>פתח בקשה. ייפתח לך "שולחן העבודה" (Workbench).</li>
+                    <li><strong>צד ימין:</strong> הבקשה הגולמית מהשטח (אי אפשר לערוך).</li>
+                    <li><strong>צד שמאל:</strong> ההזמנה הרשמית (אותה אתה בונה).</li>
+                    <li>האזן להקלטות ובדוק את התמונות.</li>
+                    <li>פריטים שהמנהל בחר נכון מהקטלוג יועתקו אוטומטית לצד שמאל.</li>
+                    <li>השתמש בחיפוש הקטלוג (צד שמאל) כדי להוסיף פריטים חסרים (כמו אלה מההקלטה) עם מק"ט מדויק.</li>
+                    <li>לחץ <b>"אשר ושלח ל-DeliveryMaster"</b>.</li>
+                </ol>
+                <p>ברגע שלחצת "אשר", ההזמנה הרשמית נשלחת ללוגיסטיקה (ח.סבן) וגם מופיעה בצ'אט הצוות.</p>
+
+                <h3><i data-feather="plus-circle" class="w-5 h-5 inline-block ml-1"></i>הזמנה חדשה</h3>
+                <p>השתמש במסך זה כדי ליצור הזמנה רשמית בעצמך, ללא בקשה מהשטח. הזמנה זו נשלחת ישר ללוגיסטיקה.</p>
+
+                <h3><i data-feather="briefcase" class="w-5 h-5 inline-block ml-1"></i>ניהול פרויקטים</h3>
+                <p>כאן אתה מגדיר את הפרויקטים של זבולון עדירן. כדי שאפליקציית השטח תעבוד, אתה חייב ליצור פרויקט ולתת לו "מפתח התקנה" (Setup Key).</p>
+                <ol>
+                    <li>לחץ על "הוסף פרויקט חדש".</li>
+                    <li>מלא את שם הפרויקט והכתובת.</li>
+                    <li>המצא "מפתח התקנה" ייחודי באנגלית (למשל: <code>zebulun-hofman-123</code>).</li>
+                    <li>לחץ על <b>אייקון השיתוף</b> <i data-feather="share-2" class="w-4 h-4 inline-block"></i> ליד הפרויקט.</li>
+                    <li>פעולה זו תעתיק לינק התקנה. שלח לינק זה למנהל האתר הרלוונטי ב-WhatsApp.</li>
+                </ol>
+            `
+        };
+
+        window.getHelpContent = (role) => {
+            return helpContent[role] || "<p>לא נמצאה הדרכה.</p>";
         }
 
-        function openModal(title, body, footer, isWide = false) {
-            const modal = document.getElementById('main-modal');
-            modal.classList.toggle('modal-wide', isWide);
-            document.getElementById('modal-title').innerText = title;
-            document.getElementById('modal-body').innerHTML = body;
-            document.getElementById('modal-footer').innerHTML = footer;
-            document.getElementById('modal-overlay').classList.add('visible');
-            modal.classList.add('visible');
-            feather.replace();
-        }
-
-        function closeModal() {
-            document.getElementById('modal-overlay').classList.remove('visible');
-            document.getElementById('main-modal').classList.remove('visible');
-            document.getElementById('main-modal').classList.remove('modal-wide');
-            
-            if (state.currentView === 'projects') {
-                renderProjectsPage();
+        window.showHelpModal = (role) => {
+            if (state.isDesktop) {
+                // On desktop, we inject into the detail panel
+                navigate('help');
+            } else {
+                // On mobile, we use the main modal
+                showModal({
+                    title: "מדריך למשתמש",
+                    wide: true,
+                    body: `<div class="help-modal-content">${getHelpContent(role)}</div>`,
+                    footer: `<button class="btn btn-primary" onclick="closeModal()">הבנתי</button>`
+                });
             }
         }
 
-        function debounce(func, wait) {
-            let timeout;
-            return function executedFunction(...args) {
-                const later = () => {
-                    clearTimeout(timeout);
-                    func(...args);
-                };
-                clearTimeout(timeout);
-                timeout = setTimeout(later, wait);
-            };
-        }
     </script>
-
 </body>
 </html>
