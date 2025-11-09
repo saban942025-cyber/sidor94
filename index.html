@@ -1,163 +1,148 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="he" dir="rtl">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>פורטל כניסה | Sidor</title>
-    <!-- טעינת Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- טעינת אייקונים של Lucide -->
-    <script src="https://unpkg.com/lucide-react@latest/dist/umd/lucide.js"></script>
-    <!-- טעינת פונט Inter -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>הדרכה — יוסי ואנשי השטח | ח.סבן — זבולון עדירן</title>
+  
+  <!-- [תיקון] הוספת Tailwind CSS לעיצוב פרימיום -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- [תיקון] הוספת מניפסט להתקנה כאפליקציה -->
+  <link rel="manifest" href="guide_manifest.json">
+  <meta name="theme-color" content="#ffffff">
+  <link rel="apple-touch-icon" href="https://i.postimg.cc/ryPT3r29/image.png">
+  <script src="https://unpkg.com/feather-icons"></script>
 
-    <style>
-        /* הגדרת פונט בסיס */
-        body {
-            font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
-        }
-
-        /* * עיצוב העטיפה (Wrapper)
-         * במובייל: תופס מסך מלא.
-         * במחשב שולחני: הופך ל"כרטיס" מרכזי עם אפקט זכוכית.
-        */
-
-        /* עיצוב בסיס (מובייל) */
-        body {
-            background-color: #030712; /* bg-gray-950 */
-        }
-
-        #app-wrapper {
-            width: 100%;
-            height: 100vh;
-            background-color: #030712; /* bg-gray-950 */
-            transition: all 0.3s ease-in-out;
-        }
-
-        /* עיצוב מחשב שולחני (md ומעלה) */
-        @media (min-width: 768px) {
-            body {
-                /* רקע גרדיאנט יוקרתי לדסקטופ */
-                background-image: linear-gradient(to top right, #1f2937, #111827);
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                height: 100vh;
-                overflow: hidden;
-            }
-
-            #app-wrapper {
-                /* הגדרת גודל "מכשיר מובייל" מדומיין */
-                max-width: 420px; /* רוחב נפוץ של מכשיר */
-                height: 90vh; /* גובה */
-                min-height: 700px;
-                max-height: 850px;
-                
-                /* אפקט העטיפה */
-                border-radius: 2.5rem; /* מעגל פינות חזק */
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.4);
-                
-                /* אפקט זכוכית (Glassmorphism) */
-                background-color: rgba(3, 7, 18, 0.8); /* bg-gray-950/80 */
-                backdrop-filter: blur(20px);
-                
-                overflow: hidden; /* חותך את התוכן לפינות המעוגלות */
-            }
-        }
-    </style>
+  <style>
+    /* [תיקון] העיצוב הישן הוסר.
+      העיצוב החדש מבוסס Tailwind ומוטמע ישירות ב-HTML.
+      נוסף עיצוב "Glassmorphism" וכרטיסיות מודרניות.
+    */
+    body {
+      font-family: 'Rubik', Arial, sans-serif; 
+      background:linear-gradient(180deg, #f3f4f6 0%, #e5e7eb 100%);
+    }
+    .card {
+      background: rgba(255, 255, 255, 0.7);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+    }
+  </style>
 </head>
-<body class="antialiased">
+<body class="min-h-screen p-4 md:p-8 antialiased">
 
-    <!-- עטיפת האפליקציה הראשית -->
-    <div id="app-wrapper">
-        
-        <!--
-          מבנה פנימי של האפליקציה (Flex)
-          גורם לכך שהתוכן המרכזי יתפוס את כל הגובה
-          והכותרת התחתונה תידבק לתחתית.
-        -->
-        <div class="flex flex-col h-full text-white overflow-y-auto">
-
-            <!-- כותרת עליונה -->
-            <header class="p-6 pt-10 text-center">
-                <div class="flex justify-center items-center space-x-3 rtl:space-x-reverse">
-                    <!-- לוגו האפליקציה -->
-                    <div class="p-2 bg-indigo-600 rounded-lg">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M16.883 17.065C17.523 16.29 17.9 15.34 17.9 14.3C17.9 12.39 16.31 10.8 14.4 10.8C12.49 10.8 10.9 12.39 10.9 14.3C10.9 16.21 12.49 17.8 14.4 17.8C15.16 17.8 15.86 17.58 16.45 17.2L19 19.75L19.75 19L17.065 16.315C17.02 16.36 16.97 16.405 16.925 16.45H16.883V17.065ZM14.4 16.4C13.29 16.4 12.4 15.46 12.4 14.3C12.4 13.19 13.29 12.2 14.4 12.2C15.51 12.2 16.4 13.19 16.4 14.3C16.4 15.46 15.51 16.4 14.4 16.4Z" fill="white"/>
-                            <path d="M12.31 4.25L5.75 8.75L4.25 7.69L10.81 3.19C11.56 2.68 12.44 2.68 13.19 3.19L19.75 7.69L18.25 8.75L12.31 4.25Z" fill="white" fill-opacity="0.6"/>
-                            <path d="M19.75 11.25V7.69L18.25 8.75V11.25L13.19 14.81C12.44 15.32 11.56 15.32 10.81 14.81L4.25 11.25V7.69L5.75 8.75V11.25L10.81 14.81C11.56 15.32 12.44 15.32 13.19 14.81L19.75 11.25Z" fill="white" fill-opacity="0.6"/>
-                        </svg>
-                    </div>
-                    <h1 class="text-2xl font-bold text-white">Sidor Portal</h1>
-                </div>
-            </header>
-
-            <!-- תוכן מרכזי (גולל) -->
-            <main class="flex-grow p-6 pt-8">
-                <div class="text-center">
-                    <h2 class="text-3xl font-bold text-white">ברוכים הבאים</h2>
-                    <p class="mt-2 text-lg text-gray-400">אנא בחר את נתיב הכניסה שלך</p>
-                </div>
-
-                <!-- אזור בחירה -->
-                <div class="mt-12 grid grid-cols-1 gap-6">
-                    
-                    <!-- כרטיס 1: כניסת מנהל -->
-                    <a href="./index_admin.html" 
-                       class="group block p-6 bg-gray-900/70 border border-gray-700/50 rounded-2xl transition-all duration-300 hover:bg-gray-800/80 hover:scale-[1.03] hover:shadow-xl">
-                        <div class="flex items-center space-x-4 rtl:space-x-reverse">
-                            <!-- אייקון מנהל -->
-                            <div class="p-3 bg-indigo-600 rounded-lg">
-                                <i data-lucide="shield-check" class="w-6 h-6 text-white"></i>
-                            </div>
-                            <div>
-                                <h3 class="text-xl font-semibold text-white">כניסת מנהל</h3>
-                                <p class="text-gray-400 text-sm mt-1">ניהול הזמנות, לקוחות וצוות</p>
-                            </div>
-                            <div class="flex-grow text-left">
-                                <i data-lucide="arrow-left" class="w-5 h-5 text-gray-600 group-hover:text-indigo-400 transition-colors rtl:hidden"></i>
-                                <i data-lucide="arrow-right" class="w-5 h-5 text-gray-600 group-hover:text-indigo-400 transition-colors ltr:hidden"></i>
-                            </div>
-                        </div>
-                    </a>
-
-                    <!-- כרטיס 2: כניסת לקוח -->
-                    <a href="./customer.html" 
-                       class="group block p-6 bg-gray-900/70 border border-gray-700/50 rounded-2xl transition-all duration-300 hover:bg-gray-800/80 hover:scale-[1.03] hover:shadow-xl">
-                        <div class="flex items-center space-x-4 rtl:space-x-reverse">
-                            <!-- אייקון לקוח -->
-                            <div class="p-3 bg-cyan-600 rounded-lg">
-                                <i data-lucide="send" class="w-6 h-6 text-white"></i>
-                            </div>
-                            <div>
-                                <h3 class="text-xl font-semibold text-white">כניסת לקוח</h3>
-                                <p class="text-gray-400 text-sm mt-1">פתיחת הזמנה חדשה ומעקב</p>
-                            </div>
-                            <div class="flex-grow text-left">
-                                <i data-lucide="arrow-left" class="w-5 h-5 text-gray-600 group-hover:text-cyan-400 transition-colors rtl:hidden"></i>
-                                <i data-lucide="arrow-right" class="w-5 h-5 text-gray-600 group-hover:text-cyan-400 transition-colors ltr:hidden"></i>
-                            </div>
-                        </div>
-                    </a>
-
-                </div>
-            </main>
-
-            <!-- כותרת תחתונה -->
-            <footer class="p-6 text-center text-gray-600 text-xs">
-                &copy; 2025 Sidor Systems. כל הזכויות שמורות.
-            </footer>
-
-        </div>
+  <div class="card max-w-4xl mx-auto rounded-2xl shadow-lg p-6 md:p-8 mb-6">
+    <div class="flex items-center justify-between">
+      <h1 class="text-3xl font-bold text-gray-900 mb-2">מדריך המערכת: זבולון עדירן</h1>
+      <img src="https://i.postimg.cc/ryPT3r29/image.png" alt="Saban Logo" class="h-10">
     </div>
+    <p class="text-lg text-gray-600">מדריך ויזואלי ליוסי (מנהל רכש), מנהלי האתרים (שטח) וצוות ח.סבן (לוגיסטיקה).</p>
+  </div>
 
-    <!-- הפעלת האייקונים -->
-    <script>
-        lucide.createIcons();
-    </script>
+  <div class="card max-w-4xl mx-auto rounded-2xl shadow-lg p-6 md:p-8 mb-6">
+    <h2 class="text-2xl font-semibold text-gray-800 mb-4 border-b border-gray-300 pb-2 flex items-center">
+      <i data-feather="link" class="ml-2 text-blue-600"></i>
+      לינקים להתקנת אפליקציית שטח (PWA)
+    </h2>
+    <p class="text-sm text-gray-600 mb-5 bg-blue-50 p-3 rounded-lg border border-blue-200">
+      <b class="text-blue-800">הנחיה ליוסי:</b> אלו הלינקים שאתה שולח למנהלי האתרים שלך. כל לינק מקושר לפרויקט ספציפי וכולל את מפתח ברירת המחדל <code>123456</code>.
+    </p>
+
+    <div class="projects grid grid-cols-1 md:grid-cols-2 gap-4">
+
+      <!-- פרויקט וייס -->
+      <div class="proj bg-white/80 p-4 rounded-lg border border-gray-200 shadow-sm transition-all hover:shadow-md">
+        <strong class="text-gray-900">607146 — זבולון-עדירן / וייס</strong>
+        <div class="text-sm text-gray-600">כתובת: הוורדים 19, סביון</div>
+        <!-- [תיקון] עדכון הלינק והמפתח -->
+        <a class="link bg-blue-500 hover:bg-blue-600 text-white font-semibold p-3 rounded-md text-center mt-3 block transition-all" href="https://saban942025-cyber.github.io/sidor94/sidor/Zebulun-Portal/site_app.html?setup_key=123456&project_id=607146" target="_blank">
+          פתח אפליקציית שטח (607146)
+        </a>
+      </div>
+      
+      <!-- פרויקט הופמן -->
+      <div class="proj bg-white/80 p-4 rounded-lg border border-gray-200 shadow-sm transition-all hover:shadow-md">
+        <strong class="text-gray-900">607145 — זבולון-עדירן / הופמן</strong>
+        <div class="text-sm text-gray-600">כתובת: החורש 21, כפר שמריהו</div>
+        <!-- [תיקון] עדכון הלינק והמפתח -->
+        <a class="link bg-blue-500 hover:bg-blue-600 text-white font-semibold p-3 rounded-md text-center mt-3 block transition-all" href="https://saban942025-cyber.github.io/sidor94/sidor/Zebulun-Portal/site_app.html?setup_key=123456&project_id=607145" target="_blank">
+          פתח אפליקציית שטח (607145)
+        </a>
+      </div>
+
+      <!-- פרויקט בן ארצי -->
+      <div class="proj bg-white/80 p-4 rounded-lg border border-gray-200 shadow-sm transition-all hover:shadow-md">
+        <strong class="text-gray-900">607127 — זבולון-עדירן / בן ארצי</strong>
+        <div class="text-sm text-gray-600">כתובת: ההאלה 8, הרצליה</div>
+        <!-- [תיקון] עדכון הלינק והמפתח -->
+        <a class="link bg-blue-500 hover:bg-blue-600 text-white font-semibold p-3 rounded-md text-center mt-3 block transition-all" href="https://saban942025-cyber.github.io/sidor94/sidor/Zebulun-Portal/site_app.html?setup_key=123456&project_id=607127" target="_blank">
+          פתח אפליקציית שטח (607127)
+        </a>
+      </div>
+
+      <!-- פרויקט בני דרור -->
+      <div class="proj bg-white/80 p-4 rounded-lg border border-gray-200 shadow-sm transition-all hover:shadow-md">
+        <strong class="text-gray-900">607114 — זבולון-עדירן / בני דרור</strong>
+        <div class="text-sm text-gray-600">כתובת: הגלבוע 6, בני דרור</div>
+        <!-- [תיקון] עדכון הלינק והמפתח (תיקון הנתיב) -->
+        <a class="link bg-blue-500 hover:bg-blue-600 text-white font-semibold p-3 rounded-md text-center mt-3 block transition-all" href="https://saban942025-cyber.github.io/sidor94/sidor/Zebulun-Portal/site_app.html?setup_key=123456&project_id=607114" target="_blank">
+          פתח אפליקציית שטח (607114)
+        </a>
+      </div>
+
+      <!-- פרויקט אדרעי -->
+      <div class="proj bg-white/80 p-4 rounded-lg border border-gray-200 shadow-sm transition-all hover:shadow-md">
+        <strong class="text-gray-900">607141 — זבולון-עדירן / אדרעי</strong>
+        <div class="text-sm text-gray-600">כתובת: שקד 2, רשפון</div>
+        <!-- [תיקון] עדכון הלינק והמפתח (תיקון הנתיב ../) -->
+        <a class="link bg-blue-500 hover:bg-blue-600 text-white font-semibold p-3 rounded-md text-center mt-3 block transition-all" href="https://saban942025-cyber.github.io/sidor94/sidor/Zebulun-Portal/site_app.html?setup_key=123456&project_id=607141" target="_blank">
+          פתח אפליקציית שטח (607141)
+        </a>
+      </div>
+      
+      <!-- פרויקט חדד -->
+      <div class="proj bg-white/80 p-4 rounded-lg border border-gray-200 shadow-sm transition-all hover:shadow-md">
+        <strong class="text-gray-900">607130 — זבולון-עדירן — חדד</strong>
+        <div class="text-sm text-gray-600">כתובת: ווינגייט 27, כפר שמריהו</div>
+        <!-- [תיקון] עדכון הלינק והמפתח (תיקון הלינק השבור) -->
+        <a class="link bg-blue-500 hover:bg-blue-600 text-white font-semibold p-3 rounded-md text-center mt-3 block transition-all" href="https://saban942025-cyber.github.io/sidor94/sidor/Zebulun-Portal/site_app.html?setup_key=123456&project_id=607130" target="_blank">
+          פתח אפליקציית שטח (607130)
+        </a>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="card max-w-4xl mx-auto rounded-2xl shadow-lg p-6 md:p-8 mb-6">
+    <h2 class="text-2xl font-semibold text-gray-800 mb-4 border-b border-gray-300 pb-2 flex items-center">
+      <i data-feather="users" class="ml-2 text-green-600"></i>
+      הסבר קצר (למשתמש)
+    </h2>
+    <p class="text-gray-700 leading-relaxed">
+      **יוסי (מנהל רכש):** התפקיד שלך הוא "בקר האיכות". כשמנהל שטח שולח בקשה, היא מגיעה אליך ללשונית "הזמנות לאישור". אתה בודק את הפריטים, מאזין להקלטות, מתרגם הכל למק"טים מדויקים מהקטלוג, ורק אז לוחץ "אשר ושלח ל-DeliveryMaster". אתה גם זה שמשתף את לינק ההתקנה למנהלי השטח.
+    </p>
+    <p class="text-gray-700 leading-relaxed mt-3">
+      **מנהל שטח (עבד):** התפקיד שלך הוא לדווח מהשטח. פתח את האפליקציה, בחר פריטים מהקטלוג, הקלט הודעה קולית, צרף תמונה, ושלח הכל לאישור יוסי. אתה יכול גם לשאול שאלות ישירות את צוות ח.סבן מלשונית "עזרה".
+    </p>
+  </div>
+
+
+  <footer class="text-center text-sm text-gray-600 mt-4">
+    מדריך זה נוצר כאפליקציית PWA וניתן להתקנה. הלינקים עודכנו למערכת הפעילה.<br>
+    &copy; 2025 H.Saban Materials & Gimini
+  </footer>
+  
+  <script>
+    feather.replace();
+    // הוספת יכולת התקנה (PWA)
+    let deferredPrompt;
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      // אפשר להציג כפתור התקנה ייעודי
+    });
+  </script>
 </body>
 </html>
