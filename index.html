@@ -3,201 +3,431 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sidor — Master Index</title>
-    
-    <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
-    <script>
-      window.OneSignalDeferred = window.OneSignalDeferred || [];
-      OneSignalDeferred.push(async function(OneSignal) {
-        await OneSignal.init({
-          appId: "de3834d3-1e11-40af-96d2-b25eda821c8f", // App ID from CSV
-        });
-      });
-    </script>
-    
+    <title>מאגר אתרים - DeliveryMaster</title>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; line-height: 1.6; margin: 0; padding: 20px; background-color: #f4f7f6; }
-        h1 { color: #2c3e50; }
-        .container { max-width: 1400px; margin: auto; background: #fff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); overflow: hidden; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 12px 15px; text-align: right; border-bottom: 1px solid #ddd; }
-        th { background-color: #34495e; color: white; }
-        tr:nth-child(even) { background-color: #f9f9f9; }
-        tr:hover { background-color: #ecf0f1; }
-        .status { padding: 5px 10px; border-radius: 15px; font-weight: bold; font-size: 0.9em; }
-        .status-ok { background-color: #2ecc71; color: white; }
-        .status-warn { background-color: #f39c12; color: white; }
-        .status-fix { background-color: #e74c3c; color: white; }
-        .suggestions { font-family: "Courier New", Courier, monospace; font-size: 0.95em; color: #555; max-width: 400px; word-wrap: break-word; }
-        .action-btn { background-color: #3498db; color: white; padding: 8px 12px; border: none; border-radius: 4px; cursor: pointer; text-decoration: none; display: inline-block; font-size: 0.9em; }
-        .action-btn:hover { background-color: #2980b9; }
-        .header { background: #2c3e50; color: white; padding: 20px; text-align: center; }
-        .header h1 { color: white; margin: 0; }
+        :root {
+            --primary: #2c3e50;
+            --secondary: #3498db;
+            --accent: #e74c3c;
+            --light: #ecf0f1;
+            --dark: #2c3e50;
+            --success: #2ecc71;
+            --warning: #f39c12;
+            --card-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            --transition: all 0.3s ease;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background-color: #f5f7fa;
+            color: var(--dark);
+            line-height: 1.6;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding: 20px;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            border-radius: 10px;
+            box-shadow: var(--card-shadow);
+        }
+        
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+        
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 25px;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: var(--card-shadow);
+            transition: var(--transition);
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+        
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15);
+        }
+        
+        .card-header {
+            background: var(--primary);
+            color: white;
+            padding: 15px 20px;
+            position: relative;
+        }
+        
+        .card-title {
+            font-size: 1.3rem;
+            margin: 0;
+            font-weight: 600;
+        }
+        
+        .card-badge {
+            position: absolute;
+            top: -10px;
+            left: 20px;
+            background: var(--accent);
+            color: white;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: bold;
+        }
+        
+        .card-content {
+            padding: 20px;
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .card-description {
+            margin-bottom: 20px;
+            color: #555;
+            flex-grow: 1;
+        }
+        
+        .card-link {
+            display: block;
+            background: var(--secondary);
+            color: white;
+            text-align: center;
+            padding: 12px;
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: 600;
+            transition: var(--transition);
+            margin-top: auto;
+        }
+        
+        .card-link:hover {
+            background: #2980b9;
+        }
+        
+        .card-footer {
+            padding: 15px 20px;
+            background: var(--light);
+            border-top: 1px solid #ddd;
+            font-size: 0.85rem;
+            color: #666;
+        }
+        
+        .category-tag {
+            display: inline-block;
+            background: var(--light);
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            margin-right: 5px;
+            margin-bottom: 5px;
+        }
+        
+        @media (max-width: 768px) {
+            .cards-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            h1 {
+                font-size: 2rem;
+            }
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="header">
-            <h1>רשימת אפליקציות ומצבן</h1>
+        <header>
+            <h1>מאגר אתרים - DeliveryMaster</h1>
+            <p class="subtitle">כרטיסיות גישה לכל האתרים והמערכות</p>
+        </header>
+        
+        <div class="cards-grid">
+            <!-- GitHub Repository -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-badge">מאגר</div>
+                    <h2 class="card-title">מאגר ראשי</h2>
+                </div>
+                <div class="card-content">
+                    <p class="card-description">מאגר הקוד הראשי של הפרויקט המאוחסן ב-GitHub</p>
+                    <a href="https://github.com/saban942025-cyber/sidor94" class="card-link" target="_blank">לחץ לגישה</a>
+                </div>
+                <div class="card-footer">
+                    <span class="category-tag">GitHub</span>
+                    <span class="category-tag">קוד מקור</span>
+                </div>
+            </div>
+            
+            <!-- DeliveryMaster+מכולות -->
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">DeliveryMaster+מכולות</h2>
+                </div>
+                <div class="card-content">
+                    <p class="card-description">מערכת ניהול משלוחים ומכולות בגרסת ECO3</p>
+                    <a href="https://sidor94-5gm.pages.dev/eco/eco3#" class="card-link" target="_blank">לחץ לגישה</a>
+                </div>
+                <div class="card-footer">
+                    <span class="category-tag">מערכת</span>
+                    <span class="category-tag">מכולות</span>
+                </div>
+            </div>
+            
+            <!-- אפליקציית נהג -->
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">אפליקציית נהג</h2>
+                </div>
+                <div class="card-content">
+                    <p class="card-description">אפליקציה ייעודית לנהגי החברה לניהול משלוחים</p>
+                    <a href="https://sidor94-5gm.pages.dev/driver-app/" class="card-link" target="_blank">לחץ לגישה</a>
+                </div>
+                <div class="card-footer">
+                    <span class="category-tag">אפליקציה</span>
+                    <span class="category-tag">נהגים</span>
+                </div>
+            </div>
+            
+            <!-- Viewer -->
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">צפייה במערכת</h2>
+                </div>
+                <div class="card-content">
+                    <p class="card-description">ממשק צפייה במערכת DeliveryMaster</p>
+                    <a href="https://sidor94-5gm.pages.dev/sidor/Viewer" class="card-link" target="_blank">לחץ לגישה</a>
+                </div>
+                <div class="card-footer">
+                    <span class="category-tag">צפייה</span>
+                    <span class="category-tag">מערכת</span>
+                </div>
+            </div>
+            
+            <!-- אפליקציית מכולות -->
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">אפליקציית מכולות</h2>
+                </div>
+                <div class="card-content">
+                    <p class="card-description">אפליקציה לניהול מכולות בגרסה החדשה</p>
+                    <a href="https://sidor94-5gm.pages.dev/app/new" class="card-link" target="_blank">לחץ לגישה</a>
+                </div>
+                <div class="card-footer">
+                    <span class="category-tag">אפליקציה</span>
+                    <span class="category-tag">מכולות</span>
+                </div>
+            </div>
+            
+            <!-- DeliveryMaster v34.5 -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-badge">גרסה 34.5</div>
+                    <h2 class="card-title">DeliveryMaster</h2>
+                </div>
+                <div class="card-content">
+                    <p class="card-description">גרסה 34.5 של מערכת DeliveryMaster</p>
+                    <a href="https://sidor94-5gm.pages.dev/sidor/saban94/index3#" class="card-link" target="_blank">לחץ לגישה</a>
+                </div>
+                <div class="card-footer">
+                    <span class="category-tag">מערכת</span>
+                    <span class="category-tag">גרסה 34.5</span>
+                </div>
+            </div>
+            
+            <!-- 607146-זבולון-עדירן וייס -->
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">פורטל זבולון - עדירן וייס</h2>
+                </div>
+                <div class="card-content">
+                    <p class="card-description">פורטל זבולון עבור לקוח עדירן וייס (קוד: 607146)</p>
+                    <a href="https://sidor94-5gm.pages.dev/sidor/Zebulun-Portal/site_app?setup_key=607146-123456" class="card-link" target="_blank">לחץ לגישה</a>
+                </div>
+                <div class="card-footer">
+                    <span class="category-tag">זבולון</span>
+                    <span class="category-tag">פורטל</span>
+                </div>
+            </div>
+            
+            <!-- 607145-זבולון-עדירן/הופמן -->
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">פורטל זבולון - עדירן/הופמן</h2>
+                </div>
+                <div class="card-content">
+                    <p class="card-description">פורטל זבולון עבור לקוח עדירן/הופמן (קוד: 607145)</p>
+                    <a href="https://sidor94-5gm.pages.dev/sidor/Zebulun-Portal/site_app.html?setup_key=607145-63914" class="card-link" target="_blank">לחץ לגישה</a>
+                </div>
+                <div class="card-footer">
+                    <span class="category-tag">זבולון</span>
+                    <span class="category-tag">פורטל</span>
+                </div>
+            </div>
+            
+            <!-- 607127 זבולון-עדירן/בן ארצי -->
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">פורטל זבולון - עדירן/בן ארצי</h2>
+                </div>
+                <div class="card-content">
+                    <p class="card-description">פורטל זבולון עבור לקוח עדירן/בן ארצי (קוד: 607127)</p>
+                    <a href="https://sidor94-5gm.pages.dev/sidor/Zebulun-Portal/site_app.html?setup_key=607127-123456" class="card-link" target="_blank">לחץ לגישה</a>
+                </div>
+                <div class="card-footer">
+                    <span class="category-tag">זבולון</span>
+                    <span class="category-tag">פורטל</span>
+                </div>
+            </div>
+            
+            <!-- 607114-זבולון-עדירן/בני דרור -->
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">פורטל זבולון - עדירן/בני דרור</h2>
+                </div>
+                <div class="card-content">
+                    <p class="card-description">פורטל זבולון עבור לקוח עדירן/בני דרור (קוד: 607114)</p>
+                    <a href="https://sidor94-5gm.pages.dev/sidor/Zebulun-Portal/site_app.html?setup_key=zebulun-dror123456" class="card-link" target="_blank">לחץ לגישה</a>
+                </div>
+                <div class="card-footer">
+                    <span class="category-tag">זבולון</span>
+                    <span class="category-tag">פורטל</span>
+                </div>
+            </div>
+            
+            <!-- 607141-זבולון-עדירן אדרעי -->
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">פורטל זבולון - עדירן אדרעי</h2>
+                </div>
+                <div class="card-content">
+                    <p class="card-description">פורטל זבולון עבור לקוח עדירן אדרעי (קוד: 607141)</p>
+                    <a href="https://sidor94-5gm.pages.dev/sidor/Zebulun-Portal/site_app.html?setup_key=607141-123456" class="card-link" target="_blank">לחץ לגישה</a>
+                </div>
+                <div class="card-footer">
+                    <span class="category-tag">זבולון</span>
+                    <span class="category-tag">פורטל</span>
+                </div>
+            </div>
+            
+            <!-- קובץ הוספת לקוח -->
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">הוספת לקוח</h2>
+                </div>
+                <div class="card-content">
+                    <p class="card-description">ממשק להוספת לקוחות חדשים למערכת</p>
+                    <a href="https://sidor94-5gm.pages.dev/sidor/add_customers" class="card-link" target="_blank">לחץ לגישה</a>
+                </div>
+                <div class="card-footer">
+                    <span class="category-tag">ניהול</span>
+                    <span class="category-tag">לקוחות</span>
+                </div>
+            </div>
+            
+            <!-- צ'אט וניהול -->
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">צ'אט וניהול</h2>
+                </div>
+                <div class="card-content">
+                    <p class="card-description">מערכת צ'אט וניהול הודעות</p>
+                    <a href="https://sidor94-5gm.pages.dev/sidor/messages_viewer" class="card-link" target="_blank">לחץ לגישה</a>
+                </div>
+                <div class="card-footer">
+                    <span class="category-tag">תקשורת</span>
+                    <span class="category-tag">הודעות</span>
+                </div>
+            </div>
+            
+            <!-- אפליקציית מנהל שטח זבולון עדירן -->
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">אפליקציית מנהל שטח</h2>
+                </div>
+                <div class="card-content">
+                    <p class="card-description">אפליקציה ייעודית למנהלי שטח בחברת זבולון עדירן</p>
+                    <a href="https://sidor94-5gm.pages.dev/sidor/site_app" class="card-link" target="_blank">לחץ לגישה</a>
+                </div>
+                <div class="card-footer">
+                    <span class="category-tag">אפליקציה</span>
+                    <span class="category-tag">מנהלי שטח</span>
+                </div>
+            </div>
+            
+            <!-- Team Viewer — יוסי (פיד חי) -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-badge">פיד חי</div>
+                    <h2 class="card-title">Team Viewer — יוסי</h2>
+                </div>
+                <div class="card-content">
+                    <p class="card-description">צפייה בצוות עם פיד חי של יוסי</p>
+                    <a href="https://sidor94-5gm.pages.dev/sidor/team" class="card-link" target="_blank">לחץ לגישה</a>
+                </div>
+                <div class="card-footer">
+                    <span class="category-tag">צוות</span>
+                    <span class="category-tag">פיד חי</span>
+                </div>
+            </div>
+            
+            <!-- DeliveryMaster Viewer -->
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">DeliveryMaster Viewer</h2>
+                </div>
+                <div class="card-content">
+                    <p class="card-description">ממשק צפייה מתקדם למערכת DeliveryMaster</p>
+                    <a href="https://sidor94-5gm.pages.dev/viewer-app/index2" class="card-link" target="_blank">לחץ לגישה</a>
+                </div>
+                <div class="card-footer">
+                    <span class="category-tag">צפייה</span>
+                    <span class="category-tag">מתקדם</span>
+                </div>
+            </div>
+            
+            <!-- אפליקציית מחסן -->
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">אפליקציית מחסן</h2>
+                </div>
+                <div class="card-content">
+                    <p class="card-description">אפליקציה לניהול מחסנים ומלאי</p>
+                    <a href="https://sidor94-5gm.pages.dev/warehouse-app/" class="card-link" target="_blank">לחץ לגישה</a>
+                </div>
+                <div class="card-footer">
+                    <span class="category-tag">אפליקציה</span>
+                    <span class="category-tag">מחסן</span>
+                </div>
+            </div>
         </div>
-        <table>
-            <thead>
-                <tr>
-                    <th>שם אפליקציה</th>
-                    <th>קובץ/נתיב</th>
-                    <th>גרסה</th>
-                    <th>סטטוס</th>
-                    <th>הצעות לשיפור / ממצאים</th>
-                    <th>הצגה בקנבס</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td>Firestore Logging (General)</td>
-                    <td>projects/saban94-76543 / saban94-78949</td>
-                    <td>N/A</td>
-                    <td><span class="status status-fix">NEEDS_FIX</span></td>
-                    <td class="suggestions"><b>FATAL: Missing or insufficient permissions.</b> בדוק חוקי אבטחה (Security Rules) בשני הפרויקטים.</td>
-                    <td><button class="action-btn" disabled>N/A</button></td>
-                </tr>
-                <tr>
-                    <td>DeliveryMaster+מכולות</td>
-                    <td>/eco/eco3</td>
-                    <td>N/A</td>
-                    <td><span class="status status-fix">NEEDS_FIX</span></td>
-                    <td class="suggestions">cdn.tailwindcss.com should not be used in production.</td>
-                    <td><button class="action-btn" onclick="show_next_file('/eco/eco3')">הצג</button></td>
-                </tr>
-                <tr>
-                    <td>מאגר ראשי</td>
-                    <td>https://github.com/saban942025-cyber/sidor94</td>
-                    <td>N/A</td>
-                    <td><span class="status status-warn">WARN</span></td>
-                    <td class="suggestions">"שגיאות" (נדרשת בדיקה)</td>
-                    <td><button class="action-btn" disabled>N/A</button></td>
-                </tr>
-                <tr>
-                    <td>אפליקציית נהג</td>
-                    <td>/driver-app/</td>
-                    <td>N/A</td>
-                    <td><span class="status status-warn">WARN</span></td>
-                    <td class="suggestions">(anonymous) @ (index):64</td>
-                    <td><button class="action-btn" onclick="show_next_file('/driver-app/')">הצג</button></td>
-                </tr>
-                <tr>
-                    <td>Viewer (משוער)</td>
-                    <td>/sidor/Viewer</td>
-                    <td>N/A</td>
-                    <td><span class="status status-warn">WARN</span></td>
-                    <td class="suggestions">[Init.Auth] WARN: No provided token...</td>
-                    <td><button class="action-btn" onclick="show_next_file('/sidor/Viewer')">הצג</button></td>
-                </tr>
-                <tr>
-                    <td>DeliveryMaster v34.5</td>
-                    <td>/sidor/saban94/index3</td>
-                    <td>v34.5</td>
-                    <td><span class="status status-warn">WARN</span></td>
-                    <td class="suggestions">Version mismatch? Log says: v32.5 Unified</td>
-                    <td><button class="action-btn" onclick="show_next_file('/sidor/saban94/index3')">הצג</button></td>
-                </tr>
-                <tr>
-                    <td>אפליקציית מכולות</td>
-                    <td>/app/new</td>
-                    <td>N/A</td>
-                    <td><span class="status status-ok">OK</span></td>
-                    <td class="suggestions">writeLog @ eco3:705</td>
-                    <td><button class="action-btn" onclick="show_next_file('/app/new')">הצג</button></td>
-                </tr>
-                <tr>
-                    <td>607146-זבולון-עדירן וייס</td>
-                    <td>/sidor/Zebulun-Portal/site_app</td>
-                    <td>N/A</td>
-                    <td><span class="status status-ok">OK</span></td>
-                    <td class="suggestions">[Init.Map] INFO: Dashboard Map initialized</td>
-                    <td><button class="action-btn" onclick="show_next_file('/sidor/Zebulun-Portal/site_app')">הצג</button></td>
-                </tr>
-                <tr>
-                    <td>607145-זבולון-עדירן/הופמן</td>
-                    <td>/sidor/Zebulun-Portal/site_app.html</td>
-                    <td>N/A</td>
-                    <td><span class="status status-ok">OK</span></td>
-                    <td class="suggestions">[Init.Map.History] INFO: ...</td>
-                    <td><button class="action-btn" onclick="show_next_file('/sidor/Zebulun-Portal/site_app.html')">הצג</button></td>
-                </tr>
-                <tr>
-                    <td>607127 זבולון-עדירן/בן ארצי</td>
-                    <td>/sidor/Zebulun-Portal/site_app.html</td>
-                    <td>N/A</td>
-                    <td><span class="status status-ok">OK</span></td>
-                    <td class="suggestions">[Init.Auth] INFO: Auth successful.</td>
-                    <td><button class="action-btn" onclick="show_next_file('/sidor/Zebulun-Portal/site_app.html')">הצג</button></td>
-                </tr>
-                <tr>
-                    <td>607114-זבולון-עדירן/בני דרור</td>
-                    <td>/sidor/Zebulun-Portal/site_app.html</td>
-                    <td>N/A</td>
-                    <td><span class="status status-ok">OK</span></td>
-                    <td class="suggestions">[Firestore.Listen] INFO: Listening to Drivers...</td>
-                    <td><button class="action-btn" onclick="show_next_file('/sidor/Zebulun-Portal/site_app.html')">הצג</button></td>
-                </tr>
-                <tr>
-                    <td>607141-זבולון-עדירן אדרעי</td>
-                    <td>/sidor/Zebulun-Portal/site_app.html</td>
-                    <td>N/A</td>
-                    <td><span class="status status-ok">OK</span></td>
-                    <td class="suggestions">[Firestore.Listen] INFO: Listening to Orders...</td>
-                    <td><button class="action-btn" onclick="show_next_file('/sidor/Zebulun-Portal/site_app.html')">הצג</button></td>
-                </tr>
-                <tr>
-                    <td>קובץ הוספת לקוח</td>
-                    <td>/sidor/add_customers</td>
-                    <td>N/A</td>
-                    <td><span class="status status-ok">OK</span></td>
-                    <td class="suggestions">[Firestore.Listen] INFO: Listening to Locations...</td>
-                    <td><button class="action-btn" onclick="show_next_file('/sidor/add_customers')">הצג</button></td>
-                </tr>
-                <tr>
-                    <td>צ'אט וניהול</td>
-                    <td>/sidor/messages_viewer</td>
-                    <td>N/A</td>
-                    <td><span class="status status-ok">OK</span></td>
-                    <td class="suggestions">[Firestore.Listen] INFO: Listening to Customers...</td>
-                    <td><button class="action-btn" onclick="show_next_file('/sidor/messages_viewer')">הצג</button></td>
-                </tr>
-                <tr>
-                    <td>אפליקציית מנהל שטח זבולון עדירן</td>
-                    <td>/sidor/site_app</td>
-                    <td>N/A</td>
-                    <td><span class="status status-ok">OK</span></td>
-                    <td class="suggestions">[Firestore.Snapshot] INFO: Drivers: 3 docs.</td>
-                    <td><button class="action-btn" onclick="show_next_file('/sidor/site_app')">הצג</button></td>
-                </tr>
-                <tr>
-                    <td>Team Viewer — יוסי (פיד חי)</td>
-                    <td>/sidor/team</td>
-                    <td>N/A</td>
-                    <td><span class="status status-ok">OK</span></td>
-                    <td class="suggestions">[Firestore.Snapshot] INFO: Orders: 75 docs.</td>
-                    <td><button class="action-btn" onclick="show_next_file('/sidor/team')">הצג</button></td>
-                </tr>
-                <tr>
-                    <td>DeliveryMaster Viewer</td>
-                    <td>/viewer-app/index2</td>
-                    <td>N/A</td>
-                    <td><span class="status status-ok">OK</span></td>
-                    <td class="suggestions">[Containers] INFO: Processing container data...</td>
-                    <td><button class="action-btn" onclick="show_next_file('/viewer-app/index2')">הצג</button></td>
-                </tr>
-                <tr>
-                    <td>אפליקציית מחסן</td>
-                    <td>/warehouse-app/</td>
-                    <td>N/A</td>
-                    <td><span class="status status-ok">OK</span></td>
-                    <td class="suggestions">[Firestore.Snapshot] INFO: Locations: 2 changes.</td>
-                    <td><button class="action-btn" onclick="show_next_file('/warehouse-app/')">הצג</button></td>
-                </tr>
-            </tbody>
-        </table>
     </div>
 </body>
 </html>
