@@ -25,7 +25,7 @@
             background: #ffffff;
             border-radius: 0.5rem;
             display: flex;
-            flex-direction: column-reverse; /* מציג הודעות חדשות למטה, אבל הפוך */
+            flex-direction: column-reverse; /* Show new messages at the bottom, but reverse order */
         }
         .msg-bubble {
             padding: 0.75rem 1rem;
@@ -35,15 +35,15 @@
             word-wrap: break-word;
         }
         .msg-admin {
-            background-color: #dbeafe; /* blue-100 */
-            color: #1e3a8a; /* blue-900 */
+            background-color: #dbeafe;
+            color: #1e3a8a;
             border-bottom-left-radius: 0.25rem;
             align-self: flex-start;
         }
         .msg-order {
-            background-color: #fef9c3; /* yellow-100 */
-            color: #713f12; /* amber-900 */
-            border: 1px solid #fde68a; /* yellow-300 */
+            background-color: #fef9c3;
+            color: #713f12;
+            border: 1px solid #fde68a;
             align-self: center;
             width: 100%;
             max-width: 100%;
@@ -76,7 +76,7 @@
 
     <!-- Log container -->
     <div id="chat-log">
-        <!-- הודעות יוצגו כאן על ידי JS -->
+        <!-- Messages will be prepended here by JS -->
     </div>
 
     <!-- Send form -->
@@ -92,7 +92,7 @@
         // --- Firebase SDK Imports ---
         import { initializeApp, getApp, getApps } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
-        import { getFirestore, collection, doc, onSnapshot, query, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, doc, onSnapshot, query, addDoc, serverTimestamp, orderBy } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
         // --- Config ---
         const fallbackConfig = {
@@ -172,7 +172,7 @@
                 });
 
                 // Render all messages
-                log.innerHTML = ''; // נקה לוג לפני רינדור מחדש
+                log.innerHTML = ''; // Clear log before rendering
                 messages.forEach(msg => {
                     appendMessage(msg);
                 });
@@ -183,10 +183,6 @@
             });
         }
 
-        /**
-         * מציג הודעה חדשה בלוג
-         * @param {object} msg - אובייקט ההודעה מ-Firestore
-         */
         function appendMessage(msg) {
             const el = document.createElement('div');
             el.className = 'msg-bubble';
@@ -215,7 +211,7 @@
                 `;
             }
             
-            log.appendChild(el); // שונה מ-prepend ל-appendChild בגלל flex-direction-reverse
+            log.appendChild(el); // Changed from prepend to append because of flex-direction-reverse
         }
 
         // --- Send Message ---
@@ -245,7 +241,6 @@
         document.addEventListener('DOMContentLoaded', () => {
             feather.replace();
             initApp();
-            console.log("צ'אט וניהול נטען. מאזין להודעות...");
         });
     </script>
 </body>
