@@ -277,6 +277,17 @@
          */
         async function main() {
             showLoading('מאמת משתמש...');
+            
+            // --- FIX: Guard Clause for Firebase Config ---
+            // Check if the config object is valid before initializing
+            if (!firebaseConfig.projectId) {
+                SmartLog('Auth.Error', 'Firebase config is missing or invalid. "projectId" is required.', 'error');
+                showError('שגיאת הגדרה קריטית', 'Firebase config is missing or invalid. "projectId" is required. Please check environment variables.');
+                hideLoading();
+                return; // Stop execution
+            }
+            // --- End Fix ---
+
             const app = initializeApp(firebaseConfig);
             db = getFirestore(app);
             auth = getAuth(app);
