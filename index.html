@@ -1,151 +1,203 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="he" dir="rtl">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>הדרכה — יוסי ואנשי השטח | ח.סבן — זבולון עדירן</title>
-  
-  <!-- [תיקון] הוספת Tailwind CSS לעיצוב פרימיום -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700&display=swap" rel="stylesheet">
-  
-  <!-- [תיקון] הוספת מניפסט להתקנה כאפליקציה -->
-  <link rel="manifest" href="guide_manifest.json">
-  <meta name="theme-color" content="#ffffff">
-  <link rel="apple-touch-icon" href="https://i.postimg.cc/ryPT3r29/image.png">
-  <script src="https://unpkg.com/feather-icons"></script>
-
-  <style>
-    /* [תיקון] העיצוב הישן הוסר.
-      העיצוב החדש מבוסס Tailwind ומוטמע ישירות ב-HTML.
-      נוסף עיצוב "Glassmorphism" וכרטיסיות מודרניות.
-    */
-    body {
-      font-family: 'Rubik', Arial, sans-serif; 
-      background:linear-gradient(180deg, #f3f4f6 0%, #e5e7eb 100%);
-    }
-    .card {
-      background: rgba(255, 255, 255, 0.7);
-      backdrop-filter: blur(10px);
-      border: 1px solid rgba(255, 255, 255, 0.3);
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sidor — Master Index</title>
+    
+    <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+    <script>
+      window.OneSignalDeferred = window.OneSignalDeferred || [];
+      OneSignalDeferred.push(async function(OneSignal) {
+        await OneSignal.init({
+          appId: "de3834d3-1e11-40af-96d2-b25eda821c8f", // App ID from CSV
+        });
+      });
+    </script>
+    
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; line-height: 1.6; margin: 0; padding: 20px; background-color: #f4f7f6; }
+        h1 { color: #2c3e50; }
+        .container { max-width: 1400px; margin: auto; background: #fff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); overflow: hidden; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px 15px; text-align: right; border-bottom: 1px solid #ddd; }
+        th { background-color: #34495e; color: white; }
+        tr:nth-child(even) { background-color: #f9f9f9; }
+        tr:hover { background-color: #ecf0f1; }
+        .status { padding: 5px 10px; border-radius: 15px; font-weight: bold; font-size: 0.9em; }
+        .status-ok { background-color: #2ecc71; color: white; }
+        .status-warn { background-color: #f39c12; color: white; }
+        .status-fix { background-color: #e74c3c; color: white; }
+        .suggestions { font-family: "Courier New", Courier, monospace; font-size: 0.95em; color: #555; max-width: 400px; word-wrap: break-word; }
+        .action-btn { background-color: #3498db; color: white; padding: 8px 12px; border: none; border-radius: 4px; cursor: pointer; text-decoration: none; display: inline-block; font-size: 0.9em; }
+        .action-btn:hover { background-color: #2980b9; }
+        .header { background: #2c3e50; color: white; padding: 20px; text-align: center; }
+        .header h1 { color: white; margin: 0; }
+    </style>
 </head>
-<body class="min-h-screen p-4 md:p-8 antialiased">
-
-  <div class="card max-w-4xl mx-auto rounded-2xl shadow-lg p-6 md:p-8 mb-6">
-    <div class="flex items-center justify-between">
-      <h1 class="text-3xl font-bold text-gray-900 mb-2">מדריך המערכת: זבולון עדירן</h1>
-      <img src="https://i.postimg.cc/ryPT3r29/image.png" alt="Saban Logo" class="h-10">
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>רשימת אפליקציות ומצבן</h1>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>שם אפליקציה</th>
+                    <th>קובץ/נתיב</th>
+                    <th>גרסה</th>
+                    <th>סטטוס</th>
+                    <th>הצעות לשיפור / ממצאים</th>
+                    <th>הצגה בקנבס</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Firestore Logging (General)</td>
+                    <td>projects/saban94-76543 / saban94-78949</td>
+                    <td>N/A</td>
+                    <td><span class="status status-fix">NEEDS_FIX</span></td>
+                    <td class="suggestions"><b>FATAL: Missing or insufficient permissions.</b> בדוק חוקי אבטחה (Security Rules) בשני הפרויקטים.</td>
+                    <td><button class="action-btn" disabled>N/A</button></td>
+                </tr>
+                <tr>
+                    <td>DeliveryMaster+מכולות</td>
+                    <td>/eco/eco3</td>
+                    <td>N/A</td>
+                    <td><span class="status status-fix">NEEDS_FIX</span></td>
+                    <td class="suggestions">cdn.tailwindcss.com should not be used in production.</td>
+                    <td><button class="action-btn" onclick="show_next_file('/eco/eco3')">הצג</button></td>
+                </tr>
+                <tr>
+                    <td>מאגר ראשי</td>
+                    <td>https://github.com/saban942025-cyber/sidor94</td>
+                    <td>N/A</td>
+                    <td><span class="status status-warn">WARN</span></td>
+                    <td class="suggestions">"שגיאות" (נדרשת בדיקה)</td>
+                    <td><button class="action-btn" disabled>N/A</button></td>
+                </tr>
+                <tr>
+                    <td>אפליקציית נהג</td>
+                    <td>/driver-app/</td>
+                    <td>N/A</td>
+                    <td><span class="status status-warn">WARN</span></td>
+                    <td class="suggestions">(anonymous) @ (index):64</td>
+                    <td><button class="action-btn" onclick="show_next_file('/driver-app/')">הצג</button></td>
+                </tr>
+                <tr>
+                    <td>Viewer (משוער)</td>
+                    <td>/sidor/Viewer</td>
+                    <td>N/A</td>
+                    <td><span class="status status-warn">WARN</span></td>
+                    <td class="suggestions">[Init.Auth] WARN: No provided token...</td>
+                    <td><button class="action-btn" onclick="show_next_file('/sidor/Viewer')">הצג</button></td>
+                </tr>
+                <tr>
+                    <td>DeliveryMaster v34.5</td>
+                    <td>/sidor/saban94/index3</td>
+                    <td>v34.5</td>
+                    <td><span class="status status-warn">WARN</span></td>
+                    <td class="suggestions">Version mismatch? Log says: v32.5 Unified</td>
+                    <td><button class="action-btn" onclick="show_next_file('/sidor/saban94/index3')">הצג</button></td>
+                </tr>
+                <tr>
+                    <td>אפליקציית מכולות</td>
+                    <td>/app/new</td>
+                    <td>N/A</td>
+                    <td><span class="status status-ok">OK</span></td>
+                    <td class="suggestions">writeLog @ eco3:705</td>
+                    <td><button class="action-btn" onclick="show_next_file('/app/new')">הצג</button></td>
+                </tr>
+                <tr>
+                    <td>607146-זבולון-עדירן וייס</td>
+                    <td>/sidor/Zebulun-Portal/site_app</td>
+                    <td>N/A</td>
+                    <td><span class="status status-ok">OK</span></td>
+                    <td class="suggestions">[Init.Map] INFO: Dashboard Map initialized</td>
+                    <td><button class="action-btn" onclick="show_next_file('/sidor/Zebulun-Portal/site_app')">הצג</button></td>
+                </tr>
+                <tr>
+                    <td>607145-זבולון-עדירן/הופמן</td>
+                    <td>/sidor/Zebulun-Portal/site_app.html</td>
+                    <td>N/A</td>
+                    <td><span class="status status-ok">OK</span></td>
+                    <td class="suggestions">[Init.Map.History] INFO: ...</td>
+                    <td><button class="action-btn" onclick="show_next_file('/sidor/Zebulun-Portal/site_app.html')">הצג</button></td>
+                </tr>
+                <tr>
+                    <td>607127 זבולון-עדירן/בן ארצי</td>
+                    <td>/sidor/Zebulun-Portal/site_app.html</td>
+                    <td>N/A</td>
+                    <td><span class="status status-ok">OK</span></td>
+                    <td class="suggestions">[Init.Auth] INFO: Auth successful.</td>
+                    <td><button class="action-btn" onclick="show_next_file('/sidor/Zebulun-Portal/site_app.html')">הצג</button></td>
+                </tr>
+                <tr>
+                    <td>607114-זבולון-עדירן/בני דרור</td>
+                    <td>/sidor/Zebulun-Portal/site_app.html</td>
+                    <td>N/A</td>
+                    <td><span class="status status-ok">OK</span></td>
+                    <td class="suggestions">[Firestore.Listen] INFO: Listening to Drivers...</td>
+                    <td><button class="action-btn" onclick="show_next_file('/sidor/Zebulun-Portal/site_app.html')">הצג</button></td>
+                </tr>
+                <tr>
+                    <td>607141-זבולון-עדירן אדרעי</td>
+                    <td>/sidor/Zebulun-Portal/site_app.html</td>
+                    <td>N/A</td>
+                    <td><span class="status status-ok">OK</span></td>
+                    <td class="suggestions">[Firestore.Listen] INFO: Listening to Orders...</td>
+                    <td><button class="action-btn" onclick="show_next_file('/sidor/Zebulun-Portal/site_app.html')">הצג</button></td>
+                </tr>
+                <tr>
+                    <td>קובץ הוספת לקוח</td>
+                    <td>/sidor/add_customers</td>
+                    <td>N/A</td>
+                    <td><span class="status status-ok">OK</span></td>
+                    <td class="suggestions">[Firestore.Listen] INFO: Listening to Locations...</td>
+                    <td><button class="action-btn" onclick="show_next_file('/sidor/add_customers')">הצג</button></td>
+                </tr>
+                <tr>
+                    <td>צ'אט וניהול</td>
+                    <td>/sidor/messages_viewer</td>
+                    <td>N/A</td>
+                    <td><span class="status status-ok">OK</span></td>
+                    <td class="suggestions">[Firestore.Listen] INFO: Listening to Customers...</td>
+                    <td><button class="action-btn" onclick="show_next_file('/sidor/messages_viewer')">הצג</button></td>
+                </tr>
+                <tr>
+                    <td>אפליקציית מנהל שטח זבולון עדירן</td>
+                    <td>/sidor/site_app</td>
+                    <td>N/A</td>
+                    <td><span class="status status-ok">OK</span></td>
+                    <td class="suggestions">[Firestore.Snapshot] INFO: Drivers: 3 docs.</td>
+                    <td><button class="action-btn" onclick="show_next_file('/sidor/site_app')">הצג</button></td>
+                </tr>
+                <tr>
+                    <td>Team Viewer — יוסי (פיד חי)</td>
+                    <td>/sidor/team</td>
+                    <td>N/A</td>
+                    <td><span class="status status-ok">OK</span></td>
+                    <td class="suggestions">[Firestore.Snapshot] INFO: Orders: 75 docs.</td>
+                    <td><button class="action-btn" onclick="show_next_file('/sidor/team')">הצג</button></td>
+                </tr>
+                <tr>
+                    <td>DeliveryMaster Viewer</td>
+                    <td>/viewer-app/index2</td>
+                    <td>N/A</td>
+                    <td><span class="status status-ok">OK</span></td>
+                    <td class="suggestions">[Containers] INFO: Processing container data...</td>
+                    <td><button class="action-btn" onclick="show_next_file('/viewer-app/index2')">הצג</button></td>
+                </tr>
+                <tr>
+                    <td>אפליקציית מחסן</td>
+                    <td>/warehouse-app/</td>
+                    <td>N/A</td>
+                    <td><span class="status status-ok">OK</span></td>
+                    <td class="suggestions">[Firestore.Snapshot] INFO: Locations: 2 changes.</td>
+                    <td><button class="action-btn" onclick="show_next_file('/warehouse-app/')">הצג</button></td>
+                </tr>
+            </tbody>
+        </table>
     </div>
-    <p class="text-lg text-gray-600">מדריך ויזואלי ליוסי (מנהל רכש), מנהלי האתרים (שטח) וצוות ח.סבן (לוגיסטיקה).</p>
-  </div>
-
-  <div class="card max-w-4xl mx-auto rounded-2xl shadow-lg p-6 md:p-8 mb-6">
-    <h2 class="text-2xl font-semibold text-gray-800 mb-4 border-b border-gray-300 pb-2 flex items-center">
-      <i data-feather="link" class="ml-2 text-blue-600"></i>
-      לינקים להתקנת אפליקציית שטח (PWA)
-    </h2>
-    <p class="text-sm text-gray-600 mb-5 bg-blue-50 p-3 rounded-lg border border-blue-200">
-      <b class="text-blue-800">הנחיה ליוסי:</b> אלו הלינקים שאתה שולח למנהלי האתרים שלך. כל לינק מקושר לפרויקט ספציפי וכולל את מפתח ברירת המחדל <code>123456</code>.
-    </p>
-
-    <div class="projects grid grid-cols-1 md:grid-cols-2 gap-4">
-
-      <!-- פרויקט וייס -->
-      <div class="proj bg-white/80 p-4 rounded-lg border border-gray-200 shadow-sm transition-all hover:shadow-md">
-        <strong class="text-gray-900">607146 — זבולון-עדירן / וייס</strong>
-        <div class="text-sm text-gray-600">כתובת: הוורדים 19, סביון</div>
-        <!-- [תיקון] עדכון הלינק והמפתח -->
-        <a class="link bg-blue-500 hover:bg-blue-600 text-white font-semibold p-3 rounded-md text-center mt-3 block transition-all" href="https://saban942025-cyber.github.io/sidor94/sidor/Zebulun-Portal/site_app.html?setup_key=607146-123456
-" target="_blank">
-          פתח אפליקציית שטח (607146)
-        </a>
-      </div>
-      
-      <!-- פרויקט הופמן -->
-      <div class="proj bg-white/80 p-4 rounded-lg border border-gray-200 shadow-sm transition-all hover:shadow-md">
-        <strong class="text-gray-900">607145 — זבולון-עדירן / הופמן</strong>
-        <div class="text-sm text-gray-600">כתובת: החורש 21, כפר שמריהו</div>
-        <!-- [תיקון] עדכון הלינק והמפתח -->
-        <a class="link bg-blue-500 hover:bg-blue-600 text-white font-semibold p-3 rounded-md text-center mt-3 block transition-all" href="https://saban942025-cyber.github.io/sidor94/sidor/Zebulun-Portal/site_app.html?setup_key=607145-63914
-" target="_blank">
-          פתח אפליקציית שטח (607145)
-        </a>
-      </div>
-
-      <!-- פרויקט בן ארצי -->
-      <div class="proj bg-white/80 p-4 rounded-lg border border-gray-200 shadow-sm transition-all hover:shadow-md">
-        <strong class="text-gray-900">607127 — זבולון-עדירן / בן ארצי</strong>
-        <div class="text-sm text-gray-600">כתובת: ההאלה 8, הרצליה</div>
-        <!-- [תיקון] עדכון הלינק והמפתח -->
-        <a class="link bg-blue-500 hover:bg-blue-600 text-white font-semibold p-3 rounded-md text-center mt-3 block transition-all" href="https://saban942025-cyber.github.io/sidor94/sidor/Zebulun-Portal/site_app.html?setup_key=607127-123456
-" target="_blank">
-          פתח אפליקציית שטח (607127)
-        </a>
-      </div>
-
-      <!-- פרויקט בני דרור -->
-      <div class="proj bg-white/80 p-4 rounded-lg border border-gray-200 shadow-sm transition-all hover:shadow-md">
-        <strong class="text-gray-900">607114 — זבולון-עדירן / בני דרור</strong>
-        <div class="text-sm text-gray-600">כתובת: הגלבוע 6, בני דרור</div>
-        <!-- [תיקון] עדכון הלינק והמפתח (תיקון הנתיב) -->
-        <a class="link bg-blue-500 hover:bg-blue-600 text-white font-semibold p-3 rounded-md text-center mt-3 block transition-all" href="https://saban942025-cyber.github.io/sidor94/sidor/Zebulun-Portal/site_app.html?setup_key=123456&project_id=607114" target="_blank">
-          פתח אפליקציית שטח (607114)
-        </a>
-      </div>
-
-      <!-- פרויקט אדרעי -->
-      <div class="proj bg-white/80 p-4 rounded-lg border border-gray-200 shadow-sm transition-all hover:shadow-md">
-        <strong class="text-gray-900">607141 — זבולון-עדירן / אדרעי</strong>
-        <div class="text-sm text-gray-600">כתובת: שקד 2, רשפון</div>
-        <!-- [תיקון] עדכון הלינק והמפתח (תיקון הנתיב ../) -->
-        <a class="link bg-blue-500 hover:bg-blue-600 text-white font-semibold p-3 rounded-md text-center mt-3 block transition-all" href="https://saban942025-cyber.github.io/sidor94/sidor/Zebulun-Portal/site_app.html?setup_key=123456&project_id=607141" target="_blank">
-          פתח אפליקציית שטח (607141)
-        </a>
-      </div>
-      
-      <!-- פרויקט חדד -->
-      <div class="proj bg-white/80 p-4 rounded-lg border border-gray-200 shadow-sm transition-all hover:shadow-md">
-        <strong class="text-gray-900">607130 — זבולון-עדירן — חדד</strong>
-        <div class="text-sm text-gray-600">כתובת: ווינגייט 27, כפר שמריהו</div>
-        <!-- [תיקון] עדכון הלינק והמפתח (תיקון הלינק השבור) -->
-        <a class="link bg-blue-500 hover:bg-blue-600 text-white font-semibold p-3 rounded-md text-center mt-3 block transition-all" href="https://saban942025-cyber.github.io/sidor94/sidor/Zebulun-Portal/site_app.html?setup_key=123456&project_id=607130" target="_blank">
-          פתח אפליקציית שטח (607130)
-        </a>
-      </div>
-
-    </div>
-  </div>
-
-  <div class="card max-w-4xl mx-auto rounded-2xl shadow-lg p-6 md:p-8 mb-6">
-    <h2 class="text-2xl font-semibold text-gray-800 mb-4 border-b border-gray-300 pb-2 flex items-center">
-      <i data-feather="users" class="ml-2 text-green-600"></i>
-      הסבר קצר (למשתמש)
-    </h2>
-    <p class="text-gray-700 leading-relaxed">
-      **יוסי (מנהל רכש):** התפקיד שלך הוא "בקר האיכות". כשמנהל שטח שולח בקשה, היא מגיעה אליך ללשונית "הזמנות לאישור". אתה בודק את הפריטים, מאזין להקלטות, מתרגם הכל למק"טים מדויקים מהקטלוג, ורק אז לוחץ "אשר ושלח ל-DeliveryMaster". אתה גם זה שמשתף את לינק ההתקנה למנהלי השטח.
-    </p>
-    <p class="text-gray-700 leading-relaxed mt-3">
-      **מנהל שטח (עבד):** התפקיד שלך הוא לדווח מהשטח. פתח את האפליקציה, בחר פריטים מהקטלוג, הקלט הודעה קולית, צרף תמונה, ושלח הכל לאישור יוסי. אתה יכול גם לשאול שאלות ישירות את צוות ח.סבן מלשונית "עזרה".
-    </p>
-  </div>
-
-
-  <footer class="text-center text-sm text-gray-600 mt-4">
-    מדריך זה נוצר כאפליקציית PWA וניתן להתקנה. הלינקים עודכנו למערכת הפעילה.<br>
-    &copy; 2025 H.Saban Materials & Gimini
-  </footer>
-  
-  <script>
-    feather.replace();
-    // הוספת יכולת התקנה (PWA)
-    let deferredPrompt;
-    window.addEventListener('beforeinstallprompt', (e) => {
-      e.preventDefault();
-      deferredPrompt = e;
-      // אפשר להציג כפתור התקנה ייעודי
-    });
-  </script>
 </body>
 </html>
