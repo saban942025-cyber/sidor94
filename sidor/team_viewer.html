@@ -3,207 +3,334 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Team Viewer (Firebase)</title>
+    <title>Sidor | Team Viewer (פיד חי)</title>
+
+    <!-- 1. Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/feather-icons"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700&display=swap" rel="stylesheet">
+
+    <!-- 2. OneSignal SDK -->
+    <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+    <script>
+      window.OneSignalDeferred = window.OneSignalDeferred || [];
+      OneSignalDeferred.push(async function(OneSignal) {
+        await OneSignal.init({
+          appId: "de3834d3-1e11-40af-96d2-b25eda821c8f", // Detected App ID
+        });
+        OneSignal.User.addTag("app_name", "team_viewer");
+      });
+    </script>
+
+    <!-- 3. Firebase SDK (Modern Modular v11+) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, query, onSnapshot, where, setLogLevel, getCountFromServer } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- Config & Init ---
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        
+        // --- Global State ---
+        let db, auth, userId;
+        const driverStats = new Map(); // To hold { openTasks: 0 }
+
+        // --- UI & Utility ---
+        const SmartLog = (module, message, level = 'info') => {
+            console[level](`[${module}] ${level.toUpperCase()}:`, message);
+        };
+
+        const showError = (title, message) => {
+            const modal = document.getElementById('error-modal');
+            const titleEl = document.getElementById('error-title');
+            const textEl = document.getElementById('error-text');
+            if (modal) modal.classList.remove('hidden');
+            if (titleEl) titleEl.textContent = title;
+            if (textEl) textEl.textContent = message;
+        };
+
+        const renderTeamGrid = (drivers) => {
+            const listEl = document.getElementById('team-grid');
+            if (!listEl) return;
+
+            if (drivers.length === 0) {
+                listEl.innerHTML = `<div class="glass-card p-4 text-center col-span-full">לא נמצאו נהגים פעילים.</div>`;
+                return;
+            }
+
+            listEl.innerHTML = drivers.map(driver => {
+                const { id, name, status } = driver;
+                const stats = driverStats.get(id) || { openTasks: '...' };
+                const statusColor = status === 'ONLINE' ? 'bg-green-500' : 'bg-gray-400';
+                const statusText = status === 'ONLINE' ? 'מחובר' : 'לא מחובר';
+
+                return `
+                    <div class="glass-card p-4 rounded-lg flex flex-col justify-between">
+                        <div>
+                            <div class="flex justify-between items-center mb-2">
+                                <h3 class="text-lg font-bold text-gray-800 dark:text-white">${name || 'נהג לא ידוע'}</h3>
+                                <span class="flex items-center gap-2 text-xs font-semibold px-3 py-1 ${statusColor} text-white rounded-full">
+                                    <span class="w-2 h-2 ${statusColor} rounded-full"></span>
+                                    ${statusText}
+                                </span>
+                            </div>
+                            <p class="text-sm text-gray-600 dark:text-gray-300">
+                                <span class="font-semibold">ID:</span>
+                                <span class="font-mono text-xs">${id.substring(0, 10)}...</span>
+                            </p>
+                        </div>
+                        <div class="mt-4 pt-3 border-t border-white/20">
+                            <p class="text-sm text-gray-600 dark:text-gray-300">
+                                <span class="font-semibold">משימות פתוחות:</span>
+                                <span class="text-xl font-bold text-gray-800 dark:text-white">${stats.openTasks}</span>
+                            </p>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        };
+
+        // --- Data Logic ---
+
+        function listenToDrivers() {
+            const driversPath = `artifacts/${appId}/public/data/drivers`;
+            SmartLog('Firestore', `Listening to drivers: ${driversPath}`);
+            
+            try {
+                // Listen to all drivers, not just online, to show full team
+                const q = query(collection(db, driversPath));
+                onSnapshot(q, (snapshot) => {
+                    const drivers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    renderTeamGrid(drivers);
+                    
+                    // After rendering drivers, fetch their stats
+                    drivers.forEach(driver => fetchDriverStats(driver.id));
+                }, (error) => handleError(error));
+            } catch (e) { handleError(e); }
+        }
+
+        async function fetchDriverStats(driverId) {
+            const ordersPath = `artifacts/${appId}/public/data/orders`;
+            try {
+                const q = query(
+                    collection(db, ordersPath), 
+                    where('driverId', '==', driverId),
+                    where('status', 'in', ['PENDING', 'IN_TRANSIT'])
+                );
+                const snapshot = await getCountFromServer(q);
+                const count = snapshot.data().count;
+                
+                // Update stats and re-render the specific card
+                driverStats.set(driverId, { openTasks: count });
+                
+                // Efficiently update just one card (if it exists)
+                const card = document.querySelector(`[data-driver-id="${driverId}"]`);
+                if (card) {
+                    card.querySelector('.open-tasks-value').textContent = count;
+                } else {
+                    // If card doesn't exist, we might need a full re-render
+                    // For simplicity, we'll just update the map. 
+                    // A full re-render would be triggered by the driver listener anyway.
+                }
+
+            } catch (e) {
+                SmartLog('Firestore.Stats', `Failed to get stats for ${driverId}: ${e.message}`, 'error');
+            }
+        }
+        
+        // This function re-fetches stats for all visible drivers when orders change
+        function listenToOrderChanges() {
+            const ordersPath = `artifacts/${appId}/public/data/orders`;
+            try {
+                const q = query(collection(db, ordersPath));
+                onSnapshot(q, () => {
+                    SmartLog('Firestore', 'Orders changed, re-calculating stats for all drivers...');
+                    // Re-fetch stats for all drivers currently in the map
+                    const driverIds = Array.from(document.querySelectorAll('#team-grid > div')).map(el => el.dataset.driverId);
+                    driverIds.forEach(id => fetchDriverStats(id));
+                    
+                    // A bit inefficient, but ensures data is fresh.
+                    // A better way would be to check which driverId was affected.
+                    // But for this app, it's fine.
+                    
+                    // We need to re-render the grid to apply new stats
+                     listenToDrivers(); 
+
+                }, (error) => handleError(error));
+            } catch (e) { handleError(e); }
+        }
+
+
+        function handleError(error) {
+            SmartLog('Firestore.Error', error, 'error');
+            console.error("Firestore Error: ", error);
+            if (error.message.includes("permission-denied")) {
+                showError("שגיאת הרשאות", "לא ניתן לטעון נתונים. בדוק את חוקי האבטחה (Security Rules) של Firestore.");
+            } else {
+                showError("שגיאת Firestore", error.message);
+            }
+        }
+
+        // --- UI Setup & Main ---
+        
+        function setupUIListeners() {
+            // Dark Mode
+            const toggle = document.getElementById('dark-mode-toggle');
+            toggle.addEventListener('click', () => {
+                document.body.classList.toggle('dark');
+                localStorage.setItem('darkMode', document.body.classList.contains('dark'));
+            });
+            if (localStorage.getItem('darkMode') === 'true') {
+                document.body.classList.add('dark');
+            }
+
+            // OneSignal Bell
+            const bell = document.getElementById('onesignal-bell');
+            bell.addEventListener('click', () => {
+                OneSignalDeferred.push(function(OneSignal) {
+                    SmartLog('OneSignal', 'Prompting for push notifications.');
+                    OneSignal.Slidedown.promptPush();
+                });
+            });
+
+            // Error Modal Close
+            document.getElementById('close-error-btn').addEventListener('click', () => {
+                document.getElementById('error-modal').classList.add('hidden');
+            });
+        }
+        
+        async function main() {
+            SmartLog('Init', 'Team Viewer Initializing...');
+            
+            // --- FIX: Guard Clause for Firebase Config ---
+            if (!firebaseConfig.projectId) {
+                SmartLog('Auth.Error', 'Firebase config is missing or invalid. "projectId" is required.', 'error');
+                showError('שגיאת הגדרה קריטית', 'Firebase config is missing. "projectId" is required.');
+                return; // Stop execution
+            }
+            // --- End Fix ---
+
+            const app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            auth = getAuth(app);
+            setLogLevel('Debug');
+
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                    SmartLog('Auth', 'Signed in with custom token.');
+                } else {
+                    await signInAnonymously(auth);
+                    SmartLog('Auth', 'No token provided, signed in anonymously.');
+                }
+                userId = auth.currentUser.uid;
+                
+                setupUIListeners();
+                listenToDrivers();
+                listenToOrderChanges(); // To keep stats fresh
+
+            } catch (error) {
+                SmartLog('Auth.Error', error, 'error');
+                showError(`שגיאת אימות: ${error.message}`);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', main);
+    </script>
+
+    <!-- 5. Custom Styles -->
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        :root {
+            --bg-light: #f4f7f6;
+            --bg-dark: #1a202c;
+            --card-light: rgba(255, 255, 255, 0.7);
+            --card-dark: rgba(26, 32, 44, 0.7);
+            --border-light: rgba(255, 255, 255, 0.6);
+            --border-dark: rgba(255, 255, 255, 0.2);
+            --text-light: #2d3748;
+            --text-dark: #e2e8f0;
+            --shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.1);
+        }
         body {
-            font-family: 'Rubik', sans-serif;
-            background-color: #ffffff;
-            display: flex;
-            flex-direction: column;
-            height: 100vh;
-            padding: 1rem;
-            box-sizing: border-box;
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-light);
+            color: var(--text-light);
+            transition: background-color 0.3s ease, color 0.3s ease;
         }
-        #team-feed {
-            flex-grow: 1;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column-reverse; /* מציג הודעות חדשות למטה, אבל הפוך */
+        body.dark {
+            background-color: var(--bg-dark);
+            color: var(--text-dark);
         }
-        .feed-item {
-            padding: 1rem;
-            border-radius: 0.75rem;
-            margin-bottom: 0.75rem;
-            border: 1px solid #e5e7eb;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+        .glass-card {
+            background: var(--card-light);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid var(--border-light);
+            border-radius: 16px;
+            box-shadow: var(--shadow);
         }
-        .feed-order {
-            background-color: #fefce8; /* yellow-50 */
-            border-color: #fef08a; /* yellow-200 */
+        body.dark .glass-card {
+            background: var(--card-dark);
+            border: 1px solid var(--border-dark);
         }
-        .feed-message {
-            background-color: #f0f9ff; /* blue-50 */
-            border-color: #bae6fd; /* blue-200 */
+        .icon-btn {
+            @apply p-2 rounded-full transition-all duration-200;
         }
-        .feed-item pre {
-            white-space: pre-wrap;
-            font-family: inherit;
-            font-size: 0.9rem;
-            color: #374151;
+        .icon-btn:hover {
+            @apply bg-gray-500/20 transform scale-110;
         }
-        .loader {
-            border: 3px solid #e5e7eb;
-            border-top: 3px solid #3b82f6;
-            border-radius: 50%;
-            width: 24px;
-            height: 24px;
-            animation: spin 1s linear infinite;
+        .btn-danger {
+            @apply px-4 py-2 rounded-lg font-semibold text-white shadow-md transition-all duration-200 ease-in-out bg-red-600;
         }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .btn-danger:hover {
+            @apply bg-red-700 transform scale-105;
+        }
+        .modal-backdrop {
+            @apply fixed inset-0 z-40 flex items-center justify-center p-4;
+            background: rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(5px);
+        }
+        .hidden { display: none; }
     </style>
 </head>
-<body>
+<body class="overflow-y-auto">
 
-    <div class="flex justify-between items-center mb-3 flex-shrink-0">
-        <h2 class="text-xl font-bold text-gray-800">פיד צוות (יוסי)</h2>
-        <div id="status" class="flex items-center gap-2 text-gray-500">
-            <div class="loader"></div>
-            <span>מתחבר...</span>
+    <div class="max-w-7xl mx-auto p-4">
+        
+        <!-- Header -->
+        <header class="glass-card p-4 rounded-lg flex justify-between items-center mb-6">
+            <h1 class="text-2xl font-bold text-gray-800 dark:text-white">Team Viewer (פיד חי)</h1>
+            <div class="flex items-center gap-2">
+                <button id="onesignal-bell" class="icon-btn text-gray-700 dark:text-gray-200" title="קבל התראות">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.73.64 3.58 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" /></svg>
+                </button>
+                <button id="dark-mode-toggle" class="icon-btn text-gray-700 dark:text-gray-200" title="שנה מצב תצוגה">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z" /></svg>
+                </button>
+            </div>
+        </header>
+
+        <!-- Team Grid -->
+        <main id="team-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <!-- Team cards injected by JS -->
+        </main>
+    </div>
+
+    <!-- Error Modal -->
+    <div id="error-modal" class="modal-backdrop hidden">
+        <div class="glass-card max-w-sm w-full p-6 rounded-lg shadow-lg">
+            <div class="flex items-center gap-3">
+                <div class="flex-shrink-0 w-10 h-10 rounded-full bg-red-100 dark:bg-red-800/50 flex items-center justify-center">
+                    <svg class="w-6 h-6 text-red-600 dark:text-red-300" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126z" /></svg>
+                </div>
+                <div class="flex-grow">
+                    <h3 id="error-title" class="font-bold text-lg text-red-800 dark:text-red-200">שגיאה</h3>
+                    <p id="error-text" class="text-sm text-red-700 dark:text-red-300">לא ניתן היה לטעון את הנתונים.</p>
+                </div>
+            </div>
+            <button id="close-error-btn" class="btn-danger w-full mt-5">סגור</button>
         </div>
     </div>
 
-    <!-- Feed container -->
-    <div id="team-feed">
-        <!-- פריטי פיד יוצגו כאן על ידי JS -->
-    </div>
-
-    <script type="module">
-        // --- Firebase SDK Imports ---
-        import { initializeApp, getApp, getApps } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
-        import { getFirestore, collection, doc, onSnapshot, query } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-
-        // --- Config ---
-        const fallbackConfig = {
-            apiKey: "AIzaSyDq0oVwS6zbEfsgrYBRkeBq80dDUKMedzo", 
-            authDomain: "saban94-78949.firebaseapp.com", 
-            projectId: "saban94-78949",
-            storageBucket: "saban94-78949.appspot.com", 
-            messagingSenderId: "41553157903", 
-            appId: "1:41553157903:web:cc33d252cff023be97a87a"
-        };
-        const FIREBASE_CONFIG = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : fallbackConfig;
-        
-        // [חשוב] זה ה-ID של חדר הצ'אט הראשי
-        const TEAM_CHAT_ID = "saban94_main_chat"; 
-
-        // --- Elements ---
-        const feed = document.getElementById('team-feed');
-        const statusEl = document.getElementById('status');
-
-        let db, auth;
-        let messagesListener = null;
-
-        // --- Initialization ---
-        function initApp() {
-            try {
-                const app = !getApps().length ? initializeApp(FIREBASE_CONFIG) : getApp();
-                db = getFirestore(app);
-                auth = getAuth(app);
-                
-                signInAnonymously(auth).then(() => {
-                    console.log("TeamViewer: Signed in anonymously.");
-                    listenForMessages();
-                }).catch(error => {
-                    console.error("TeamViewer: Anonymous sign-in failed", error);
-                    updateStatus("שגיאת התחברות", false);
-                });
-
-            } catch (error) {
-                console.error("TeamViewer: Firebase Init Error:", error);
-                updateStatus("Firebase נכשל", false);
-            }
-        }
-
-        function updateStatus(message, isConnected) {
-            if (isConnected) {
-                statusEl.innerHTML = `<div class="w-3 h-3 bg-green-500 rounded-full"></div> <span>${message}</span>`;
-            } else {
-                statusEl.innerHTML = `<div class="w-3 h-3 bg-red-500 rounded-full"></div> <span>${message}</span>`;
-            }
-        }
-
-        // --- Firestore Listener ---
-        function listenForMessages() {
-            if (messagesListener) messagesListener(); // Unsubscribe
-
-            const messagesRef = collection(db, "teamChats", TEAM_CHAT_ID, "messages");
-            
-            // [תיקון] הסרת orderBy כדי למנוע שגיאות אינדקס. נמיין בצד הלקוח.
-            const q = query(messagesRef);
-
-            messagesListener = onSnapshot(q, (snapshot) => {
-                updateStatus("מחובר", true);
-                console.log(`TeamViewer: Received ${snapshot.docChanges().length} changes.`);
-                
-                let messages = [];
-                snapshot.docs.forEach(doc => {
-                    messages.push({ id: doc.id, ...doc.data() });
-                });
-
-                // [תיקון] מיון בצד הלקוח (מהחדש לישן)
-                messages.sort((a, b) => {
-                    const timeA = a.timestamp?.seconds || 0;
-                    const timeB = b.timestamp?.seconds || 0;
-                    return timeB - timeA;
-                });
-
-                // Render all messages
-                feed.innerHTML = ''; // נקה פיד לפני רינדור מחדש
-                messages.forEach(msg => {
-                    appendFeedItem(msg);
-                });
-                
-            }, (error) => {
-                console.error("TeamViewer: Error listening to messages:", error);
-                updateStatus("שגיאת האזנה", false);
-            });
-        }
-
-        /**
-         * מציג פריט חדש בפיד
-         * @param {object} msg - אובייקט ההודעה מ-Firestore
-         */
-        function appendFeedItem(msg) {
-            const el = document.createElement('div');
-            el.className = 'feed-item';
-            
-            const sender = msg.senderName || 'לא ידוע';
-            const text = msg.text || '';
-            const time = msg.timestamp ? new Date(msg.timestamp.seconds * 1000).toLocaleString('he-IL', { dateStyle: 'short', timeStyle: 'short' }) : '';
-
-            if (msg.type === 'order') {
-                el.classList.add('feed-order');
-                el.innerHTML = `
-                    <div class="font-semibold text-sm flex justify-between text-yellow-800">
-                        <span>🔔 הזמנה חדשה מ: ${sender}</span>
-                        <span class="font-normal text-yellow-700">${time}</span>
-                    </div>
-                    <pre class="mt-2 text-yellow-900">${text}</pre>
-                `;
-            } else {
-                el.classList.add('feed-message');
-                 el.innerHTML = `
-                    <div class="font-semibold text-sm flex justify-between text-blue-800">
-                        <span>${sender}</span>
-                        <span class="font-normal text-blue-700">${time}</span>
-                    </div>
-                    <p class="mt-1 text-blue-900">${text}</p>
-                `;
-            }
-            
-            feed.appendChild(el); // שונה מ-prepend ל-appendChild בגלל flex-direction-reverse
-        }
-
-        // --- Init ---
-        document.addEventListener('DOMContentLoaded', () => {
-            feather.replace();
-            initApp();
-            console.log("פיד צוות נטען. מאזין להודעות...");
-        });
-    </script>
 </body>
 </html>
