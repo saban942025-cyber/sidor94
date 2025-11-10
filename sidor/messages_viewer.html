@@ -3,245 +3,414 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Messages Viewer (Firebase)</title>
+    <title>Sidor | ניהול צ'אט</title>
+
+    <!-- 1. Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/feather-icons"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700&display=swap" rel="stylesheet">
+
+    <!-- 2. OneSignal SDK -->
+    <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+    <script>
+      window.OneSignalDeferred = window.OneSignalDeferred || [];
+      OneSignalDeferred.push(async function(OneSignal) {
+        await OneSignal.init({
+          appId: "de3834d3-1e11-40af-96d2-b25eda821c8f", // Detected App ID
+        });
+        OneSignal.User.addTag("app_name", "chat_manager");
+      });
+    </script>
+
+    <!-- 3. Firebase SDK (Modern Modular v11+) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, query, onSnapshot, addDoc, setLogLevel, orderBy, where, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- Config & Init ---
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        
+        // --- Global State ---
+        let db, auth, userId;
+        let currentRoomId = null;
+        let unsubscribeMessages = () => {}; // Function to stop the listener
+
+        // --- UI & Utility ---
+        const SmartLog = (module, message, level = 'info') => {
+            console[level](`[${module}] ${level.toUpperCase()}:`, message);
+        };
+
+        const showError = (title, message) => {
+            const modal = document.getElementById('error-modal');
+            const titleEl = document.getElementById('error-title');
+            const textEl = document.getElementById('error-text');
+            if (modal) modal.classList.remove('hidden');
+            if (titleEl) titleEl.textContent = title;
+            if (textEl) textEl.textContent = message;
+        };
+
+        const renderMessage = (msg) => {
+            const listEl = document.getElementById('message-list');
+            if (!listEl) return;
+            
+            const isSent = msg.senderId === userId;
+            const alignClass = isSent ? 'justify-end' : 'justify-start';
+            const bubbleClass = isSent 
+                ? 'bg-blue-600 text-white' 
+                : 'bg-gray-500/20 dark:bg-gray-700/50 text-gray-800 dark:text-white';
+            
+            const time = msg.createdAt ? new Date(msg.createdAt.seconds * 1000).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' }) : '';
+            
+            const msgEl = document.createElement('div');
+            msgEl.className = `flex ${alignClass} mb-3`;
+            msgEl.innerHTML = `
+                <div class="max-w-xs lg:max-w-md">
+                    <div class="${bubbleClass} rounded-lg py-2 px-4 shadow-sm">
+                        <p class="text-sm">${msg.text}</p>
+                    </div>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1 ${isSent ? 'text-left' : 'text-right'}">${time}</p>
+                </div>
+            `;
+            listEl.appendChild(msgEl);
+        };
+
+        const scrollToBottom = () => {
+            const listEl = document.getElementById('message-list');
+            if (listEl) {
+                listEl.scrollTop = listEl.scrollHeight;
+            }
+        };
+
+        // --- Chat Logic ---
+
+        function listenToChatRooms() {
+            const roomsEl = document.getElementById('chat-room-list');
+            const collectionPath = `artifacts/${appId}/public/data/chat_rooms`;
+            SmartLog('Firestore', `Listening to rooms: ${collectionPath}`);
+            
+            try {
+                const q = query(collection(db, collectionPath));
+                onSnapshot(q, (snapshot) => {
+                    if (snapshot.empty) {
+                        roomsEl.innerHTML = `<div class="p-3 text-sm text-center">לא נמצאו חדרים.</div>`;
+                        return;
+                    }
+                    
+                    roomsEl.innerHTML = snapshot.docs.map(doc => {
+                        const room = doc.data();
+                        return `
+                            <div class="chat-room-item" data-id="${doc.id}" data-name="${room.name}">
+                                <h3 class="font-semibold">${room.name}</h3>
+                                <p class="text-sm text-gray-600 dark:text-gray-400 truncate">${room.lastMessage || 'אין הודעות...'}</p>
+                            </div>
+                        `;
+                    }).join('');
+
+                    // Add click listeners
+                    roomsEl.querySelectorAll('.chat-room-item').forEach(item => {
+                        item.addEventListener('click', () => {
+                            // Remove active state from all
+                            roomsEl.querySelectorAll('.chat-room-item').forEach(i => i.classList.remove('active'));
+                            // Add active state to clicked one
+                            item.classList.add('active');
+                            switchRoom(item.dataset.id, item.dataset.name);
+                        });
+                    });
+                    
+                    // Auto-select first room
+                    if (!currentRoomId && roomsEl.firstChild) {
+                        roomsEl.firstChild.click();
+                    }
+
+                }, (error) => handleError(error));
+            } catch (e) { handleError(e); }
+        }
+
+        function switchRoom(roomId, roomName) {
+            if (currentRoomId === roomId) return; // Already in this room
+            
+            currentRoomId = roomId;
+            document.getElementById('chat-header-name').textContent = roomName;
+            document.getElementById('message-list').innerHTML = ''; // Clear messages
+            
+            listenToMessages(roomId);
+        }
+
+        function listenToMessages(roomId) {
+            unsubscribeMessages(); // Stop listening to old room
+            
+            const collectionPath = `artifacts/${appId}/public/data/messages`;
+            SmartLog('Firestore', `Listening to messages where roomId == ${roomId}`);
+            
+            try {
+                const q = query(
+                    collection(db, collectionPath), 
+                    where('roomId', '==', roomId),
+                    orderBy('createdAt', 'asc') // Show oldest first
+                );
+
+                unsubscribeMessages = onSnapshot(q, (snapshot) => {
+                    document.getElementById('message-list').innerHTML = ''; // Clear list
+                    snapshot.docs.forEach(doc => renderMessage(doc.data()));
+                    scrollToBottom();
+                }, (error) => handleError(error));
+            } catch (e) { handleError(e); }
+        }
+
+        async function handleSendMessage() {
+            const inputEl = document.getElementById('message-input');
+            const text = inputEl.value.trim();
+            
+            if (!text || !currentRoomId) return;
+
+            const sendBtn = document.getElementById('send-btn');
+            sendBtn.disabled = true;
+
+            const collectionPath = `artifacts/${appId}/public/data/messages`;
+            const messageData = {
+                text,
+                roomId: currentRoomId,
+                senderId: userId,
+                // In a real app, senderName would come from user profile
+                senderName: "מנהל", 
+                createdAt: serverTimestamp() 
+            };
+            
+            try {
+                await addDoc(collection(db, collectionPath), messageData);
+                inputEl.value = ''; // Clear input
+            } catch (e) {
+                SmartLog('Firestore.Error', e, 'error');
+                showError('שגיאת שליחה', e.message);
+            } finally {
+                sendBtn.disabled = false;
+                inputEl.focus();
+            }
+        }
+
+        function handleError(error) {
+            SmartLog('Firestore.Error', error, 'error');
+            console.error("Firestore Error: ", error);
+            if (error.message.includes("permission-denied")) {
+                showError("שגיאת הרשאות", "לא ניתן לטעון נתונים. בדוק את חוקי האבטחה (Security Rules) של Firestore.");
+            } else {
+                showError("שגיאת Firestore", error.message);
+            }
+        }
+
+        // --- UI Setup & Main ---
+        
+        function setupUIListeners() {
+            // Dark Mode
+            const toggle = document.getElementById('dark-mode-toggle');
+            toggle.addEventListener('click', () => {
+                document.body.classList.toggle('dark');
+                localStorage.setItem('darkMode', document.body.classList.contains('dark'));
+            });
+            if (localStorage.getItem('darkMode') === 'true') {
+                document.body.classList.add('dark');
+            }
+
+            // OneSignal Bell
+            const bell = document.getElementById('onesignal-bell');
+            bell.addEventListener('click', () => {
+                OneSignalDeferred.push(function(OneSignal) {
+                    SmartLog('OneSignal', 'Prompting for push notifications.');
+                    OneSignal.Slidedown.promptPush();
+                });
+            });
+
+            // Error Modal Close
+            document.getElementById('close-error-btn').addEventListener('click', () => hideModal('error-modal'));
+            
+            // Send Message
+            document.getElementById('send-btn').addEventListener('click', handleSendMessage);
+            document.getElementById('message-input').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') handleSendMessage();
+            });
+        }
+        
+        async function main() {
+            SmartLog('Init', 'Chat Manager Initializing...');
+            
+            // --- FIX: Guard Clause for Firebase Config ---
+            if (!firebaseConfig.projectId) {
+                SmartLog('Auth.Error', 'Firebase config is missing or invalid. "projectId" is required.', 'error');
+                showError('שגיאת הגדרה קריטית', 'Firebase config is missing. "projectId" is required.');
+                return; // Stop execution
+            }
+            // --- End Fix ---
+
+            const app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            auth = getAuth(app);
+            setLogLevel('Debug');
+
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                    SmartLog('Auth', 'Signed in with custom token.');
+                } else {
+                    await signInAnonymously(auth);
+                    SmartLog('Auth', 'No token provided, signed in anonymously.');
+                }
+                userId = auth.currentUser.uid;
+                
+                setupUIListeners();
+                listenToChatRooms();
+
+            } catch (error) {
+                SmartLog('Auth.Error', error, 'error');
+                showError(`שגיאת אימות: ${error.message}`);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', main);
+    </script>
+
+    <!-- 5. Custom Styles -->
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        :root {
+            --bg-light: #f4f7f6;
+            --bg-dark: #1a202c;
+            --card-light: rgba(255, 255, 255, 0.7);
+            --card-dark: rgba(26, 32, 44, 0.7);
+            --border-light: rgba(255, 255, 255, 0.6);
+            --border-dark: rgba(255, 255, 255, 0.2);
+            --text-light: #2d3748;
+            --text-dark: #e2e8f0;
+            --shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.1);
+        }
         body {
-            font-family: 'Rubik', sans-serif;
-            background-color: #f9fafb;
-            display: flex;
-            flex-direction: column;
-            height: 100vh;
-            padding: 1rem;
-            box-sizing: border-box;
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-light);
+            color: var(--text-light);
+            transition: background-color 0.3s ease, color 0.3s ease;
         }
-        #chat-log {
-            flex-grow: 1;
-            border: 1px solid #e5e7eb;
-            padding: 0.75rem;
-            overflow-y: auto;
-            background: #ffffff;
-            border-radius: 0.5rem;
-            display: flex;
-            flex-direction: column-reverse; /* Show new messages at the bottom, but reverse order */
+        body.dark {
+            background-color: var(--bg-dark);
+            color: var(--text-dark);
         }
-        .msg-bubble {
-            padding: 0.75rem 1rem;
-            border-radius: 0.75rem;
-            margin-bottom: 0.5rem;
-            max-width: 80%;
-            word-wrap: break-word;
+        .glass-card {
+            background: var(--card-light);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid var(--border-light);
+            border-radius: 16px;
+            box-shadow: var(--shadow);
         }
-        .msg-admin {
-            background-color: #dbeafe;
-            color: #1e3a8a;
-            border-bottom-left-radius: 0.25rem;
-            align-self: flex-start;
+        body.dark .glass-card {
+            background: var(--card-dark);
+            border: 1px solid var(--border-dark);
         }
-        .msg-order {
-            background-color: #fef9c3;
-            color: #713f12;
-            border: 1px solid #fde68a;
-            align-self: center;
-            width: 100%;
-            max-width: 100%;
+        .icon-btn {
+            @apply p-2 rounded-full transition-all duration-200;
         }
-        .msg-order pre {
-            white-space: pre-wrap;
-            font-family: inherit;
-            font-size: 0.9rem;
+        .icon-btn:hover {
+            @apply bg-gray-500/20 transform scale-110;
         }
-        .loader {
-            border: 3px solid #e5e7eb;
-            border-top: 3px solid #3b82f6;
-            border-radius: 50%;
-            width: 24px;
-            height: 24px;
-            animation: spin 1s linear infinite;
+        .btn-primary {
+            @apply bg-blue-600 text-white rounded-lg font-semibold shadow-md transition-all duration-200 ease-in-out;
         }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .btn-primary:hover:not(:disabled) {
+            @apply bg-blue-700 transform scale-105;
+        }
+         .btn-danger {
+            @apply bg-red-600 text-white rounded-lg font-semibold shadow-md transition-all duration-200 ease-in-out;
+        }
+        .btn-danger:hover {
+            @apply bg-red-700 transform scale-105;
+        }
+        .chat-room-item {
+            @apply p-3 rounded-lg cursor-pointer transition-all;
+        }
+        .chat-room-item:hover {
+            @apply bg-gray-500/10 dark:bg-gray-900/30;
+        }
+        .chat-room-item.active {
+            @apply bg-blue-500/20 dark:bg-blue-900/30;
+        }
+        #message-list::-webkit-scrollbar { width: 6px; }
+        #message-list::-webkit-scrollbar-track { background: transparent; }
+        #message-list::-webkit-scrollbar-thumb {
+            background-color: rgba(150, 150, 150, 0.3);
+            border-radius: 20px;
+        }
+        body.dark #message-list::-webkit-scrollbar-thumb {
+            background-color: rgba(255, 255, 255, 0.2);
+        }
+        .modal-backdrop {
+            @apply fixed inset-0 z-40 flex items-center justify-center p-4;
+            background: rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(5px);
+        }
+        .hidden { display: none; }
     </style>
 </head>
-<body>
+<body class="overflow-hidden">
 
-    <div class="flex justify-between items-center mb-3 flex-shrink-0">
-        <h2 class="text-xl font-bold text-gray-800">צ'אט וניהול</h2>
-        <div id="status" class="flex items-center gap-2 text-gray-500">
-            <div class="loader"></div>
-            <span>מתחבר...</span>
+    <div class="flex h-screen w-screen p-4 gap-4">
+
+        <!-- Sidebar (Chat Rooms) -->
+        <aside class="w-full md:w-80 glass-card flex-shrink-0 flex flex-col">
+            <!-- Header -->
+            <div class="p-4 flex-shrink-0 flex justify-between items-center border-b border-gray-500/20">
+                <h1 class="text-xl font-bold text-gray-800 dark:text-white">צ'אטים</h1>
+                <div class="flex items-center gap-2">
+                    <button id="onesignal-bell" class="icon-btn text-gray-700 dark:text-gray-200" title="קבל התראות">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.73.64 3.58 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" /></svg>
+                    </button>
+                    <button id="dark-mode-toggle" class="icon-btn text-gray-700 dark:text-gray-200" title="שנה מצב תצוגה">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z" /></svg>
+                    </button>
+                </div>
+            </div>
+            <!-- Room List -->
+            <div id="chat-room-list" class="flex-grow p-2 space-y-1 overflow-y-auto">
+                <!-- Chat rooms injected by JS -->
+            </div>
+        </aside>
+
+        <!-- Main Content (Chat Window) -->
+        <main class="flex-1 glass-card min-w-0 flex flex-col">
+            <!-- Chat Header -->
+            <div id="chat-header" class="p-4 flex-shrink-0 border-b border-gray-500/20">
+                <h2 id="chat-header-name" class="text-lg font-semibold">טוען...</h2>
+            </div>
+            
+            <!-- Message List -->
+            <div id="message-list" class="flex-grow p-4 overflow-y-auto space-y-4">
+                <!-- Messages injected by JS -->
+            </div>
+
+            <!-- Message Input -->
+            <div class="p-4 flex-shrink-0 border-t border-gray-500/20">
+                <div class="flex gap-2">
+                    <input type="text" id="message-input" class="flex-grow bg-gray-500/10 dark:bg-gray-900/30 border border-gray-500/20 dark:border-gray-700/50 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-800 dark:text-white" placeholder="כתוב הודעה...">
+                    <button id="send-btn" class="btn-primary p-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.875L6 12z" /></svg>
+                    </button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Error Modal -->
+    <div id="error-modal" class="modal-backdrop hidden">
+        <div class="glass-card max-w-sm w-full p-6 rounded-lg shadow-lg">
+            <div class="flex items-center gap-3">
+                <div class="flex-shrink-0 w-10 h-10 rounded-full bg-red-100 dark:bg-red-800/50 flex items-center justify-center">
+                    <svg class="w-6 h-6 text-red-600 dark:text-red-300" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126z" /></svg>
+                </div>
+                <div class="flex-grow">
+                    <h3 id="error-title" class="font-bold text-lg text-red-800 dark:text-red-200">שגיאה</h3>
+                    <p id="error-text" class="text-sm text-red-700 dark:text-red-300">לא ניתן היה לטעון את הנתונים.</p>
+                </div>
+            </div>
+            <button id="close-error-btn" class="btn-danger w-full mt-5">סגור</button>
         </div>
     </div>
 
-    <!-- Log container -->
-    <div id="chat-log">
-        <!-- Messages will be prepended here by JS -->
-    </div>
-
-    <!-- Send form -->
-    <form id="sendForm" class="flex gap-3 mt-4 flex-shrink-0">
-        <input id="msg-input" class="flex-grow form-input px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="כתוב הודעה לצוות..." autocomplete="off">
-        <button type="submit" class="btn-primary bg-blue-600 text-white px-5 py-2 rounded-lg font-semibold shadow hover:bg-blue-700 flex items-center gap-2">
-            <span>שלח</span>
-            <i data-feather="send" class="w-4 h-4"></i>
-        </button>
-    </form>
-
-    <script type="module">
-        // --- Firebase SDK Imports ---
-        import { initializeApp, getApp, getApps } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
-        import { getFirestore, collection, doc, onSnapshot, query, addDoc, serverTimestamp, orderBy } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-
-        // --- Config ---
-        const fallbackConfig = {
-            apiKey: "AIzaSyDq0oVwS6zbEfsgrYBRkeBq80dDUKMedzo", 
-            authDomain: "saban94-78949.firebaseapp.com", 
-            projectId: "saban94-78949",
-            storageBucket: "saban94-78949.appspot.com", 
-            messagingSenderId: "41553157903", 
-            appId: "1:41553157903:web:cc33d252cff023be97a87a"
-        };
-        const FIREBASE_CONFIG = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : fallbackConfig;
-        
-        // [חשוב] זה ה-ID של חדר הצ'אט הראשי
-        const TEAM_CHAT_ID = "saban94_main_chat"; 
-
-        // --- Elements ---
-        const log = document.getElementById('chat-log');
-        const statusEl = document.getElementById('status');
-        const sendForm = document.getElementById('sendForm');
-        const msgInput = document.getElementById('msg-input');
-
-        let db, auth;
-        let messagesListener = null;
-
-        // --- Initialization ---
-        function initApp() {
-            try {
-                const app = !getApps().length ? initializeApp(FIREBASE_CONFIG) : getApp();
-                db = getFirestore(app);
-                auth = getAuth(app);
-                
-                signInAnonymously(auth).then(() => {
-                    console.log("MessagesViewer: Signed in anonymously.");
-                    listenForMessages();
-                }).catch(error => {
-                    console.error("MessagesViewer: Anonymous sign-in failed", error);
-                    updateStatus("שגיאת התחברות", false);
-                });
-
-            } catch (error) {
-                console.error("MessagesViewer: Firebase Init Error:", error);
-                updateStatus("Firebase נכשל", false);
-            }
-        }
-
-        function updateStatus(message, isConnected) {
-            if (isConnected) {
-                statusEl.innerHTML = `<div class="w-3 h-3 bg-green-500 rounded-full"></div> <span>${message}</span>`;
-            } else {
-                statusEl.innerHTML = `<div class="w-3 h-3 bg-red-500 rounded-full"></div> <span>${message}</span>`;
-            }
-        }
-
-        // --- Firestore Listener ---
-        function listenForMessages() {
-            if (messagesListener) messagesListener(); // Unsubscribe from previous listener
-
-            const messagesRef = collection(db, "teamChats", TEAM_CHAT_ID, "messages");
-            
-            // [תיקון] הסרת orderBy כדי למנוע שגיאות אינדקס. נמיין בצד הלקוח.
-            const q = query(messagesRef);
-
-            messagesListener = onSnapshot(q, (snapshot) => {
-                updateStatus("מחובר", true);
-                console.log(`MessagesViewer: Received ${snapshot.docChanges().length} changes.`);
-                
-                let messages = [];
-                snapshot.docs.forEach(doc => {
-                    messages.push({ id: doc.id, ...doc.data() });
-                });
-
-                // [תיקון] מיון בצד הלקוח (מהחדש לישן)
-                messages.sort((a, b) => {
-                    const timeA = a.timestamp?.seconds || 0;
-                    const timeB = b.timestamp?.seconds || 0;
-                    return timeB - timeA;
-                });
-
-                // Render all messages
-                log.innerHTML = ''; // Clear log before rendering
-                messages.forEach(msg => {
-                    appendMessage(msg);
-                });
-                
-            }, (error) => {
-                console.error("MessagesViewer: Error listening to messages:", error);
-                updateStatus("שגיאת האזנה", false);
-            });
-        }
-
-        function appendMessage(msg) {
-            const el = document.createElement('div');
-            el.className = 'msg-bubble';
-            
-            const sender = msg.senderName || 'לא ידוע';
-            const text = msg.text || '';
-            const time = msg.timestamp ? new Date(msg.timestamp.seconds * 1000).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' }) : '';
-
-            if (msg.type === 'order') {
-                el.classList.add('msg-order');
-                el.innerHTML = `
-                    <div class="font-bold text-sm flex justify-between">
-                        <span>🔔 הזמנה חדשה התקבלה מ: ${sender}</span>
-                        <span class="font-normal text-gray-600">${time}</span>
-                    </div>
-                    <pre class="mt-2">${text}</pre>
-                `;
-            } else {
-                el.classList.add('msg-admin');
-                 el.innerHTML = `
-                    <div class="font-bold text-sm flex justify-between">
-                        <span>${sender}</span>
-                        <span class="font-normal text-gray-600">${time}</span>
-                    </div>
-                    <p class="mt-1">${text}</p>
-                `;
-            }
-            
-            log.appendChild(el); // Changed from prepend to append because of flex-direction-reverse
-        }
-
-        // --- Send Message ---
-        sendForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const text = msgInput.value.trim();
-            if (!text || !db) return;
-
-            const messagesRef = collection(db, "teamChats", TEAM_CHAT_ID, "messages");
-            
-            try {
-                await addDoc(messagesRef, {
-                    text: text,
-                    senderName: "מנהל", // או לשלוף שם משתמש אמיתי
-                    timestamp: serverTimestamp(),
-                    type: "message" // סוג הודעה רגיל
-                });
-                msgInput.value = '';
-                console.log("MessagesViewer: Message sent.");
-            } catch (error) {
-                console.error("MessagesViewer: Error sending message:", error);
-                alert("שגיאה בשליחת הודעה.");
-            }
-        });
-
-        // --- Init ---
-        document.addEventListener('DOMContentLoaded', () => {
-            feather.replace();
-            initApp();
-        });
-    </script>
 </body>
 </html>
