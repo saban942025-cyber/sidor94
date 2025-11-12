@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>פורטל יוסי | מובייל</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700&display=swap" rel="stylesheet">
+
+    <!-- Icons (Lucide) -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- OneSignal SDK -->
+    <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+    <script>
+      window.OneSignalDeferred = window.OneSignalDeferred || [];
+      OneSignalDeferred.push(async function(OneSignal) {
+        await OneSignal.init({
+          appId: "de3834d3-1e11-40af-96d2-b25eda821c8f",
+        });
+      });
+    </script>
+
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, query, onSnapshot, where, getCountFromServer, orderBy, limit } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- Config & Init ---
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        let db, auth;
+
+        // --- State Management ---
+        const state = {
+            activeDrivers: 0,
+            openOrders: 0,
+            listeners: {} // Store unsubscribe functions
+        };
+
+        // --- Main Init ---
+        async function initApp() {
+            // Guard Clause
+            if (!firebaseConfig.projectId) {
+                console.error("Firebase config missing");
+                document.getElementById('inner-content-text').textContent = "שגיאת חיבור: חסרה תצורת Firebase";
+                return;
+            }
+
+            const app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            auth = getAuth(app);
+
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+                console.log("Connected to Firebase");
+                
+                // Start listening to dashboard stats
+                listenToDashboardStats();
+
+            } catch (error) {
+                console.error("Auth failed", error);
+            }
+        }
+
+        // --- Dashboard Logic ---
+        function listenToDashboardStats() {
+            const driversCol = collection(db, `artifacts/${appId}/public/data/drivers`);
+            const ordersCol = collection(db, `artifacts/${appId}/public/data/orders`);
+
+            // Listen to Active Drivers
+            const qDrivers = query(driversCol, where('status', '==', 'ONLINE'));
+            onSnapshot(qDrivers, (snap) => {
+                state.activeDrivers = snap.size;
+                updateDashboardUI('stat-drivers', `${snap.size} נהגים פעילים`);
+            });
+
+            // Listen to Open Orders
+            const qOrders = query(ordersCol, where('status', 'in', ['PENDING', 'IN_TRANSIT']));
+            onSnapshot(qOrders, (snap) => {
+                state.openOrders = snap.size;
+                updateDashboardUI('stat-orders', `${snap.size} משימות פתוחות`);
+            });
+        }
+
+        function updateDashboardUI(id, text) {
+            const el = document.getElementById(id);
+            if (el) {
+                el.textContent = text;
+                el.classList.add('text-blue-600', 'dark:text-blue-400', 'font-bold'); // Highlight update
+                setTimeout(() => el.classList.remove('text-blue-600', 'dark:text-blue-400', 'font-bold'), 1000);
+            }
+        }
+
+        // --- Inner Page Renderers ---
+
+        // 1. Render Logistics (Drivers List)
+        function renderLogistics(container) {
+            container.innerHTML = '<div class="flex justify-center p-4"><i data-lucide="loader" class="animate-spin"></i></div>';
+            lucide.createIcons();
+
+            const col = collection(db, `artifacts/${appId}/public/data/drivers`);
+            // Query online drivers first
+            const q = query(col, orderBy('status', 'desc')); 
+
+            const unsub = onSnapshot(q, (snapshot) => {
+                if (snapshot.empty) {
+                    container.innerHTML = `<div class="text-center text-gray-500 mt-10">אין נהגים במערכת</div>`;
+                    return;
+                }
+
+                container.innerHTML = snapshot.docs.map(doc => {
+                    const d = doc.data();
+                    const isOnline = d.status === 'ONLINE';
+                    return `
+                        <div class="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm mb-3 flex items-center justify-between border-r-4 ${isOnline ? 'border-green-500' : 'border-gray-300'}">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
+                                    <i data-lucide="user" class="w-5 h-5 text-gray-600 dark:text-gray-300"></i>
+                                </div>
+                                <div>
+                                    <h3 class="font-bold text-gray-800 dark:text-white">${d.name || 'לא ידוע'}</h3>
+                                    <p class="text-xs text-gray-500">${d.phone || ''}</p>
+                                </div>
+                            </div>
+                            <span class="text-xs px-2 py-1 rounded-full ${isOnline ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}">
+                                ${d.status || 'OFFLINE'}
+                            </span>
+                        </div>
+                    `;
+                }).join('');
+                lucide.createIcons();
+            });
+            state.listeners['inner'] = unsub;
+        }
+
+        // 2. Render Orders List
+        function renderOrders(container) {
+            container.innerHTML = '<div class="flex justify-center p-4"><i data-lucide="loader" class="animate-spin"></i></div>';
+            lucide.createIcons();
+
+            const col = collection(db, `artifacts/${appId}/public/data/orders`);
+            const q = query(col, orderBy('createdAt', 'desc'), limit(20));
+
+            const unsub = onSnapshot(q, (snapshot) => {
+                if (snapshot.empty) {
+                    container.innerHTML = `<div class="text-center text-gray-500 mt-10">אין הזמנות במערכת</div>`;
+                    return;
+                }
+
+                container.innerHTML = snapshot.docs.map(doc => {
+                    const o = doc.data();
+                    const statusColor = o.status === 'DONE' ? 'text-green-600' : (o.status === 'PENDING' ? 'text-yellow-600' : 'text-blue-600');
+                    return `
+                        <div class="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm mb-3">
+                            <div class="flex justify-between items-start mb-2">
+                                <span class="text-xs font-mono bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded text-gray-600 dark:text-gray-300">#${(o.orderId || doc.id).substring(0,6)}</span>
+                                <span class="text-xs font-bold ${statusColor}">${o.status}</span>
+                            </div>
+                            <h3 class="font-semibold text-gray-800 dark:text-white mb-1">${o.customerName || 'לקוח כללי'}</h3>
+                            <div class="flex items-center gap-2 text-xs text-gray-500">
+                                <i data-lucide="map-pin" class="w-3 h-3"></i>
+                                <span>${o.address || 'אין כתובת'}</span>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+                lucide.createIcons();
+            });
+            state.listeners['inner'] = unsub;
+        }
+
+        // 3. Render Customers List
+        function renderCustomers(container) {
+            container.innerHTML = '<div class="flex justify-center p-4"><i data-lucide="loader" class="animate-spin"></i></div>';
+            lucide.createIcons();
+
+            const col = collection(db, `artifacts/${appId}/public/data/customers`);
+            const q = query(col, orderBy('createdAt', 'desc'), limit(20));
+
+            const unsub = onSnapshot(q, (snapshot) => {
+                if (snapshot.empty) {
+                    container.innerHTML = `<div class="text-center text-gray-500 mt-10">אין לקוחות</div>`;
+                    return;
+                }
+
+                container.innerHTML = snapshot.docs.map(doc => {
+                    const c = doc.data();
+                    return `
+                        <div class="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm mb-3 flex items-center justify-between">
+                            <div>
+                                <h3 class="font-bold text-gray-800 dark:text-white">${c.name}</h3>
+                                <p class="text-xs text-gray-500">${c.phone}</p>
+                            </div>
+                            <a href="tel:${c.phone}" class="p-2 bg-green-100 text-green-600 rounded-full">
+                                <i data-lucide="phone" class="w-4 h-4"></i>
+                            </a>
+                        </div>
+                    `;
+                }).join('');
+                lucide.createIcons();
+            });
+            state.listeners['inner'] = unsub;
+        }
+
+        // --- Expose to Global Scope for HTML events ---
+        window.initApp = initApp;
+        window.renderLogistics = renderLogistics;
+        window.renderOrders = renderOrders;
+        window.renderCustomers = renderCustomers;
+        window.state = state;
+
+        document.addEventListener('DOMContentLoaded', initApp);
+
+    </script>
+
+    <style>
+        :root {
+            --primary-color: #3b82f6; 
+            --bg-light: #f3f4f6;
+            --bg-dark: #111827;
+        }
+
+        body {
+            font-family: 'Heebo', sans-serif;
+            background-color: var(--bg-light);
+            color: #1f2937;
+            overflow: hidden;
+            touch-action: manipulation;
+        }
+
+        body.dark {
+            background-color: var(--bg-dark);
+            color: #f3f4f6;
+        }
+
+        .scroll-container::-webkit-scrollbar { width: 4px; }
+        .scroll-container::-webkit-scrollbar-track { background: transparent; }
+        .scroll-container::-webkit-scrollbar-thumb {
+            background-color: rgba(156, 163, 175, 0.5);
+            border-radius: 20px;
+        }
+
+        .dept-card {
+            transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s ease;
+        }
+        .dept-card:active { transform: scale(0.96); }
+
+        .page {
+            transition: opacity 0.3s ease, transform 0.3s ease;
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            opacity: 0; pointer-events: none; transform: translateX(20px);
+        }
+        
+        .page.active {
+            opacity: 1; pointer-events: auto; transform: translateX(0); position: relative;
+        }
+        .page.hidden-init { display: none; }
+
+        .glass-header {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid rgba(0,0,0,0.05);
+        }
+        body.dark .glass-header {
+            background: rgba(17, 24, 39, 0.85);
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+    </style>
+</head>
+<body class="h-[100dvh] flex flex-col">
+
+    <!-- Header -->
+    <header class="glass-header flex-shrink-0 h-16 px-4 flex items-center justify-between z-50 shadow-sm transition-colors duration-300">
+        <div class="flex items-center gap-3">
+            <button id="back-btn" class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors hidden" aria-label="חזור">
+                <i data-lucide="arrow-right" class="w-6 h-6"></i>
+            </button>
+            <h1 id="page-title" class="text-xl font-bold text-gray-800 dark:text-white truncate">פורטל יוסי</h1>
+        </div>
+        
+        <div class="flex items-center gap-2">
+            <button id="theme-toggle" class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
+                <i data-lucide="moon" class="w-5 h-5 dark:hidden"></i>
+                <i data-lucide="sun" class="w-5 h-5 hidden dark:block text-yellow-400"></i>
+            </button>
+            <button class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors relative">
+                <i data-lucide="bell" class="w-5 h-5"></i>
+                <span class="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full"></span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main id="main-container" class="flex-grow relative overflow-hidden bg-gray-50 dark:bg-gray-900">
+        
+        <!-- HOME PAGE -->
+        <div id="page-home" class="page active w-full h-full overflow-y-auto scroll-container p-4">
+            
+            <!-- Welcome -->
+            <div class="mb-6">
+                <h2 class="text-2xl font-light text-gray-600 dark:text-gray-300">שלום, <span class="font-bold text-gray-900 dark:text-white">מנהל</span></h2>
+                <p class="text-sm text-gray-500 dark:text-gray-400">בחר מחלקה כדי להתחיל</p>
+            </div>
+
+            <!-- Search -->
+            <div class="relative mb-6">
+                <input type="text" placeholder="חיפוש בפורטל..." class="w-full pl-4 pr-10 py-3 rounded-xl bg-white dark:bg-gray-800 border-none shadow-sm focus:ring-2 focus:ring-blue-500 dark:text-white transition-shadow">
+                <i data-lucide="search" class="absolute left-3 top-3.5 w-5 h-5 text-gray-400"></i>
+            </div>
+
+            <!-- Grid -->
+            <div class="grid grid-cols-2 gap-4 pb-20">
+                
+                <!-- Logistics -->
+                <button onclick="navigateTo('logistics', 'לוגיסטיקה ושינוע')" class="dept-card bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm hover:shadow-md flex flex-col items-center justify-center gap-3 text-center h-40">
+                    <div class="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center text-blue-600 dark:text-blue-400">
+                        <i data-lucide="truck" class="w-6 h-6"></i>
+                    </div>
+                    <span class="font-semibold text-gray-800 dark:text-gray-100">לוגיסטיקה</span>
+                    <span id="stat-drivers" class="text-xs text-gray-500 transition-all">טוען...</span>
+                </button>
+
+                <!-- Orders -->
+                <button onclick="navigateTo('orders', 'ניהול הזמנות')" class="dept-card bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm hover:shadow-md flex flex-col items-center justify-center gap-3 text-center h-40">
+                    <div class="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center text-green-600 dark:text-green-400">
+                        <i data-lucide="package" class="w-6 h-6"></i>
+                    </div>
+                    <span class="font-semibold text-gray-800 dark:text-gray-100">הזמנות</span>
+                    <span id="stat-orders" class="text-xs text-gray-500 transition-all">טוען...</span>
+                </button>
+
+                <!-- Customers -->
+                <button onclick="navigateTo('customers', 'לקוחות')" class="dept-card bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm hover:shadow-md flex flex-col items-center justify-center gap-3 text-center h-40">
+                    <div class="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center text-purple-600 dark:text-purple-400">
+                        <i data-lucide="users" class="w-6 h-6"></i>
+                    </div>
+                    <span class="font-semibold text-gray-800 dark:text-gray-100">לקוחות</span>
+                    <span class="text-xs text-gray-500">מאגר לקוחות</span>
+                </button>
+
+                <!-- Warehouse (Static for now) -->
+                <button onclick="navigateTo('warehouse', 'מחסן ומלאי')" class="dept-card bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm hover:shadow-md flex flex-col items-center justify-center gap-3 text-center h-40">
+                    <div class="w-12 h-12 bg-orange-100 dark:bg-orange-900/30 rounded-full flex items-center justify-center text-orange-600 dark:text-orange-400">
+                        <i data-lucide="box" class="w-6 h-6"></i>
+                    </div>
+                    <span class="font-semibold text-gray-800 dark:text-gray-100">מחסן</span>
+                    <span class="text-xs text-gray-500">ניהול מלאי</span>
+                </button>
+
+                <!-- Chat (Static for now) -->
+                <button onclick="navigateTo('chat', 'הודעות וצ׳אט')" class="dept-card bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm hover:shadow-md flex flex-col items-center justify-center gap-3 text-center h-40 col-span-2">
+                    <div class="flex items-center gap-4">
+                        <div class="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/30 rounded-full flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+                            <i data-lucide="message-circle" class="w-6 h-6"></i>
+                        </div>
+                        <div class="flex flex-col items-start">
+                            <span class="font-semibold text-gray-800 dark:text-gray-100">הודעות וצ׳אט</span>
+                            <span class="text-xs text-gray-500">מרכז הודעות</span>
+                        </div>
+                    </div>
+                </button>
+            </div>
+        </div>
+
+        <!-- INNER PAGE CONTAINER -->
+        <div id="page-inner" class="page hidden-init w-full h-full overflow-y-auto scroll-container p-4 bg-white dark:bg-gray-900">
+            <!-- Content injected here -->
+            <div id="inner-content-area" class="mt-4">
+                <div class="flex flex-col items-center justify-center h-64 text-gray-400">
+                    <i id="inner-icon" data-lucide="loader" class="w-12 h-12 mb-4 animate-spin"></i>
+                    <p id="inner-content-text">טוען נתונים...</p>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        // --- Navigation Logic ---
+        const historyStack = ['home'];
+        const pageHome = document.getElementById('page-home');
+        const pageInner = document.getElementById('page-inner');
+        const backBtn = document.getElementById('back-btn');
+        const titleEl = document.getElementById('page-title');
+        const innerContent = document.getElementById('inner-content-area');
+
+        function navigateTo(deptId, deptName) {
+            historyStack.push(deptId);
+            titleEl.textContent = deptName;
+            backBtn.classList.remove('hidden');
+            
+            // Transition
+            pageHome.classList.remove('active');
+            pageHome.classList.add('hidden-init'); 
+            pageInner.classList.remove('hidden-init');
+            requestAnimationFrame(() => pageInner.classList.add('active'));
+
+            // Render specific content
+            if (deptId === 'logistics') window.renderLogistics(innerContent);
+            else if (deptId === 'orders') window.renderOrders(innerContent);
+            else if (deptId === 'customers') window.renderCustomers(innerContent);
+            else {
+                // Fallback for unimplemented pages
+                innerContent.innerHTML = `<div class="text-center mt-10 text-gray-500">מודול זה בפיתוח</div>`;
+            }
+        }
+
+        function goBack() {
+            if (historyStack.length <= 1) return;
+            
+            // Unsubscribe from inner listener if exists
+            if (window.state.listeners['inner']) {
+                window.state.listeners['inner'](); // Stop listening
+                delete window.state.listeners['inner'];
+            }
+
+            historyStack.pop();
+            
+            titleEl.textContent = 'פורטל יוסי';
+            backBtn.classList.add('hidden');
+            
+            pageInner.classList.remove('active');
+            setTimeout(() => {
+                pageInner.classList.add('hidden-init');
+                innerContent.innerHTML = ''; // Clean up
+            }, 300); 
+            
+            pageHome.classList.remove('hidden-init');
+            requestAnimationFrame(() => pageHome.classList.add('active'));
+        }
+
+        backBtn.addEventListener('click', goBack);
+        window.onpopstate = function(event) { if (historyStack.length > 1) goBack(); };
+
+        // Dark Mode
+        const themeToggle = document.getElementById('theme-toggle');
+        themeToggle.addEventListener('click', () => {
+            document.body.classList.toggle('dark');
+        });
+
+        lucide.createIcons();
+    </script>
+</body>
+</html>
+
+
