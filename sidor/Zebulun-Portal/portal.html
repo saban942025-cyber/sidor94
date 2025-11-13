@@ -2,18 +2,20 @@
 <html lang="he" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>פורטל יוסי | מובייל</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>פורטל זבולון-עדירן | ניהול שטח</title>
+    
+    <!-- PWA Manifest & Theme -->
+    <meta name="theme-color" content="#3b82f6">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
-    <!-- Tailwind CSS -->
+    <!-- TailwindCSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700&display=swap" rel="stylesheet">
-
-    <!-- Icons (Lucide) -->
+    <!-- Icons (Lucide) - More modern than Feather -->
     <script src="https://unpkg.com/lucide@latest"></script>
-
+    
     <!-- OneSignal SDK -->
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script>
@@ -28,27 +30,32 @@
     <!-- Firebase SDK -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, query, onSnapshot, where, getCountFromServer, orderBy, limit } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, query, onSnapshot, where, orderBy, doc, updateDoc, getDoc, serverTimestamp, addDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // --- Config & Init ---
+        // --- Config ---
         const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        let db, auth;
+        let db, auth, userId;
 
-        // --- State Management ---
-        const state = {
-            activeDrivers: 0,
-            openOrders: 0,
-            listeners: {} // Store unsubscribe functions
+        // --- UI Helpers ---
+        const showToast = (msg, type = 'info') => {
+            const toast = document.getElementById('toast');
+            toast.textContent = msg;
+            toast.className = `fixed bottom-20 left-1/2 transform -translate-x-1/2 px-6 py-3 rounded-full shadow-xl text-white text-sm font-medium transition-all duration-300 z-50 ${type === 'error' ? 'bg-red-600' : 'bg-gray-800'}`;
+            toast.classList.remove('opacity-0', 'translate-y-10');
+            setTimeout(() => toast.classList.add('opacity-0', 'translate-y-10'), 3000);
         };
 
-        // --- Main Init ---
+        const formatTime = (timestamp) => {
+            if (!timestamp) return '';
+            return new Date(timestamp.seconds * 1000).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
+        };
+
+        // --- Main Logic ---
         async function initApp() {
-            // Guard Clause
             if (!firebaseConfig.projectId) {
-                console.error("Firebase config missing");
-                document.getElementById('inner-content-text').textContent = "שגיאת חיבור: חסרה תצורת Firebase";
+                document.body.innerHTML = '<div class="p-10 text-center text-red-500">שגיאת קונפיגורציה: חסר Project ID</div>';
                 return;
             }
 
@@ -62,395 +69,342 @@
                 } else {
                     await signInAnonymously(auth);
                 }
-                console.log("Connected to Firebase");
                 
-                // Start listening to dashboard stats
-                listenToDashboardStats();
+                userId = auth.currentUser.uid;
+                console.log("Connected as:", userId);
+                
+                // Check URL for Magic Link Action
+                checkUrlParams();
+
+                // Start Listeners
+                listenToStats();
+                listenToOrders();
 
             } catch (error) {
-                console.error("Auth failed", error);
+                console.error("Init failed:", error);
+                showToast("שגיאת חיבור למערכת", "error");
             }
         }
 
-        // --- Dashboard Logic ---
-        function listenToDashboardStats() {
-            const driversCol = collection(db, `artifacts/${appId}/public/data/drivers`);
-            const ordersCol = collection(db, `artifacts/${appId}/public/data/orders`);
+        // --- URL & Sharing Logic ---
+        function checkUrlParams() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const orderId = urlParams.get('orderId');
+            const action = urlParams.get('action');
 
-            // Listen to Active Drivers
-            const qDrivers = query(driversCol, where('status', '==', 'ONLINE'));
-            onSnapshot(qDrivers, (snap) => {
-                state.activeDrivers = snap.size;
-                updateDashboardUI('stat-drivers', `${snap.size} נהגים פעילים`);
-            });
-
-            // Listen to Open Orders
-            const qOrders = query(ordersCol, where('status', 'in', ['PENDING', 'IN_TRANSIT']));
-            onSnapshot(qOrders, (snap) => {
-                state.openOrders = snap.size;
-                updateDashboardUI('stat-orders', `${snap.size} משימות פתוחות`);
-            });
-        }
-
-        function updateDashboardUI(id, text) {
-            const el = document.getElementById(id);
-            if (el) {
-                el.textContent = text;
-                el.classList.add('text-blue-600', 'dark:text-blue-400', 'font-bold'); // Highlight update
-                setTimeout(() => el.classList.remove('text-blue-600', 'dark:text-blue-400', 'font-bold'), 1000);
+            if (orderId && action === 'execute') {
+                // Field Manager Mode
+                openExecutionModal(orderId);
+                // Clean URL without reloading
+                window.history.replaceState({}, document.title, window.location.pathname);
             }
         }
 
-        // --- Inner Page Renderers ---
+        async function openExecutionModal(orderId) {
+            const modal = document.getElementById('execution-modal');
+            const content = document.getElementById('execution-content');
+            
+            modal.classList.remove('hidden');
+            content.innerHTML = '<div class="text-center p-4">טוען פרטי משימה...</div>';
 
-        // 1. Render Logistics (Drivers List)
-        function renderLogistics(container) {
-            container.innerHTML = '<div class="flex justify-center p-4"><i data-lucide="loader" class="animate-spin"></i></div>';
-            lucide.createIcons();
+            try {
+                const docRef = doc(db, `artifacts/${appId}/public/data/orders`, orderId);
+                const docSnap = await getDoc(docRef);
 
-            const col = collection(db, `artifacts/${appId}/public/data/drivers`);
-            // Query online drivers first
-            const q = query(col, orderBy('status', 'desc')); 
-
-            const unsub = onSnapshot(q, (snapshot) => {
-                if (snapshot.empty) {
-                    container.innerHTML = `<div class="text-center text-gray-500 mt-10">אין נהגים במערכת</div>`;
-                    return;
-                }
-
-                container.innerHTML = snapshot.docs.map(doc => {
-                    const d = doc.data();
-                    const isOnline = d.status === 'ONLINE';
-                    return `
-                        <div class="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm mb-3 flex items-center justify-between border-r-4 ${isOnline ? 'border-green-500' : 'border-gray-300'}">
-                            <div class="flex items-center gap-3">
-                                <div class="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
-                                    <i data-lucide="user" class="w-5 h-5 text-gray-600 dark:text-gray-300"></i>
-                                </div>
-                                <div>
-                                    <h3 class="font-bold text-gray-800 dark:text-white">${d.name || 'לא ידוע'}</h3>
-                                    <p class="text-xs text-gray-500">${d.phone || ''}</p>
-                                </div>
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    content.innerHTML = `
+                        <div class="text-center mb-6">
+                            <div class="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                                <i data-lucide="package" class="w-8 h-8 text-blue-600"></i>
                             </div>
-                            <span class="text-xs px-2 py-1 rounded-full ${isOnline ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}">
-                                ${d.status || 'OFFLINE'}
-                            </span>
+                            <h2 class="text-xl font-bold text-gray-800">קיבלת משימה חדשה</h2>
+                            <p class="text-gray-500 text-sm">מאת: יוסי (מערכת)</p>
+                        </div>
+                        
+                        <div class="bg-gray-50 p-4 rounded-xl mb-6 border border-gray-100">
+                            <div class="flex justify-between mb-2">
+                                <span class="text-gray-500">לקוח:</span>
+                                <span class="font-bold">${data.customerName}</span>
+                            </div>
+                            <div class="flex justify-between mb-2">
+                                <span class="text-gray-500">מיקום:</span>
+                                <span class="font-bold">${data.locationName}</span>
+                            </div>
+                            ${data.notes ? `<div class="mt-2 pt-2 border-t border-gray-200 text-sm text-gray-600">${data.notes}</div>` : ''}
+                        </div>
+
+                        <button onclick="completeOrder('${orderId}')" class="w-full bg-green-600 text-white py-4 rounded-xl font-bold shadow-lg active:scale-95 transition-transform flex items-center justify-center gap-2">
+                            <i data-lucide="check-circle" class="w-5 h-5"></i>
+                            אשר ביצוע משימה
+                        </button>
+                        <button onclick="closeExecutionModal()" class="w-full mt-3 py-3 text-gray-500 font-medium">סגור</button>
+                    `;
+                    lucide.createIcons();
+                } else {
+                    content.innerHTML = '<div class="text-center text-red-500">ההזמנה לא נמצאה או נמחקה.</div>';
+                }
+            } catch (e) {
+                console.error(e);
+                content.innerHTML = '<div class="text-center text-red-500">שגיאה בטעינת ההזמנה.</div>';
+            }
+        }
+
+        window.closeExecutionModal = () => {
+            document.getElementById('execution-modal').classList.add('hidden');
+        };
+
+        window.completeOrder = async (orderId) => {
+            try {
+                const docRef = doc(db, `artifacts/${appId}/public/data/orders`, orderId);
+                await updateDoc(docRef, {
+                    status: 'COMPLETED',
+                    completedAt: serverTimestamp(),
+                    completedBy: userId || 'field-manager'
+                });
+                closeExecutionModal();
+                showToast("המשימה הושלמה בהצלחה!");
+                // Trigger confetti or sound here ideally
+            } catch (e) {
+                console.error(e);
+                showToast("שגיאה בעדכון המשימה", "error");
+            }
+        };
+
+        window.shareOrder = (orderId) => {
+            // Construct the Magic Link
+            const baseUrl = window.location.origin + window.location.pathname;
+            const shareUrl = `${baseUrl}?orderId=${orderId}&action=execute`;
+            
+            if (navigator.share) {
+                navigator.share({
+                    title: 'משימה חדשה - פורטל זבולון',
+                    text: 'קיבלת משימת שטח חדשה לביצוע. לחץ לפתיחה:',
+                    url: shareUrl
+                }).catch(console.error);
+            } else {
+                // Fallback for desktop
+                navigator.clipboard.writeText(shareUrl).then(() => {
+                    showToast("הקישור הועתק! שלח אותו למנהל השטח.");
+                });
+            }
+        };
+
+        // --- Data Listeners ---
+        function listenToStats() {
+            const colRef = collection(db, `artifacts/${appId}/public/data/orders`);
+            // Pending
+            onSnapshot(query(colRef, where('status', '==', 'PENDING')), snap => {
+                document.getElementById('stat-pending').textContent = snap.size;
+            });
+            // Completed
+            onSnapshot(query(colRef, where('status', '==', 'COMPLETED')), snap => {
+                document.getElementById('stat-completed').textContent = snap.size;
+            });
+        }
+
+        function listenToOrders() {
+            const container = document.getElementById('orders-list');
+            const colRef = collection(db, `artifacts/${appId}/public/data/orders`);
+            const q = query(colRef, orderBy('createdAt', 'desc')); // removed limit for now
+
+            onSnapshot(q, (snapshot) => {
+                if (snapshot.empty) {
+                    container.innerHTML = `
+                        <div class="flex flex-col items-center justify-center py-12 text-gray-400">
+                            <i data-lucide="inbox" class="w-12 h-12 mb-2 opacity-50"></i>
+                            <p>אין הזמנות במערכת</p>
                         </div>
                     `;
-                }).join('');
-                lucide.createIcons();
-            });
-            state.listeners['inner'] = unsub;
-        }
-
-        // 2. Render Orders List
-        function renderOrders(container) {
-            container.innerHTML = '<div class="flex justify-center p-4"><i data-lucide="loader" class="animate-spin"></i></div>';
-            lucide.createIcons();
-
-            const col = collection(db, `artifacts/${appId}/public/data/orders`);
-            const q = query(col, orderBy('createdAt', 'desc'), limit(20));
-
-            const unsub = onSnapshot(q, (snapshot) => {
-                if (snapshot.empty) {
-                    container.innerHTML = `<div class="text-center text-gray-500 mt-10">אין הזמנות במערכת</div>`;
+                    lucide.createIcons();
                     return;
                 }
 
                 container.innerHTML = snapshot.docs.map(doc => {
-                    const o = doc.data();
-                    const statusColor = o.status === 'DONE' ? 'text-green-600' : (o.status === 'PENDING' ? 'text-yellow-600' : 'text-blue-600');
+                    const data = doc.data();
+                    const isCompleted = data.status === 'COMPLETED';
+                    const statusColor = isCompleted ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700';
+                    const statusText = isCompleted ? 'הושלם' : 'ממתין';
+
                     return `
-                        <div class="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm mb-3">
+                        <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 mb-3 transition-all hover:shadow-md">
                             <div class="flex justify-between items-start mb-2">
-                                <span class="text-xs font-mono bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded text-gray-600 dark:text-gray-300">#${(o.orderId || doc.id).substring(0,6)}</span>
-                                <span class="text-xs font-bold ${statusColor}">${o.status}</span>
+                                <div class="flex items-center gap-3">
+                                    <div class="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-600 font-bold">
+                                        ${data.customerName ? data.customerName[0] : '?'}
+                                    </div>
+                                    <div>
+                                        <h3 class="font-bold text-gray-800">${data.customerName}</h3>
+                                        <p class="text-xs text-gray-500">${formatTime(data.createdAt)}</p>
+                                    </div>
+                                </div>
+                                <span class="px-2 py-1 rounded-lg text-xs font-bold ${statusColor}">
+                                    ${statusText}
+                                </span>
                             </div>
-                            <h3 class="font-semibold text-gray-800 dark:text-white mb-1">${o.customerName || 'לקוח כללי'}</h3>
-                            <div class="flex items-center gap-2 text-xs text-gray-500">
-                                <i data-lucide="map-pin" class="w-3 h-3"></i>
-                                <span>${o.address || 'אין כתובת'}</span>
+                            
+                            <div class="pl-2 border-l-2 border-gray-100 ml-4 my-2">
+                                <p class="text-sm text-gray-600 flex items-center gap-2">
+                                    <i data-lucide="map-pin" class="w-3 h-3"></i> ${data.locationName}
+                                </p>
+                                ${data.notes ? `<p class="text-xs text-gray-400 mt-1">${data.notes}</p>` : ''}
                             </div>
+
+                            ${!isCompleted ? `
+                                <div class="flex gap-2 mt-3 pt-3 border-t border-gray-50">
+                                    <button onclick="shareOrder('${doc.id}')" class="flex-1 bg-blue-50 text-blue-600 py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2 active:bg-blue-100">
+                                        <i data-lucide="share-2" class="w-4 h-4"></i>
+                                        שתף למנהל שטח
+                                    </button>
+                                </div>
+                            ` : ''}
                         </div>
                     `;
                 }).join('');
+                
                 lucide.createIcons();
             });
-            state.listeners['inner'] = unsub;
         }
 
-        // 3. Render Customers List
-        function renderCustomers(container) {
-            container.innerHTML = '<div class="flex justify-center p-4"><i data-lucide="loader" class="animate-spin"></i></div>';
-            lucide.createIcons();
+        // --- New Order Logic ---
+        window.toggleNewOrderModal = (show) => {
+            const modal = document.getElementById('new-order-modal');
+            if (show) modal.classList.remove('translate-y-full');
+            else modal.classList.add('translate-y-full');
+        };
 
-            const col = collection(db, `artifacts/${appId}/public/data/customers`);
-            const q = query(col, orderBy('createdAt', 'desc'), limit(20));
+        window.submitNewOrder = async () => {
+            const customer = document.getElementById('inp-customer').value;
+            const location = document.getElementById('inp-location').value;
+            
+            if (!customer || !location) {
+                showToast("אנא מלא שם ומיקום", "error");
+                return;
+            }
 
-            const unsub = onSnapshot(q, (snapshot) => {
-                if (snapshot.empty) {
-                    container.innerHTML = `<div class="text-center text-gray-500 mt-10">אין לקוחות</div>`;
-                    return;
-                }
+            try {
+                await addDoc(collection(db, `artifacts/${appId}/public/data/orders`), {
+                    customerName: customer,
+                    locationName: location,
+                    notes: document.getElementById('inp-notes').value,
+                    status: 'PENDING',
+                    createdAt: serverTimestamp()
+                });
+                
+                document.getElementById('new-order-form').reset();
+                toggleNewOrderModal(false);
+                showToast("הזמנה נוצרה בהצלחה!");
+            } catch (e) {
+                console.error(e);
+                showToast("שגיאה ביצירה", "error");
+            }
+        };
 
-                container.innerHTML = snapshot.docs.map(doc => {
-                    const c = doc.data();
-                    return `
-                        <div class="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm mb-3 flex items-center justify-between">
-                            <div>
-                                <h3 class="font-bold text-gray-800 dark:text-white">${c.name}</h3>
-                                <p class="text-xs text-gray-500">${c.phone}</p>
-                            </div>
-                            <a href="tel:${c.phone}" class="p-2 bg-green-100 text-green-600 rounded-full">
-                                <i data-lucide="phone" class="w-4 h-4"></i>
-                            </a>
-                        </div>
-                    `;
-                }).join('');
-                lucide.createIcons();
-            });
-            state.listeners['inner'] = unsub;
-        }
-
-        // --- Expose to Global Scope for HTML events ---
-        window.initApp = initApp;
-        window.renderLogistics = renderLogistics;
-        window.renderOrders = renderOrders;
-        window.renderCustomers = renderCustomers;
-        window.state = state;
-
+        // Init
         document.addEventListener('DOMContentLoaded', initApp);
-
     </script>
 
     <style>
-        :root {
-            --primary-color: #3b82f6; 
-            --bg-light: #f3f4f6;
-            --bg-dark: #111827;
-        }
-
-        body {
-            font-family: 'Heebo', sans-serif;
-            background-color: var(--bg-light);
-            color: #1f2937;
-            overflow: hidden;
-            touch-action: manipulation;
-        }
-
-        body.dark {
-            background-color: var(--bg-dark);
-            color: #f3f4f6;
-        }
-
-        .scroll-container::-webkit-scrollbar { width: 4px; }
-        .scroll-container::-webkit-scrollbar-track { background: transparent; }
-        .scroll-container::-webkit-scrollbar-thumb {
-            background-color: rgba(156, 163, 175, 0.5);
-            border-radius: 20px;
-        }
-
-        .dept-card {
-            transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s ease;
-        }
-        .dept-card:active { transform: scale(0.96); }
-
-        .page {
-            transition: opacity 0.3s ease, transform 0.3s ease;
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            opacity: 0; pointer-events: none; transform: translateX(20px);
-        }
+        body { font-family: 'Rubik', sans-serif; background-color: #f3f4f6; -webkit-tap-highlight-color: transparent; }
+        /* Google Font import within style for single-file portability */
+        @import url('https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;500;700&display=swap');
         
-        .page.active {
-            opacity: 1; pointer-events: auto; transform: translateX(0); position: relative;
-        }
-        .page.hidden-init { display: none; }
-
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
         .glass-header {
-            background: rgba(255, 255, 255, 0.85);
-            backdrop-filter: blur(12px);
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
             border-bottom: 1px solid rgba(0,0,0,0.05);
         }
-        body.dark .glass-header {
-            background: rgba(17, 24, 39, 0.85);
-            border-bottom: 1px solid rgba(255,255,255,0.05);
-        }
+        
+        /* Animations */
+        .fade-in { animation: fadeIn 0.3s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
-<body class="h-[100dvh] flex flex-col">
+<body class="h-screen flex flex-col overflow-hidden">
 
-    <!-- Header -->
-    <header class="glass-header flex-shrink-0 h-16 px-4 flex items-center justify-between z-50 shadow-sm transition-colors duration-300">
-        <div class="flex items-center gap-3">
-            <button id="back-btn" class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors hidden" aria-label="חזור">
-                <i data-lucide="arrow-right" class="w-6 h-6"></i>
-            </button>
-            <h1 id="page-title" class="text-xl font-bold text-gray-800 dark:text-white truncate">פורטל יוסי</h1>
+    <!-- HEADER -->
+    <header class="glass-header h-16 px-5 flex items-center justify-between flex-shrink-0 z-20 relative">
+        <div>
+            <h1 class="text-lg font-bold text-gray-800">פורטל זבולון</h1>
+            <p class="text-[10px] text-blue-600 font-medium">ניהול מערך שטח</p>
         </div>
-        
-        <div class="flex items-center gap-2">
-            <button id="theme-toggle" class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
-                <i data-lucide="moon" class="w-5 h-5 dark:hidden"></i>
-                <i data-lucide="sun" class="w-5 h-5 hidden dark:block text-yellow-400"></i>
-            </button>
-            <button class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors relative">
-                <i data-lucide="bell" class="w-5 h-5"></i>
-                <span class="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full"></span>
-            </button>
+        <div class="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold shadow-blue-200 shadow-lg">
+            Z
         </div>
     </header>
 
-    <!-- Main Content -->
-    <main id="main-container" class="flex-grow relative overflow-hidden bg-gray-50 dark:bg-gray-900">
-        
-        <!-- HOME PAGE -->
-        <div id="page-home" class="page active w-full h-full overflow-y-auto scroll-container p-4">
-            
-            <!-- Welcome -->
-            <div class="mb-6">
-                <h2 class="text-2xl font-light text-gray-600 dark:text-gray-300">שלום, <span class="font-bold text-gray-900 dark:text-white">מנהל</span></h2>
-                <p class="text-sm text-gray-500 dark:text-gray-400">בחר מחלקה כדי להתחיל</p>
-            </div>
-
-            <!-- Search -->
-            <div class="relative mb-6">
-                <input type="text" placeholder="חיפוש בפורטל..." class="w-full pl-4 pr-10 py-3 rounded-xl bg-white dark:bg-gray-800 border-none shadow-sm focus:ring-2 focus:ring-blue-500 dark:text-white transition-shadow">
-                <i data-lucide="search" class="absolute left-3 top-3.5 w-5 h-5 text-gray-400"></i>
-            </div>
-
-            <!-- Grid -->
-            <div class="grid grid-cols-2 gap-4 pb-20">
-                
-                <!-- Logistics -->
-                <button onclick="navigateTo('logistics', 'לוגיסטיקה ושינוע')" class="dept-card bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm hover:shadow-md flex flex-col items-center justify-center gap-3 text-center h-40">
-                    <div class="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center text-blue-600 dark:text-blue-400">
-                        <i data-lucide="truck" class="w-6 h-6"></i>
-                    </div>
-                    <span class="font-semibold text-gray-800 dark:text-gray-100">לוגיסטיקה</span>
-                    <span id="stat-drivers" class="text-xs text-gray-500 transition-all">טוען...</span>
-                </button>
-
-                <!-- Orders -->
-                <button onclick="navigateTo('orders', 'ניהול הזמנות')" class="dept-card bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm hover:shadow-md flex flex-col items-center justify-center gap-3 text-center h-40">
-                    <div class="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center text-green-600 dark:text-green-400">
-                        <i data-lucide="package" class="w-6 h-6"></i>
-                    </div>
-                    <span class="font-semibold text-gray-800 dark:text-gray-100">הזמנות</span>
-                    <span id="stat-orders" class="text-xs text-gray-500 transition-all">טוען...</span>
-                </button>
-
-                <!-- Customers -->
-                <button onclick="navigateTo('customers', 'לקוחות')" class="dept-card bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm hover:shadow-md flex flex-col items-center justify-center gap-3 text-center h-40">
-                    <div class="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center text-purple-600 dark:text-purple-400">
-                        <i data-lucide="users" class="w-6 h-6"></i>
-                    </div>
-                    <span class="font-semibold text-gray-800 dark:text-gray-100">לקוחות</span>
-                    <span class="text-xs text-gray-500">מאגר לקוחות</span>
-                </button>
-
-                <!-- Warehouse (Static for now) -->
-                <button onclick="navigateTo('warehouse', 'מחסן ומלאי')" class="dept-card bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm hover:shadow-md flex flex-col items-center justify-center gap-3 text-center h-40">
-                    <div class="w-12 h-12 bg-orange-100 dark:bg-orange-900/30 rounded-full flex items-center justify-center text-orange-600 dark:text-orange-400">
-                        <i data-lucide="box" class="w-6 h-6"></i>
-                    </div>
-                    <span class="font-semibold text-gray-800 dark:text-gray-100">מחסן</span>
-                    <span class="text-xs text-gray-500">ניהול מלאי</span>
-                </button>
-
-                <!-- Chat (Static for now) -->
-                <button onclick="navigateTo('chat', 'הודעות וצ׳אט')" class="dept-card bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm hover:shadow-md flex flex-col items-center justify-center gap-3 text-center h-40 col-span-2">
-                    <div class="flex items-center gap-4">
-                        <div class="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/30 rounded-full flex items-center justify-center text-indigo-600 dark:text-indigo-400">
-                            <i data-lucide="message-circle" class="w-6 h-6"></i>
-                        </div>
-                        <div class="flex flex-col items-start">
-                            <span class="font-semibold text-gray-800 dark:text-gray-100">הודעות וצ׳אט</span>
-                            <span class="text-xs text-gray-500">מרכז הודעות</span>
-                        </div>
-                    </div>
-                </button>
-            </div>
+    <!-- STATS BAR -->
+    <div class="px-4 pt-4 pb-2 flex gap-3 flex-shrink-0 overflow-x-auto no-scrollbar">
+        <div class="bg-white p-3 rounded-xl shadow-sm flex-1 min-w-[100px] border border-blue-50">
+            <span class="block text-xs text-gray-400 mb-1">פתוחות</span>
+            <span id="stat-pending" class="text-2xl font-bold text-blue-600">0</span>
         </div>
-
-        <!-- INNER PAGE CONTAINER -->
-        <div id="page-inner" class="page hidden-init w-full h-full overflow-y-auto scroll-container p-4 bg-white dark:bg-gray-900">
-            <!-- Content injected here -->
-            <div id="inner-content-area" class="mt-4">
-                <div class="flex flex-col items-center justify-center h-64 text-gray-400">
-                    <i id="inner-icon" data-lucide="loader" class="w-12 h-12 mb-4 animate-spin"></i>
-                    <p id="inner-content-text">טוען נתונים...</p>
-                </div>
-            </div>
+        <div class="bg-white p-3 rounded-xl shadow-sm flex-1 min-w-[100px] border border-green-50">
+            <span class="block text-xs text-gray-400 mb-1">הושלמו</span>
+            <span id="stat-completed" class="text-2xl font-bold text-green-600">0</span>
         </div>
+    </div>
 
+    <!-- MAIN LIST -->
+    <main id="orders-list" class="flex-grow overflow-y-auto p-4 pb-24 space-y-3">
+        <!-- Orders injected here -->
+        <div class="animate-pulse space-y-3">
+            <div class="h-24 bg-white rounded-2xl"></div>
+            <div class="h-24 bg-white rounded-2xl"></div>
+        </div>
     </main>
 
-    <script>
-        // --- Navigation Logic ---
-        const historyStack = ['home'];
-        const pageHome = document.getElementById('page-home');
-        const pageInner = document.getElementById('page-inner');
-        const backBtn = document.getElementById('back-btn');
-        const titleEl = document.getElementById('page-title');
-        const innerContent = document.getElementById('inner-content-area');
+    <!-- FAB (Floating Action Button) -->
+    <button onclick="toggleNewOrderModal(true)" class="fixed bottom-6 left-6 w-14 h-14 bg-blue-600 text-white rounded-full shadow-xl flex items-center justify-center active:scale-90 transition-transform z-30 shadow-blue-500/40">
+        <i data-lucide="plus" class="w-7 h-7"></i>
+    </button>
 
-        function navigateTo(deptId, deptName) {
-            historyStack.push(deptId);
-            titleEl.textContent = deptName;
-            backBtn.classList.remove('hidden');
-            
-            // Transition
-            pageHome.classList.remove('active');
-            pageHome.classList.add('hidden-init'); 
-            pageInner.classList.remove('hidden-init');
-            requestAnimationFrame(() => pageInner.classList.add('active'));
+    <!-- NEW ORDER MODAL -->
+    <div id="new-order-modal" class="fixed inset-x-0 bottom-0 h-[85vh] bg-white rounded-t-3xl shadow-2xl z-40 transform translate-y-full transition-transform duration-300 flex flex-col">
+        <div class="p-5 border-b border-gray-100 flex justify-between items-center">
+            <h2 class="text-lg font-bold">הזמנה חדשה</h2>
+            <button onclick="toggleNewOrderModal(false)" class="p-2 bg-gray-50 rounded-full"><i data-lucide="x" class="w-5 h-5"></i></button>
+        </div>
+        <div class="p-6 flex-grow overflow-y-auto">
+            <form id="new-order-form" class="space-y-5">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">שם הלקוח / קבלן</label>
+                    <input type="text" id="inp-customer" class="w-full p-4 bg-gray-50 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 transition-all outline-none" placeholder="לדוגמה: איציק הובלות">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">מיקום (עיר/רחוב)</label>
+                    <input type="text" id="inp-location" class="w-full p-4 bg-gray-50 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 transition-all outline-none" placeholder="לדוגמה: ז'בוטינסקי 4, רמת גן">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">הערות למבצע</label>
+                    <textarea id="inp-notes" class="w-full p-4 bg-gray-50 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 transition-all outline-none h-32 resize-none" placeholder="פרטים נוספים..."></textarea>
+                </div>
+            </form>
+        </div>
+        <div class="p-5 border-t border-gray-50">
+            <button onclick="submitNewOrder()" class="w-full bg-blue-600 text-white py-4 rounded-xl font-bold shadow-lg active:scale-95 transition-transform">
+                צור הזמנה
+            </button>
+        </div>
+    </div>
 
-            // Render specific content
-            if (deptId === 'logistics') window.renderLogistics(innerContent);
-            else if (deptId === 'orders') window.renderOrders(innerContent);
-            else if (deptId === 'customers') window.renderCustomers(innerContent);
-            else {
-                // Fallback for unimplemented pages
-                innerContent.innerHTML = `<div class="text-center mt-10 text-gray-500">מודול זה בפיתוח</div>`;
-            }
-        }
+    <!-- EXECUTION MODAL (For Field Manager - via Link) -->
+    <div id="execution-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden animate-fadeIn">
+            <div id="execution-content" class="p-6">
+                <!-- Content Injected by JS -->
+            </div>
+        </div>
+    </div>
 
-        function goBack() {
-            if (historyStack.length <= 1) return;
-            
-            // Unsubscribe from inner listener if exists
-            if (window.state.listeners['inner']) {
-                window.state.listeners['inner'](); // Stop listening
-                delete window.state.listeners['inner'];
-            }
+    <!-- TOAST NOTIFICATION -->
+    <div id="toast" class="fixed bottom-20 left-1/2 transform -translate-x-1/2 px-6 py-3 rounded-full shadow-xl text-white text-sm font-medium transition-all duration-300 z-50 opacity-0 translate-y-10 bg-gray-800 pointer-events-none">
+        הודעה
+    </div>
 
-            historyStack.pop();
-            
-            titleEl.textContent = 'פורטל יוסי';
-            backBtn.classList.add('hidden');
-            
-            pageInner.classList.remove('active');
-            setTimeout(() => {
-                pageInner.classList.add('hidden-init');
-                innerContent.innerHTML = ''; // Clean up
-            }, 300); 
-            
-            pageHome.classList.remove('hidden-init');
-            requestAnimationFrame(() => pageHome.classList.add('active'));
-        }
-
-        backBtn.addEventListener('click', goBack);
-        window.onpopstate = function(event) { if (historyStack.length > 1) goBack(); };
-
-        // Dark Mode
-        const themeToggle = document.getElementById('theme-toggle');
-        themeToggle.addEventListener('click', () => {
-            document.body.classList.toggle('dark');
-        });
-
-        lucide.createIcons();
-    </script>
 </body>
 </html>
-
 
