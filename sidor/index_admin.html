@@ -3,26 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DeliveryMaster v36 (Refactored)</title>
+    <title>DeliveryMaster v36.1 (Refactored)</title>
     <!-- 
-      DeliveryMaster Admin App v36 (Refactored)
+      DeliveryMaster Admin App v36.1 (Refactored)
       
       Changelog:
+      - [INFO v36.1]:
+        - הוספת הערת תהליך עבודה (Flow) לסדרן בטופס הזמנה חדשה,
+          לפי האפיון של זרימת הלקוח מ-WhatsApp.
       - [CRITICAL REFACTOR v36]:
         - "הפרדת כוחות" - הוצאת מערכת ההודעות והלוגים לקבצים נפרדים.
         - הסרת `<main id="view-messages">` וכל הקוד הקשור אליו.
-        - הסרת כל הפונקציות הקשורות להודעות מה-JS:
-          (listenForNewMessages, createMessageCard, updateNotificationBadge, 
-           showSendReplyModal, closeReplyModal, sendAdminReply, markMessageAsRead)
-        - הסרת סגנונות CSS של הודעות.
-      - [NAV v36]:
-        - כפתור "הודעות" בתפריט הניווט מקושר כעת ל-`messages_viewer.html` (נפתח בטאב חדש).
-        - כפתור "לוגים" הוסר מהתפריט הראשי.
-        - נוסף כפתור אייקון קטן ללוגים ליד שם המנהל, מקושר ל-`log_viewer.html`.
+        - הסרת כל הפונקציות הקשורות להודעות מה-JS.
+        - כפתור "הודעות" בתפריט הניווט מקושר כעת ל-`messages_viewer.html`.
+        - כפתור "לוגים" מקושר כעת ל-`log_viewer.html`.
       - [BASE v35]:
-        - בסיס קוד יציב (v31.9.2) עם כל הפונקציות (מפה, נהגים, היסטוריה, לקוחות).
+        - בסיס קוד יציב עם כל הפונקציות (מפה, נהגים, היסטוריה, לקוחות).
         - טופס הזמנה משודרג (פרויקט + WhatsApp).
-        - תיקון נתיב `copyCustomerLink`.
     -->
     
     <!-- TailwindCSS -->
@@ -102,8 +99,6 @@
         .app-view.active#view-driver-history {
             display: grid; /* Override for grid */
         }
-        
-        /* [REMOVED v36] Message View styles removed */
 
         #map-container {
             position: relative;
@@ -185,7 +180,7 @@
             padding: 1rem;
             border-bottom: 1px solid var(--border-color);
             transition: background-color 0.2s;
-            cursor: pointer; /* [Restored] */
+            cursor: pointer;
         }
         .order-card:hover, .driver-card:hover {
             background-color: #fafafa;
@@ -402,8 +397,6 @@
              gap: 1rem;
         }
         
-        /* [REMOVED v36] Messaging Styles removed */
-
         /* Responsive */
         @media (max-width: 1024px) {
             #view-dashboard {
@@ -459,8 +452,6 @@
 </head>
 <body class="antialiased">
 
-    <!-- [REMOVED v36] Reply Modal removed -->
-
     <div class="app-layout">
         <!-- Navbar -->
         <nav id="navbar" class="w-20 lg:w-64 flex flex-col p-4 space-y-4">
@@ -485,14 +476,11 @@
             <a href="messages_viewer.html" target="_blank" class="nav-link flex items-center p-3 space-x-4 space-x-reverse rounded-lg">
                 <i data-feather="message-square" class="w-6 h-6"></i>
                 <span class="font-semibold text-lg hidden lg:block">הודעות</span>
-                <!-- Badge removed, it will be in the messages_viewer page -->
             </a>
             <a href="#" class="nav-link flex items-center p-3 space-x-4 space-x-reverse rounded-lg" onclick="openNewOrderForm()">
                 <i data-feather="plus-circle" class="w-6 h-6"></i>
                 <span class="font-semibold text-lg hidden lg:block">הזמנה חדשה</span>
             </a>
-            
-            <!-- [REMOVED v36] Log link removed from main nav -->
             
             <div class="flex-grow"></div> <!-- Spacer -->
             
@@ -517,7 +505,7 @@
         <!-- Main Content Wrapper -->
         <div class="relative">
             <!-- Main Content (Map + Side Panel) -->
-            <main id="view-dashboard" class="app-view active"> <!-- [NEW] Added 'active' class -->
+            <main id="view-dashboard" class="app-view active">
                 <!-- Map Container -->
                 <div id="map-container">
                     <div id="map"></div>
@@ -690,7 +678,7 @@
     </div>
 
     <!-- Toast Container -->
-    <div id="toast-container" class="fixed bottom-5 right-5 z-[5000]"></div> <!-- [FIX] Changed position -->
+    <div id="toast-container" class="fixed bottom-5 right-5 z-[5000]"></div>
 
     <!-- New Order Modal (עם שדות משודרגים) -->
     <dialog id="new-order-modal">
@@ -703,6 +691,18 @@
             </div>
             
             <div class="p-6 space-y-4">
+                <!-- [NEW v36.1] Workflow comment -->
+                <div class="p-3 bg-yellow-50 border border-yellow-200 rounded-md text-sm text-yellow-800">
+                    <h4 class="font-bold mb-1">תזכורת: תהליך עבודה (לפי אפיון)</h4>
+                    <ol class="list-decimal list-inside">
+                        <li>לקוח שולח WhatsApp (המערכת עונה אוטומטית).</li>
+                        <li>מלא טופס זה עם הפרטים מה-WhatsApp.</li>
+                        <li>לחץ "צור ושתף ב-WhatsApp" (זה ישמור ויפתח WA).</li>
+                        <li>לאחר מכן, חזור לרשימת ההזמנות, מצא את ההזמנה, ולחץ על <i data-feather="link" class="inline-block w-4 h-4"></i> (העתק קישור).</li>
+                        <li>שלח את הקישור ללקוח ב-WhatsApp.</li>
+                    </ol>
+                </div>
+                
                 <!-- Customer Search -->
                 <div>
                     <label for="customer-search" class="block text-sm font-medium mb-1">חפש לקוח קיים או הקלד שם ללקוח חדש</label>
@@ -859,7 +859,7 @@
 
     <!-- 
       ==========================================================
-      ===               תחילת סקריפט ראשי (v36)              ===
+      ===               תחילת סקריפט ראשי (v36.1)            ===
       ==========================================================
     -->
     <script type="module">
@@ -884,17 +884,15 @@
         let selectedOrder = null;
         let selectedDriver = null;
         let lastUpdate = null;
-        let liveLocations = {}; // [Restored]
+        let liveLocations = {}; 
 
         let ordersUnsubscribe = null;
         let customersUnsubscribe = null;
         let driversUnsubscribe = null;
         let locationsUnsubscribe = null;
-        // [REMOVED v36] let messagesUnsubscribe = null;
         let currentUserId = null;
         
-        // [Restored]
-        const ALLOWED_STATUSES = ["חדש", "שויך", "בדרך", "הושלם", "בוטל"];
+        const ALLOWED_STATUSES = ["חדש", "חדש (מלקוח)", "בטיפול", "מוכן לטעינה", "שויך", "בדרך", "הושלם", "בוטל"];
         const WAREHOUSE_LOCATIONS = { "החרש": [32.13266, 34.89819], "התלמיד": [32.16303, 34.89492] };
 
         // --- Firebase Config & Auth ---
@@ -907,6 +905,9 @@
           appId: "1:41553157903:web:cc33d252cff023be97a87a", 
           measurementId: "G-XV6RZDESSB"
         };
+        
+        // --- [SPEC IMPLEMENTATION] Using 'orders' collection as defined in spec part 4
+        const ORDERS_COLLECTION = "orders";
         
         const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : JSON.stringify(fallbackConfig));
         
@@ -1026,7 +1027,6 @@
             listenForCustomers();
             listenForDrivers();
             listenForDriverLocations();
-            // [REMOVED v36] listenForNewMessages();
             
             // Update timestamp
             setInterval(() => {
@@ -1036,35 +1036,37 @@
             }, 5000);
         }
 
-        // 1. Listen for Orders
+        // 1. Listen for Orders (Using ORDERS_COLLECTION)
         function listenForActiveOrders() {
             if (ordersUnsubscribe) ordersUnsubscribe();
             
             const q = query(
-                collection(db, 'orders'), 
-                where('status', 'not-in', ['הושלם', 'בוטל', 'סופק']), // [Restored]
+                collection(db, ORDERS_COLLECTION), 
+                where('status', 'not-in', ['הושלם', 'בוטל', 'סופק']),
                 limit(100) 
             );
             
             ordersUnsubscribe = onSnapshot(q, (snapshot) => {
-                document.getElementById('orders-list').querySelector('.loader-container').style.display = 'none';
+                const loader = document.getElementById('orders-list').querySelector('.loader-container');
+                if (loader) loader.style.display = 'none';
                 
                 allOrders = [];
                 snapshot.forEach(doc => allOrders.push({ id: doc.id, ...doc.data() }));
                 
+                // [SPEC IMPLEMENTATION] Sort to show "חדש (מלקוח)" first
                 allOrders.sort((a, b) => {
                     const statusA = a.status;
                     const statusB = b.status;
-                    if (statusA === 'בטיפול' && statusB !== 'בטיפול') return -1;
-                    if (statusA !== 'בטיפול' && statusB === 'בטיפול') return 1;
+                    if (statusA === 'חדש (מלקוח)' && statusB !== 'חדש (מלקוח)') return -1;
+                    if (statusA !== 'חדש (מלקוח)' && statusB === 'חדש (מלקוח)') return 1;
                     if (statusA === 'חדש' && statusB !== 'חדש') return -1;
                     if (statusA !== 'חדש' && statusB === 'חדש') return 1;
                     return (a.createdAt?.toMillis() || 0) - (b.createdAt?.toMillis() || 0);
                 });
                 
                 renderOrdersList();
-                renderMapMarkers(); // [Restored]
-                SmartLog.info(`Loaded ${allOrders.length} active orders`, "Data.Orders");
+                renderMapMarkers();
+                SmartLog.info(`Loaded ${allOrders.length} active orders from '${ORDERS_COLLECTION}'`, "Data.Orders");
                 lastUpdate = new Date();
             }, (error) => {
                 SmartLog.error(error, "Data.Orders.ListenFailed");
@@ -1081,16 +1083,18 @@
             customersUnsubscribe = onSnapshot(q, (snapshot) => {
                 allCustomers = [];
                 const datalist = document.getElementById('customer-list');
-                datalist.innerHTML = ''; 
+                if (datalist) datalist.innerHTML = ''; 
                 
                 snapshot.forEach(doc => {
                     const customer = { id: doc.id, ...doc.data() };
                     allCustomers.push(customer);
                     
-                    const option = document.createElement('option');
-                    option.value = customer.name; // Use name for datalist
-                    option.dataset.id = customer.id;
-                    datalist.appendChild(option);
+                    if (datalist) {
+                        const option = document.createElement('option');
+                        option.value = customer.name; // Use name for datalist
+                        option.dataset.id = customer.id;
+                        datalist.appendChild(option);
+                    }
                 });
                 
                 SmartLog.info(`Loaded ${allCustomers.length} customers`, "Data.Customers");
@@ -1106,20 +1110,23 @@
             const q = query(collection(db, 'drivers'), orderBy('name'));
             
             driversUnsubscribe = onSnapshot(q, (snapshot) => {
-                document.getElementById('drivers-list').querySelector('.loader-container').style.display = 'none';
+                const loader = document.getElementById('drivers-list').querySelector('.loader-container');
+                if (loader) loader.style.display = 'none';
                 
                 allDrivers = [];
                 const driverSelect = document.getElementById('driver-select');
-                driverSelect.innerHTML = '<option value="">בחר נהג</option>';
+                if (driverSelect) driverSelect.innerHTML = '<option value="">בחר נהג</option>';
 
                 snapshot.forEach(doc => {
                     const driver = { id: doc.id, ...doc.data() };
                     allDrivers.push(driver);
                     
-                    const option = document.createElement('option');
-                    option.value = driver.id;
-                    option.text = driver.name;
-                    driverSelect.appendChild(option);
+                    if (driverSelect) {
+                        const option = document.createElement('option');
+                        option.value = driver.id;
+                        option.text = driver.name;
+                        driverSelect.appendChild(option);
+                    }
                 });
                 
                 renderDriversList();
@@ -1151,8 +1158,6 @@
                 SmartLog.error(error, "Data.Locations.ListenFailed");
             });
         }
-
-        // 5. [REMOVED v36] listenForNewMessages removed
 
         // --- Rendering Functions ---
         
@@ -1192,13 +1197,17 @@
                 const address = order.address || 'כתובת לא צוינה';
                 const createdTime = order.createdAt?.toDate ? formatTime(order.createdAt.toDate()) : '';
                 const displayTime = order.orderTime ? `| ${order.orderTime}` : '';
+                
+                // [SPEC IMPLEMENTATION] Highlight orders from customer
+                const highlightClass = order.status === 'חדש (מלקוח)' ? 'bg-yellow-50 border-yellow-300' : '';
+                const highlightText = order.status === 'חדש (מלקוח)' ? '<span class="text-xs font-bold text-yellow-800"> (הזמנה מאפליקציה)</span>' : '';
 
                 card.innerHTML = `
-                    <div class="flex justify-between items-center mb-1">
+                    <div class="flex justify-between items-center mb-1 ${highlightClass} p-1 rounded">
                         <span class="font-bold text-blue-600">${displayId}</span>
                         <span class="text-sm font-semibold">${order.orderDate} ${displayTime}</span>
                     </div>
-                    <div class="font-semibold text-gray-800">${customerName}</div>
+                    <div class="font-semibold text-gray-800">${customerName}${highlightText}</div>
                     <div class="text-sm text-gray-600 truncate">${address}</div>
                     <div class="text-xs text-gray-500 mt-1 flex justify-between">
                         <span>${order.deliveryType || ''} | ${order.warehouse || ''}</span>
@@ -1261,7 +1270,6 @@
             });
         }
         
-        // --- [Restored] Map Markers ---
         function renderMapMarkers() {
             if (!map) return;
             const bounds = L.latLngBounds();
@@ -1275,8 +1283,6 @@
                 const name = driverData?.name || 'נהג לא ידוע';
                 
                 const latLng = [location.latitude, location.longitude];
-                // [TODO] Add proper icon logic
-                // const icon = location.isStuck ? driverIconStuck : driverIconActive; 
                 const icon = L.icon({
                     iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png',
                     iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34],
@@ -1297,7 +1303,7 @@
             });
             
             // Render Active Orders
-            const activeMapOrders = allOrders.filter(o => o.status === 'חדש' && o.latitude && o.longitude);
+            const activeMapOrders = allOrders.filter(o => (o.status === 'חדש' || o.status === 'חדש (מלקוח)' || o.status === 'בטיפול') && o.latitude && o.longitude);
             
             // Clear old order markers
             Object.keys(orderMarkers).forEach(orderId => {
@@ -1345,7 +1351,6 @@
             }
         }
         
-        // --- [Restored] Details Panel Functions ---
         function renderDetailsPanel(orderId) {
             const order = allOrders.find(o => o.id === orderId);
             const panel = document.getElementById('details-panel');
@@ -1358,6 +1363,9 @@
             const displayId = order.orderNumber || order.order_id || `#${order.id.slice(0,6)}`;
             const displayTime = order.orderTime ? ` (שעה: ${order.orderTime})` : '';
 
+            // [SPEC IMPLEMENTATION] Show rawText if it exists (from customer app)
+            const notes = order.notes || order.rawText || '-';
+            
             panel.innerHTML = `
                 <div id="details-panel-header">
                     <h4 class="truncate">הזמנה: ${displayId}${displayTime}</h4>
@@ -1376,7 +1384,7 @@
                             ${ALLOWED_STATUSES.map(s => `<option value="${s}" ${order.status === s ? 'selected' : ''}>${s}</option>`).join('')}
                         </select>
                     </li>
-                    <li><span class="font-semibold">הערות:</span> ${order.notes || '-'}</li>
+                    <li><span class="font-semibold">תוכן:</span> ${notes}</li>
                 </ul>
             `;
             feather.replace();
@@ -1415,18 +1423,17 @@
         }
         window.closeDetailsPanel = closeDetailsPanel; // Expose
         
-        // [Restored]
         function focusOnMapItem(id, type) {
             let marker, card;
             
             if (type === 'driver') {
                 marker = driverMarkers[id];
-                card = document.getElementById(`driver-card-${id}`);
+                card = document.querySelector(`.driver-card[onclick*="'${id}'"]`);
                 selectedDriver = id;
                 selectedOrder = null;
             } else {
                 marker = orderMarkers[id];
-                card = document.getElementById(`order-card-${id}`);
+                card = document.querySelector(`.order-card[onclick*="'${id}'"]`);
                 selectedOrder = id;
                 selectedDriver = null;
             }
@@ -1461,10 +1468,10 @@
             const navLink = document.querySelector(`.nav-link[onclick*="showView('${viewName}')"]`);
             if (navLink) navLink.classList.add('active');
 
-            // [FIX] Move listener attachment here
             if (viewName === 'history') {
                 try {
                     document.getElementById('history-filter-btn').addEventListener('click', renderHistoryTable);
+                    renderHistoryTable(); // Load history on view
                 } catch(e) { SmartLog.error(e, "UI.AttachListener", { button: "history-filter-btn" }); }
             }
             if (viewName === 'driver-history') {
@@ -1479,7 +1486,7 @@
             
             SmartLog.info(`Switched to view: ${viewName}`, "UI.Nav");
         }
-        window.showView = showView; // [NEW] Expose to global
+        window.showView = showView; 
 
         function showHistoryTab(tabName) {
             document.getElementById('history-orders-content').style.display = (tabName === 'orders') ? 'block' : 'none';
@@ -1490,7 +1497,7 @@
             
             if(tabName === 'customers') renderCustomerTable();
         }
-        window.showHistoryTab = showHistoryTab; // [NEW] Expose to global
+        window.showHistoryTab = showHistoryTab; 
 
         function showPanelTab(tabName) {
             document.getElementById('orders-list').style.display = (tabName === 'orders') ? 'block' : 'none';
@@ -1510,49 +1517,37 @@
 
         function filterLists() {
             renderOrdersList();
-            renderDriversList(); // [FIX v34.3]
+            renderDriversList(); 
         }
         window.filterLists = filterLists;
         
+        // [REFACTORED] Toast Function
         function showToast(message, type = 'info') {
             const container = document.getElementById('toast-container');
             if (!container) return;
             
             const toast = document.createElement('div');
-            let icon = '<i class="fas fa-info-circle"></i>';
-            let bgColor = 'bg-blue-500';
-            if (type === 'success') {
-                icon = '<i class="fas fa-check-circle"></i>';
-                bgColor = 'bg-green-500';
-            } else if (type === 'error') {
-                icon = '<i class="fas fa-times-circle"></i>';
-                bgColor = 'bg-red-500';
-            }
-            
-            toast.className = `p-4 rounded-lg shadow-lg text-white ${bgColor} mb-2 transform translate-y-10 opacity-0 transition-all duration-300 ease-out`;
-            toast.innerHTML = `<span class="mr-2">${icon}</span> ${message}`;
+            toast.className = `toast ${type}`;
+            toast.innerText = message;
             
             container.appendChild(toast);
             
             setTimeout(() => {
-                toast.classList.remove('translate-y-10');
-                toast.classList.remove('opacity-0');
+                toast.classList.add('show');
             }, 100);
             
             setTimeout(() => {
-                toast.classList.add('opacity-0');
-                toast.classList.add('-translate-x-full');
+                toast.classList.remove('show');
                 setTimeout(() => {
                     if (container.contains(toast)) {
                         container.removeChild(toast);
                     }
                 }, 300);
-            }, 5000);
+            }, 3000);
         }
 
         // --- CRUD Functions ---
 
-        // [NEW] Added function
         function openNewOrderForm() {
             document.getElementById('new-order-modal').showModal();
             // Reset form
@@ -1562,13 +1557,13 @@
             document.getElementById('existing-customer-display').style.display = 'none';
             feather.replace();
         }
+        window.openNewOrderForm = openNewOrderForm;
 
-        // [NEW] Added function
         function closeNewOrderForm() {
             document.getElementById('new-order-modal').close();
         }
+        window.closeNewOrderForm = closeNewOrderForm;
 
-        // [NEW] Added function
         function handleCustomerSearch(value) {
             const newCustomerFields = document.getElementById('new-customer-fields');
             const existingCustomerDisplay = document.getElementById('existing-customer-display');
@@ -1604,9 +1599,9 @@
                 existingCustomerDisplay.style.display = 'none';
             }
         }
+        window.handleCustomerSearch = handleCustomerSearch;
 
-
-        // 1. [MODIFIED] New Order Form
+        // 1. New Order Form
         async function submitNewOrder(e) {
             e.preventDefault();
             const form = e.target;
@@ -1709,10 +1704,10 @@
 
                 if (customOrderNumber) {
                     docId = customOrderNumber;
-                    orderRef = doc(db, "orders", customOrderNumber);
+                    orderRef = doc(db, ORDERS_COLLECTION, customOrderNumber);
                     await setDoc(orderRef, orderData);
                 } else {
-                    orderRef = await addDoc(collection(db, "orders"), orderData);
+                    orderRef = await addDoc(collection(db, ORDERS_COLLECTION), orderData);
                     docId = orderRef.id;
                     // Update the order with its own auto-generated ID as the order_id if not set
                     finalOrderId = orderRef.id;
@@ -1722,7 +1717,7 @@
                 // Add geo-coordinates if not already present
                 if (!customCoords.latitude) {
                     getLatLngFromAddressString(address).then(coords => {
-                        if (coords) updateDoc(doc(db, "orders", docId), coords);
+                        if (coords) updateDoc(doc(db, ORDERS_COLLECTION, docId), coords);
                     });
                 }
 
@@ -1733,6 +1728,7 @@
                 closeNewOrderForm();
                 showView('dashboard'); // Switch to dashboard
                 
+                // [SPEC IMPLEMENTATION] Share to WhatsApp *after* creation
                 await shareToWhatsApp(orderData);
 
             } catch (error) {
@@ -1743,10 +1739,15 @@
                 btn.innerText = 'צור ושתף ב-WhatsApp';
             }
         }
+        window.submitNewOrder = submitNewOrder;
 
-        // [NEW] WhatsApp Sharing Function
+        // [SPEC IMPLEMENTATION] WhatsApp Sharing Function
         async function shareToWhatsApp(orderData) {
-            const phone = "972508860896"; // יש להגדיר מספר טלפון קבוע
+            const phone = orderData.customer?.phone || ""; 
+            if (!phone) {
+                SmartLog.warn("No customer phone, cannot open WhatsApp.", "CRUD.Order.WhatsApp");
+                return;
+            }
             
             const customer = allCustomers.find(c => c.id === orderData.customer.id);
             const customerContact = customer?.contactPerson || 'לא צוין';
@@ -1769,18 +1770,22 @@
 =================
 *תוכן ההזמנה:*
 ${orderData.notes || "--- אין תוכן ---"}
+
+---
+*חשוב: זהו אינו קישור המעקב.*
+*הסדרן ישלח לך קישור מעקב אישי בהודעה נפרדת.*
             `;
             
-            const waUrl = `https://api.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(template)}`;
+            const waUrl = `https://api.whatsapp.com/send?phone=${phone.replace('+', '')}&text=${encodeURIComponent(template)}`;
             window.open(waUrl, '_blank');
             SmartLog.info("Opened WhatsApp share window", "CRUD.Order.WhatsApp");
         }
-        window.shareToWhatsApp = shareToWhatsApp; // Expose
+        window.shareToWhatsApp = shareToWhatsApp; 
         
         // 2. Update Order Status
         async function updateOrderStatus(event, orderId) {
             const newStatus = event.target.value;
-            const orderRef = doc(db, 'orders', orderId);
+            const orderRef = doc(db, ORDERS_COLLECTION, orderId);
             
             SmartLog.info(`Updating status for order ${orderId} to ${newStatus}`, "CRUD.Order.UpdateStatus");
             try {
@@ -1823,7 +1828,6 @@ ${orderData.notes || "--- אין תוכן ---"}
             const customer_id = customer.customer_id || customer.customerNumber || '';
             const contactPerson = customer.contactPerson || '';
 
-            // Use the <dialog> modal
             const modal = document.getElementById('customer-edit-modal');
             
             modal.querySelector('#customer-edit-id').value = customer.id;
@@ -1833,23 +1837,17 @@ ${orderData.notes || "--- אין תוכן ---"}
             modal.querySelector('#customer-edit-phone').value = customer.phone || '';
             modal.querySelector('#customer-edit-contact').value = contactPerson;
             
-            // Separate address fields
             modal.querySelector('#customer-edit-street').value = customer.addressStreet || '';
             modal.querySelector('#customer-edit-streetnum').value = customer.addressNumber || '';
             modal.querySelector('#customer-edit-city').value = customer.addressCity || '';
             
             modal.querySelector('#customer-edit-coords').value = customer.customLat ? `${customer.customLat}, ${customer.customLon}` : '';
             
-            // Populate audit log
             const logList = modal.querySelector('#customer-audit-log');
             if (customer.auditLog && Array.isArray(customer.auditLog) && customer.auditLog.length > 0) {
                  logList.innerHTML = customer.auditLog
                     .filter(log => log.timestamp)
-                    .sort((a, b) => {
-                        const timeA = a.timestamp.seconds ? a.timestamp.toMillis() : (a.timestamp.getTime ? a.timestamp.getTime() : 0);
-                        const timeB = b.timestamp.seconds ? b.timestamp.toMillis() : (b.timestamp.getTime ? b.timestamp.getTime() : 0);
-                        return timeB - timeA;
-                    })
+                    .sort((a, b) => (b.timestamp.toMillis ? b.timestamp.toMillis() : 0) - (a.timestamp.toMillis ? a.timestamp.toMillis() : 0))
                     .slice(0, 5) 
                     .map(log => {
                         const time = (log.timestamp.toDate ? log.timestamp.toDate() : new Date(log.timestamp)).toLocaleString('he-IL');
@@ -1877,9 +1875,7 @@ ${orderData.notes || "--- אין תוכן ---"}
             try {
                 await runTransaction(db, async (transaction) => {
                     const customerDoc = await transaction.get(customerRef);
-                    if (!customerDoc.exists()) {
-                        throw "Document does not exist!";
-                    }
+                    if (!customerDoc.exists()) throw "Document does not exist!";
                     const oldData = customerDoc.data();
 
                     const coordsString = document.getElementById('customer-edit-coords').value.trim();
@@ -1940,7 +1936,7 @@ ${orderData.notes || "--- אין תוכן ---"}
                 if (newAddress !== oldAddress) {
                     SmartLog.info("Address changed, updating linked active orders...", "CRUD.Customer.Update");
                     const q = query(
-                        collection(db, 'orders'), 
+                        collection(db, ORDERS_COLLECTION), 
                         where('customer.id', '==', customerId),
                         where('status', 'not-in', ['סופק', 'מבוטל', 'הושלם'])
                     );
@@ -1982,8 +1978,9 @@ ${orderData.notes || "--- אין תוכן ---"}
                 btn.innerText = 'שמור שינויים';
             }
         }
+        window.handleSaveCustomer = handleSaveCustomer;
         
-        // 5. [FIX v34.5] Copy Customer Link
+        // 5. Copy Customer Link
         async function copyCustomerLink(orderId) {
             if (!orderId) {
                 showToast('מזהה הזמנה חסר', 'error');
@@ -1993,7 +1990,7 @@ ${orderData.notes || "--- אין תוכן ---"}
             SmartLog.info(`Fetching order_id for doc: ${orderId}`, "UI.CopyLink");
 
             try {
-                const orderRef = doc(db, "orders", orderId);
+                const orderRef = doc(db, ORDERS_COLLECTION, orderId);
                 const orderSnap = await getDoc(orderRef);
                 
                 if (!orderSnap.exists()) {
@@ -2009,7 +2006,6 @@ ${orderData.notes || "--- אין תוכן ---"}
                      return;
                 }
 
-                // [FIX v34.5] Assuming index_admin.html is in /sidor/
                 const customerLink = `customer.html?id=${shortOrderId}`;
                 
                 const tempInput = document.createElement("textarea");
@@ -2029,9 +2025,7 @@ ${orderData.notes || "--- אין תוכן ---"}
         }
         window.copyCustomerLink = copyCustomerLink;
 
-        // 6. [REMOVED v36] Messaging System Functions removed
-        
-        // 7. Global Ping Function
+        // 6. Global Ping Function
         async function sendGlobalPing() {
              const message = prompt("הזן הודעה להתראה הגלובלית (למשל: 'דוח למחר מוכן'):");
              if (!message || message.trim() === '') {
@@ -2057,7 +2051,7 @@ ${orderData.notes || "--- אין תוכן ---"}
         }
         window.sendGlobalPing = sendGlobalPing;
 
-        // --- [Restored] History/Customer Table Functions ---
+        // --- History/Customer Table Functions ---
         async function renderHistoryTable() {
             const tbody = document.getElementById('history-table-body');
             tbody.innerHTML = '<tr><td colspan="7" class="text-center p-8 text-gray-500">טוען היסטוריה...</td></tr>';
@@ -2068,7 +2062,7 @@ ${orderData.notes || "--- אין תוכן ---"}
             
             try {
                 // Fetch ALL orders for history
-                const q = query(collection(db, "orders"), orderBy("createdAt", "desc"));
+                const q = query(collection(db, ORDERS_COLLECTION), orderBy("createdAt", "desc"));
                 const snapshot = await getDocs(q);
                 let orders = [];
                 snapshot.forEach(doc => orders.push({ id: doc.id, ...doc.data() }));
@@ -2140,16 +2134,17 @@ ${orderData.notes || "--- אין תוכן ---"}
                 </tr>
              `).join('');
         }
+        window.renderCustomerTable = renderCustomerTable;
 
         async function fetchAndDrawDriverRoute() {
              // Placeholder function
              showToast("טעינת היסטוריית נהג בבנייה...", "info");
         }
+        window.fetchAndDrawDriverRoute = fetchAndDrawDriverRoute;
 
-        // --- [Restored] Helper Functions ---
+        // --- Helper Functions ---
         async function getLatLngFromAddressString(address) {
             // Placeholder - In a real app, this would call a Geocoding API
-            // For now, we return null
             SmartLog.info("Geocoding attempted (placeholder)", "Util.Geo", { address });
             return null;
         }
@@ -2175,7 +2170,7 @@ ${orderData.notes || "--- אין תוכן ---"}
         // --- Generic Modal Functions (from v31) ---
         const genericModal = document.createElement('div');
         genericModal.id = 'generic-modal';
-        genericModal.className = 'modal-overlay hidden flex items-center justify-center p-4';
+        genericModal.className = 'modal-overlay hidden fixed inset-0 bg-black bg-opacity-50 z-40 flex items-center justify-center p-4'; // [FIX] Added base styles
         genericModal.innerHTML = `
             <div class="modal-content bg-white w-11/12 md:w-1/2 lg:w-1/3 rounded-lg shadow-xl" onclick="event.stopPropagation()">
                 <div id="generic-modal-content-inner"></div>
@@ -2209,16 +2204,6 @@ ${orderData.notes || "--- אין תוכן ---"}
         window.closeCustomerEditModal = closeCustomerEditModal; // Expose
         window.closeModal = closeModal; // Expose generic close
         
-        // [FIX] Expose all functions to global scope
-        window.openNewOrderForm = openNewOrderForm;
-        window.handleCustomerSearch = handleCustomerSearch;
-        window.submitNewOrder = submitNewOrder;
-        window.closeNewOrderForm = closeNewOrderForm;
-        window.renderCustomerTable = renderCustomerTable;
-        window.renderHistoryTable = renderHistoryTable;
-        window.fetchAndDrawDriverRoute = fetchAndDrawDriverRoute;
-
     </script>
 </body>
 </html>
-
