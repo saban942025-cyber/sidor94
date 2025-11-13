@@ -2,57 +2,110 @@
 <html lang="he" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>פורטל זבולון-עדירן | ניהול שטח</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>פורטל זבולון | ניהול שטח</title>
     
-    <!-- PWA Manifest & Theme -->
-    <meta name="theme-color" content="#3b82f6">
+    <!-- PWA Manifest & Theme (מהקובץ המקורי שלך) -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
     <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="https://i.postimg.cc/ryPT3r29/image.png">
+    <link rel="icon" href="https://i.postimg.cc/ryPT3r29/image.png">
 
     <!-- TailwindCSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- Icons (Lucide) - More modern than Feather -->
+    <!-- Icons (שדרוג ל-Lucide) -->
     <script src="https://unpkg.com/lucide@latest"></script>
     
+    <!-- Google Font (מהקובץ המקורי שלך) -->
+    <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;500;700&display=swap" rel="stylesheet">
+    
+    <!-- Leaflet (עבור המפה) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
     <!-- OneSignal SDK -->
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script>
       window.OneSignalDeferred = window.OneSignalDeferred || [];
       OneSignalDeferred.push(async function(OneSignal) {
-        await OneSignal.init({
-          appId: "de3834d3-1e11-40af-96d2-b25eda821c8f",
-        });
+        await OneSignal.init({ appId: "de3834d3-1e11-40af-96d2-b25eda821c8f" });
       });
     </script>
 
     <!-- Firebase SDK -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, query, onSnapshot, where, orderBy, doc, updateDoc, getDoc, serverTimestamp, addDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, query, onSnapshot, where, orderBy, doc, updateDoc, getDoc, serverTimestamp, addDoc, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- Config ---
         const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        let db, auth, userId;
+        let db, auth, userId, map;
+        let markersGroup = null;
 
-        // --- UI Helpers ---
-        const showToast = (msg, type = 'info') => {
-            const toast = document.getElementById('toast');
-            toast.textContent = msg;
-            toast.className = `fixed bottom-20 left-1/2 transform -translate-x-1/2 px-6 py-3 rounded-full shadow-xl text-white text-sm font-medium transition-all duration-300 z-50 ${type === 'error' ? 'bg-red-600' : 'bg-gray-800'}`;
-            toast.classList.remove('opacity-0', 'translate-y-10');
-            setTimeout(() => toast.classList.add('opacity-0', 'translate-y-10'), 3000);
+        // --- שמירה על המבנה המקורי שלך ---
+        const state = {
+            currentView: "dashboard",
+            listeners: {}
         };
 
-        const formatTime = (timestamp) => {
-            if (!timestamp) return '';
-            return new Date(timestamp.seconds * 1000).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
-        };
+        // --- פונקציות מקוריות (משודרגות) ---
+        
+        // פונקציית הניווט המקורית, עם שדרוג למפה
+        window.showView = (viewId) => {
+            if (state.currentView === viewId) return;
 
-        // --- Main Logic ---
+            document.querySelectorAll('.view-container').forEach(v => v.classList.remove('visible'));
+            document.getElementById(`view-${viewId}`).classList.add('visible');
+            
+            document.querySelectorAll('.app-nav-item').forEach(btn => btn.classList.remove('active'));
+            document.getElementById(`nav-${viewId}`).classList.add('active');
+            
+            state.currentView = viewId;
+
+            // שדרוג: אם עוברים למפה, רענן את התצוגה שלה
+            if (viewId === 'map' && map) {
+                setTimeout(() => map.invalidateSize(), 100);
+            }
+        }
+
+        // פונקציית המודאל המקורית (ללא שינוי)
+        window.openModal = (title, body, footer, isWide = false) => {
+            const modal = document.getElementById('main-modal');
+            modal.classList.toggle('modal-wide', isWide);
+            document.getElementById('modal-title').innerText = title;
+            document.getElementById('modal-body').innerHTML = body;
+            document.getElementById('modal-footer').innerHTML = footer;
+            document.getElementById('modal-overlay').classList.add('visible');
+            modal.classList.add('visible');
+            lucide.createIcons(); // שדרוג: רענון אייקונים
+        }
+
+        window.closeModal = () => {
+            document.getElementById('modal-overlay').classList.remove('visible');
+            document.getElementById('main-modal').classList.remove('visible');
+            document.getElementById('main-modal').classList.remove('modal-wide');
+        }
+
+        // פונקציית ההתראות המקורית (ללא שינוי)
+        window.playAlert = (message, type = "info") => {
+            const toast = document.getElementById('toast-alert');
+            const toastMsg = document.getElementById('toast-message');
+            toastMsg.innerText = message;
+            toast.className = `toast ${type}`; // Add info, success, warning, error
+            toast.classList.add('visible');
+            setTimeout(() => toast.classList.remove('visible'), 4000);
+        }
+
+        // --- לוגיקה חדשה ---
+
+        // 1. אתחול כללי
         async function initApp() {
             if (!firebaseConfig.projectId) {
                 document.body.innerHTML = '<div class="p-10 text-center text-red-500">שגיאת קונפיגורציה: חסר Project ID</div>';
@@ -62,6 +115,7 @@
             const app = initializeApp(firebaseConfig);
             db = getFirestore(app);
             auth = getAuth(app);
+            setLogLevel('Debug');
 
             try {
                 if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
@@ -73,86 +127,212 @@
                 userId = auth.currentUser.uid;
                 console.log("Connected as:", userId);
                 
-                // Check URL for Magic Link Action
-                checkUrlParams();
-
-                // Start Listeners
+                // התחלת האזנה
+                initMap();
                 listenToStats();
                 listenToOrders();
+                
+                // בדיקת קישור הפעלה
+                checkUrlParams();
 
             } catch (error) {
                 console.error("Init failed:", error);
-                showToast("שגיאת חיבור למערכת", "error");
+                playAlert("שגיאת חיבור למערכת", "error");
             }
         }
 
-        // --- URL & Sharing Logic ---
-        function checkUrlParams() {
-            const urlParams = new URLSearchParams(window.location.search);
-            const orderId = urlParams.get('orderId');
-            const action = urlParams.get('action');
+        // 2. האזנה לסטטיסטיקות (דאשבורד)
+        function listenToStats() {
+            const colRef = collection(db, `artifacts/${appId}/public/data/orders`);
+            onSnapshot(query(colRef, where('status', '==', 'PENDING')), snap => {
+                document.getElementById('stat-pending').textContent = snap.size;
+            });
+            onSnapshot(query(colRef, where('status', '==', 'COMPLETED')), snap => {
+                document.getElementById('stat-completed').textContent = snap.size;
+            });
+        }
 
-            if (orderId && action === 'execute') {
-                // Field Manager Mode
-                openExecutionModal(orderId);
-                // Clean URL without reloading
+        // 3. האזנה להזמנות (רשימה + מפה)
+        function listenToOrders() {
+            const container = document.getElementById('orders-list-container');
+            const colRef = collection(db, `artifacts/${appId}/public/data/orders`);
+            const q = query(colRef, orderBy('createdAt', 'desc'));
+
+            onSnapshot(q, (snapshot) => {
+                if (snapshot.empty) {
+                    container.innerHTML = `<div class="text-center p-10 text-gray-400"><i data-lucide="inbox" class="w-12 h-12 mx-auto mb-2"></i>אין הזמנות</div>`;
+                    lucide.createIcons();
+                    return;
+                }
+                
+                const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                renderOrdersList(container, orders);
+                updateMapMarkers(orders);
+                
+                lucide.createIcons();
+            });
+        }
+        
+        // 4. רינדור רשימת הזמנות
+        function renderOrdersList(container, orders) {
+            container.innerHTML = orders.map(data => {
+                const isCompleted = data.status === 'COMPLETED';
+                const statusColor = isCompleted ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700';
+                const statusText = isCompleted ? 'הושלם' : 'ממתין';
+
+                return `
+                    <div classitem>
+                        <div class="item-header">
+                            <div class="item-id">${data.customerName}</div>
+                            <div class="item-status ${statusColor}">${statusText}</div>
+                        </div>
+                        <div class="item-body">
+                            <i data-lucide="map-pin"></i>
+                            <span>${data.locationName}</span>
+                        </div>
+                        ${data.driverName ? `<div class="item-sub-body"><i data-lucide="user-check"></i><span>נהג: ${data.driverName}</span></div>` : ''}
+                        ${data.notes ? `<div class="item-sub-body"><i data-lucide="message-square"></i><span>${data.notes}</span></div>` : ''}
+                        
+                        ${!isCompleted ? `
+                            <div class="item-footer">
+                                <button class="btn btn-icon" onclick="shareOrder('${data.id}')">
+                                    <i data-lucide="share-2"></i>
+                                    שתף למנהל שטח
+                                </button>
+                            </div>
+                        ` : ''}
+                    </divitem>
+                `;
+            }).join('');
+        }
+
+        // 5. לוגיקת מפה וסיכות
+        function initMap() {
+            map = L.map('map-container').setView([32.0853, 34.7818], 10);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+            markersGroup = L.layerGroup().addTo(map);
+        }
+
+        const createMapIcon = (color) => L.divIcon({
+            html: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="${color}" class="w-10 h-10 drop-shadow-md"><path fill-rule="evenodd" d="M11.54 22.351l.07.04.028.016a.76.76 0 00.723 0l.028-.015.071-.041A16.975 16.975 0 0012 21.75c-2.676 0-5.216-.584-7.499-1.632l-.004-.002c-.004-.002-.007-.003-.011-.005a.758.758 0 00-.346-.115L3.75 19.5c-.828 0-1.5-.672-1.5-1.5V4.5A2.25 2.25 0 014.5 2.25h15A2.25 2.25 0 0121.75 4.5v13.5c0 .828-.672 1.5-1.5 1.5h-.008a.75.75 0 00-.347.114l-.01.005c-.004.002-.007.003-.012.005A16.975 16.975 0 0012 21.75c-2.676 0-5.216-.584-7.499-1.632zM12 15.75a3.75 3.75 0 100-7.5 3.75 3.75 0 000 7.5z" clip-rule="evenodd" /></svg>`,
+            className: 'bg-transparent border-0', iconSize: [40, 40], iconAnchor: [20, 40], popupAnchor: [0, -40]
+        });
+        const iconPending = createMapIcon('#EF4444'); // אדום
+        const iconAssigned = createMapIcon('#3B82F6'); // כחול
+
+        function updateMapMarkers(orders) {
+            if (!map || !markersGroup) return;
+            markersGroup.clearLayers();
+            const bounds = [];
+            
+            orders.forEach(o => {
+                if (o.location && o.location.lat && o.location.lng) {
+                    const isAssigned = !!o.driverId;
+                    const icon = isAssigned ? iconAssigned : iconPending;
+                    const popup = `<b>${o.customerName}</b><br>${o.locationName}<br>נהג: ${o.driverName || 'לא שויך'}`;
+                    
+                    L.marker([o.location.lat, o.location.lng], { icon: icon })
+                        .bindPopup(popup)
+                        .addTo(markersGroup);
+                    bounds.push([o.location.lat, o.location.lng]);
+                }
+            });
+            
+            if (bounds.length > 0) {
+                map.fitBounds(bounds, { padding: [50, 50] });
+            }
+        }
+
+        // 6. הזמנה חדשה (בשביל יוסי)
+        window.openNewOrderModal = () => {
+            const title = "הזמנה חדשה";
+            const body = `
+                <form id="new-order-form" class="space-y-4">
+                    <div>
+                        <label class="form-label">שם לקוח / קבלן</label>
+                        <input type="text" id="inp-customer" class="form-input" placeholder="לדוגמה: איציק הובלות">
+                    </div>
+                    <div>
+                        <label class="form-label">מיקום (עיר/רחוב)</label>
+                        <input type="text" id="inp-location" class="form-input" placeholder="לדוגמה: ז'בוטינסקי 4, רמת גן">
+                    </div>
+                    <div>
+                        <label class="form-label">הערות למבצע</label>
+                        <textarea id="inp-notes" class="form-input" rows="3" placeholder="פרטים נוספים..."></textarea>
+                    </div>
+                </form>
+            `;
+            const footer = `
+                <button class="btn btn-secondary" onclick="closeModal()">ביטול</button>
+                <button class="btn btn-primary" onclick="submitNewOrder()">צור הזמנה</button>
+            `;
+            openModal(title, body, footer);
+        }
+
+        window.submitNewOrder = async () => {
+            const customer = document.getElementById('inp-customer').value;
+            const location = document.getElementById('inp-location').value;
+            
+            if (!customer || !location) {
+                playAlert("אנא מלא שם ומיקום", "warning");
+                return;
+            }
+
+            // Mock Geocoding
+            const baseLat = 32.0853, baseLng = 34.7818;
+            const mockLat = baseLat + (Math.random() - 0.5) * 0.1;
+            const mockLng = baseLng + (Math.random() - 0.5) * 0.1;
+
+            try {
+                await addDoc(collection(db, `artifacts/${appId}/public/data/orders`), {
+                    customerName: customer,
+                    locationName: location,
+                    location: { lat: mockLat, lng: mockLng },
+                    notes: document.getElementById('inp-notes').value,
+                    status: 'PENDING',
+                    createdAt: serverTimestamp()
+                });
+                
+                closeModal();
+                playAlert("הזמנה נוצרה בהצלחה!", "success");
+                showView('orders');
+            } catch (e) {
+                console.error(e);
+                playAlert("שגיאה ביצירת ההזמנה", "error");
+            }
+        };
+
+        // 7. לוגיקת שיתוף וביצוע
+        function checkUrlParams() {
+            const p = new URLSearchParams(window.location.search);
+            if (p.has('orderId') && p.get('action') === 'execute') {
+                openExecutionModal(p.get('orderId'));
                 window.history.replaceState({}, document.title, window.location.pathname);
             }
         }
 
         async function openExecutionModal(orderId) {
-            const modal = document.getElementById('execution-modal');
-            const content = document.getElementById('execution-content');
-            
-            modal.classList.remove('hidden');
-            content.innerHTML = '<div class="text-center p-4">טוען פרטי משימה...</div>';
+            const bodyLoading = '<div class="text-center p-4">טוען פרטי משימה...</div>';
+            openModal("אישור ביצוע משימה", bodyLoading, "");
 
-            try {
-                const docRef = doc(db, `artifacts/${appId}/public/data/orders`, orderId);
-                const docSnap = await getDoc(docRef);
+            const docRef = doc(db, `artifacts/${appId}/public/data/orders`, orderId);
+            const docSnap = await getDoc(docRef);
 
-                if (docSnap.exists()) {
-                    const data = docSnap.data();
-                    content.innerHTML = `
-                        <div class="text-center mb-6">
-                            <div class="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                                <i data-lucide="package" class="w-8 h-8 text-blue-600"></i>
-                            </div>
-                            <h2 class="text-xl font-bold text-gray-800">קיבלת משימה חדשה</h2>
-                            <p class="text-gray-500 text-sm">מאת: יוסי (מערכת)</p>
-                        </div>
-                        
-                        <div class="bg-gray-50 p-4 rounded-xl mb-6 border border-gray-100">
-                            <div class="flex justify-between mb-2">
-                                <span class="text-gray-500">לקוח:</span>
-                                <span class="font-bold">${data.customerName}</span>
-                            </div>
-                            <div class="flex justify-between mb-2">
-                                <span class="text-gray-500">מיקום:</span>
-                                <span class="font-bold">${data.locationName}</span>
-                            </div>
-                            ${data.notes ? `<div class="mt-2 pt-2 border-t border-gray-200 text-sm text-gray-600">${data.notes}</div>` : ''}
-                        </div>
-
-                        <button onclick="completeOrder('${orderId}')" class="w-full bg-green-600 text-white py-4 rounded-xl font-bold shadow-lg active:scale-95 transition-transform flex items-center justify-center gap-2">
-                            <i data-lucide="check-circle" class="w-5 h-5"></i>
-                            אשר ביצוע משימה
-                        </button>
-                        <button onclick="closeExecutionModal()" class="w-full mt-3 py-3 text-gray-500 font-medium">סגור</button>
-                    `;
-                    lucide.createIcons();
-                } else {
-                    content.innerHTML = '<div class="text-center text-red-500">ההזמנה לא נמצאה או נמחקה.</div>';
-                }
-            } catch (e) {
-                console.error(e);
-                content.innerHTML = '<div class="text-center text-red-500">שגיאה בטעינת ההזמנה.</div>';
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+                const body = `
+                    <div class="bg-gray-50 p-4 rounded-xl mb-4 border">
+                        <p><strong>לקוח:</strong> ${data.customerName}</p>
+                        <p><strong>מיקום:</strong> ${data.locationName}</p>
+                        ${data.notes ? `<p><strong>הערות:</strong> ${data.notes}</p>` : ''}
+                    </div>
+                `;
+                const footer = `<button class="btn btn-success w-full" onclick="completeOrder('${orderId}')">אשר ביצוע משימה</button>`;
+                openModal("קיבלת משימה חדשה", body, footer);
+            } else {
+                openModal("שגיאה", "<p>ההזמנה לא נמצאה.</p>", `<button class="btn btn-secondary" onclick="closeModal()">סגור</button>`);
             }
         }
-
-        window.closeExecutionModal = () => {
-            document.getElementById('execution-modal').classList.add('hidden');
-        };
 
         window.completeOrder = async (orderId) => {
             try {
@@ -162,247 +342,286 @@
                     completedAt: serverTimestamp(),
                     completedBy: userId || 'field-manager'
                 });
-                closeExecutionModal();
-                showToast("המשימה הושלמה בהצלחה!");
-                // Trigger confetti or sound here ideally
+                closeModal();
+                playAlert("המשימה הושלמה בהצלחה!", "success");
             } catch (e) {
-                console.error(e);
-                showToast("שגיאה בעדכון המשימה", "error");
+                playAlert("שגיאה בעדכון המשימה", "error");
             }
         };
 
         window.shareOrder = (orderId) => {
-            // Construct the Magic Link
             const baseUrl = window.location.origin + window.location.pathname;
             const shareUrl = `${baseUrl}?orderId=${orderId}&action=execute`;
             
             if (navigator.share) {
                 navigator.share({
                     title: 'משימה חדשה - פורטל זבולון',
-                    text: 'קיבלת משימת שטח חדשה לביצוע. לחץ לפתיחה:',
+                    text: 'קיבלת משימת שטח חדשה לביצוע:',
                     url: shareUrl
                 }).catch(console.error);
             } else {
-                // Fallback for desktop
                 navigator.clipboard.writeText(shareUrl).then(() => {
-                    showToast("הקישור הועתק! שלח אותו למנהל השטח.");
+                    playAlert("הקישור הועתק! שלח אותו למנהל השטח.");
                 });
             }
         };
 
-        // --- Data Listeners ---
-        function listenToStats() {
-            const colRef = collection(db, `artifacts/${appId}/public/data/orders`);
-            // Pending
-            onSnapshot(query(colRef, where('status', '==', 'PENDING')), snap => {
-                document.getElementById('stat-pending').textContent = snap.size;
-            });
-            // Completed
-            onSnapshot(query(colRef, where('status', '==', 'COMPLETED')), snap => {
-                document.getElementById('stat-completed').textContent = snap.size;
-            });
-        }
-
-        function listenToOrders() {
-            const container = document.getElementById('orders-list');
-            const colRef = collection(db, `artifacts/${appId}/public/data/orders`);
-            const q = query(colRef, orderBy('createdAt', 'desc')); // removed limit for now
-
-            onSnapshot(q, (snapshot) => {
-                if (snapshot.empty) {
-                    container.innerHTML = `
-                        <div class="flex flex-col items-center justify-center py-12 text-gray-400">
-                            <i data-lucide="inbox" class="w-12 h-12 mb-2 opacity-50"></i>
-                            <p>אין הזמנות במערכת</p>
-                        </div>
-                    `;
-                    lucide.createIcons();
-                    return;
-                }
-
-                container.innerHTML = snapshot.docs.map(doc => {
-                    const data = doc.data();
-                    const isCompleted = data.status === 'COMPLETED';
-                    const statusColor = isCompleted ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700';
-                    const statusText = isCompleted ? 'הושלם' : 'ממתין';
-
-                    return `
-                        <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 mb-3 transition-all hover:shadow-md">
-                            <div class="flex justify-between items-start mb-2">
-                                <div class="flex items-center gap-3">
-                                    <div class="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-600 font-bold">
-                                        ${data.customerName ? data.customerName[0] : '?'}
-                                    </div>
-                                    <div>
-                                        <h3 class="font-bold text-gray-800">${data.customerName}</h3>
-                                        <p class="text-xs text-gray-500">${formatTime(data.createdAt)}</p>
-                                    </div>
-                                </div>
-                                <span class="px-2 py-1 rounded-lg text-xs font-bold ${statusColor}">
-                                    ${statusText}
-                                </span>
-                            </div>
-                            
-                            <div class="pl-2 border-l-2 border-gray-100 ml-4 my-2">
-                                <p class="text-sm text-gray-600 flex items-center gap-2">
-                                    <i data-lucide="map-pin" class="w-3 h-3"></i> ${data.locationName}
-                                </p>
-                                ${data.notes ? `<p class="text-xs text-gray-400 mt-1">${data.notes}</p>` : ''}
-                            </div>
-
-                            ${!isCompleted ? `
-                                <div class="flex gap-2 mt-3 pt-3 border-t border-gray-50">
-                                    <button onclick="shareOrder('${doc.id}')" class="flex-1 bg-blue-50 text-blue-600 py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2 active:bg-blue-100">
-                                        <i data-lucide="share-2" class="w-4 h-4"></i>
-                                        שתף למנהל שטח
-                                    </button>
-                                </div>
-                            ` : ''}
-                        </div>
-                    `;
-                }).join('');
-                
-                lucide.createIcons();
-            });
-        }
-
-        // --- New Order Logic ---
-        window.toggleNewOrderModal = (show) => {
-            const modal = document.getElementById('new-order-modal');
-            if (show) modal.classList.remove('translate-y-full');
-            else modal.classList.add('translate-y-full');
-        };
-
-        window.submitNewOrder = async () => {
-            const customer = document.getElementById('inp-customer').value;
-            const location = document.getElementById('inp-location').value;
-            
-            if (!customer || !location) {
-                showToast("אנא מלא שם ומיקום", "error");
-                return;
-            }
-
-            try {
-                await addDoc(collection(db, `artifacts/${appId}/public/data/orders`), {
-                    customerName: customer,
-                    locationName: location,
-                    notes: document.getElementById('inp-notes').value,
-                    status: 'PENDING',
-                    createdAt: serverTimestamp()
-                });
-                
-                document.getElementById('new-order-form').reset();
-                toggleNewOrderModal(false);
-                showToast("הזמנה נוצרה בהצלחה!");
-            } catch (e) {
-                console.error(e);
-                showToast("שגיאה ביצירה", "error");
-            }
-        };
-
-        // Init
+        // אתחול
         document.addEventListener('DOMContentLoaded', initApp);
-    </script>
+        window.initIcons = () => lucide.createIcons(); // החלפה של feather
+        window.initIcons();
 
+    </script>
+    
+    <!-- CSS (מבוסס על הקובץ המקורי שלך) -->
     <style>
-        body { font-family: 'Rubik', sans-serif; background-color: #f3f4f6; -webkit-tap-highlight-color: transparent; }
-        /* Google Font import within style for single-file portability */
-        @import url('https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;500;700&display=swap');
-        
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        
-        .glass-header {
-            background: rgba(255, 255, 255, 0.9);
-            backdrop-filter: blur(10px);
+        :root {
+            --app-bg-light: #f3f4f6;
+            --app-bg-dark: #0f172a;
+            --header-bg-light: rgba(255, 255, 255, 0.8);
+            --header-bg-dark: rgba(30, 41, 59, 0.8);
+            --card-bg-light: #ffffff;
+            --card-bg-dark: #1e293b;
+            --text-light: #1f2937;
+            --text-dark: #f1f5f9;
+            --text-muted-light: #6b7280;
+            --text-muted-dark: #94a3b8;
+            --primary-color: #3b82f6;
+        }
+        body {
+            font-family: 'Rubik', sans-serif;
+            background-color: var(--app-bg-light);
+            color: var(--text-light);
+        }
+        .dark body {
+            background-color: var(--app-bg-dark);
+            color: var(--text-dark);
+        }
+        .app-header {
+            background-color: var(--header-bg-light);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
             border-bottom: 1px solid rgba(0,0,0,0.05);
         }
+        .dark .app-header {
+            background-color: var(--header-bg-dark);
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .app-footer-nav {
+            background-color: var(--header-bg-light);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-top: 1px solid rgba(0,0,0,0.05);
+        }
+        .dark .app-footer-nav {
+            background-color: var(--header-bg-dark);
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }
         
-        /* Animations */
-        .fade-in { animation: fadeIn 0.3s ease-in; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .app-nav-item {
+            color: var(--text-muted-light);
+        }
+        .dark .app-nav-item {
+            color: var(--text-muted-dark);
+        }
+        .app-nav-item.active {
+            color: var(--primary-color);
+        }
+        
+        .view-container { display: none; }
+        .view-container.visible { display: block; }
+        
+        .kpi-card { background: var(--card-bg-light); }
+        .dark .kpi-card { background: var(--card-bg-dark); }
+        
+        [class^="item"] {
+            background: var(--card-bg-light);
+            border-radius: 1rem;
+            margin-bottom: 0.75rem;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03);
+            border: 1px solid rgba(0,0,0,0.05);
+        }
+        .dark [class^="item"] {
+            background: var(--card-bg-dark);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .item-header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1rem 0.5rem 1rem; }
+        .item-id { font-weight: 700; }
+        .item-status { font-size: 0.75rem; font-weight: 700; padding: 0.25rem 0.75rem; border-radius: 99px; }
+        .item-body { display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem 1.25rem; font-size: 0.875rem; color: #374151; }
+        .dark .item-body { color: #d1d5db; }
+        .item-sub-body { display: flex; align-items: center; gap: 0.5rem; padding: 0 1.25rem; font-size: 0.75rem; color: #6b7280; }
+        .dark .item-sub-body { color: #9ca3af; }
+        .item-footer { padding: 0.75rem; margin-top: 0.75rem; border-top: 1px solid #f3f4f6; }
+        .dark .item-footer { border-top: 1px solid #374151; }
+        
+        /* כפתורים וטפסים */
+        .btn { padding: 0.75rem 1.25rem; border-radius: 0.75rem; font-weight: 700; transition: all 0.2s; }
+        .btn-primary { background-color: var(--primary-color); color: white; }
+        .btn-primary:hover { background-color: #2563eb; }
+        .btn-secondary { background-color: #e5e7eb; color: #1f2937; }
+        .dark .btn-secondary { background-color: #374151; color: #f1f5f9; }
+        .btn-success { background-color: #16a34a; color: white; }
+        .btn-icon { display: flex; align-items: center; justify-content: center; gap: 0.5rem; padding: 0.5rem 1rem; border-radius: 0.75rem; font-weight: 500; }
+        .btn-icon { background-color: #eff6ff; color: #3b82f6; }
+        .dark .btn-icon { background-color: #1e293b; color: #60a5fa; }
+        
+        .form-label { font-size: 0.875rem; font-weight: 500; color: #4b5563; margin-bottom: 0.5rem; display: block; }
+        .dark .form-label { color: #d1d5db; }
+        .form-input {
+            width: 100%; padding: 0.75rem 1rem; border-radius: 0.75rem;
+            background-color: #f3f4f6; border: 1px solid #e5e7eb;
+            outline: none; transition: all 0.2s;
+        }
+        .dark .form-input {
+            background-color: #374151; border-color: #4b5563; color: white;
+        }
+        .form-input:focus {
+            border-color: var(--primary-color);
+            background-color: white;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+        }
+        .dark .form-input:focus { background-color: var(--card-bg-dark); }
+        
+        /* מודאל (מהקובץ המקורי) */
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); z-index: 40; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
+        .modal-overlay.visible { opacity: 1; pointer-events: all; }
+        
+        .app-modal {
+            position: fixed; bottom: 0; left: 0; right: 0;
+            background: var(--card-bg-light);
+            border-top-left-radius: 1.5rem; border-top-right-radius: 1.5rem;
+            transform: translateY(100%); transition: transform 0.3s ease-out;
+            z-index: 50; max-height: 90vh; display: flex; flex-direction: column;
+        }
+        .dark .app-modal { background: var(--card-bg-dark); }
+        .app-modal.visible { transform: translateY(0); }
+        
+        .modal-header { padding: 1rem 1.5rem; border-bottom: 1px solid #e5e7eb; }
+        .dark .modal-header { border-bottom-color: #374151; }
+        .modal-body { padding: 1.5rem; overflow-y: auto; }
+        .modal-footer { padding: 1rem 1.5rem; border-top: 1px solid #e5e7eb; display: flex; gap: 0.75rem; justify-content: flex-end; }
+        .dark .modal-footer { border-top-color: #374151; }
+
+        /* התראות (מהקובץ המקורי) */
+        .toast {
+            position: fixed; top: 1rem; left: 1rem; right: 1rem;
+            padding: 1.25rem; border-radius: 1rem;
+            color: white; font-weight: 700;
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
+            transform: translateY(-150%);
+            transition: transform 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+            z-index: 999;
+        }
+        .toast.visible { transform: translateY(0); }
+        .toast.info { background: #3b82f6; }
+        .toast.success { background: #16a34a; }
+        .toast.warning { background: #f59e0b; }
+        .toast.error { background: #ef4444; }
+
+        /* מפת ליפלט */
+        #map-container { z-index: 1; }
+        
     </style>
 </head>
 <body class="h-screen flex flex-col overflow-hidden">
 
-    <!-- HEADER -->
-    <header class="glass-header h-16 px-5 flex items-center justify-between flex-shrink-0 z-20 relative">
-        <div>
-            <h1 class="text-lg font-bold text-gray-800">פורטל זבולון</h1>
-            <p class="text-[10px] text-blue-600 font-medium">ניהול מערך שטח</p>
-        </div>
-        <div class="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold shadow-blue-200 shadow-lg">
-            Z
+    <!-- Header -->
+    <header class="app-header h-16 px-4 flex items-center justify-between flex-shrink-0 z-20">
+        <h1 class="text-lg font-bold">פורטל זבולון</h1>
+        <div class="flex items-center gap-2">
+            <button class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700">
+                <i data-lucide="search" class="w-5 h-5 text-gray-500"></i>
+            </button>
+            <button class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700">
+                <i data-lucide="bell" class="w-5 h-5 text-gray-500"></i>
+            </button>
         </div>
     </header>
 
-    <!-- STATS BAR -->
-    <div class="px-4 pt-4 pb-2 flex gap-3 flex-shrink-0 overflow-x-auto no-scrollbar">
-        <div class="bg-white p-3 rounded-xl shadow-sm flex-1 min-w-[100px] border border-blue-50">
-            <span class="block text-xs text-gray-400 mb-1">פתוחות</span>
-            <span id="stat-pending" class="text-2xl font-bold text-blue-600">0</span>
+    <!-- App Content -->
+    <main class="app-content flex-grow overflow-hidden relative">
+        <!-- Dashboard View -->
+        <div id="view-dashboard" class="view-container visible h-full overflow-y-auto p-4">
+            <h2 class="text-2xl font-light mb-4">ברוך שובך, <span class="font-bold">יוסי</span></h2>
+            <div class="grid grid-cols-2 gap-4 mb-6">
+                <div class="kpi-card p-4 rounded-xl shadow-sm">
+                    <span class="block text-sm text-gray-500 mb-1">הזמנות פתוחות</span>
+                    <span id="stat-pending" class="text-3xl font-bold text-blue-600">0</span>
+                </div>
+                <div class="kpi-card p-4 rounded-xl shadow-sm">
+                    <span class="block text-sm text-gray-500 mb-1">הושלמו היום</span>
+                    <span id="stat-completed" class="text-3xl font-bold text-green-600">0</span>
+                </div>
+            </div>
+            <h3 class="text-lg font-bold mb-2">קיצורי דרך</h3>
+            <div class="space-y-3">
+                <button onclick="showView('orders')" class="w-full text-right bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm flex items-center gap-4">
+                    <i data-lucide="list-checks" class="w-6 h-6 text-blue-500"></i>
+                    <span class="font-semibold">צפה בכל ההזמנות</span>
+                </button>
+                <button onclick="showView('map')" class="w-full text-right bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm flex items-center gap-4">
+                    <i data-lucide="map" class="w-6 h-6 text-green-500"></i>
+                    <span class="font-semibold">פתח מפת שטח</span>
+                </button>
+            </div>
         </div>
-        <div class="bg-white p-3 rounded-xl shadow-sm flex-1 min-w-[100px] border border-green-50">
-            <span class="block text-xs text-gray-400 mb-1">הושלמו</span>
-            <span id="stat-completed" class="text-2xl font-bold text-green-600">0</span>
-        </div>
-    </div>
 
-    <!-- MAIN LIST -->
-    <main id="orders-list" class="flex-grow overflow-y-auto p-4 pb-24 space-y-3">
-        <!-- Orders injected here -->
-        <div class="animate-pulse space-y-3">
-            <div class="h-24 bg-white rounded-2xl"></div>
-            <div class="h-24 bg-white rounded-2xl"></div>
+        <!-- Orders View -->
+        <div id="view-orders" class="view-container h-full overflow-y-auto p-4">
+            <h2 class="text-xl font-bold mb-4">כל ההזמנות</h2>
+            <div id="orders-list-container">
+                <!-- Orders Injected Here -->
+            </div>
+        </div>
+        
+        <!-- Map View -->
+        <div id="view-map" class="view-container h-full">
+            <div id="map-container" class="w-full h-full"></div>
         </div>
     </main>
 
-    <!-- FAB (Floating Action Button) -->
-    <button onclick="toggleNewOrderModal(true)" class="fixed bottom-6 left-6 w-14 h-14 bg-blue-600 text-white rounded-full shadow-xl flex items-center justify-center active:scale-90 transition-transform z-30 shadow-blue-500/40">
-        <i data-lucide="plus" class="w-7 h-7"></i>
-    </button>
+    <!-- Footer Nav -->
+    <footer class="app-footer-nav h-20 px-4 flex justify-around items-center flex-shrink-0 z-20">
+        <button id="nav-dashboard" onclick="showView('dashboard')" class="app-nav-item active">
+            <i data-lucide="layout-dashboard"></i>
+            <span>דאשבורד</span>
+        </button>
+        <button id="nav-orders" onclick="showView('orders')" class="app-nav-item">
+            <i data-lucide="list-checks"></i>
+            <span>הזמנות</span>
+        </button>
+        <!-- כפתור הזמנה חדשה (בשביל יוסי) -->
+        <button id="nav-new" onclick="openNewOrderModal()" class="bg-blue-600 text-white rounded-full w-14 h-14 flex items-center justify-center -mt-8 shadow-lg">
+            <i data-lucide="plus" class="w-7 h-7"></i>
+        </button>
+        <button id="nav-map" onclick="showView('map')" class="app-nav-item">
+            <i data-lucide="map"></i>
+            <span>מפה</span>
+        </button>
+        <button id="nav-settings" class="app-nav-item">
+            <i data-lucide="settings"></i>
+            <span>הגדרות</span>
+        </button>
+    </footer>
 
-    <!-- NEW ORDER MODAL -->
-    <div id="new-order-modal" class="fixed inset-x-0 bottom-0 h-[85vh] bg-white rounded-t-3xl shadow-2xl z-40 transform translate-y-full transition-transform duration-300 flex flex-col">
-        <div class="p-5 border-b border-gray-100 flex justify-between items-center">
-            <h2 class="text-lg font-bold">הזמנה חדשה</h2>
-            <button onclick="toggleNewOrderModal(false)" class="p-2 bg-gray-50 rounded-full"><i data-lucide="x" class="w-5 h-5"></i></button>
+    <!-- Modal (מהקובץ המקורי) -->
+    <div id="modal-overlay" class="modal-overlay" onclick="closeModal()"></div>
+    <div id="main-modal" class="app-modal">
+        <div class="modal-header">
+            <h3 id="modal-title" class="font-bold text-lg">כותרת מודאל</h3>
         </div>
-        <div class="p-6 flex-grow overflow-y-auto">
-            <form id="new-order-form" class="space-y-5">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">שם הלקוח / קבלן</label>
-                    <input type="text" id="inp-customer" class="w-full p-4 bg-gray-50 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 transition-all outline-none" placeholder="לדוגמה: איציק הובלות">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">מיקום (עיר/רחוב)</label>
-                    <input type="text" id="inp-location" class="w-full p-4 bg-gray-50 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 transition-all outline-none" placeholder="לדוגמה: ז'בוטינסקי 4, רמת גן">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">הערות למבצע</label>
-                    <textarea id="inp-notes" class="w-full p-4 bg-gray-50 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 transition-all outline-none h-32 resize-none" placeholder="פרטים נוספים..."></textarea>
-                </div>
-            </form>
+        <div id="modal-body" class="modal-body">
+            <!-- Content Injected Here -->
         </div>
-        <div class="p-5 border-t border-gray-50">
-            <button onclick="submitNewOrder()" class="w-full bg-blue-600 text-white py-4 rounded-xl font-bold shadow-lg active:scale-95 transition-transform">
-                צור הזמנה
-            </button>
+        <div id="modal-footer" class="modal-footer">
+            <!-- Buttons Injected Here -->
         </div>
     </div>
 
-    <!-- EXECUTION MODAL (For Field Manager - via Link) -->
-    <div id="execution-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-        <div class="bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden animate-fadeIn">
-            <div id="execution-content" class="p-6">
-                <!-- Content Injected by JS -->
-            </div>
-        </div>
-    </div>
-
-    <!-- TOAST NOTIFICATION -->
-    <div id="toast" class="fixed bottom-20 left-1/2 transform -translate-x-1/2 px-6 py-3 rounded-full shadow-xl text-white text-sm font-medium transition-all duration-300 z-50 opacity-0 translate-y-10 bg-gray-800 pointer-events-none">
-        הודעה
+    <!-- Toast Alert (מהקובץ המקורי) -->
+    <div id="toast-alert" class="toast info">
+        <span id="toast-message">זוהי התראה</span>
     </div>
 
 </body>
