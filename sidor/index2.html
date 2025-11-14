@@ -3,23 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Sidor Mobile v1.4</title>
+    <title>Sidor Mobile v1.5</title>
     <!-- 
-      Sidor Mobile v1.4 - WhatsApp Report Generator
+      Sidor Mobile v1.5 - Log Snitch & UI Errors
       
       Changelog:
-      - [NEW] Replaced "Tomorrow" tab with "Share" tab.
-      - [NEW] Share tab allows picking a date (defaults to tomorrow) and loading orders.
-      - [NEW] Added floating WhatsApp button, password protected (default: 1125).
-      - [NEW] Added Driver Assignment Modal: Pops up after password, allows assigning drivers.
-      - [NEW] Added `app.loadDrivers()` to populate assignment dropdown.
-      - [NEW] Added `app.generateWhatsAppReport()`:
-        - Sorts orders by time.
-        - Groups by delivery type (crane, truck, other).
-        - Generates formatted text report with emojis (🏗️, 🚚, 👤, 👷).
-        - Adds dynamic title (e.g., "סידור עבודה למחר...") and day of week.
-        - Calculates and shows total order count.
-        - Appends the live viewer app link as requested.
+      - [NEW] Added "Log Snitches" (console.log) to all data fetching functions
+        to trace the data flow, as requested.
+      - [NEW] Error messages from Firebase (like Permissions) are now
+        rendered directly into the UI lists, not just the console.
     -->
     
     <!-- PWA & Mobile Specific Tags -->
@@ -433,7 +425,7 @@
     
     <!-- 
       ==========================================================
-      ===               תחילת סקריפט ראשי (v1.4)              ===
+      ===               תחילת סקריפט ראשי (v1.5)              ===
       ==========================================================
     -->
     <script type="module">
@@ -460,9 +452,9 @@
         let db, auth;
         let currentUserId = null;
         let allTodayOrders = [];
-        let allShareOrders = []; // [NEW] For the report builder
+        let allShareOrders = []; // For the report builder
         let allHistoryOrders = [];
-        let allDrivers = []; // [NEW] To populate driver dropdowns
+        let allDrivers = []; // To populate driver dropdowns
         let detailMap;
         let orderMarker, driverMarker;
         let driverLocationUnsub;
@@ -523,7 +515,7 @@
                 
                 const titles = {
                     'dashboard': 'הובלות להיום',
-                    'share': 'שיתוף סידור עבודה', // [NEW]
+                    'share': 'שיתוף סידור עבודה',
                     'history': 'היסטוריית הזמנות',
                     'profile': 'פרופיל אישי'
                 };
@@ -533,11 +525,9 @@
                 if (viewId === 'dashboard') {
                     app.listenForToday();
                 } else if (viewId === 'share') {
-                    // Set date picker to tomorrow by default
                     const tomorrow = new Date();
                     tomorrow.setDate(tomorrow.getDate() + 1);
                     document.getElementById('share-date-picker').value = tomorrow.toISOString().split('T')[0];
-                    // Auto-load orders for tomorrow
                     app.loadOrdersForShare();
                 } else if (viewId === 'history') {
                     app.listenForHistory();
@@ -546,16 +536,17 @@
             
             // --- Data Fetching & Rendering ---
             
-            // [NEW v1.4] Load all drivers once for dropdowns
             loadDrivers: () => {
                 if (driversUnsub) driversUnsub();
                 
                 const q = query(collection(db, DRIVERS_COLLECTION), orderBy('name'));
                 driversUnsub = onSnapshot(q, (snapshot) => {
                     allDrivers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    console.log(`Loaded ${allDrivers.length} drivers`);
+                    // [מלשינון]
+                    console.log(`[מלשינון DRIVERS] נטענו ${allDrivers.length} נהגים.`);
                 }, (err) => {
-                    console.error("Error fetching drivers:", err);
+                    // [מלשינון]
+                    console.error("[מלשינון DRIVERS] כשלון קריטי! Firebase חסם את הגישה.", err.message);
                 });
             },
             
@@ -572,19 +563,28 @@
                 );
                 
                 todayUnsub = onSnapshot(qToday, (snapshot) => {
+                    // [מלשינון]
+                    console.log(`[מלשינון TODAY] התקבלו ${snapshot.docs.length} הזמנות מהשרת.`);
                     allTodayOrders = snapshot.docs
                         .map(doc => ({ id: doc.id, ...doc.data() }))
                         .filter(order => !['הושלם', 'בוטל', 'סופק'].includes(order.status)); 
+                    
+                    // [מלשינון]
+                    console.log(`[מלשינון TODAY] מציג ${allTodayOrders.length} הזמנות לאחר סינון סטטוס.`);
                         
                     app.filterOrders('all'); // Render with 'all' filter
                     document.getElementById('loader').style.display = 'none';
                 }, (err) => {
-                    console.error("Error fetching today's orders:", err);
-                    document.getElementById('dashboard-order-list').innerHTML = `<p class="text-center text-red-500 p-4">שגיאה בטעינת הזמנות להיום: ${err.message}</p>`;
+                    // [מלשינון]
+                    console.error("[מלשינון TODAY] כשלון קריטי! Firebase חסם את הגישה.", err.message);
+                    document.getElementById('dashboard-order-list').innerHTML = `<div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+                        <strong class="font-bold">שגיאת הרשאות!</strong>
+                        <span class="block sm:inline">האפליקציה חסומה. אנא פנה למנהל המערכת לתיקון הרשאות Firebase.</span>
+                    </div>`;
+                    document.getElementById('loader').style.display = 'none';
                 });
             },
             
-            // [NEW v1.4] Renamed from listenForTomorrow
             loadOrdersForShare: async () => {
                 const listEl = document.getElementById('share-order-list');
                 listEl.innerHTML = `<div class="spinner-container"><div class="spinner"></div></div>`;
@@ -604,13 +604,14 @@
                     
                     const snapshot = await getDocs(q);
                     allShareOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    // [מלשינון]
+                    console.log(`[מלשינון SHARE] התקבלו ${allShareOrders.length} הזמנות לדיווח.`);
                     
                     document.getElementById('share-total-count').innerText = `(${allShareOrders.length})`;
                     
                     if (allShareOrders.length === 0) {
                         listEl.innerHTML = `<p class="text-center text-gray-500 pt-8">לא נמצאו הזמנות לתאריך זה.</p>`;
                     } else {
-                        // Render simple cards (no actions)
                         listEl.innerHTML = allShareOrders
                             .sort((a, b) => (a.orderTime || '09:00').localeCompare(b.orderTime || '09:00'))
                             .map(order => {
@@ -630,8 +631,12 @@
                             }).join('');
                     }
                 } catch (err) {
-                    console.error("Error fetching orders for share:", err);
-                    listEl.innerHTML = `<p class="text-center text-red-500 p-4">שגיאה בטעינת הזמנות: ${err.message}</p>`;
+                    // [מלשינון]
+                    console.error("[מלשינון SHARE] כשלון קריטי! Firebase חסם את הגישה.", err.message);
+                    listEl.innerHTML = `<div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+                        <strong class="font-bold">שגיאת הרשאות!</strong>
+                        <span class="block sm:inline">לא ניתן לטעון הזמנות. אנא פנה למנהל המערכת.</span>
+                    </div>`;
                 }
             },
             
@@ -646,11 +651,17 @@
                 );
                 
                 historyUnsub = onSnapshot(qHistory, (snapshot) => {
+                    // [מלשינון]
+                    console.log(`[מלשינון HISTORY] התקבלו ${snapshot.docs.length} הזמנות היסטוריה.`);
                     allHistoryOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     app.renderOrderList(allHistoryOrders, 'history-order-list');
                 }, (err) => {
-                    console.error("Error fetching history orders:", err);
-                    document.getElementById('history-order-list').innerHTML = `<p class="text-center text-red-500 p-4">שגיאה בטעינת היסטוריה: ${err.message}</p>`;
+                    // [מלשינון]
+                    console.error("[מלשינון HISTORY] כשלון קריטי! Firebase חסם את הגישה.", err.message);
+                    document.getElementById('history-order-list').innerHTML = `<div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+                        <strong class="font-bold">שגיאת הרשאות!</strong>
+                        <span class="block sm:inline">לא ניתן לטעון היסטוריה. אנא פנה למנהל המערכת.</span>
+                    </div>`;
                 });
             },
 
@@ -877,7 +888,9 @@
             renderAssignmentList: () => {
                 const container = document.getElementById('assignment-list-container');
                 if (allDrivers.length === 0) {
-                    container.innerHTML = `<p class="text-center text-red-500 p-4">שגיאה: לא נטענו נהגים. לא ניתן לשייך.</p>`;
+                    // [מלשינון]
+                    console.warn("[מלשינון ASSIGN] לא ניתן לפתוח שיוך כי רשימת הנהגים ריקה.");
+                    container.innerHTML = `<p class="text-center text-red-500 p-4">שגיאה: לא נטענו נהגים. האם ההרשאות לקריאת 'drivers' תקינות?</p>`;
                     return;
                 }
                 
