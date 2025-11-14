@@ -1028,8 +1028,7 @@
         const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : JSON.stringify(fallbackConfig));
         // [GEMINI FIX] Clean the appId to prevent path errors
         const dirtyAppId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const match = dirtyAppId.match(/(c_[a-f0-9]{16})/); // [GEMINI FIX] Use regex to find the correct c_... ID
-        const appId = match ? match[1] : 'default-app-id'; // Use the matched ID or fallback
+        const appId = dirtyAppId.split('_').slice(0, 2).join('_'); // [GEMINI FIX] Reverting to robust slice/join logic
 
         // [GEMINI FIX] Define collection names centrally
         const ORDERS_COLLECTION = 'orders_v2';
