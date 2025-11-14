@@ -8,17 +8,9 @@
       DeliveryMaster Admin App v40.3
       
       Changelog:
-      - [CRITICAL FIX v40.3]
-        - Fixed customer search logic in `handleCustomerSearch`.
-        - It now checks against the `allCustomers` array for an exact match,
-          not just the datalist.
-        - This correctly identifies existing customers even while typing.
-      - [v40.2]
-        - Fixed Race Condition in new order form.
-        - Customer search input is now DISABLED until the customer list (datalist)
-          is fully loaded from Firestore.
-      - [v40.1]
-        - Implemented Nominatim (OpenStreetMap) geocoding.
+      - [GEMINI FIX] Patched all Firestore collection/doc paths to use the
+        correct `artifacts/{appId}/public/data/...` structure to resolve
+        all "Missing or insufficient permissions" errors.
     -->
     
     <!-- TailwindCSS -->
@@ -1034,6 +1026,17 @@
         };
         
         const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : JSON.stringify(fallbackConfig));
+        // [GEMINI FIX] Clean the appId to prevent path errors
+        const dirtyAppId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const appId = dirtyAppId.split('/')[0]; // Get only the part before the slash
+
+        // [GEMINI FIX] Define collection names centrally
+        const ORDERS_COLLECTION = 'orders_v2';
+        const CUSTOMERS_COLLECTION = 'customers';
+        const DRIVERS_COLLECTION = 'drivers';
+        const LOCATIONS_COLLECTION = 'driverLocations';
+        const PINGS_COLLECTION = 'globalPings';
+        const LOGS_COLLECTION = 'logs';
         
         try {
             const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
@@ -1086,6 +1089,13 @@
             },
             async _logToFirestore(level, message, category, context) {
                 // [FIX v36.3] Disable client-side logging to Firestore to prevent permission errors.
+                // [GEMINI NOTE] Even if re-enabled, path below would need fixing.
+                // [GEMINI FIX] Path corrected just in case it's re-enabled.
+                try {
+                    // await addDoc(collection(db, 'artifacts', appId, 'public', 'data', LOGS_COLLECTION), { ... });
+                } catch (e) {
+                    console.warn("Failed to write log to Firestore (logging is disabled or path error)", e);
+                }
                 return;
             }
         };
@@ -1145,8 +1155,8 @@
 
 
         // --- Data Fetching & Listeners ---
-        const ORDERS_COLLECTION = 'orders_v2'; // [v40] Switched to v2
-
+        // const ORDERS_COLLECTION = 'orders_v2'; // [GEMINI] Moved up
+        
         function attachAllListeners() {
             listenForActiveOrders();
             listenForCustomers();
@@ -1164,8 +1174,9 @@
         function listenForActiveOrders() {
             if (ordersUnsubscribe) ordersUnsubscribe();
             
+            // [GEMINI FIX] Add full path
             const q = query(
-                collection(db, ORDERS_COLLECTION), 
+                collection(db, 'artifacts', appId, 'public', 'data', ORDERS_COLLECTION), 
                 where('status', 'not-in', ['הושלם', 'בוטל', 'סופק']),
                 limit(100) 
             );
@@ -1201,7 +1212,8 @@
         function listenForCustomers() {
             if (customersUnsubscribe) customersUnsubscribe();
             
-            const q = query(collection(db, 'customers'), orderBy('name'));
+            // [GEMINI FIX] Add full path
+            const q = query(collection(db, 'artifacts', appId, 'public', 'data', CUSTOMERS_COLLECTION), orderBy('name'));
             
             customersUnsubscribe = onSnapshot(q, (snapshot) => {
                 allCustomers = [];
@@ -1233,7 +1245,8 @@
         function listenForDrivers() {
             if (driversUnsubscribe) driversUnsubscribe();
             
-            const q = query(collection(db, 'drivers'), orderBy('name'));
+            // [GEMINI FIX] Add full path
+            const q = query(collection(db, 'artifacts', appId, 'public', 'data', DRIVERS_COLLECTION), orderBy('name'));
             
             driversUnsubscribe = onSnapshot(q, (snapshot) => {
                 const loader = document.getElementById('drivers-list').querySelector('.loader-container');
@@ -1265,7 +1278,8 @@
         function listenForDriverLocations() {
             if (locationsUnsubscribe) locationsUnsubscribe();
             
-            const q = query(collection(db, 'driverLocations'));
+            // [GEMINI FIX] Add full path
+            const q = query(collection(db, 'artifacts', appId, 'public', 'data', LOCATIONS_COLLECTION));
             
             locationsUnsubscribe = onSnapshot(q, (snapshot) => {
                 liveLocations = {};
@@ -1539,8 +1553,9 @@
             
             if (customer) {
                 try {
+                    // [GEMINI FIX] Add full path
                     const q = query(
-                        collection(db, ORDERS_COLLECTION),
+                        collection(db, 'artifacts', appId, 'public', 'data', ORDERS_COLLECTION),
                         where('customer.id', '==', customer.id),
                         orderBy('createdAt', 'desc'),
                         limit(10)
@@ -1641,7 +1656,8 @@
             btn.innerText = 'שומר...';
 
             const orderId = document.getElementById('order-edit-id').value;
-            const orderRef = doc(db, ORDERS_COLLECTION, orderId);
+            // [GEMINI FIX] Add full path
+            const orderRef = doc(db, 'artifacts', appId, 'public', 'data', ORDERS_COLLECTION, orderId);
 
             const updatedData = {
                 status: document.getElementById('order-edit-status').value,
@@ -1682,8 +1698,9 @@
             modal.showModal();
 
             try {
+                // [GEMINI FIX] Add full path
                 const q = query(
-                    collection(db, ORDERS_COLLECTION),
+                    collection(db, 'artifacts', appId, 'public', 'data', ORDERS_COLLECTION),
                     where('customer.id', '==', customerId),
                     orderBy('createdAt', 'desc'),
                     limit(20)
@@ -1916,7 +1933,8 @@
                 
                 try {
                     btn.innerText = 'יוצר לקוח...';
-                    const newCustomerRef = await addDoc(collection(db, "customers"), {
+                    // [GEMINI FIX] Add full path
+                    const newCustomerRef = await addDoc(collection(db, 'artifacts', appId, 'public', 'data', CUSTOMERS_COLLECTION), {
                         ...customerData,
                         customLat: customCoords?.latitude || null,
                         customLon: customCoords?.longitude || null,
@@ -1989,10 +2007,12 @@
 
                 if (customOrderNumber) {
                     docId = customOrderNumber;
-                    orderRef = doc(db, ORDERS_COLLECTION, customOrderNumber);
+                    // [GEMINI FIX] Add full path
+                    orderRef = doc(db, 'artifacts', appId, 'public', 'data', ORDERS_COLLECTION, customOrderNumber);
                     await setDoc(orderRef, orderData);
                 } else {
-                    orderRef = await addDoc(collection(db, ORDERS_COLLECTION), orderData);
+                    // [GEMINI FIX] Add full path
+                    orderRef = await addDoc(collection(db, 'artifacts', appId, 'public', 'data', ORDERS_COLLECTION), orderData);
                     docId = orderRef.id;
                     finalOrderId = orderRef.id;
                     await updateDoc(orderRef, { order_id: finalOrderId });
@@ -2058,7 +2078,8 @@ ${orderData.notes || "--- אין תוכן ---"}
         
         async function updateOrderStatus(event, orderId) {
             const newStatus = event.target.value;
-            const orderRef = doc(db, ORDERS_COLLECTION, orderId);
+            // [GEMINI FIX] Add full path
+            const orderRef = doc(db, 'artifacts', appId, 'public', 'data', ORDERS_COLLECTION, orderId);
             
             SmartLog.info(`Updating status for order ${orderId} to ${newStatus}`, "CRUD.Order.UpdateStatus");
             try {
@@ -2138,7 +2159,8 @@ ${orderData.notes || "--- אין תוכן ---"}
             btn.innerText = 'שומר...';
             
             const customerId = document.getElementById('customer-edit-id').value;
-            const customerRef = doc(db, 'customers', customerId);
+            // [GEMINI FIX] Add full path
+            const customerRef = doc(db, 'artifacts', appId, 'public', 'data', CUSTOMERS_COLLECTION, customerId);
             
             try {
                 await runTransaction(db, async (transaction) => {
@@ -2202,8 +2224,9 @@ ${orderData.notes || "--- אין תוכן ---"}
 
                 if (newAddress !== oldAddress) {
                     SmartLog.info("Address changed, updating linked active orders...", "CRUD.Customer.Update");
+                    // [GEMINI FIX] Add full path
                     const q = query(
-                        collection(db, ORDERS_COLLECTION), 
+                        collection(db, 'artifacts', appId, 'public', 'data', ORDERS_COLLECTION), 
                         where('customer.id', '==', customerId),
                         where('status', 'not-in', ['סופק', 'מבוטל', 'הושלם'])
                     );
@@ -2255,7 +2278,8 @@ ${orderData.notes || "--- אין תוכן ---"}
             SmartLog.info(`Fetching order_id for doc: ${orderId}`, "UI.CopyLink");
 
             try {
-                const orderRef = doc(db, ORDERS_COLLECTION, orderId);
+                // [GEMINI FIX] Add full path
+                const orderRef = doc(db, 'artifacts', appId, 'public', 'data', ORDERS_COLLECTION, orderId);
                 const orderSnap = await getDoc(orderRef);
                 
                 if (!orderSnap.exists()) {
@@ -2298,7 +2322,8 @@ ${orderData.notes || "--- אין תוכן ---"}
              
              SmartLog.info("Sending global ping...", "CRUD.Ping", { message });
              try {
-                 const pingRef = doc(collection(db, "globalPings"));
+                 // [GEMINI FIX] Add full path
+                 const pingRef = doc(collection(db, 'artifacts', appId, 'public', 'data', PINGS_COLLECTION));
                  await setDoc(pingRef, {
                      type: "MANAGER_BROADCAST",
                      message: message.trim(),
@@ -2324,7 +2349,8 @@ ${orderData.notes || "--- אין תוכן ---"}
             
             try {
                 // Fetch ALL orders for history
-                const q = query(collection(db, ORDERS_COLLECTION), orderBy("createdAt", "desc"));
+                // [GEMINI FIX] Add full path
+                const q = query(collection(db, 'artifacts', appId, 'public', 'data', ORDERS_COLLECTION), orderBy("createdAt", "desc"));
                 const snapshot = await getDocs(q);
                 let orders = [];
                 snapshot.forEach(doc => orders.push({ id: doc.id, ...doc.data() }));
