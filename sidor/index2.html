@@ -3,15 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Sidor Mobile v1.5</title>
+    <title>Sidor Mobile v1.6</title>
     <!-- 
-      Sidor Mobile v1.5 - Log Snitch & UI Errors
+      Sidor Mobile v1.6 - Static Driver List
       
       Changelog:
-      - [NEW] Added "Log Snitches" (console.log) to all data fetching functions
-        to trace the data flow, as requested.
-      - [NEW] Error messages from Firebase (like Permissions) are now
-        rendered directly into the UI lists, not just the console.
+      - [NEW v1.6] Modified `renderAssignmentList()`.
+        - Removed dynamic driver fetching from Firestore for this modal.
+        - Added a hardcoded list of drivers ("חכמת", "עלי", "מוביל חיצוני", "יואב")
+          as requested, making the assignment list static and controlled.
+      - [v1.4] WhatsApp Report Generator
+      - [v1.3] Gateway Buttons & History
     -->
     
     <!-- PWA & Mobile Specific Tags -->
@@ -369,7 +371,6 @@
                 <i data-feather="truck"></i>
                 <span>היום</span>
             </button>
-            <!-- [NEW v1.4] Changed to Share -->
             <button class="nav-item" id="nav-share" onclick="app.navigate('share')">
                 <i data-feather="share-2"></i>
                 <span>שיתוף</span>
@@ -425,7 +426,7 @@
     
     <!-- 
       ==========================================================
-      ===               תחילת סקריפט ראשי (v1.5)              ===
+      ===               תחילת סקריפט ראשי (v1.6)              ===
       ==========================================================
     -->
     <script type="module">
@@ -437,10 +438,13 @@
 
         // --- Configs ---
         const ORDERS_COLLECTION = 'orders_v2';
-        const DRIVERS_COLLECTION = 'drivers';
+        // [v1.6] Removed DRIVERS_COLLECTION constant, as we now use a static list for assignment.
         const WHATSAPP_PASSWORD = '1125';
         const VIEWER_APP_LINK = 'https://sidor94-5gm.pages.dev/sidor/index2';
         
+        // [v1.6] Static driver list for assignment modal
+        const STATIC_DRIVERS = ["חכמת", "עלי", "מוביל חיצוני", "יואב"];
+
         const fallbackConfig = {
           apiKey: "AIzaSyDq0oVwS6zbEfsgrYBRkeBq80dDUKMedzo", 
           authDomain: "saban94-78949.firebaseapp.com", 
@@ -454,13 +458,13 @@
         let allTodayOrders = [];
         let allShareOrders = []; // For the report builder
         let allHistoryOrders = [];
-        let allDrivers = []; // To populate driver dropdowns
+        // [v1.6] allDrivers is no longer needed for the assignment modal
         let detailMap;
         let orderMarker, driverMarker;
         let driverLocationUnsub;
         
         // Listeners
-        let todayUnsub, historyUnsub, driversUnsub;
+        let todayUnsub, historyUnsub; // [v1.6] Removed driversUnsub
 
         // --- Main App Object ---
         window.app = {
@@ -478,7 +482,8 @@
                             currentUserId = user.uid;
                             console.log("User Signed In:", currentUserId);
                             app.loadProfile(); // Load saved profile
-                            app.loadDrivers(); // [NEW] Load drivers for modals
+                            // [v1.6] We no longer need to load all drivers on init
+                            // app.loadDrivers(); 
                             app.navigate('dashboard'); // Start on dashboard
                         } else {
                             await app.signIn();
@@ -525,9 +530,11 @@
                 if (viewId === 'dashboard') {
                     app.listenForToday();
                 } else if (viewId === 'share') {
+                    // Set date picker to tomorrow by default
                     const tomorrow = new Date();
                     tomorrow.setDate(tomorrow.getDate() + 1);
                     document.getElementById('share-date-picker').value = tomorrow.toISOString().split('T')[0];
+                    // Auto-load orders for tomorrow
                     app.loadOrdersForShare();
                 } else if (viewId === 'history') {
                     app.listenForHistory();
@@ -536,21 +543,12 @@
             
             // --- Data Fetching & Rendering ---
             
-            loadDrivers: () => {
-                if (driversUnsub) driversUnsub();
-                
-                const q = query(collection(db, DRIVERS_COLLECTION), orderBy('name'));
-                driversUnsub = onSnapshot(q, (snapshot) => {
-                    allDrivers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    // [מלשינון]
-                    console.log(`[מלשינון DRIVERS] נטענו ${allDrivers.length} נהגים.`);
-                }, (err) => {
-                    // [מלשינון]
-                    console.error("[מלשינון DRIVERS] כשלון קריטי! Firebase חסם את הגישה.", err.message);
-                });
-            },
+            // [v1.6] loadDrivers() is no longer called on init.
             
             listenForToday: () => {
+                const listEl = document.getElementById('dashboard-order-list');
+                listEl.innerHTML = `<div class="spinner-container"><div class="spinner"></div></div>`;
+                
                 if (todayUnsub) todayUnsub();
                 
                 const today = new Date();
@@ -563,25 +561,18 @@
                 );
                 
                 todayUnsub = onSnapshot(qToday, (snapshot) => {
-                    // [מלשינון]
-                    console.log(`[מלשינון TODAY] התקבלו ${snapshot.docs.length} הזמנות מהשרת.`);
                     allTodayOrders = snapshot.docs
                         .map(doc => ({ id: doc.id, ...doc.data() }))
                         .filter(order => !['הושלם', 'בוטל', 'סופק'].includes(order.status)); 
-                    
-                    // [מלשינון]
+                        
+                    console.log(`[מלשינון TODAY] התקבלו ${snapshot.docs.length} הזמנות מהשרת.`);
                     console.log(`[מלשינון TODAY] מציג ${allTodayOrders.length} הזמנות לאחר סינון סטטוס.`);
                         
                     app.filterOrders('all'); // Render with 'all' filter
                     document.getElementById('loader').style.display = 'none';
                 }, (err) => {
-                    // [מלשינון]
-                    console.error("[מלשינון TODAY] כשלון קריטי! Firebase חסם את הגישה.", err.message);
-                    document.getElementById('dashboard-order-list').innerHTML = `<div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
-                        <strong class="font-bold">שגיאת הרשאות!</strong>
-                        <span class="block sm:inline">האפליקציה חסומה. אנא פנה למנהל המערכת לתיקון הרשאות Firebase.</span>
-                    </div>`;
-                    document.getElementById('loader').style.display = 'none';
+                    console.error("Error fetching today's orders:", err);
+                    listEl.innerHTML = `<p class="text-center text-red-500 p-4">שגיאה בטעינת הזמנות להיום: ${err.message}</p>`;
                 });
             },
             
@@ -594,6 +585,7 @@
                     listEl.innerHTML = `<p class="text-center text-red-500 pt-8">אנא בחר תאריך.</p>`;
                     return;
                 }
+                console.log(`[מלשינון SHARE] טוען הזמנות לתאריך: ${selectedDate}`);
 
                 try {
                     const q = query(
@@ -604,14 +596,15 @@
                     
                     const snapshot = await getDocs(q);
                     allShareOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    // [מלשינון]
-                    console.log(`[מלשינון SHARE] התקבלו ${allShareOrders.length} הזמנות לדיווח.`);
+                    
+                    console.log(`[מלשינון SHARE] התקבלו ${allShareOrders.length} הזמנות.`);
                     
                     document.getElementById('share-total-count').innerText = `(${allShareOrders.length})`;
                     
                     if (allShareOrders.length === 0) {
                         listEl.innerHTML = `<p class="text-center text-gray-500 pt-8">לא נמצאו הזמנות לתאריך זה.</p>`;
                     } else {
+                        // Render simple cards (no actions)
                         listEl.innerHTML = allShareOrders
                             .sort((a, b) => (a.orderTime || '09:00').localeCompare(b.orderTime || '09:00'))
                             .map(order => {
@@ -631,16 +624,15 @@
                             }).join('');
                     }
                 } catch (err) {
-                    // [מלשינון]
-                    console.error("[מלשינון SHARE] כשלון קריטי! Firebase חסם את הגישה.", err.message);
-                    listEl.innerHTML = `<div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
-                        <strong class="font-bold">שגיאת הרשאות!</strong>
-                        <span class="block sm:inline">לא ניתן לטעון הזמנות. אנא פנה למנהל המערכת.</span>
-                    </div>`;
+                    console.error("Error fetching orders for share:", err);
+                    listEl.innerHTML = `<p class="text-center text-red-500 p-4">שגיאה בטעינת הזמנות: ${err.message}</p>`;
                 }
             },
             
             listenForHistory: () => {
+                const listEl = document.getElementById('history-order-list');
+                listEl.innerHTML = `<div class="spinner-container"><div class="spinner"></div></div>`;
+                
                 if (historyUnsub) historyUnsub();
                 
                 const qHistory = query(
@@ -651,17 +643,12 @@
                 );
                 
                 historyUnsub = onSnapshot(qHistory, (snapshot) => {
-                    // [מלשינון]
-                    console.log(`[מלשינון HISTORY] התקבלו ${snapshot.docs.length} הזמנות היסטוריה.`);
                     allHistoryOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    console.log(`[מלשינון HISTORY] התקבלו ${allHistoryOrders.length} הזמנות.`);
                     app.renderOrderList(allHistoryOrders, 'history-order-list');
                 }, (err) => {
-                    // [מלשינון]
-                    console.error("[מלשינון HISTORY] כשלון קריטי! Firebase חסם את הגישה.", err.message);
-                    document.getElementById('history-order-list').innerHTML = `<div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
-                        <strong class="font-bold">שגיאת הרשאות!</strong>
-                        <span class="block sm:inline">לא ניתן לטעון היסטוריה. אנא פנה למנהל המערכת.</span>
-                    </div>`;
+                    console.error("Error fetching history orders:", err);
+                    listEl.innerHTML = `<p class="text-center text-red-500 p-4">שגיאה בטעינת היסטוריה: ${err.message}</p>`;
                 });
             },
 
@@ -691,7 +678,9 @@
                     else if (listElementId.includes('history')) container.innerHTML = `<p class="text-center text-gray-500 pt-8">לא נמצאה היסטוריה.</p>`;
                     else container.innerHTML = `<p class="text-center text-gray-500 pt-8">לא נמצאו הזמנות.</p>`;
                 } else {
-                    container.innerHTML = orders.map(order => app.renderOrderCard(order)).join('');
+                    container.innerHTML = orders
+                        .sort((a, b) => (a.orderTime || '09:00').localeCompare(b.orderTime || '09:00')) // [v1.4] Sort by time
+                        .map(order => app.renderOrderCard(order)).join('');
                     feather.replace({ width: '16px', height: '16px' });
                 }
             },
@@ -866,7 +855,7 @@
                 alert('פונקציית סיסמה בבנייה.');
             },
             
-            // --- [NEW v1.4] WhatsApp Share Logic ---
+            // --- [v1.6] WhatsApp Share Logic ---
             
             initiateShare: () => {
                 if (allShareOrders.length === 0) {
@@ -885,16 +874,12 @@
                 document.getElementById('driver-assignment-modal').classList.add('open');
             },
             
+            // [v1.6] MODIFIED: Uses STATIC_DRIVERS list
             renderAssignmentList: () => {
                 const container = document.getElementById('assignment-list-container');
-                if (allDrivers.length === 0) {
-                    // [מלשינון]
-                    console.warn("[מלשינון ASSIGN] לא ניתן לפתוח שיוך כי רשימת הנהגים ריקה.");
-                    container.innerHTML = `<p class="text-center text-red-500 p-4">שגיאה: לא נטענו נהגים. האם ההרשאות לקריאת 'drivers' תקינות?</p>`;
-                    return;
-                }
                 
-                const driverOptions = allDrivers.map(d => `<option value="${d.name}">${d.name}</option>`).join('');
+                // Build options from the static list
+                const driverOptions = STATIC_DRIVERS.map(d => `<option value="${d}">${d}</option>`).join('');
                 
                 container.innerHTML = allShareOrders
                     .sort((a, b) => (a.orderTime || '09:00').localeCompare(b.orderTime || '09:00'))
@@ -933,7 +918,7 @@
                     }
                 });
                 
-                // 2. Sort by time (already sorted, but just in case)
+                // 2. Sort by time
                 allShareOrders.sort((a, b) => (a.orderTime || '09:00').localeCompare(b.orderTime || '09:00'));
 
                 // 3. Group by type
