@@ -971,7 +971,12 @@
                 await this._logToFirestore("error", error.message || "Unknown error", category, { ...context, stack: error.stack });
             },
             async _logToFirestore(level, message, category, context) {
-                if (!db || !currentUserId) return; 
+                // [FIX v36.3] Disable client-side logging to Firestore to prevent permission errors.
+                // The console.log/warn/error calls in info/warn/error functions will still work.
+                return;
+
+                // --- Disabled Code ---
+                /* if (!db || !currentUserId) return; 
                 try {
                     await addDoc(collection(db, "system_logs_v3"), {
                         timestamp: serverTimestamp(),
@@ -984,6 +989,7 @@
                 } catch (e) {
                     console.error("Failed to write log to Firestore:", e);
                 }
+                */
             }
         };
         window.SmartLog = SmartLog; 
