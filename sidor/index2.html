@@ -3,17 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Sidor Mobile v1.6</title>
+    <title>Sidor Mobile v1.7</title>
     <!-- 
-      Sidor Mobile v1.6 - Static Driver List
+      Sidor Mobile v1.7 - UI Error Snitch
       
       Changelog:
-      - [NEW v1.6] Modified `renderAssignmentList()`.
-        - Removed dynamic driver fetching from Firestore for this modal.
-        - Added a hardcoded list of drivers ("חכמת", "עלי", "מוביל חיצוני", "יואב")
-          as requested, making the assignment list static and controlled.
-      - [v1.4] WhatsApp Report Generator
-      - [v1.3] Gateway Buttons & History
+      - [NEW v1.7] Added UI "Snitch" (מלשינון).
+        - If a Firebase permission error occurs, the app will now display
+          a clear error message ON THE SCREEN (inside the list) instead 
+          of just showing a spinner or an empty list.
+        - This directly addresses the user's issue where the screen is blank
+          by pointing to the *actual* cause (Permissions).
     -->
     
     <!-- PWA & Mobile Specific Tags -->
@@ -42,6 +42,8 @@
             --secondary: #10b981; /* green-500 for WA */
             --bg-app: #f1f5f9;
             --surface: #ffffff;
+            --danger-bg: #fee2e2;
+            --danger-text: #b91c1c;
         }
         html, body {
             overscroll-behavior: none;
@@ -236,6 +238,24 @@
         }
         @keyframes spin { to { transform: rotate(360deg); } }
         
+        /* [NEW v1.7] UI Error Message */
+        .error-snitch {
+            background-color: var(--danger-bg);
+            color: var(--danger-text);
+            border: 1px solid var(--danger-text);
+            padding: 1rem;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .error-snitch h3 {
+            font-weight: 700;
+            font-size: 1.1rem;
+            margin-bottom: 0.5rem;
+        }
+        .error-snitch p {
+            font-size: 0.9rem;
+        }
+        
         /* [NEW] WhatsApp FAB */
         .fab-whatsapp {
             position: absolute;
@@ -402,7 +422,7 @@
         </div>
     </div>
     
-    <!-- [NEW v1.4] Driver Assignment Modal (Full Screen) -->
+    <!-- Driver Assignment Modal (Full Screen) -->
     <div id="driver-assignment-modal" class="modal-fullscreen">
         <header class="app-header">
             <h1 id="assign-header-title" class="font-bold text-lg">שייך נהגים לסידור</h1>
@@ -426,7 +446,7 @@
     
     <!-- 
       ==========================================================
-      ===               תחילת סקריפט ראשי (v1.6)              ===
+      ===               תחילת סקריפט ראשי (v1.7)              ===
       ==========================================================
     -->
     <script type="module">
@@ -438,11 +458,8 @@
 
         // --- Configs ---
         const ORDERS_COLLECTION = 'orders_v2';
-        // [v1.6] Removed DRIVERS_COLLECTION constant, as we now use a static list for assignment.
         const WHATSAPP_PASSWORD = '1125';
         const VIEWER_APP_LINK = 'https://sidor94-5gm.pages.dev/sidor/index2';
-        
-        // [v1.6] Static driver list for assignment modal
         const STATIC_DRIVERS = ["חכמת", "עלי", "מוביל חיצוני", "יואב"];
 
         const fallbackConfig = {
@@ -456,15 +473,37 @@
         let db, auth;
         let currentUserId = null;
         let allTodayOrders = [];
-        let allShareOrders = []; // For the report builder
+        let allShareOrders = [];
         let allHistoryOrders = [];
-        // [v1.6] allDrivers is no longer needed for the assignment modal
         let detailMap;
         let orderMarker, driverMarker;
         let driverLocationUnsub;
-        
-        // Listeners
-        let todayUnsub, historyUnsub; // [v1.6] Removed driversUnsub
+        let todayUnsub, historyUnsub;
+
+        // --- [NEW v1.7] Error Display Function ---
+        const renderErrorSnitch = (elementId, error) => {
+            const container = document.getElementById(elementId);
+            if (!container) return;
+            
+            let title = "שגיאה בטעינת נתונים";
+            let message = "לא ניתן היה לטעון את ההזמנות. נסה לרענן את העמוד.";
+            
+            if (error.code === 'permission-denied' || error.message.includes('permissions')) {
+                title = "שגיאת הרשאות 🛑";
+                message = "נראה שלמשתמש שלך אין הרשאה לקרוא את הנתונים. אנא פנה למנהל המערכת ובקש ממנו לעדכן את חוקי האבטחה (Security Rules) ב-Firebase.";
+            } else if (error.code === 'failed-precondition' || error.message.includes('index')) {
+                title = "שגיאת אינדקס 🧭";
+                message = "הבקשה לשרת נכשלה מכיוון שהיא דורשת אינדקס שלא הוגדר. אנא פנה למנהל המערכת.";
+            }
+            
+            container.innerHTML = `
+                <div class="error-snitch">
+                    <h3>${title}</h3>
+                    <p>${message}</p>
+                    <code class="block text-xs text-left dir-ltr p-2 bg-red-100 rounded mt-2">${error.message}</code>
+                </div>
+            `;
+        };
 
         // --- Main App Object ---
         window.app = {
@@ -481,10 +520,8 @@
                         if (user) {
                             currentUserId = user.uid;
                             console.log("User Signed In:", currentUserId);
-                            app.loadProfile(); // Load saved profile
-                            // [v1.6] We no longer need to load all drivers on init
-                            // app.loadDrivers(); 
-                            app.navigate('dashboard'); // Start on dashboard
+                            app.loadProfile(); 
+                            app.navigate('dashboard'); 
                         } else {
                             await app.signIn();
                         }
@@ -530,11 +567,9 @@
                 if (viewId === 'dashboard') {
                     app.listenForToday();
                 } else if (viewId === 'share') {
-                    // Set date picker to tomorrow by default
                     const tomorrow = new Date();
                     tomorrow.setDate(tomorrow.getDate() + 1);
                     document.getElementById('share-date-picker').value = tomorrow.toISOString().split('T')[0];
-                    // Auto-load orders for tomorrow
                     app.loadOrdersForShare();
                 } else if (viewId === 'history') {
                     app.listenForHistory();
@@ -542,8 +577,6 @@
             },
             
             // --- Data Fetching & Rendering ---
-            
-            // [v1.6] loadDrivers() is no longer called on init.
             
             listenForToday: () => {
                 const listEl = document.getElementById('dashboard-order-list');
@@ -572,7 +605,8 @@
                     document.getElementById('loader').style.display = 'none';
                 }, (err) => {
                     console.error("Error fetching today's orders:", err);
-                    listEl.innerHTML = `<p class="text-center text-red-500 p-4">שגיאה בטעינת הזמנות להיום: ${err.message}</p>`;
+                    // [NEW v1.7] Show error in UI
+                    renderErrorSnitch('dashboard-order-list', err);
                 });
             },
             
@@ -625,7 +659,8 @@
                     }
                 } catch (err) {
                     console.error("Error fetching orders for share:", err);
-                    listEl.innerHTML = `<p class="text-center text-red-500 p-4">שגיאה בטעינת הזמנות: ${err.message}</p>`;
+                    // [NEW v1.7] Show error in UI
+                    renderErrorSnitch('share-order-list', err);
                 }
             },
             
@@ -648,7 +683,8 @@
                     app.renderOrderList(allHistoryOrders, 'history-order-list');
                 }, (err) => {
                     console.error("Error fetching history orders:", err);
-                    listEl.innerHTML = `<p class="text-center text-red-500 p-4">שגיאה בטעינת היסטוריה: ${err.message}</p>`;
+                    // [NEW v1.7] Show error in UI
+                    renderErrorSnitch('history-order-list', err);
                 });
             },
 
@@ -679,7 +715,7 @@
                     else container.innerHTML = `<p class="text-center text-gray-500 pt-8">לא נמצאו הזמנות.</p>`;
                 } else {
                     container.innerHTML = orders
-                        .sort((a, b) => (a.orderTime || '09:00').localeCompare(b.orderTime || '09:00')) // [v1.4] Sort by time
+                        .sort((a, b) => (a.orderTime || '09:00').localeCompare(b.orderTime || '09:00'))
                         .map(order => app.renderOrderCard(order)).join('');
                     feather.replace({ width: '16px', height: '16px' });
                 }
@@ -855,7 +891,7 @@
                 alert('פונקציית סיסמה בבנייה.');
             },
             
-            // --- [v1.6] WhatsApp Share Logic ---
+            // --- WhatsApp Share Logic ---
             
             initiateShare: () => {
                 if (allShareOrders.length === 0) {
@@ -869,16 +905,13 @@
                     return;
                 }
                 
-                // Password OK, open assignment modal
                 app.renderAssignmentList();
                 document.getElementById('driver-assignment-modal').classList.add('open');
             },
             
-            // [v1.6] MODIFIED: Uses STATIC_DRIVERS list
             renderAssignmentList: () => {
                 const container = document.getElementById('assignment-list-container');
                 
-                // Build options from the static list
                 const driverOptions = STATIC_DRIVERS.map(d => `<option value="${d}">${d}</option>`).join('');
                 
                 container.innerHTML = allShareOrders
@@ -908,7 +941,6 @@
             },
             
             generateWhatsAppReport: () => {
-                // 1. Update orders in memory with assigned drivers
                 document.querySelectorAll('.driver-assign-select').forEach(select => {
                     const orderId = select.dataset.orderId;
                     const driverName = select.value || "טרם שויך";
@@ -918,10 +950,8 @@
                     }
                 });
                 
-                // 2. Sort by time
                 allShareOrders.sort((a, b) => (a.orderTime || '09:00').localeCompare(b.orderTime || '09:00'));
 
-                // 3. Group by type
                 const groups = {
                     'מנוף': [],
                     'משאית': [],
@@ -935,15 +965,13 @@
                     else groups['אחר'].push(order);
                 });
                 
-                // 4. Build Title
                 const selectedDateStr = document.getElementById('share-date-picker').value;
-                const selectedDate = new Date(`${selectedDateStr}T00:00:00`); // Fix for timezone issues
+                const selectedDate = new Date(`${selectedDateStr}T00:00:00`);
                 const title = app.formatShareTitle(selectedDate);
                 
                 let reportText = `*${title}*\n`;
                 reportText += `*סה"כ הזמנות: ${allShareOrders.length}*\n\n`;
 
-                // 5. Build Report Body
                 if (groups['מנוף'].length > 0) {
                     reportText += "*🏗️ הובלות מנוף:*\n";
                     groups['מנוף'].forEach(order => {
@@ -968,12 +996,10 @@
                     reportText += "\n";
                 }
                 
-                // 6. Add Footer
                 reportText += "\n\n";
                 reportText += "👀 *ניתן לצפות בסידור און ליין:*\n";
                 reportText += VIEWER_APP_LINK;
                 
-                // 7. Open WhatsApp
                 const encodedText = encodeURIComponent(reportText);
                 const waUrl = `https://api.whatsapp.com/send?text=${encodedText}`;
                 window.open(waUrl, '_blank');
