@@ -193,6 +193,15 @@
             color: var(--primary-dark);
         }
         
+        /* [SPEC IMPLEMENT] Highlight new customer orders */
+        .order-card.highlight-customer-order {
+            background-color: #fefce8; /* yellow-50 */
+            border-right: 3px solid #facc15; /* yellow-400 */
+        }
+        .order-card.highlight-customer-order:hover {
+            background-color: #fef9c3; /* yellow-100 */
+        }
+
         /* Details Panel */
         #details-panel {
             height: 300px;
@@ -892,6 +901,7 @@
         let locationsUnsubscribe = null;
         let currentUserId = null;
         
+        // [SPEC IMPLEMENTATION] Added new statuses
         const ALLOWED_STATUSES = ["חדש", "חדש (מלקוח)", "בטיפול", "מוכן לטעינה", "שויך", "בדרך", "הושלם", "בוטל"];
         const WAREHOUSE_LOCATIONS = { "החרש": [32.13266, 34.89819], "התלמיד": [32.16303, 34.89492] };
 
@@ -1182,7 +1192,12 @@
             
             filtered.forEach(order => {
                 const card = document.createElement('div');
-                card.className = `order-card ${selectedOrder === order.id ? 'active' : ''}`;
+                
+                // [SPEC IMPLEMENTATION] Highlight new customer orders
+                const isCustomerOrder = order.status === 'חדש (מלקוח)';
+                const highlightClass = isCustomerOrder ? 'highlight-customer-order' : '';
+                
+                card.className = `order-card ${selectedOrder === order.id ? 'active' : ''} ${highlightClass}`;
                 card.onclick = () => {
                     selectedOrder = order.id;
                     selectedDriver = null;
@@ -1198,12 +1213,10 @@
                 const createdTime = order.createdAt?.toDate ? formatTime(order.createdAt.toDate()) : '';
                 const displayTime = order.orderTime ? `| ${order.orderTime}` : '';
                 
-                // [SPEC IMPLEMENTATION] Highlight orders from customer
-                const highlightClass = order.status === 'חדש (מלקוח)' ? 'bg-yellow-50 border-yellow-300' : '';
-                const highlightText = order.status === 'חדש (מלקוח)' ? '<span class="text-xs font-bold text-yellow-800"> (הזמנה מאפליקציה)</span>' : '';
+                const highlightText = isCustomerOrder ? `<span class="text-xs font-bold text-yellow-800"> (הזמנה מאפליקציה)</span>` : '';
 
                 card.innerHTML = `
-                    <div class="flex justify-between items-center mb-1 ${highlightClass} p-1 rounded">
+                    <div class="flex justify-between items-center mb-1 p-1 rounded">
                         <span class="font-bold text-blue-600">${displayId}</span>
                         <span class="text-sm font-semibold">${order.orderDate} ${displayTime}</span>
                     </div>
@@ -1370,7 +1383,9 @@
                 <div id="details-panel-header">
                     <h4 class="truncate">הזמנה: ${displayId}${displayTime}</h4>
                     <div>
-                        <button id="details-copy-link-btn" class="mr-2" onclick="copyCustomerLink('${order.id}')"><i data-feather="link" class="w-4 h-4"></i></button>
+                        <button id="details-copy-link-btn" class="mr-2" onclick="copyCustomerLink('${order.id}')" title="העתק קישור ללקוח">
+                            <i data-feather="link" class="w-4 h-4"></i>
+                        </button>
                         <button id="details-close-btn" onclick="closeDetailsPanel()"><i data-feather="x" class="w-5 h-5"></i></button>
                     </div>
                 </div>
@@ -2097,7 +2112,7 @@ ${orderData.notes || "--- אין תוכן ---"}
                         <td class="px-6 py-4 whitespace-nowrap">${order.status || '-'}</td>
                         <td class="px-6 py-4 whitespace-nowrap">${order.orderDate || (order.createdAt ? new Date(order.createdAt.seconds * 1000).toLocaleDateString('he-IL') : '-')}</td>
                         <td class="px-6 py-4 whitespace-nowrap">
-                            <button class="action-button" onclick="copyCustomerLink('${order.id}')"><i data-feather="link" class="w-4 h-4"></i></button>
+                            <button class="action-button" onclick="copyCustomerLink('${order.id}')" title="העתק קישור ללקוח"><i data-feather="link" class="w-4 h-4"></i></button>
                         </td>
                     </tr>
                 `).join('');
@@ -2204,6 +2219,24 @@ ${orderData.notes || "--- אין תוכן ---"}
         window.closeCustomerEditModal = closeCustomerEditModal; // Expose
         window.closeModal = closeModal; // Expose generic close
         
+        // [FIX v36.2] Expose all functions for HTML onclick events
+        window.showView = showView;
+        window.showHistoryTab = showHistoryTab;
+        window.showPanelTab = showPanelTab;
+        window.filterLists = filterLists;
+        window.openNewOrderForm = openNewOrderForm;
+        window.handleCustomerSearch = handleCustomerSearch;
+        window.submitNewOrder = submitNewOrder;
+        window.closeNewOrderForm = closeNewOrderForm;
+        window.renderCustomerTable = renderCustomerTable;
+        window.renderHistoryTable = renderHistoryTable;
+        window.fetchAndDrawDriverRoute = fetchAndDrawDriverRoute;
+        window.updateOrderStatus = updateOrderStatus;
+        window.showAssignDriverModal = showAssignDriverModal;
+        window.handleSaveCustomer = handleSaveCustomer;
+        window.copyCustomerLink = copyCustomerLink;
+        window.sendGlobalPing = sendGlobalPing;
+
     </script>
 </body>
 </html>
