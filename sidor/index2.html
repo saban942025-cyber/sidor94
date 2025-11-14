@@ -3,17 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Sidor Mobile v1.7</title>
+    <title>Sidor Mobile v1.5</title>
     <!-- 
-      Sidor Mobile v1.7 - UI Error Snitch
+      Sidor Mobile v1.5 - Log Snitch & UI Errors
       
       Changelog:
-      - [NEW v1.7] Added UI "Snitch" (מלשינון).
-        - If a Firebase permission error occurs, the app will now display
-          a clear error message ON THE SCREEN (inside the list) instead 
-          of just showing a spinner or an empty list.
-        - This directly addresses the user's issue where the screen is blank
-          by pointing to the *actual* cause (Permissions).
+      - [NEW] Added "Log Snitches" (console.log) to all data fetching functions
+        to trace the data flow, as requested.
+      - [NEW] Error messages from Firebase (like Permissions) are now
+        rendered directly into the UI lists, not just the console.
     -->
     
     <!-- PWA & Mobile Specific Tags -->
@@ -42,8 +40,6 @@
             --secondary: #10b981; /* green-500 for WA */
             --bg-app: #f1f5f9;
             --surface: #ffffff;
-            --danger-bg: #fee2e2;
-            --danger-text: #b91c1c;
         }
         html, body {
             overscroll-behavior: none;
@@ -238,24 +234,6 @@
         }
         @keyframes spin { to { transform: rotate(360deg); } }
         
-        /* [NEW v1.7] UI Error Message */
-        .error-snitch {
-            background-color: var(--danger-bg);
-            color: var(--danger-text);
-            border: 1px solid var(--danger-text);
-            padding: 1rem;
-            border-radius: 8px;
-            text-align: center;
-        }
-        .error-snitch h3 {
-            font-weight: 700;
-            font-size: 1.1rem;
-            margin-bottom: 0.5rem;
-        }
-        .error-snitch p {
-            font-size: 0.9rem;
-        }
-        
         /* [NEW] WhatsApp FAB */
         .fab-whatsapp {
             position: absolute;
@@ -391,6 +369,7 @@
                 <i data-feather="truck"></i>
                 <span>היום</span>
             </button>
+            <!-- [NEW v1.4] Changed to Share -->
             <button class="nav-item" id="nav-share" onclick="app.navigate('share')">
                 <i data-feather="share-2"></i>
                 <span>שיתוף</span>
@@ -422,7 +401,7 @@
         </div>
     </div>
     
-    <!-- Driver Assignment Modal (Full Screen) -->
+    <!-- [NEW v1.4] Driver Assignment Modal (Full Screen) -->
     <div id="driver-assignment-modal" class="modal-fullscreen">
         <header class="app-header">
             <h1 id="assign-header-title" class="font-bold text-lg">שייך נהגים לסידור</h1>
@@ -446,7 +425,7 @@
     
     <!-- 
       ==========================================================
-      ===               תחילת סקריפט ראשי (v1.7)              ===
+      ===               תחילת סקריפט ראשי (v1.5)              ===
       ==========================================================
     -->
     <script type="module">
@@ -458,10 +437,10 @@
 
         // --- Configs ---
         const ORDERS_COLLECTION = 'orders_v2';
+        const DRIVERS_COLLECTION = 'drivers';
         const WHATSAPP_PASSWORD = '1125';
         const VIEWER_APP_LINK = 'https://sidor94-5gm.pages.dev/sidor/index2';
-        const STATIC_DRIVERS = ["חכמת", "עלי", "מוביל חיצוני", "יואב"];
-
+        
         const fallbackConfig = {
           apiKey: "AIzaSyDq0oVwS6zbEfsgrYBRkeBq80dDUKMedzo", 
           authDomain: "saban94-78949.firebaseapp.com", 
@@ -473,37 +452,15 @@
         let db, auth;
         let currentUserId = null;
         let allTodayOrders = [];
-        let allShareOrders = [];
+        let allShareOrders = []; // For the report builder
         let allHistoryOrders = [];
+        let allDrivers = []; // To populate driver dropdowns
         let detailMap;
         let orderMarker, driverMarker;
         let driverLocationUnsub;
-        let todayUnsub, historyUnsub;
-
-        // --- [NEW v1.7] Error Display Function ---
-        const renderErrorSnitch = (elementId, error) => {
-            const container = document.getElementById(elementId);
-            if (!container) return;
-            
-            let title = "שגיאה בטעינת נתונים";
-            let message = "לא ניתן היה לטעון את ההזמנות. נסה לרענן את העמוד.";
-            
-            if (error.code === 'permission-denied' || error.message.includes('permissions')) {
-                title = "שגיאת הרשאות 🛑";
-                message = "נראה שלמשתמש שלך אין הרשאה לקרוא את הנתונים. אנא פנה למנהל המערכת ובקש ממנו לעדכן את חוקי האבטחה (Security Rules) ב-Firebase.";
-            } else if (error.code === 'failed-precondition' || error.message.includes('index')) {
-                title = "שגיאת אינדקס 🧭";
-                message = "הבקשה לשרת נכשלה מכיוון שהיא דורשת אינדקס שלא הוגדר. אנא פנה למנהל המערכת.";
-            }
-            
-            container.innerHTML = `
-                <div class="error-snitch">
-                    <h3>${title}</h3>
-                    <p>${message}</p>
-                    <code class="block text-xs text-left dir-ltr p-2 bg-red-100 rounded mt-2">${error.message}</code>
-                </div>
-            `;
-        };
+        
+        // Listeners
+        let todayUnsub, historyUnsub, driversUnsub;
 
         // --- Main App Object ---
         window.app = {
@@ -520,8 +477,9 @@
                         if (user) {
                             currentUserId = user.uid;
                             console.log("User Signed In:", currentUserId);
-                            app.loadProfile(); 
-                            app.navigate('dashboard'); 
+                            app.loadProfile(); // Load saved profile
+                            app.loadDrivers(); // [NEW] Load drivers for modals
+                            app.navigate('dashboard'); // Start on dashboard
                         } else {
                             await app.signIn();
                         }
@@ -578,10 +536,21 @@
             
             // --- Data Fetching & Rendering ---
             
-            listenForToday: () => {
-                const listEl = document.getElementById('dashboard-order-list');
-                listEl.innerHTML = `<div class="spinner-container"><div class="spinner"></div></div>`;
+            loadDrivers: () => {
+                if (driversUnsub) driversUnsub();
                 
+                const q = query(collection(db, DRIVERS_COLLECTION), orderBy('name'));
+                driversUnsub = onSnapshot(q, (snapshot) => {
+                    allDrivers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    // [מלשינון]
+                    console.log(`[מלשינון DRIVERS] נטענו ${allDrivers.length} נהגים.`);
+                }, (err) => {
+                    // [מלשינון]
+                    console.error("[מלשינון DRIVERS] כשלון קריטי! Firebase חסם את הגישה.", err.message);
+                });
+            },
+            
+            listenForToday: () => {
                 if (todayUnsub) todayUnsub();
                 
                 const today = new Date();
@@ -594,19 +563,25 @@
                 );
                 
                 todayUnsub = onSnapshot(qToday, (snapshot) => {
+                    // [מלשינון]
+                    console.log(`[מלשינון TODAY] התקבלו ${snapshot.docs.length} הזמנות מהשרת.`);
                     allTodayOrders = snapshot.docs
                         .map(doc => ({ id: doc.id, ...doc.data() }))
                         .filter(order => !['הושלם', 'בוטל', 'סופק'].includes(order.status)); 
-                        
-                    console.log(`[מלשינון TODAY] התקבלו ${snapshot.docs.length} הזמנות מהשרת.`);
+                    
+                    // [מלשינון]
                     console.log(`[מלשינון TODAY] מציג ${allTodayOrders.length} הזמנות לאחר סינון סטטוס.`);
                         
                     app.filterOrders('all'); // Render with 'all' filter
                     document.getElementById('loader').style.display = 'none';
                 }, (err) => {
-                    console.error("Error fetching today's orders:", err);
-                    // [NEW v1.7] Show error in UI
-                    renderErrorSnitch('dashboard-order-list', err);
+                    // [מלשינון]
+                    console.error("[מלשינון TODAY] כשלון קריטי! Firebase חסם את הגישה.", err.message);
+                    document.getElementById('dashboard-order-list').innerHTML = `<div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+                        <strong class="font-bold">שגיאת הרשאות!</strong>
+                        <span class="block sm:inline">האפליקציה חסומה. אנא פנה למנהל המערכת לתיקון הרשאות Firebase.</span>
+                    </div>`;
+                    document.getElementById('loader').style.display = 'none';
                 });
             },
             
@@ -619,7 +594,6 @@
                     listEl.innerHTML = `<p class="text-center text-red-500 pt-8">אנא בחר תאריך.</p>`;
                     return;
                 }
-                console.log(`[מלשינון SHARE] טוען הזמנות לתאריך: ${selectedDate}`);
 
                 try {
                     const q = query(
@@ -630,15 +604,14 @@
                     
                     const snapshot = await getDocs(q);
                     allShareOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    
-                    console.log(`[מלשינון SHARE] התקבלו ${allShareOrders.length} הזמנות.`);
+                    // [מלשינון]
+                    console.log(`[מלשינון SHARE] התקבלו ${allShareOrders.length} הזמנות לדיווח.`);
                     
                     document.getElementById('share-total-count').innerText = `(${allShareOrders.length})`;
                     
                     if (allShareOrders.length === 0) {
                         listEl.innerHTML = `<p class="text-center text-gray-500 pt-8">לא נמצאו הזמנות לתאריך זה.</p>`;
                     } else {
-                        // Render simple cards (no actions)
                         listEl.innerHTML = allShareOrders
                             .sort((a, b) => (a.orderTime || '09:00').localeCompare(b.orderTime || '09:00'))
                             .map(order => {
@@ -658,16 +631,16 @@
                             }).join('');
                     }
                 } catch (err) {
-                    console.error("Error fetching orders for share:", err);
-                    // [NEW v1.7] Show error in UI
-                    renderErrorSnitch('share-order-list', err);
+                    // [מלשינון]
+                    console.error("[מלשינון SHARE] כשלון קריטי! Firebase חסם את הגישה.", err.message);
+                    listEl.innerHTML = `<div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+                        <strong class="font-bold">שגיאת הרשאות!</strong>
+                        <span class="block sm:inline">לא ניתן לטעון הזמנות. אנא פנה למנהל המערכת.</span>
+                    </div>`;
                 }
             },
             
             listenForHistory: () => {
-                const listEl = document.getElementById('history-order-list');
-                listEl.innerHTML = `<div class="spinner-container"><div class="spinner"></div></div>`;
-                
                 if (historyUnsub) historyUnsub();
                 
                 const qHistory = query(
@@ -678,13 +651,17 @@
                 );
                 
                 historyUnsub = onSnapshot(qHistory, (snapshot) => {
+                    // [מלשינון]
+                    console.log(`[מלשינון HISTORY] התקבלו ${snapshot.docs.length} הזמנות היסטוריה.`);
                     allHistoryOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    console.log(`[מלשינון HISTORY] התקבלו ${allHistoryOrders.length} הזמנות.`);
                     app.renderOrderList(allHistoryOrders, 'history-order-list');
                 }, (err) => {
-                    console.error("Error fetching history orders:", err);
-                    // [NEW v1.7] Show error in UI
-                    renderErrorSnitch('history-order-list', err);
+                    // [מלשינון]
+                    console.error("[מלשינון HISTORY] כשלון קריטי! Firebase חסם את הגישה.", err.message);
+                    document.getElementById('history-order-list').innerHTML = `<div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+                        <strong class="font-bold">שגיאת הרשאות!</strong>
+                        <span class="block sm:inline">לא ניתן לטעון היסטוריה. אנא פנה למנהל המערכת.</span>
+                    </div>`;
                 });
             },
 
@@ -714,9 +691,7 @@
                     else if (listElementId.includes('history')) container.innerHTML = `<p class="text-center text-gray-500 pt-8">לא נמצאה היסטוריה.</p>`;
                     else container.innerHTML = `<p class="text-center text-gray-500 pt-8">לא נמצאו הזמנות.</p>`;
                 } else {
-                    container.innerHTML = orders
-                        .sort((a, b) => (a.orderTime || '09:00').localeCompare(b.orderTime || '09:00'))
-                        .map(order => app.renderOrderCard(order)).join('');
+                    container.innerHTML = orders.map(order => app.renderOrderCard(order)).join('');
                     feather.replace({ width: '16px', height: '16px' });
                 }
             },
@@ -891,7 +866,7 @@
                 alert('פונקציית סיסמה בבנייה.');
             },
             
-            // --- WhatsApp Share Logic ---
+            // --- [NEW v1.4] WhatsApp Share Logic ---
             
             initiateShare: () => {
                 if (allShareOrders.length === 0) {
@@ -905,14 +880,21 @@
                     return;
                 }
                 
+                // Password OK, open assignment modal
                 app.renderAssignmentList();
                 document.getElementById('driver-assignment-modal').classList.add('open');
             },
             
             renderAssignmentList: () => {
                 const container = document.getElementById('assignment-list-container');
+                if (allDrivers.length === 0) {
+                    // [מלשינון]
+                    console.warn("[מלשינון ASSIGN] לא ניתן לפתוח שיוך כי רשימת הנהגים ריקה.");
+                    container.innerHTML = `<p class="text-center text-red-500 p-4">שגיאה: לא נטענו נהגים. האם ההרשאות לקריאת 'drivers' תקינות?</p>`;
+                    return;
+                }
                 
-                const driverOptions = STATIC_DRIVERS.map(d => `<option value="${d}">${d}</option>`).join('');
+                const driverOptions = allDrivers.map(d => `<option value="${d.name}">${d.name}</option>`).join('');
                 
                 container.innerHTML = allShareOrders
                     .sort((a, b) => (a.orderTime || '09:00').localeCompare(b.orderTime || '09:00'))
@@ -941,6 +923,7 @@
             },
             
             generateWhatsAppReport: () => {
+                // 1. Update orders in memory with assigned drivers
                 document.querySelectorAll('.driver-assign-select').forEach(select => {
                     const orderId = select.dataset.orderId;
                     const driverName = select.value || "טרם שויך";
@@ -950,8 +933,10 @@
                     }
                 });
                 
+                // 2. Sort by time (already sorted, but just in case)
                 allShareOrders.sort((a, b) => (a.orderTime || '09:00').localeCompare(b.orderTime || '09:00'));
 
+                // 3. Group by type
                 const groups = {
                     'מנוף': [],
                     'משאית': [],
@@ -965,13 +950,15 @@
                     else groups['אחר'].push(order);
                 });
                 
+                // 4. Build Title
                 const selectedDateStr = document.getElementById('share-date-picker').value;
-                const selectedDate = new Date(`${selectedDateStr}T00:00:00`);
+                const selectedDate = new Date(`${selectedDateStr}T00:00:00`); // Fix for timezone issues
                 const title = app.formatShareTitle(selectedDate);
                 
                 let reportText = `*${title}*\n`;
                 reportText += `*סה"כ הזמנות: ${allShareOrders.length}*\n\n`;
 
+                // 5. Build Report Body
                 if (groups['מנוף'].length > 0) {
                     reportText += "*🏗️ הובלות מנוף:*\n";
                     groups['מנוף'].forEach(order => {
@@ -996,10 +983,12 @@
                     reportText += "\n";
                 }
                 
+                // 6. Add Footer
                 reportText += "\n\n";
                 reportText += "👀 *ניתן לצפות בסידור און ליין:*\n";
                 reportText += VIEWER_APP_LINK;
                 
+                // 7. Open WhatsApp
                 const encodedText = encodeURIComponent(reportText);
                 const waUrl = `https://api.whatsapp.com/send?text=${encodedText}`;
                 window.open(waUrl, '_blank');
