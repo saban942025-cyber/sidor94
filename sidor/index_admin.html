@@ -3,24 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DeliveryMaster v39.0 (Dynamic Dashboard)</title>
+    <title>DeliveryMaster v39.1 (Timestamp Fix)</title>
     <!-- 
-      DeliveryMaster Admin App v39.0
+      DeliveryMaster Admin App v39.1
       
       Changelog:
-      - [CRITICAL FIX v39.0]
-        - Fixed "ReferenceError: showView is not defined". 
-        - Exposed ALL necessary functions to 'window' at the end of the script.
-      - [UI/UX v39.0] Dynamic Card Dashboard
-        - Changed '.panel-list' from 'flex-col' to 'display: grid' with
-          'grid-template-columns: repeat(auto-fill, minmax(300px, 1fr))'.
-        - This creates the 2-column dynamic grid layout the user requested.
-        - Increased font sizes and clarity on cards.
-      - [FEATURE v39.0] Added Order Time
-        - Added 'orderTime' or 'createdTime' to the order card header.
-      - [FIX v39.0] Map Markers
-        - Broadened 'renderMapMarkers' filter to show ALL active orders
-          (not just 'חדש') that have coordinates.
+      - [CRITICAL FIX v39.1]
+        - Fixed "FirebaseError: serverTimestamp() is not currently supported inside arrays"
+        - Replaced serverTimestamp() with Timestamp.now() in:
+          1. `submitNewOrder` (for new customer auditLog)
+          2. `handleSaveCustomer` (for existing customer auditLog)
+      - [UI v39.1]
+        - Added a simple emoji favicon to remove the 404 error.
     -->
     
     <!-- TailwindCSS -->
@@ -37,6 +31,10 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    
+    <!-- [v39.1] Favicon -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🚚</text></svg>">
+
 
     <style>
         :root {
@@ -567,8 +565,6 @@
                             <div class="loader-container"><div class="loader"></div></div>
                         </div>
                     </div>
-                    
-                    <!-- [REMOVED v37] Details Panel removed, replaced by modal -->
                 </aside>
             </main>
             
@@ -749,7 +745,6 @@
             <div class="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
                 <div class_alias="detail-item">
                     <label for="order-edit-status" class="block text-sm font-medium text-gray-700">סטטוס</label>
-                    <!-- [v38.1 FIX] Removed invalid JS literal. Will be populated by JS. -->
                     <select id="order-edit-status" class="w-full p-2 border rounded-md mt-1">
                         <!-- Options populated by JS -->
                     </select>
@@ -968,7 +963,7 @@
 
     <!-- 
       ==========================================================
-      ===               תחילת סקריפט ראשי (v39.0)              ===
+      ===               תחילת סקריפט ראשי (v39.1)              ===
       ==========================================================
     -->
     <script type="module">
@@ -1001,7 +996,7 @@
         let locationsUnsubscribe = null;
         let currentUserId = null;
         
-        const ALLOWED_STATUSES = ["חדש", "חדש (מלקוח)", "בטיפול", "שויך", "בדרך", "הושלם", "בוטל", "סופק"];
+        const ALLOWED_STATUSES = ["חדש", "חדש (מלקוח)", "בטיפול", "שויך", "בדרך", "הושלם", "בוטל", "סופק", "מוכן לטעינה"];
         const WAREHOUSE_LOCATIONS = { "החרש": [32.13266, 34.89819], "התלמיד": [32.16303, 34.89492] };
 
         // --- Firebase Config & Auth ---
@@ -1899,7 +1894,8 @@
                 try {
                     const newCustomerRef = await addDoc(collection(db, "customers"), {
                         ...customerData,
-                        auditLog: [{ action: "Created", timestamp: serverTimestamp() }]
+                        // [v39.1 FIX] Use Timestamp.now() instead of serverTimestamp()
+                        auditLog: [{ action: "Created", timestamp: Timestamp.now() }]
                     });
                     customerId = newCustomerRef.id;
                     customerData.id = customerId;
@@ -2162,7 +2158,8 @@ ${orderData.notes || "--- אין תוכן ---"}
                     
                     if (hasChanges) {
                         const logEntry = {
-                            timestamp: serverTimestamp(),
+                            // [v39.1 FIX] Use Timestamp.now() instead of serverTimestamp()
+                            timestamp: Timestamp.now(),
                             action: "Updated",
                             changes: changes
                         };
@@ -2456,6 +2453,7 @@ ${orderData.notes || "--- אין תוכן ---"}
         window.closeCustomerHistoryModal = closeCustomerHistoryModal;
         window.closeModal = closeModal;
         window.showEditCustomerModal = showEditCustomerModal;
+        window.showDriverDetailsModal = showDriverDetailsModal; // [v39.0] Expose driver modal
 
     </script>
 </body>
