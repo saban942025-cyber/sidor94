@@ -466,6 +466,10 @@
           projectId: "saban94-78949"
         };
         const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : JSON.stringify(fallbackConfig));
+        // [FIX 2.1] Add appId variable for correct collection paths
+        const dirtyAppId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        // [FIX 4.1] Correct fix: Just take the part before the slash.
+        const appId = dirtyAppId.split('/')[0];
 
         // --- Global State ---
         let db, auth;
@@ -558,7 +562,10 @@
             loadDrivers: () => {
                 if (driversUnsub) driversUnsub();
                 
-                const q = query(collection(db, DRIVERS_COLLECTION), orderBy('name'));
+                // [FIX 2.2] Use the full public path for drivers collection
+                const driversPath = collection(db, 'artifacts', appId, 'public', 'data', DRIVERS_COLLECTION);
+                const q = query(driversPath, orderBy('name'));
+
                 driversUnsub = onSnapshot(q, (snapshot) => {
                     allDrivers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     // [מלשינון]
@@ -576,21 +583,28 @@
                 today.setHours(0,0,0,0);
                 const todayStr = today.toISOString().split('T')[0];
 
-                // [MODIFIED] Query now fetches all orders from today onwards
+                // [FIX 2.3] Use the full public path for orders collection
+                const upcomingOrdersPath = collection(db, 'artifacts', appId, 'public', 'data', ORDERS_COLLECTION);
+                // [FIX 1.1] Removed inequality filter on 'status'
                 const qUpcoming = query(
-                    collection(db, ORDERS_COLLECTION),
+                    upcomingOrdersPath,
                     where('orderDate', '>=', todayStr), // Get today AND all future
-                    where('status', 'not-in', ['הושלם', 'בוטל', 'סופק']),
+                    // where('status', 'not-in', ['הושלם', 'בוטל', 'סופק']), // <-- REMOVED due to Firestore limitations
                     orderBy('orderDate', 'asc'), // Sort by date first
                     orderBy('orderTime', 'asc')  // Then by time
                 );
                 
                 upcomingUnsub = onSnapshot(qUpcoming, (snapshot) => { // Renamed from todayUnsub
                     // [מלשינון]
-                    console.log(`[מלשינון UPCOMING] התקבלו ${snapshot.docs.length} הזמנות עתידיות מהשרת.`);
-                    allUpcomingOrders = snapshot.docs // Renamed from allTodayOrders
-                        .map(doc => ({ id: doc.id, ...doc.data() }));
-                        
+                    console.log(`[מלשינון UPCOMING] התקבלו ${snapshot.docs.length} הזמנות עתידיות מהשרת (לפני סינון סטטוס).`);
+                    
+                    // [FIX 1.2] Apply status filter here (client-side)
+                    allUpcomingOrders = snapshot.docs 
+                        .map(doc => ({ id: doc.id, ...doc.data() }))
+                        .filter(order => !['הושלם', 'בוטל', 'סופק'].includes(order.status)); 
+                    
+                    console.log(`[מלשינון UPCOMING] מציג ${allUpcomingOrders.length} הזמנות לאחר סינון סטטוס.`);
+
                     app.renderUpcomingList(); // Call new render function
                     document.getElementById('loader').style.display = 'none';
                 }, (err) => {
@@ -615,10 +629,12 @@
                 }
 
                 try {
+                    // [FIX 2.4] Use the full public path for orders collection
+                    const shareOrdersPath = collection(db, 'artifacts', appId, 'public', 'data', ORDERS_COLLECTION);
                     const q = query(
-                        collection(db, ORDERS_COLLECTION),
+                        shareOrdersPath,
                         where('orderDate', '==', selectedDate),
-                        where('status', 'not-in', ['הושלם', 'בוטל', 'סופק'])
+                        where('status', 'not-in', ['הושלם', 'בוטל', 'סופק']) // This is OK, 'orderDate' is equality
                     );
                     
                     const snapshot = await getDocs(q);
@@ -662,8 +678,10 @@
             listenForHistory: () => {
                 if (historyUnsub) historyUnsub();
                 
+                // [FIX 2.5] Use the full public path for orders collection
+                const historyOrdersPath = collection(db, 'artifacts', appId, 'public', 'data', ORDERS_COLLECTION);
                 const qHistory = query(
-                    collection(db, ORDERS_COLLECTION),
+                    historyOrdersPath,
                     where('status', 'in', ['הושלם', 'בוטל', 'סופק']),
                     orderBy('createdAt', 'desc'),
                     limit(50)
@@ -744,6 +762,21 @@
 
                 container.innerHTML = html;
                 feather.replace({ width: '16px', height: '16px' });
+            },
+            
+            // [NEW] Added this function to render history list
+            renderOrderList: (orders, listElementId) => {
+                const container = document.getElementById(listElementId);
+                if (!container) return;
+                
+                if (orders.length === 0) {
+                    if (listElementId.includes('dashboard')) container.innerHTML = `<p class="text-center text-gray-500 pt-8">לא נמצאו הזמנות להיום.</p>`;
+                    else if (listElementId.includes('history')) container.innerHTML = `<p class="text-center text-gray-500 pt-8">לא נמצאה היסטוריה.</p>`;
+                    else container.innerHTML = `<p class="text-center text-gray-500 pt-8">לא נמצאו הזמנות.</p>`;
+                } else {
+                    container.innerHTML = orders.map(order => app.renderOrderCard(order)).join('');
+                    feather.replace({ width: '16px', height: '16px' });
+                }
             },
             
             renderOrderCard: (order) => {
@@ -842,7 +875,10 @@
                 
                 const driverIcon = L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png', shadowSize: [41, 41] });
 
-                driverLocationUnsub = onSnapshot(doc(db, "driverLocations", driverId), (docSnap) => {
+                // [FIX 2.6] Use the full public path for driverLocations doc
+                const driverLocDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'driverLocations', driverId);
+
+                driverLocationUnsub = onSnapshot(driverLocDocRef, (docSnap) => {
                     if (!detailMap) return;
                     
                     const orderLatLng = (order.latitude && order.longitude) ? [order.latitude, order.longitude] : null;
@@ -925,7 +961,7 @@
                     return;
                 }
                 
-                const password = prompt('כדי לשתף, הזן סיסמה (ברירת מחדל: ):');
+                const password = prompt('כדי לשתף, הזן סיסמה (ברירת מחדל: 1125):');
                 if (password !== WHATSAPP_PASSWORD) {
                     alert('סיסמה שגויה.');
                     return;
