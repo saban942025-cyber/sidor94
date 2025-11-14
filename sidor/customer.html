@@ -293,7 +293,7 @@
                 const orderData = docSnap.data();
                 
                 // Re-render UI
-                const container = document.getElementById('view-single-order');
+                const container = document.getElementById(state.customerId ? 'view-portal-tracker' : 'view-single-order');
                 container.innerHTML = createTrackerUI(orderData);
                 updateStatusTracker(orderData.status);
                 
@@ -303,7 +303,7 @@
                 if (driverId && (orderData.status === 'שויך' || orderData.status === 'בדרך')) {
                     listenToDriverLocation(driverId, orderLatLng, orderData.status);
                 } else {
-                    if (locationListenerUnsubscribe) locationListenerUnsubscribe();
+                    if (locationListenerUnsubscribe) { locationListenerUnsubscribe(); locationListenerUnsubscribe = null; }
                     updateMap(orderLatLng, null);
                 }
                 
@@ -406,15 +406,17 @@
                 }
                 
                 const orderDoc = snapshot.docs[0];
-                listenToSingleOrder(orderDoc.id); // Re-use the single order listener
-                // The listener will render the UI in 'view-single-order', let's move it
-                const singleOrderContainer = document.getElementById('view-single-order');
-                singleOrderContainer.style.display = 'none'; // Hide the original
-                container.innerHTML = createTrackerUI(orderDoc.data()); // Render it here
-                updateStatusTracker(orderDoc.data().status);
+                const orderData = orderDoc.data();
                 
-                const orderLatLng = (orderDoc.data().latitude && orderDoc.data().longitude) ? [orderDoc.data().latitude, orderDoc.data().longitude] : null;
+                // Render the UI in the correct view
+                container.innerHTML = createTrackerUI(orderData);
+                updateStatusTracker(orderData.status);
+                
+                const orderLatLng = (orderData.latitude && orderData.longitude) ? [orderData.latitude, orderData.longitude] : null;
                 if (orderLatLng) initializeMap(orderLatLng);
+
+                // Start listening to this specific order
+                listenToSingleOrder(orderDoc.id); 
             },
             
             renderPortalHistory: async (customerId) => {
@@ -436,7 +438,7 @@
                 
                 container.innerHTML = snapshot.docs.map(doc => {
                     const d = doc.data();
-                    const statusColor = d.status === 'הושלם' ? 'bg-green-100 text-green-800' : 'bg-gray-100';
+                    const statusColor = (d.status === 'הושלם' || d.status === 'סופק') ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800';
                     return `
                     <div class="bg-white p-4 rounded-lg shadow-sm border">
                         <div class="flex justify-between items-center mb-2">
@@ -531,7 +533,7 @@
 
         // --- Helper Functions (Shared) ---
         function createTrackerUI(order) {
-            const displayId = order.orderNumber || order.order_id || `...${order.id.slice(-6)}`;
+            const displayId = order.orderNumber || order.order_id || `...${order.id?.slice(-6)}`;
             document.getElementById('order-id-display').innerText = `הזמנה ${displayId}`;
             setDynamicGreeting(order.customer?.name);
 
@@ -573,7 +575,7 @@
         }
         
         function listenToDriverLocation(driverId, orderLatLng, orderStatus) {
-            if (locationListenerUnsubscribe) locationListenerUnsubscribe();
+            if (locationListenerUnsubscribe) { locationListenerUnsubscribe(); locationListenerUnsubscribe = null; }
             
             locationListenerUnsubscribe = onSnapshot(doc(db, "driverLocations", driverId), (docSnap) => {
                  if (docSnap.exists() && orderStatus === 'בדרך') {
@@ -582,6 +584,9 @@
                  } else {
                      updateMap(orderLatLng, null);
                  }
+            }, (error) => {
+                console.error("Driver location listener error:", error);
+                updateMap(orderLatLng, null); // Stop showing driver on error
             });
         }
         
@@ -605,6 +610,7 @@
         }
 
         function updateStatusTracker(status) {
+            // [SPEC IMPLEMENTATION] Added new statuses
             const steps = { 'חדש': 0, 'חדש (מלקוח)': 0, 'בטיפול': 1, 'שויך': 1, 'מוכן לטעינה': 1, 'בדרך': 2, 'הושלם': 3, 'סופק': 3, 'בוטל': -1 };
             const stepIndex = steps[status] ?? 0;
             if (stepIndex === -1) return;
@@ -622,6 +628,18 @@
             if (stepIndex === 1) document.getElementById('step-assigned')?.classList.add('active');
             if (stepIndex === 2) document.getElementById('step-onway')?.classList.add('active');
             if (stepIndex === 3) document.getElementById('step-completed')?.classList.add('active');
+        }
+        
+        function setDynamicGreeting(customerName) {
+            const greetingEl = document.getElementById('dynamic-greeting');
+            if (!greetingEl) return;
+            const hour = new Date().getHours();
+            let greeting = "ברוך הבא";
+            if (hour < 12) greeting = "בוקר טוב";
+            else if (hour < 18) greeting = "צהריים טובים";
+            else greeting = "ערב טוב";
+            const firstName = (customerName || 'לקוח').split(' ')[0].replace(',', '');
+            greetingEl.innerText = `${greeting}, ${firstName}!`;
         }
 
         // --- Init ---
