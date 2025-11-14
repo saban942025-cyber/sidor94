@@ -505,12 +505,16 @@
                 // Listener for Today's Orders
                 const qToday = query(
                     collection(db, ORDERS_COLLECTION),
-                    where('orderDate', '==', todayStr),
-                    where('status', 'not-in', ['הושלם', 'בוטל', 'סופק'])
+                    where('orderDate', '==', todayStr)
+                    // [FIX v1.2] Removed: where('status', 'not-in', ['הושלם', 'בוטל', 'סופק'])
+                    // This avoids the complex query / index requirement. Filtering is now done client-side.
                 );
                 
                 onSnapshot(qToday, (snapshot) => {
-                    allTodayOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    allTodayOrders = snapshot.docs
+                        .map(doc => ({ id: doc.id, ...doc.data() }))
+                        .filter(order => !['הושלם', 'בוטל', 'סופק'].includes(order.status)); // [FIX v1.2] Filter client-side
+                        
                     app.filterOrders('all'); // Render with 'all' filter
                     document.getElementById('loader').style.display = 'none';
                 }, (err) => console.error("Error fetching today's orders:", err));
@@ -518,12 +522,15 @@
                 // Listener for Tomorrow's Orders
                 const qTomorrow = query(
                     collection(db, ORDERS_COLLECTION),
-                    where('orderDate', '==', tomorrowStr),
-                    where('status', 'not-in', ['הושלם', 'בוטל', 'סופק'])
+                    where('orderDate', '==', tomorrowStr)
+                    // [FIX v1.2] Removed: where('status', 'not-in', ['הושלם', 'בוטל', 'סופק'])
                 );
                 
                 onSnapshot(qTomorrow, (snapshot) => {
-                    allTomorrowOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    allTomorrowOrders = snapshot.docs
+                        .map(doc => ({ id: doc.id, ...doc.data() }))
+                        .filter(order => !['הושלם', 'בוטל', 'סופק'].includes(order.status)); // [FIX v1.2] Filter client-side
+                        
                     app.renderOrderList(allTomorrowOrders, 'tomorrow-order-list');
                 }, (err) => console.error("Error fetching tomorrow's orders:", err));
             },
