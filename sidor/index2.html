@@ -52,6 +52,33 @@
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         
+        /* [NEW] Date Header for Order List */
+        .date-divider {
+            padding: 0.5rem 0.75rem;
+            background-color: #e2e8f0; /* gray-200 */
+            color: #475569; /* gray-600 */
+            font-weight: 700;
+            font-size: 0.9rem;
+            border-radius: 8px;
+            margin-top: 1.5rem;
+            margin-bottom: 0.75rem;
+            border-bottom: 2px solid #cbd5e1; /* gray-300 */
+        }
+        
+        /* [NEW] Highlighted Headers for Today & Tomorrow */
+        .date-divider-today {
+            background-color: var(--primary); /* blue-600 */
+            color: white;
+            border-bottom: 2px solid #1d4ed8; /* blue-800 */
+            box-shadow: 0 4px 6px rgba(37, 99, 235, 0.2);
+        }
+        .date-divider-tomorrow {
+            background-color: var(--secondary); /* green-500 */
+            color: white;
+            border-bottom: 2px solid #059669; /* green-600 */
+            box-shadow: 0 4px 6px rgba(16, 185, 129, 0.2);
+        }
+
         /* App Layout */
         .app-layout {
             display: flex;
@@ -273,15 +300,7 @@
             
             <!-- Page 1: Dashboard (Today's Orders) -->
             <div id="page-dashboard" class="app-page">
-                <div class="filter-tabs">
-                    <button class="filter-tab active" onclick="app.filterOrders('all')">הכל</button>
-                    <button class="filter-tab" onclick="app.filterOrders('מנוף')">
-                        <span class="mr-1">🏗️</span> מנוף
-                    </button>
-                    <button class="filter-tab" onclick="app.filterOrders('משאית')">
-                        <span class="mr-1">🚚</span> משאית
-                    </button>
-                </div>
+                <!-- [REMOVED] Filter tabs are removed in favor of date grouping -->
                 
                 <div id="dashboard-order-list" class="space-y-3">
                     <div class="spinner-container"><div class="spinner"></div></div>
@@ -451,7 +470,7 @@
         // --- Global State ---
         let db, auth;
         let currentUserId = null;
-        let allTodayOrders = [];
+        let allUpcomingOrders = []; // Renamed from allTodayOrders
         let allShareOrders = []; // For the report builder
         let allHistoryOrders = [];
         let allDrivers = []; // To populate driver dropdowns
@@ -460,7 +479,7 @@
         let driverLocationUnsub;
         
         // Listeners
-        let todayUnsub, historyUnsub, driversUnsub;
+        let upcomingUnsub, historyUnsub, driversUnsub; // Renamed from todayUnsub
 
         // --- Main App Object ---
         window.app = {
@@ -523,7 +542,7 @@
                 
                 // Load data based on view
                 if (viewId === 'dashboard') {
-                    app.listenForToday();
+                    app.listenForUpcoming(); // Renamed from listenForToday
                 } else if (viewId === 'share') {
                     const tomorrow = new Date();
                     tomorrow.setDate(tomorrow.getDate() + 1);
@@ -550,33 +569,33 @@
                 });
             },
             
-            listenForToday: () => {
-                if (todayUnsub) todayUnsub();
+            listenForUpcoming: () => { // Renamed from listenForToday
+                if (upcomingUnsub) upcomingUnsub(); // Renamed from todayUnsub
                 
                 const today = new Date();
                 today.setHours(0,0,0,0);
                 const todayStr = today.toISOString().split('T')[0];
 
-                const qToday = query(
+                // [MODIFIED] Query now fetches all orders from today onwards
+                const qUpcoming = query(
                     collection(db, ORDERS_COLLECTION),
-                    where('orderDate', '==', todayStr)
+                    where('orderDate', '>=', todayStr), // Get today AND all future
+                    where('status', 'not-in', ['הושלם', 'בוטל', 'סופק']),
+                    orderBy('orderDate', 'asc'), // Sort by date first
+                    orderBy('orderTime', 'asc')  // Then by time
                 );
                 
-                todayUnsub = onSnapshot(qToday, (snapshot) => {
+                upcomingUnsub = onSnapshot(qUpcoming, (snapshot) => { // Renamed from todayUnsub
                     // [מלשינון]
-                    console.log(`[מלשינון TODAY] התקבלו ${snapshot.docs.length} הזמנות מהשרת.`);
-                    allTodayOrders = snapshot.docs
-                        .map(doc => ({ id: doc.id, ...doc.data() }))
-                        .filter(order => !['הושלם', 'בוטל', 'סופק'].includes(order.status)); 
-                    
-                    // [מלשינון]
-                    console.log(`[מלשינון TODAY] מציג ${allTodayOrders.length} הזמנות לאחר סינון סטטוס.`);
+                    console.log(`[מלשינון UPCOMING] התקבלו ${snapshot.docs.length} הזמנות עתידיות מהשרת.`);
+                    allUpcomingOrders = snapshot.docs // Renamed from allTodayOrders
+                        .map(doc => ({ id: doc.id, ...doc.data() }));
                         
-                    app.filterOrders('all'); // Render with 'all' filter
+                    app.renderUpcomingList(); // Call new render function
                     document.getElementById('loader').style.display = 'none';
                 }, (err) => {
                     // [מלשינון]
-                    console.error("[מלשינון TODAY] כשלון קריטי! Firebase חסם את הגישה.", err.message);
+                    console.error("[מלשינון UPCOMING] כשלון קריטי! Firebase חסם את הגישה.", err.message);
                     document.getElementById('dashboard-order-list').innerHTML = `<div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
                         <strong class="font-bold">שגיאת הרשאות!</strong>
                         <span class="block sm:inline">האפליקציה חסומה. אנא פנה למנהל המערכת לתיקון הרשאות Firebase.</span>
@@ -666,34 +685,65 @@
             },
 
             
-            filterOrders: (type) => {
-                document.querySelectorAll('#page-dashboard .filter-tab').forEach(tab => {
-                    tab.classList.remove('active');
-                });
-                const activeTab = document.querySelector(`#page-dashboard .filter-tab[onclick="app.filterOrders('${type}')"]`);
-                if(activeTab) activeTab.classList.add('active');
-
-                let filteredOrders = allTodayOrders;
-                if (type !== 'all') {
-                    filteredOrders = allTodayOrders.filter(order => 
-                        order.deliveryType && order.deliveryType.includes(type)
-                    );
-                }
-                app.renderOrderList(filteredOrders, 'dashboard-order-list');
-            },
+            // [REMOVED] filterOrders function is no longer needed
             
-            renderOrderList: (orders, listElementId) => {
-                const container = document.getElementById(listElementId);
+            // [MODIFIED] Renamed and rewrote renderOrderList to renderUpcomingList
+            renderUpcomingList: () => {
+                const container = document.getElementById('dashboard-order-list');
                 if (!container) return;
-                
-                if (orders.length === 0) {
-                    if (listElementId.includes('dashboard')) container.innerHTML = `<p class="text-center text-gray-500 pt-8">לא נמצאו הזמנות להיום.</p>`;
-                    else if (listElementId.includes('history')) container.innerHTML = `<p class="text-center text-gray-500 pt-8">לא נמצאה היסטוריה.</p>`;
-                    else container.innerHTML = `<p class="text-center text-gray-500 pt-8">לא נמצאו הזמנות.</p>`;
-                } else {
-                    container.innerHTML = orders.map(order => app.renderOrderCard(order)).join('');
-                    feather.replace({ width: '16px', height: '16px' });
+
+                if (allUpcomingOrders.length === 0) {
+                    container.innerHTML = `<p class="text-center text-gray-500 pt-8">לא נמצאו הזמנות עתידיות.</p>`;
+                    return;
                 }
+
+                // 1. Get date strings for today and tomorrow
+                const today = new Date();
+                const tomorrow = new Date();
+                tomorrow.setDate(today.getDate() + 1);
+                
+                const todayStr = today.toISOString().split('T')[0];
+                const tomorrowStr = tomorrow.toISOString().split('T')[0];
+
+                // 2. Group orders by date
+                const groupedOrders = allUpcomingOrders.reduce((groups, order) => {
+                    const date = order.orderDate; // e.g., "2025-11-14"
+                    if (!groups[date]) {
+                        groups[date] = [];
+                    }
+                    groups[date].push(order);
+                    return groups;
+                }, {});
+
+                // 3. Render HTML
+                let html = '';
+                // Keys are sorted because the query was sorted by 'orderDate'
+                const sortedDates = Object.keys(groupedOrders);
+
+                for (const date of sortedDates) {
+                    const ordersForDate = groupedOrders[date];
+                    const dateObj = new Date(`${date}T00:00:00`); // Fix timezone issues
+                    
+                    // Create Header
+                    let headerClass = 'date-divider';
+                    let headerText = dateObj.toLocaleDateString('he-IL', { weekday: 'long', day: '2-digit', month: '2-digit' });
+
+                    if (date === todayStr) {
+                        headerClass = 'date-divider date-divider-today';
+                        headerText = `🔥 היום, ${headerText}`;
+                    } else if (date === tomorrowStr) {
+                        headerClass = 'date-divider date-divider-tomorrow';
+                        headerText = `☀️ מחר, ${headerText}`;
+                    }
+
+                    html += `<div class="${headerClass}">${headerText} (${ordersForDate.length} הזמנות)</div>`;
+                    
+                    // Render cards for this date
+                    html += ordersForDate.map(order => app.renderOrderCard(order)).join('');
+                }
+
+                container.innerHTML = html;
+                feather.replace({ width: '16px', height: '16px' });
             },
             
             renderOrderCard: (order) => {
@@ -731,7 +781,8 @@
             
             // --- Order Detail & Map Modal ---
             showOrderDetails: (orderId) => {
-                const order = [...allTodayOrders, ...allHistoryOrders, ...allShareOrders].find(o => o.id === orderId);
+                // [MODIFIED] Search in allUpcomingOrders instead of allTodayOrders
+                const order = [...allUpcomingOrders, ...allHistoryOrders, ...allShareOrders].find(o => o.id === orderId);
                 if (!order) {
                     alert('שגיאה: לא ניתן למצוא הזמנה');
                     return;
@@ -874,7 +925,7 @@
                     return;
                 }
                 
-                const password = prompt('כדי לשתף, הזן סיסמה )');
+                const password = prompt('כדי לשתף, הזן סיסמה (ברירת מחדל: ):');
                 if (password !== WHATSAPP_PASSWORD) {
                     alert('סיסמה שגויה.');
                     return;
