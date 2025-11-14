@@ -5,13 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Sidor Mobile v1.5</title>
     <!-- 
-      Sidor Mobile v1.5 - Log Snitch & UI Errors
+      Sidor Mobile v1.5 - Tabbed Dashboard
       
       Changelog:
-      - [NEW] Added "Log Snitches" (console.log) to all data fetching functions
-        to trace the data flow, as requested.
-      - [NEW] Error messages from Firebase (like Permissions) are now
-        rendered directly into the UI lists, not just the console.
+      - [NEW] Dashboard now uses a Tabbed interface for "Today", "Tomorrow", and "2 Days".
+      - [FIX] Removed date-divider logic, replaced with tab panels.
+      - [FIX] Firebase query loads all upcoming orders and JS sorts them into tabs.
     -->
     
     <!-- PWA & Mobile Specific Tags -->
@@ -52,32 +51,38 @@
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         
-        /* [NEW] Date Header for Order List */
-        .date-divider {
-            padding: 0.5rem 0.75rem;
-            background-color: #e2e8f0; /* gray-200 */
+        /* [NEW] Dashboard Tabs */
+        .dashboard-tabs {
+            display: flex;
+            background-color: var(--surface);
+            border-radius: 10px;
+            padding: 0.25rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            border: 1px solid #e2e8f0;
+        }
+        .dashboard-tab {
+            flex: 1;
+            padding: 0.6rem 0.5rem;
+            font-size: 0.85rem;
+            font-weight: 600;
             color: #475569; /* gray-600 */
-            font-weight: 700;
-            font-size: 0.9rem;
+            text-align: center;
             border-radius: 8px;
-            margin-top: 1.5rem;
-            margin-bottom: 0.75rem;
-            border-bottom: 2px solid #cbd5e1; /* gray-300 */
+            transition: all 0.2s ease-in-out;
         }
-        
-        /* [NEW] Highlighted Headers for Today & Tomorrow */
-        .date-divider-today {
-            background-color: var(--primary); /* blue-600 */
+        .dashboard-tab.active {
+            background-color: var(--primary);
             color: white;
-            border-bottom: 2px solid #1d4ed8; /* blue-800 */
-            box-shadow: 0 4px 6px rgba(37, 99, 235, 0.2);
+            box-shadow: 0 2px 5px rgba(37, 99, 235, 0.3);
         }
-        .date-divider-tomorrow {
-            background-color: var(--secondary); /* green-500 */
-            color: white;
-            border-bottom: 2px solid #059669; /* green-600 */
-            box-shadow: 0 4px 6px rgba(16, 185, 129, 0.2);
+        .dashboard-page-content {
+            display: none; /* Hidden by default */
+            padding-top: 1rem;
         }
+        .dashboard-page-content.active {
+            display: block; /* Shown when active */
+        }
+
 
         /* App Layout */
         .app-layout {
@@ -300,11 +305,27 @@
             
             <!-- Page 1: Dashboard (Today's Orders) -->
             <div id="page-dashboard" class="app-page">
-                <!-- [REMOVED] Filter tabs are removed in favor of date grouping -->
                 
-                <div id="dashboard-order-list" class="space-y-3">
-                    <div class="spinner-container"><div class="spinner"></div></div>
+                <!-- [NEW] Dashboard Tab Navigation -->
+                <div class="dashboard-tabs">
+                    <button id="dash-tab-today" class="dashboard-tab active" onclick="app.navigateDashboardTab('today')">🔥 היום</button>
+                    <button id="dash-tab-tomorrow" class="dashboard-tab" onclick="app.navigateDashboardTab('tomorrow')">☀️ מחר</button>
+                    <button id="dash-tab-twodays" class="dashboard-tab" onclick="app.navigateDashboardTab('twodays')">🗓️ עוד יומיים</button>
                 </div>
+                
+                <!-- [NEW] Tab Content Panels -->
+                <div id="dashboard-page-container">
+                    <div id="dashboard-today-list" class="dashboard-page-content active">
+                        <div class="spinner-container"><div class="spinner"></div></div>
+                    </div>
+                    <div id="dashboard-tomorrow-list" class="dashboard-page-content">
+                        <div class="spinner-container"><div class="spinner"></div></div>
+                    </div>
+                    <div id="dashboard-twodays-list" class="dashboard-page-content">
+                        <div class="spinner-container"><div class="spinner"></div></div>
+                    </div>
+                </div>
+
             </div>
             
             <!-- Page 2: Share Report (Was "Tomorrow") -->
@@ -466,15 +487,13 @@
           projectId: "saban94-78949"
         };
         const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : JSON.stringify(fallbackConfig));
-        // [FIX 2.1] Add appId variable for correct collection paths
         const dirtyAppId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        // [FIX 4.1] Correct fix: Just take the part before the slash.
         const appId = dirtyAppId.split('/')[0];
 
         // --- Global State ---
         let db, auth;
         let currentUserId = null;
-        let allUpcomingOrders = []; // Renamed from allTodayOrders
+        let allUpcomingOrders = []; // All orders from today onwards
         let allShareOrders = []; // For the report builder
         let allHistoryOrders = [];
         let allDrivers = []; // To populate driver dropdowns
@@ -483,7 +502,7 @@
         let driverLocationUnsub;
         
         // Listeners
-        let upcomingUnsub, historyUnsub, driversUnsub; // Renamed from todayUnsub
+        let upcomingUnsub, historyUnsub, driversUnsub;
 
         // --- Main App Object ---
         window.app = {
@@ -546,7 +565,8 @@
                 
                 // Load data based on view
                 if (viewId === 'dashboard') {
-                    app.listenForUpcoming(); // Renamed from listenForToday
+                    app.listenForUpcoming(); 
+                    app.navigateDashboardTab('today'); // [NEW] Default to 'today' tab
                 } else if (viewId === 'share') {
                     const tomorrow = new Date();
                     tomorrow.setDate(tomorrow.getDate() + 1);
@@ -557,60 +577,71 @@
                 }
             },
             
+            // [NEW] Handles tab switching within the dashboard
+            navigateDashboardTab: (tabName) => {
+                // Update tab buttons
+                document.querySelectorAll('.dashboard-tab').forEach(tab => tab.classList.remove('active'));
+                document.getElementById(`dash-tab-${tabName}`).classList.add('active');
+                
+                // Update tab content
+                document.querySelectorAll('.dashboard-page-content').forEach(content => content.classList.remove('active'));
+                document.getElementById(`dashboard-${tabName}-list`).classList.add('active');
+                
+                // Update header title
+                const titles = {
+                    'today': 'הובלות להיום',
+                    'tomorrow': 'הובלות למחר',
+                    'twodays': 'הובלות לעוד יומיים'
+                };
+                document.getElementById('header-title').innerText = titles[tabName] || 'Sidor Mobile';
+            },
+
             // --- Data Fetching & Rendering ---
             
             loadDrivers: () => {
                 if (driversUnsub) driversUnsub();
                 
-                // [FIX 2.2] Use the full public path for drivers collection
                 const driversPath = collection(db, 'artifacts', appId, 'public', 'data', DRIVERS_COLLECTION);
                 const q = query(driversPath, orderBy('name'));
 
                 driversUnsub = onSnapshot(q, (snapshot) => {
                     allDrivers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    // [מלשינון]
                     console.log(`[מלשינון DRIVERS] נטענו ${allDrivers.length} נהגים.`);
                 }, (err) => {
-                    // [מלשינון]
                     console.error("[מלשינון DRIVERS] כשלון קריטי! Firebase חסם את הגישה.", err.message);
                 });
             },
             
-            listenForUpcoming: () => { // Renamed from listenForToday
-                if (upcomingUnsub) upcomingUnsub(); // Renamed from todayUnsub
+            listenForUpcoming: () => { 
+                if (upcomingUnsub) upcomingUnsub(); 
                 
                 const today = new Date();
                 today.setHours(0,0,0,0);
                 const todayStr = today.toISOString().split('T')[0];
 
-                // [FIX 2.3] Use the full public path for orders collection
                 const upcomingOrdersPath = collection(db, 'artifacts', appId, 'public', 'data', ORDERS_COLLECTION);
-                // [FIX 1.1] Removed inequality filter on 'status'
                 const qUpcoming = query(
                     upcomingOrdersPath,
                     where('orderDate', '>=', todayStr), // Get today AND all future
-                    // where('status', 'not-in', ['הושלם', 'בוטל', 'סופק']), // <-- REMOVED due to Firestore limitations
-                    orderBy('orderDate', 'asc'), // Sort by date first
-                    orderBy('orderTime', 'asc')  // Then by time
+                    orderBy('orderDate', 'asc'), 
+                    orderBy('orderTime', 'asc')  
                 );
                 
-                upcomingUnsub = onSnapshot(qUpcoming, (snapshot) => { // Renamed from todayUnsub
-                    // [מלשינון]
+                upcomingUnsub = onSnapshot(qUpcoming, (snapshot) => { 
                     console.log(`[מלשינון UPCOMING] התקבלו ${snapshot.docs.length} הזמנות עתידיות מהשרת (לפני סינון סטטוס).`);
                     
-                    // [FIX 1.2] Apply status filter here (client-side)
                     allUpcomingOrders = snapshot.docs 
                         .map(doc => ({ id: doc.id, ...doc.data() }))
                         .filter(order => !['הושלם', 'בוטל', 'סופק'].includes(order.status)); 
                     
                     console.log(`[מלשינון UPCOMING] מציג ${allUpcomingOrders.length} הזמנות לאחר סינון סטטוס.`);
 
-                    app.renderUpcomingList(); // Call new render function
+                    // [NEW] Sort orders into their respective tab lists
+                    app.sortOrdersToTabs(); 
                     document.getElementById('loader').style.display = 'none';
                 }, (err) => {
-                    // [מלשינון]
                     console.error("[מלשינון UPCOMING] כשלון קריטי! Firebase חסם את הגישה.", err.message);
-                    document.getElementById('dashboard-order-list').innerHTML = `<div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+                    document.getElementById('dashboard-today-list').innerHTML = `<div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
                         <strong class="font-bold">שגיאת הרשאות!</strong>
                         <span class="block sm:inline">האפליקציה חסומה. אנא פנה למנהל המערכת לתיקון הרשאות Firebase.</span>
                     </div>`;
@@ -618,6 +649,27 @@
                 });
             },
             
+            // [NEW] Helper function to split orders into tab lists
+            sortOrdersToTabs: () => {
+                const today = new Date();
+                const tomorrow = new Date(today);
+                tomorrow.setDate(today.getDate() + 1);
+                const twoDays = new Date(today);
+                twoDays.setDate(today.getDate() + 2);
+
+                const todayStr = today.toISOString().split('T')[0];
+                const tomorrowStr = tomorrow.toISOString().split('T')[0];
+                const twoDaysStr = twoDays.toISOString().split('T')[0];
+
+                const todayOrders = allUpcomingOrders.filter(o => o.orderDate === todayStr);
+                const tomorrowOrders = allUpcomingOrders.filter(o => o.orderDate === tomorrowStr);
+                const twoDaysOrders = allUpcomingOrders.filter(o => o.orderDate === twoDaysStr);
+
+                app.renderOrderList(todayOrders, 'dashboard-today-list');
+                app.renderOrderList(tomorrowOrders, 'dashboard-tomorrow-list');
+                app.renderOrderList(twoDaysOrders, 'dashboard-twodays-list');
+            },
+
             loadOrdersForShare: async () => {
                 const listEl = document.getElementById('share-order-list');
                 listEl.innerHTML = `<div class="spinner-container"><div class="spinner"></div></div>`;
@@ -629,17 +681,15 @@
                 }
 
                 try {
-                    // [FIX 2.4] Use the full public path for orders collection
                     const shareOrdersPath = collection(db, 'artifacts', appId, 'public', 'data', ORDERS_COLLECTION);
                     const q = query(
                         shareOrdersPath,
                         where('orderDate', '==', selectedDate),
-                        where('status', 'not-in', ['הושלם', 'בוטל', 'סופק']) // This is OK, 'orderDate' is equality
+                        where('status', 'not-in', ['הושלם', 'בוטל', 'סופק']) 
                     );
                     
                     const snapshot = await getDocs(q);
                     allShareOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    // [מלשינון]
                     console.log(`[מלשינון SHARE] התקבלו ${allShareOrders.length} הזמנות לדיווח.`);
                     
                     document.getElementById('share-total-count').innerText = `(${allShareOrders.length})`;
@@ -666,7 +716,6 @@
                             }).join('');
                     }
                 } catch (err) {
-                    // [מלשינון]
                     console.error("[מלשינון SHARE] כשלון קריטי! Firebase חסם את הגישה.", err.message);
                     listEl.innerHTML = `<div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
                         <strong class="font-bold">שגיאת הרשאות!</strong>
@@ -678,7 +727,6 @@
             listenForHistory: () => {
                 if (historyUnsub) historyUnsub();
                 
-                // [FIX 2.5] Use the full public path for orders collection
                 const historyOrdersPath = collection(db, 'artifacts', appId, 'public', 'data', ORDERS_COLLECTION);
                 const qHistory = query(
                     historyOrdersPath,
@@ -688,12 +736,10 @@
                 );
                 
                 historyUnsub = onSnapshot(qHistory, (snapshot) => {
-                    // [מלשינון]
                     console.log(`[מלשינון HISTORY] התקבלו ${snapshot.docs.length} הזמנות היסטוריה.`);
                     allHistoryOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     app.renderOrderList(allHistoryOrders, 'history-order-list');
                 }, (err) => {
-                    // [מלשינון]
                     console.error("[מלשינון HISTORY] כשלון קריטי! Firebase חסם את הגישה.", err.message);
                     document.getElementById('history-order-list').innerHTML = `<div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
                         <strong class="font-bold">שגיאת הרשאות!</strong>
@@ -701,80 +747,24 @@
                     </div>`;
                 });
             },
-
             
-            // [REMOVED] filterOrders function is no longer needed
-            
-            // [MODIFIED] Renamed and rewrote renderOrderList to renderUpcomingList
-            renderUpcomingList: () => {
-                const container = document.getElementById('dashboard-order-list');
-                if (!container) return;
-
-                if (allUpcomingOrders.length === 0) {
-                    container.innerHTML = `<p class="text-center text-gray-500 pt-8">לא נמצאו הזמנות עתידיות.</p>`;
-                    return;
-                }
-
-                // 1. Get date strings for today and tomorrow
-                const today = new Date();
-                const tomorrow = new Date();
-                tomorrow.setDate(today.getDate() + 1);
-                
-                const todayStr = today.toISOString().split('T')[0];
-                const tomorrowStr = tomorrow.toISOString().split('T')[0];
-
-                // 2. Group orders by date
-                const groupedOrders = allUpcomingOrders.reduce((groups, order) => {
-                    const date = order.orderDate; // e.g., "2025-11-14"
-                    if (!groups[date]) {
-                        groups[date] = [];
-                    }
-                    groups[date].push(order);
-                    return groups;
-                }, {});
-
-                // 3. Render HTML
-                let html = '';
-                // Keys are sorted because the query was sorted by 'orderDate'
-                const sortedDates = Object.keys(groupedOrders);
-
-                for (const date of sortedDates) {
-                    const ordersForDate = groupedOrders[date];
-                    const dateObj = new Date(`${date}T00:00:00`); // Fix timezone issues
-                    
-                    // Create Header
-                    let headerClass = 'date-divider';
-                    let headerText = dateObj.toLocaleDateString('he-IL', { weekday: 'long', day: '2-digit', month: '2-digit' });
-
-                    if (date === todayStr) {
-                        headerClass = 'date-divider date-divider-today';
-                        headerText = `🔥 היום, ${headerText}`;
-                    } else if (date === tomorrowStr) {
-                        headerClass = 'date-divider date-divider-tomorrow';
-                        headerText = `☀️ מחר, ${headerText}`;
-                    }
-
-                    html += `<div class="${headerClass}">${headerText} (${ordersForDate.length} הזמנות)</div>`;
-                    
-                    // Render cards for this date
-                    html += ordersForDate.map(order => app.renderOrderCard(order)).join('');
-                }
-
-                container.innerHTML = html;
-                feather.replace({ width: '16px', height: '16px' });
-            },
-            
-            // [NEW] Added this function to render history list
+            // [MODIFIED] This function now renders lists for tabs and history
             renderOrderList: (orders, listElementId) => {
                 const container = document.getElementById(listElementId);
                 if (!container) return;
                 
-                if (orders.length === 0) {
-                    if (listElementId.includes('dashboard')) container.innerHTML = `<p class="text-center text-gray-500 pt-8">לא נמצאו הזמנות להיום.</p>`;
-                    else if (listElementId.includes('history')) container.innerHTML = `<p class="text-center text-gray-500 pt-8">לא נמצאה היסטוריה.</p>`;
-                    else container.innerHTML = `<p class="text-center text-gray-500 pt-8">לא נמצאו הזמנות.</p>`;
+                // Sort by time, as they are already grouped by date
+                const sortedOrders = orders.sort((a, b) => (a.orderTime || '09:00').localeCompare(b.orderTime || '09:00'));
+
+                if (sortedOrders.length === 0) {
+                    let message = '<p class="text-center text-gray-500 pt-8">לא נמצאו הזמנות.</p>';
+                    if (listElementId.includes('today')) message = '<p class="text-center text-gray-500 pt-8">אין הזמנות להיום. 👍</p>';
+                    else if (listElementId.includes('tomorrow')) message = '<p class="text-center text-gray-500 pt-8">אין הזמנות למחר.</p>';
+                    else if (listElementId.includes('twodays')) message = '<p class="text-center text-gray-500 pt-8">אין הזמנות לעוד יומיים.</p>';
+                    else if (listElementId.includes('history')) message = '<p class="text-center text-gray-500 pt-8">לא נמצאה היסטוריה.</p>';
+                    container.innerHTML = message;
                 } else {
-                    container.innerHTML = orders.map(order => app.renderOrderCard(order)).join('');
+                    container.innerHTML = sortedOrders.map(order => app.renderOrderCard(order)).join('');
                     feather.replace({ width: '16px', height: '16px' });
                 }
             },
@@ -790,11 +780,17 @@
                 const displayId = order.order_id || order.id.slice(-6);
                 const customerName = order.customer?.name || 'לקוח לא ידוע';
                 
+                // [NEW] Add time to the card header
+                const orderTime = order.orderTime ? `<span class="font-bold text-lg text-blue-600">${order.orderTime}</span>` : '';
+
                 return `
                 <div class="order-card">
                     <div class="order-card-header">
                         <span class="font-bold text-lg">${emoji} ${typeText}</span>
-                        <span class="text-sm font-medium text-blue-600">${order.status || 'חדש'}</span>
+                        <div>
+                            ${orderTime}
+                            <span class="text-sm font-medium text-gray-500 ml-2">${order.status || 'חדש'}</span>
+                        </div>
                     </div>
                     <div class="order-card-body">
                         <h3 class="font-bold text-lg text-gray-800">${customerName}</h3>
@@ -814,7 +810,6 @@
             
             // --- Order Detail & Map Modal ---
             showOrderDetails: (orderId) => {
-                // [MODIFIED] Search in allUpcomingOrders instead of allTodayOrders
                 const order = [...allUpcomingOrders, ...allHistoryOrders, ...allShareOrders].find(o => o.id === orderId);
                 if (!order) {
                     alert('שגיאה: לא ניתן למצוא הזמנה');
@@ -875,7 +870,6 @@
                 
                 const driverIcon = L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png', shadowSize: [41, 41] });
 
-                // [FIX 2.6] Use the full public path for driverLocations doc
                 const driverLocDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'driverLocations', driverId);
 
                 driverLocationUnsub = onSnapshot(driverLocDocRef, (docSnap) => {
@@ -975,7 +969,6 @@
             renderAssignmentList: () => {
                 const container = document.getElementById('assignment-list-container');
                 if (allDrivers.length === 0) {
-                    // [מלשינון]
                     console.warn("[מלשינון ASSIGN] לא ניתן לפתוח שיוך כי רשימת הנהגים ריקה.");
                     container.innerHTML = `<p class="text-center text-red-500 p-4">שגיאה: לא נטענו נהגים. האם ההרשאות לקריאת 'drivers' תקינות?</p>`;
                     return;
