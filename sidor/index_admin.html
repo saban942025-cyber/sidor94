@@ -3,18 +3,29 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DeliveryMaster v39.1 (Timestamp Fix)</title>
+    <title>DeliveryMaster v40.0 (Dynamic Timers)</title>
     <!-- 
-      DeliveryMaster Admin App v39.1
+      DeliveryMaster Admin App v40.0
       
       Changelog:
-      - [CRITICAL FIX v39.1]
-        - Fixed "FirebaseError: serverTimestamp() is not currently supported inside arrays"
-        - Replaced serverTimestamp() with Timestamp.now() in:
-          1. `submitNewOrder` (for new customer auditLog)
-          2. `handleSaveCustomer` (for existing customer auditLog)
-      - [UI v39.1]
-        - Added a simple emoji favicon to remove the 404 error.
+      - [FEATURE v40.0] Upcoming Order Timer & Popup
+        - Added a new fixed popup (#upcoming-timer-popup) showing a countdown
+          to the *closest* upcoming order for today.
+        - Added `setInterval(updateTimersAndUrgency, 10000)` to manage timers.
+        - Added `showUpcomingListPopup()` to show a modal with all upcoming orders.
+      - [FEATURE v40.0] Urgency Pulse
+        - Orders within 30 minutes get a pulsing red border (`.pulse-urgent-card`).
+        - Map markers for urgent orders turn red.
+      - [FEATURE v40.0] Edit Date & Time
+        - Added `orderDate` and `orderTime` fields to the 'order-edit-modal'.
+        - Updated `handleSaveOrderEdit` to save these fields.
+      - [UI v40.0] Card Redesign
+        - Emphasized Customer Name (text-xl), added Customer Number.
+        - Emphasized Order Time.
+        - Widened side panel grid to `700px` to better fit 2 columns.
+      - [FIX v40.0] Orders on Map
+        - `renderMapMarkers` now plots orders *at their warehouse* (e.g., "החרש")
+          if they don't have lat/lon and are in a 'new' or 'pending' state.
     -->
     
     <!-- TailwindCSS -->
@@ -32,7 +43,6 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
     
-    <!-- [v39.1] Favicon -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🚚</text></svg>">
 
 
@@ -48,6 +58,7 @@
             --text-dark-nav: #d1d5db; /* gray-300 */
             --bg-dark-nav: #1f2937; /* slate-800 */
             --bg-dark-nav-hover: #374151; /* slate-700 */
+            --danger-color: #ef4444; /* red-500 */
         }
         body {
             font-family: 'Inter', 'Arial', sans-serif;
@@ -67,36 +78,37 @@
         .app-view {
             width: 100%;
             height: 100vh;
-            overflow: hidden; /* Prevent scrolling on main views */
-            display: none; /* Default hide */
+            overflow: hidden;
+            display: none;
         }
         .app-view.active {
-            display: block; /* Show active view */
+            display: block;
         }
 
         
+        /* [v40.0] Widened side panel to 700px */
         #view-dashboard {
             display: grid;
-            grid-template-columns: 1fr 400px; /* [v37] הגדלת הפאנל */
+            grid-template-columns: 1fr 700px; 
             overflow: hidden;
         }
         .app-view.active#view-dashboard {
-            display: grid; /* Override for grid */
+            display: grid;
         }
 
         
         #view-history {
-            overflow-y: auto; /* Allow scrolling for history content */
+            overflow-y: auto;
             padding: 1rem 2rem;
         }
 
         #view-driver-history {
-             display: grid; /* Use grid for driver history */
-             grid-template-columns: 300px 1fr; /* Sidebar and Map */
+             display: grid;
+             grid-template-columns: 300px 1fr;
              height: 100vh;
         }
         .app-view.active#view-driver-history {
-            display: grid; /* Override for grid */
+            display: grid;
         }
 
         #map-container {
@@ -122,9 +134,6 @@
             color: white;
             z-index: 10;
         }
-        #navbar .text-xl {
-            color: white;
-        }
         .nav-link {
             transition: all 0.2s;
             color: var(--text-dark-nav);
@@ -137,7 +146,7 @@
         .nav-link.active {
             background-color: var(--primary-color);
             color: white;
-            border-right: 3px solid #60a5fa; /* blue-400 */
+            border-right: 3px solid #60a5fa;
         }
          .nav-link-special {
              color: var(--text-dark-nav);
@@ -147,16 +156,13 @@
              background-color: var(--primary-color);
              color: white;
          }
-        #navbar .hidden.lg\\:block {
-             color: white;
-        }
         #navbar #last-updated {
             color: var(--text-light);
         }
         
         #log-button {
             display: inline-block;
-            float: left; /* Position to the left (due to RTL) */
+            float: left;
             margin-top: 4px;
             color: var(--text-light);
         }
@@ -171,18 +177,16 @@
             position: relative;
         }
         
-        /* [v39.0] DYNAMIC GRID LAYOUT */
         .panel-list {
             overflow-y: auto;
             position: relative;
             padding: 0.5rem;
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); /* The dynamic grid */
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
             gap: 0.5rem;
-            align-content: flex-start; /* Prevent stretching */
+            align-content: flex-start;
         }
         
-        /* [v39.0] Redesigned Order Card */
         .order-card, .driver-card {
             padding: 1rem;
             border: 1px solid var(--border-color);
@@ -190,7 +194,6 @@
             transition: all 0.2s;
             cursor: pointer;
             background-color: var(--bg-white);
-            /* [v39] Set height to auto */
             height: auto; 
             display: flex;
             flex-direction: column;
@@ -201,7 +204,7 @@
             box-shadow: 0 1px 3px rgba(0,0,0,0.05);
         }
         .order-card.active, .driver-card.active {
-            background-color: #eff6ff; /* blue-50 */
+            background-color: #eff6ff;
             border-right-width: 4px;
             border-right-color: var(--primary-color);
         }
@@ -210,14 +213,13 @@
         }
         
         .order-card.highlight-customer-order {
-            background-color: #fefce8; /* yellow-50 */
-            border-color: #facc15; /* yellow-400 */
+            background-color: #fefce8;
+            border-color: #facc15;
         }
         .order-card.highlight-customer-order:hover {
-            background-color: #fef9c3; /* yellow-100 */
+            background-color: #fef9c3;
         }
 
-        /* [v37] Removed Details Panel */
         #details-panel {
             display: none;
         }
@@ -235,7 +237,6 @@
              color: var(--primary-color);
          }
         
-        /* [v37] Redesigned Customer Cards */
         #customer-card-list {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -255,7 +256,7 @@
         }
         
         .history-table tbody tr:hover {
-             background-color: #f9fafb; /* gray-50 */
+             background-color: #f9fafb;
          }
          .history-table .action-button {
              background-color: var(--primary-color);
@@ -286,9 +287,9 @@
         
         /* Status Colors */
         .status-dot { width: 10px; height: 10px; border-radius: 50%; }
-        .status-active { background-color: #22c55e; } /* green-500 */
-        .status-stuck { background-color: #ef4444; } /* red-500 */
-        .status-inactive { background-color: #9ca3af; } /* gray-400 */
+        .status-active { background-color: #22c55e; }
+        .status-stuck { background-color: #ef4444; }
+        .status-inactive { background-color: #9ca3af; }
         
         /* Leaflet Customizations */
         .leaflet-popup-content-wrapper { border-radius: 8px; }
@@ -342,44 +343,31 @@
         .toast.error { background-color: #ef4444; }
         
         /* Modal Dialog */
-        #new-order-modal, #customer-edit-modal, #order-details-modal { /* [v37] Added new modal */
-            max-width: 900px; /* [v37] Wider modal */
+        dialog {
+            max-width: 900px;
             width: 90%;
             border-radius: 12px;
             border: none;
             box-shadow: 0 10px 30px rgba(0,0,0,0.1);
             padding: 0;
         }
-        /* [v37] Specific width for order modal */
+        dialog::backdrop {
+            background: rgba(0,0,0,0.5);
+            backdrop-filter: blur(2px);
+        }
         #order-details-modal { max-width: 900px; }
         #new-order-modal, #customer-edit-modal { max-width: 600px; }
-        /* [v38] New Modals */
-        #order-edit-modal, #customer-history-modal {
-            max-width: 600px;
-            border-radius: 12px;
-            border: none;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-            padding: 0;
-        }
-        #order-edit-modal::backdrop, #customer-history-modal::backdrop {
-            background: rgba(0,0,0,0.5);
-            backdrop-filter: blur(2px);
-        }
-
-        #new-order-modal::backdrop, #customer-edit-modal::backdrop, #order-details-modal::backdrop {
-            background: rgba(0,0,0,0.5);
-            backdrop-filter: blur(2px);
-        }
+        #order-edit-modal, #customer-history-modal { max-width: 600px; }
+        
         .form-grid {
              display: grid;
              grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
              gap: 1rem;
         }
         
-        /* [v37] Order Details Modal Layout */
         #modal-order-details-content {
             display: grid;
-            grid-template-columns: 1fr 300px; /* Details | History */
+            grid-template-columns: 1fr 300px;
             gap: 1.5rem;
             max-height: 70vh;
             overflow-y: auto;
@@ -397,17 +385,54 @@
         }
         .history-item:last-child { border: none; }
         
+        /* [v40.0] Upcoming Timer Popup */
+        #upcoming-timer-popup {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 3000;
+            background-color: var(--text-dark);
+            color: white;
+            padding: 0.75rem 1.25rem;
+            border-radius: 8px;
+            font-weight: 500;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            cursor: pointer;
+            transition: all 0.3s;
+            display: none; /* Hidden by default */
+        }
+        #upcoming-timer-popup:hover {
+            background-color: #000;
+        }
+        .upcoming-order-item {
+            padding: 0.5rem 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .upcoming-order-item:last-child {
+            border-bottom: none;
+        }
+
+        /* [v40.0] Urgency Pulse Animation */
+        @keyframes pulse-border {
+            0%, 100% { border-color: var(--danger-color); box-shadow: 0 0 5px var(--danger-color); }
+            50% { border-color: var(--border-color); box-shadow: none; }
+        }
+        .pulse-urgent-card {
+            animation: pulse-border 1.5s infinite;
+            border-width: 2px;
+        }
+
         /* Responsive */
         @media (max-width: 1024px) {
             #view-dashboard {
-                grid-template-columns: 1fr; /* Stack map and list */
+                grid-template-columns: 1fr;
             }
             #side-panel {
                 position: fixed;
                 bottom: 0;
                 left: 0;
                 right: 0;
-                height: 40vh; /* Show panel at bottom */
+                height: 40vh;
                 z-index: 2000;
                 border-right: none;
                 border-top: 1px solid var(--border-color);
@@ -429,11 +454,11 @@
                 grid-template-rows: auto 1fr;
             }
             .nav-link { flex: 1; justify-content: center; }
-            .nav-link span.hidden { display: none; } /* Hide text on mobile */
+            .nav-link span.hidden { display: none; }
             .nav-link.active { border-right: none; border-bottom: 3px solid var(--primary-color); }
             
             #view-driver-history {
-                 grid-template-columns: 1fr; /* Stack on mobile */
+                 grid-template-columns: 1fr;
                  grid-template-rows: auto 1fr;
             }
             #driver-history-sidebar {
@@ -444,19 +469,23 @@
             #driver-history-map {
                  grid-row: 2 / 3;
             }
-            /* [v37] Modal on mobile */
             #modal-order-details-content {
-                grid-template-columns: 1fr; /* Stack details and history */
+                grid-template-columns: 1fr;
             }
             #modal-customer-history {
-                max-height: 200px; /* Limit history height on mobile */
+                max-height: 200px;
             }
-            /* [v39.0] Make grid 1 column on mobile */
             .panel-list {
                 grid-template-columns: 1fr;
             }
+            /* [v40.0] Timer on mobile */
+            #upcoming-timer-popup {
+                bottom: 80px; /* Above nav bar */
+                right: 10px;
+                padding: 0.5rem 1rem;
+                font-size: 0.9rem;
+            }
         }
-        /* [v38] New Card Action Button Style */
         .card-action-button {
             padding: 4px 10px;
             font-size: 0.8rem;
@@ -674,6 +703,13 @@
  
     <!-- Toast Container -->
     <div id="toast-container"></div>
+
+    <!-- [v40.0] Upcoming Order Timer -->
+    <div id="upcoming-timer-popup" onclick="showUpcomingListPopup()">
+        <!-- Content injected by updateTimersAndUrgency() -->
+        <i data-feather="clock" class="inline-block w-4 h-4 ml-1"></i>
+        <span>טוען טיימר...</span>
+    </div>
  
     <!-- [v37] Order Details Modal (Replaces details-panel) -->
     <dialog id="order-details-modal">
@@ -749,6 +785,19 @@
                         <!-- Options populated by JS -->
                     </select>
                 </div>
+                
+                <!-- [v40.0] New Date/Time fields -->
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="order-edit-date" class="block text-sm font-medium text-gray-700">תאריך אספקה</label>
+                        <input type="date" id="order-edit-date" class="w-full p-2 border rounded-md mt-1">
+                    </div>
+                    <div>
+                        <label for="order-edit-time" class="block text-sm font-medium text-gray-700">שעת אספקה</label>
+                        <input type="time" id="order-edit-time" class="w-full p-2 border rounded-md mt-1">
+                    </div>
+                </div>
+                
                 <div class_alias="detail-item">
                     <label for="order-edit-project" class="block text-sm font-medium text-gray-700">פרויקט</label>
                     <input type="text" id="order-edit-project" class="w-full p-2 border rounded-md mt-1">
@@ -846,7 +895,6 @@
                     <input type="text" id="order-number" placeholder="השאר ריק למזהה אוטומטי" class="w-full p-2 border rounded-md mb-4">
                  </div>
                 
-                <!-- [NEW] Project Name -->
                 <div>
                     <label for="order-project-name" class="block text-sm font-medium mb-1">שם פרויקט (רשות)</label>
                     <input type="text" id="order-project-name" placeholder="לדוגמה: בניין בראשון" class="w-full p-2 border rounded-md mb-4">
@@ -963,7 +1011,7 @@
 
     <!-- 
       ==========================================================
-      ===               תחילת סקריפט ראשי (v39.1)              ===
+      ===               תחילת סקריפט ראשי (v40.0)              ===
       ==========================================================
     -->
     <script type="module">
@@ -980,7 +1028,7 @@
         // --- Global Variables ---
         let db, auth;
         let map, driverHistoryMap;
-        let allOrders = [];
+        let allOrders = []; // This will now include `isUrgent` flag
         let allCustomers = [];
         let allDrivers = [];
         let driverMarkers = {};
@@ -989,6 +1037,8 @@
         let selectedDriver = null;
         let lastUpdate = null;
         let liveLocations = {}; 
+        let upcomingOrdersCache = []; // [v40.0] Cache for popup
+        let urgencyTimerInterval = null; // [v40.0] Timer handle
 
         let ordersUnsubscribe = null;
         let customersUnsubscribe = null;
@@ -997,7 +1047,23 @@
         let currentUserId = null;
         
         const ALLOWED_STATUSES = ["חדש", "חדש (מלקוח)", "בטיפול", "שויך", "בדרך", "הושלם", "בוטל", "סופק", "מוכן לטעינה"];
-        const WAREHOUSE_LOCATIONS = { "החרש": [32.13266, 34.89819], "התלמיד": [32.16303, 34.89492] };
+        // [v40.0] Added all warehouse locations for map plotting
+        const WAREHOUSE_LOCATIONS = { 
+            "החרש": [32.13266, 34.89819], 
+            "התלמיד": [32.16303, 34.89492],
+            "30-שארק": [32.16303, 34.89492], // Assuming same location for now
+            "32-כראדי": [32.16303, 34.89492], // Assuming same location for now
+            "40-כראדי": [32.16303, 34.89492]  // Assuming same location for now
+        };
+        const ORDERS_COLLECTION = 'orders_v2';
+        
+        // [v40.0] New Map Icons
+        const redIcon = L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png', shadowSize: [41, 41]});
+        const blueIcon = L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-blue.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png', shadowSize: [41, 41]});
+        const orangeIcon = L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-orange.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png', shadowSize: [41, 41]});
+        const violetIcon = L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-violet.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png', shadowSize: [41, 41]});
+        const greenIcon = L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png', shadowSize: [41, 41]});
+
 
         // --- Firebase Config & Auth ---
         const fallbackConfig = {
@@ -1075,6 +1141,7 @@
             initializeMaps();
             populateStatusDropdowns();
             attachAllListeners();
+            initializeTimers(); // [v40.0] Start the timer
             
             try {
                 document.getElementById('order-date').value = new Date().toISOString().split('T')[0];
@@ -1122,8 +1189,6 @@
 
 
         // --- Data Fetching & Listeners ---
-        const ORDERS_COLLECTION = 'orders_v2';
-
         function attachAllListeners() {
             listenForActiveOrders();
             listenForCustomers();
@@ -1154,18 +1219,36 @@
                 allOrders = [];
                 snapshot.forEach(doc => allOrders.push({ id: doc.id, ...doc.data() }));
                 
+                // Sort by status first, then by urgency (upcoming time)
                 allOrders.sort((a, b) => {
+                    // 1. Status Priority
                     const statusA = a.status;
                     const statusB = b.status;
-                    if (statusA === 'חדש (מלקוח)' && statusB !== 'חדש (מלקוח)') return -1;
-                    if (statusA !== 'חדש (מלקוח)' && statusB === 'חדש (מלקוח)') return 1;
-                    if (statusA === 'חדש' && statusB !== 'חדש') return -1;
-                    if (statusA !== 'חדש' && statusB === 'חדש') return 1;
+                    const statusPriority = (s) => {
+                        if (s === 'חדש (מלקוח)') return 1;
+                        if (s === 'חדש') return 2;
+                        return 3;
+                    };
+                    if (statusPriority(statusA) !== statusPriority(statusB)) {
+                        return statusPriority(statusA) - statusPriority(statusB);
+                    }
+                    
+                    // 2. Time Priority (for upcoming orders)
+                    const timeA = getOrderDateTime(a);
+                    const timeB = getOrderDateTime(b);
+                    if (timeA && timeB) {
+                        return timeA.getTime() - timeB.getTime(); // Closest time first
+                    }
+                    if (timeA) return -1; // Orders with time come before orders without
+                    if (timeB) return 1;
+                    
+                    // 3. Fallback to creation time
                     return (a.createdAt?.toMillis() || 0) - (b.createdAt?.toMillis() || 0);
                 });
                 
-                renderOrdersList();
-                renderMapMarkers(); 
+                // Run timer logic *after* getting new data
+                updateTimersAndUrgency(); 
+                
                 SmartLog.info(`Loaded ${allOrders.length} active orders from '${ORDERS_COLLECTION}'`, "Data.Orders");
                 lastUpdate = new Date();
             }, (error) => {
@@ -1177,24 +1260,19 @@
         // 2. Listen for Customers
         function listenForCustomers() {
             if (customersUnsubscribe) customersUnsubscribe();
-            
             const q = query(collection(db, 'customers'), orderBy('name'));
-            
             customersUnsubscribe = onSnapshot(q, (snapshot) => {
                 allCustomers = [];
                 const datalist = document.getElementById('customer-list');
                 datalist.innerHTML = ''; 
-                
                 snapshot.forEach(doc => {
                     const customer = { id: doc.id, ...doc.data() };
                     allCustomers.push(customer);
-                    
                     const option = document.createElement('option');
                     option.value = customer.name; 
                     option.dataset.id = customer.id;
                     datalist.appendChild(option);
                 });
-                
                 SmartLog.info(`Loaded ${allCustomers.length} customers`, "Data.Customers");
             }, (error) => {
                 SmartLog.error(error, "Data.Customers.ListenFailed");
@@ -1204,27 +1282,21 @@
         // 3. Listen for Drivers
         function listenForDrivers() {
             if (driversUnsubscribe) driversUnsubscribe();
-            
             const q = query(collection(db, 'drivers'), orderBy('name'));
-            
             driversUnsubscribe = onSnapshot(q, (snapshot) => {
                 const loader = document.getElementById('drivers-list').querySelector('.loader-container');
                 if(loader) loader.style.display = 'none';
-                
                 allDrivers = [];
                 const driverSelect = document.getElementById('driver-select');
                 driverSelect.innerHTML = '<option value="">בחר נהג</option>';
-
                 snapshot.forEach(doc => {
                     const driver = { id: doc.id, ...doc.data() };
                     allDrivers.push(driver);
-                    
                     const option = document.createElement('option');
                     option.value = driver.id;
                     option.text = driver.name;
                     driverSelect.appendChild(option);
                 });
-                
                 renderDriversList();
                 SmartLog.info(`Loaded ${allDrivers.length} drivers`, "Data.Drivers");
             }, (error) => {
@@ -1236,18 +1308,14 @@
         // 4. Listen for Driver Locations
         function listenForDriverLocations() {
             if (locationsUnsubscribe) locationsUnsubscribe();
-            
             const q = query(collection(db, 'driverLocations'));
-            
             locationsUnsubscribe = onSnapshot(q, (snapshot) => {
                 liveLocations = {};
                 snapshot.forEach(doc => {
                     liveLocations[doc.id] = doc.data();
                 });
-                
                 renderDriversList(); 
                 renderMapMarkers(); 
-                
                 lastUpdate = new Date();
                 SmartLog.info(`Driver locations updated`, "Data.Locations");
             }, (error) => {
@@ -1257,7 +1325,6 @@
 
         // --- Rendering Functions ---
         
-        // [v39.0] Redesigned function
         function renderOrdersList() {
             const list = document.getElementById('orders-list');
             if (!list) return;
@@ -1279,32 +1346,41 @@
             
             filtered.forEach(order => {
                 const card = document.createElement('div');
+                card.dataset.id = order.id; // [v40.0] For urgency selector
                 
                 const isCustomerOrder = order.status === 'חדש (מלקוח)';
                 const highlightClass = isCustomerOrder ? 'highlight-customer-order' : '';
+                const urgencyClass = order.isUrgent ? 'pulse-urgent-card' : '';
                 
-                card.className = `order-card ${selectedOrder === order.id ? 'active' : ''} ${highlightClass} flex flex-col`;
+                card.className = `order-card ${selectedOrder === order.id ? 'active' : ''} ${highlightClass} ${urgencyClass} flex flex-col`;
                 
                 const displayId = order.orderNumber || order.order_id || `#${order.id.slice(0,6)}`;
+                const customer = allCustomers.find(c => c.id === order.customer?.id);
                 const customerName = order.customer?.name || 'לקוח לא ידוע';
+                const customerNumber = customer?.customerNumber || order.customer?.customerNumber || 'N/A';
+                
                 const address = order.address || 'כתובת לא צוינה';
-                const createdTime = order.createdAt?.toDate ? formatTime(order.createdAt.toDate()) : '';
                 const notes = order.notes || order.rawText || '...';
                 
                 const highlightText = isCustomerOrder ? `<span class="text-xs font-bold text-yellow-800"> (הזמנה מאפליקציה)</span>` : '';
                 
-                // [v39.0] Added orderTime
-                const displayTime = order.orderTime ? `| ${order.orderTime}` : `| ${createdTime}`;
+                const displayTime = order.orderTime || formatTime(order.createdAt);
+                const timeClass = order.isUrgent ? 'text-red-600 font-bold' : (order.orderTime ? 'text-blue-700 font-bold' : 'text-gray-700');
 
                 card.innerHTML = `
                     <div class="flex-grow">
                         <div class="flex justify-between items-center mb-2">
                             <span class="font-bold text-blue-600 text-lg cursor-pointer hover:underline" onclick="showOrderDetailsModal('${order.id}')">${displayId}</span>
-                            <!-- [v39.0] Added Time -->
-                            <span class="text-sm font-medium ${isCustomerOrder ? 'text-yellow-800' : 'text-gray-700'}">${order.status || 'חדש'} ${displayTime}</span>
+                            <span class="text-sm font-medium ${isCustomerOrder ? 'text-yellow-800' : timeClass}">
+                                ${order.status || 'חדש'} | ${displayTime}
+                            </span>
                         </div>
-                        <div class="font-semibold text-gray-900 text-lg">${customerName}${highlightText}</div>
-                        <p class="text-sm text-gray-600 truncate mt-1">${order.projectName || 'ללא פרויקט'}</p>
+                        <!-- [v40.0] Emphasized Name and Added Number -->
+                        <div class="font-bold text-gray-900 text-xl">
+                            ${customerName}${highlightText}
+                            <span class="text-sm text-gray-500 font-medium ml-2">(${customerNumber})</span>
+                        </div>
+                        <p class="text-base text-gray-600 truncate mt-1">${order.projectName || 'ללא פרויקט'}</p>
                         <p class="text-sm text-gray-500 truncate mt-1">${address}</p>
                         
                         <pre class="text-sm bg-gray-50 p-2 mt-3 rounded-md border whitespace-pre-wrap max-h-20 overflow-y-auto no-scrollbar">${notes}</pre>
@@ -1379,7 +1455,7 @@
             });
         }
         
-        // [v39.0] Updated Map Marker Logic
+        // [v40.0] Heavily modified map marker logic
         function renderMapMarkers() {
             if (!map) return;
             const bounds = L.latLngBounds();
@@ -1391,12 +1467,10 @@
                 const driverData = allDrivers.find(d => d.id === driverId);
                 const name = driverData?.name || 'נהג לא ידוע';
                 const latLng = [location.latitude, location.longitude];
-                const icon = L.icon({
-                    iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png',
-                    iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34],
-                    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png', shadowSize: [41, 41]
-                });
+                
+                const icon = location.isStuck ? redIcon : greenIcon;
                 const popupContent = `<h4>${name}</h4><p>${location.isStuck ? 'תקוע' : 'פעיל'}</p>`;
+                
                 if (driverMarkers[driverId]) {
                     driverMarkers[driverId].setLatLng(latLng).setIcon(icon).setPopupContent(popupContent);
                 } else {
@@ -1408,10 +1482,8 @@
                 if (!location.isStuck) bounds.extend(latLng);
             });
             
-            // [v39.0 FIX] Show ALL active orders with location, not just 'חדש'
-            const activeMapOrders = allOrders.filter(o => 
-                !['הושלם', 'בוטל', 'סופק'].includes(o.status) && o.latitude && o.longitude
-            );
+            // Render Orders
+            const activeMapOrders = allOrders.filter(o => !['הושלם', 'בוטל', 'סופק'].includes(o.status));
             
             // Clear old order markers
             Object.keys(orderMarkers).forEach(orderId => {
@@ -1425,31 +1497,46 @@
 
             // Add/Update current markers
             activeMapOrders.forEach(order => {
-                const latLng = [order.latitude, order.longitude];
+                let latLng;
+                let icon;
+                let popupContent;
+
                 const customerName = order.customer?.name || 'לקוח לא ידוע';
                 const displayId = order.orderNumber || `#${order.id.slice(0,6)}`;
                 
-                // [v39.0] Change icon based on status
-                const isNew = order.status === 'חדש' || order.status === 'חדש (מלקוח)' || order.status === 'בטיפול';
-                const iconUrl = isNew 
-                    ? 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-blue.png'
-                    : 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-orange.png'; // Assigned/OnWay
+                if (order.latitude && order.longitude) {
+                    // Order has coordinates (e.g., from customer or address)
+                    latLng = [order.latitude, order.longitude];
+                    
+                    if (order.isUrgent) icon = redIcon;
+                    else if (order.status === 'חדש' || order.status === 'חדש (מלקוח)' || order.status === 'בטיפול') icon = blueIcon;
+                    else icon = orangeIcon; // 'שויך', 'בדרך'
+                    
+                    popupContent = `
+                        <h4>הזמנה ${displayId} (${order.status})</h4>
+                        <p>${customerName}</p>
+                        <p>${order.address || '...'}</p>`;
                 
-                const icon = L.icon({
-                    iconUrl: iconUrl,
-                    iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34],
-                    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png', shadowSize: [41, 41]
-                });
-                
-                const popupContent = `
-                    <h4>הזמנה ${displayId} (${order.status})</h4>
-                    <p>${customerName}</p>
-                    <p>${order.address || '...'}</p>
+                } else if (WAREHOUSE_LOCATIONS[order.warehouse]) {
+                    // [v40.0] Plot at warehouse location
+                    latLng = WAREHOUSE_LOCATIONS[order.warehouse];
+                    icon = order.isUrgent ? redIcon : violetIcon; // Use violet for warehouse
+                    
+                    popupContent = `
+                        <h4>הזמנה ${displayId} (${order.status})</h4>
+                        <p>${customerName}</p>
+                        <p><b>ממתין במחסן: ${order.warehouse}</b></p>`;
+                } else {
+                    // No location data, cannot plot
+                    return;
+                }
+
+                popupContent += `
                     <button class="w-full mt-2 px-3 py-1 bg-blue-500 text-white text-sm rounded hover:bg-blue-600" 
                             onclick="showOrderDetailsModal('${order.id}')">
                         פתח פרטים
-                    </button>
-                `;
+                    </button>`;
+                
                 if (orderMarkers[order.id]) {
                     orderMarkers[order.id].setLatLng(latLng).setIcon(icon).setPopupContent(popupContent);
                 } else {
@@ -1466,19 +1553,15 @@
             }
         }
         
-        // [v37] New Modal Function
         async function showOrderDetailsModal(orderId) {
             const order = allOrders.find(o => o.id === orderId);
             const modal = document.getElementById('order-details-modal');
-            if (!order || !modal) {
-                return;
-            }
+            if (!order || !modal) return;
             
             SmartLog.info(`Opening modal for order: ${orderId}`, "UI.Modal");
 
             const customer = allCustomers.find(c => c.id === order.customer?.id);
             
-            // --- 1. Populate Order Details ---
             const detailsContainer = document.getElementById('modal-order-details');
             const displayId = order.orderNumber || order.order_id || `#${order.id.slice(0,6)}`;
             const notes = order.notes || order.rawText || '-';
@@ -1493,7 +1576,7 @@
                 </div>
                 <div class_alias="detail-item">
                     <label class="text-sm font-medium text-gray-500">לקוח</label>
-                    <p class="text-lg font-semibold">${order.customer?.name || 'N/A'} (${order.customer?.id || 'N/A'})</p>
+                    <p class="text-lg font-semibold">${order.customer?.name || 'N/A'} (${customer?.customerNumber || 'N/A'})</p>
                 </div>
                 <div class_alias="detail-item">
                     <label class="text-sm font-medium text-gray-500">פרויקט</label>
@@ -1513,7 +1596,6 @@
                 </div>
             `;
             
-            // --- 2. Populate Customer History ---
             const historyContainer = document.getElementById('modal-customer-history-list');
             historyContainer.innerHTML = '<div class="loader-container" style="position: relative; background: none;"><div class="loader"></div></div>';
             
@@ -1552,13 +1634,11 @@
                 historyContainer.innerHTML = '<p class="text-sm text-gray-500">לא זוהה לקוח.</p>';
             }
 
-            // --- 3. Set Button Action & Show ---
             document.getElementById('modal-copy-link-btn').onclick = () => copyCustomerLink(order.id);
             modal.showModal();
             feather.replace();
         }
  
-        // [v37] New Modal Function for Driver (simplified)
         function showDriverDetailsModal(driverId) {
              const driver = allDrivers.find(d => d.id === driverId);
              if (!driver) return;
@@ -1591,10 +1671,10 @@
  
         function closeOrderDetailsModal() {
             document.getElementById('order-details-modal').close();
-            document.getElementById('modal-copy-link-btn').style.display = 'inline-flex'; // Restore button
+            document.getElementById('modal-copy-link-btn').style.display = 'inline-flex';
         }
  
-        // [v38] NEW: Functions for Edit Modal
+        // [v40.0] Updated function
         function openOrderEditModal(orderId) {
             const order = allOrders.find(o => o.id === orderId);
             if (!order) return;
@@ -1609,6 +1689,10 @@
             modal.querySelector('#order-edit-delivery-type').value = order.deliveryType || '';
             modal.querySelector('#order-edit-warehouse').value = order.warehouse || '';
             
+            // [v40.0] Populate new fields
+            modal.querySelector('#order-edit-date').value = order.orderDate || '';
+            modal.querySelector('#order-edit-time').value = order.orderTime || '';
+            
             modal.showModal();
         }
 
@@ -1616,6 +1700,7 @@
             document.getElementById('order-edit-modal').close();
         }
         
+        // [v40.0] Updated function
         async function handleSaveOrderEdit(event) {
             event.preventDefault();
             const btn = document.getElementById('order-edit-save-btn');
@@ -1629,9 +1714,11 @@
                 status: document.getElementById('order-edit-status').value,
                 projectName: document.getElementById('order-edit-project').value,
                 notes: document.getElementById('order-edit-notes').value,
-                rawText: document.getElementById('order-edit-notes').value, // Save to both
+                rawText: document.getElementById('order-edit-notes').value,
                 deliveryType: document.getElementById('order-edit-delivery-type').value,
                 warehouse: document.getElementById('order-edit-warehouse').value,
+                orderDate: document.getElementById('order-edit-date').value, // [v40.0] Save new field
+                orderTime: document.getElementById('order-edit-time').value, // [v40.0] Save new field
                 lastModified: serverTimestamp()
             };
 
@@ -1650,7 +1737,6 @@
             }
         }
 
-        // [v38] NEW: Functions for Customer History Modal
         async function showCustomerHistoryModal(customerId, customerName) {
             if (!customerId) {
                 showToast('לא משויך לקוח להזמנה זו', 'error');
@@ -1699,8 +1785,6 @@
             document.getElementById('customer-history-modal').close();
         }
 
-
-        // [REMOVED v37]
         function closeDetailsPanel() {}
         
         function focusOnMapItem(id, type) {
@@ -1710,7 +1794,6 @@
                 marker = driverMarkers[id];
                 card = document.querySelector(`.driver-card[onclick*="'${id}'"]`);
             } else {
-                // [v39.0 FIX] Click needs to find the correct modal opener
                 marker = orderMarkers[id];
                 card = document.querySelector(`.order-card .font-bold[onclick*="'${id}'"]`);
             }
@@ -1763,7 +1846,7 @@
             document.querySelector('.tab-button[onclick*="orders"]').classList.toggle('active', tabName === 'orders');
             document.querySelector('.tab-button[onclick*="customers"]').classList.toggle('active', tabName === 'customers');
             
-            if(tabName === 'customers') renderCustomerCards(); // [v37] Changed function name
+            if(tabName === 'customers') renderCustomerCards();
         }
 
         function showPanelTab(tabName) {
@@ -1894,7 +1977,6 @@
                 try {
                     const newCustomerRef = await addDoc(collection(db, "customers"), {
                         ...customerData,
-                        // [v39.1 FIX] Use Timestamp.now() instead of serverTimestamp()
                         auditLog: [{ action: "Created", timestamp: Timestamp.now() }]
                     });
                     customerId = newCustomerRef.id;
@@ -2158,8 +2240,7 @@ ${orderData.notes || "--- אין תוכן ---"}
                     
                     if (hasChanges) {
                         const logEntry = {
-                            // [v39.1 FIX] Use Timestamp.now() instead of serverTimestamp()
-                            timestamp: Timestamp.now(),
+                            timestamp: Timestamp.now(), // [v39.1 FIX]
                             action: "Updated",
                             changes: changes
                         };
@@ -2347,7 +2428,6 @@ ${orderData.notes || "--- אין תוכן ---"}
             }
         }
         
-        // [v37] Redesigned function
         function renderCustomerCards() {
              const container = document.getElementById('customer-card-list');
              container.innerHTML = '<p class="text-center p-8 text-gray-500 col-span-full">טוען לקוחות...</p>';
@@ -2391,8 +2471,114 @@ ${orderData.notes || "--- אין תוכן ---"}
             if (date.toDate) date = date.toDate();
             return date.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
         }
+        
+        // [v40.0] New Timer Functions
+        function initializeTimers() {
+            if (urgencyTimerInterval) clearInterval(urgencyTimerInterval);
+            // Run every 10 seconds to update urgency and countdown
+            urgencyTimerInterval = setInterval(updateTimersAndUrgency, 10000); 
+            updateTimersAndUrgency(); // Run immediately
+        }
+        
+        function getOrderDateTime(order) {
+            if (!order.orderDate || !order.orderTime) return null;
+            try {
+                return new Date(`${order.orderDate}T${order.orderTime}`);
+            } catch (e) {
+                return null;
+            }
+        }
+        
+        function updateTimersAndUrgency() {
+            const now = new Date();
+            const todayStr = now.toISOString().split('T')[0];
+            let closestOrder = null;
+            let closestOrderMs = Infinity;
+            
+            upcomingOrdersCache = [];
 
-        // --- Generic Modal Functions (from v31) ---
+            allOrders.forEach(order => {
+                order.isUrgent = false; // Reset
+                const orderDateTime = getOrderDateTime(order);
+                
+                if (orderDateTime && order.orderDate === todayStr && orderDateTime > now) {
+                    const msRemaining = orderDateTime.getTime() - now.getTime();
+                    
+                    // Add to popup list
+                    upcomingOrdersCache.push(order);
+
+                    // Check for urgency (30 mins)
+                    if (msRemaining < (30 * 60 * 1000)) {
+                        order.isUrgent = true;
+                    }
+                    
+                    // Check if this is the closest order
+                    if (msRemaining < closestOrderMs) {
+                        closestOrderMs = msRemaining;
+                        closestOrder = order;
+                    }
+                }
+            });
+            
+            // --- Update Timer Popup ---
+            const timerPopup = document.getElementById('upcoming-timer-popup');
+            if (closestOrder) {
+                timerPopup.innerHTML = `
+                    <i data-feather="clock" class="inline-block w-4 h-4 ml-1"></i>
+                    <span>הזמנה קרובה: <strong>${formatMsToCountdown(closestOrderMs)}</strong></span>
+                `;
+                timerPopup.style.display = 'block';
+                if(closestOrder.isUrgent) {
+                    timerPopup.style.backgroundColor = 'var(--danger-color)';
+                } else {
+                    timerPopup.style.backgroundColor = 'var(--text-dark)';
+                }
+                feather.replace({ width: '16px', height: '16px' });
+            } else {
+                timerPopup.style.display = 'none';
+            }
+            
+            // --- Re-render lists and map to show urgency ---
+            renderOrdersList();
+            renderMapMarkers();
+        }
+        
+        function showUpcomingListPopup() {
+            if (upcomingOrdersCache.length === 0) {
+                showToast("אין הזמנות קרובות להיום", "info");
+                return;
+            }
+            
+            // Sort for the list
+            upcomingOrdersCache.sort((a,b) => getOrderDateTime(a) - getOrderDateTime(b));
+            
+            const listHtml = upcomingOrdersCache.map(order => {
+                const customer = allCustomers.find(c => c.id === order.customer?.id);
+                return `
+                <div class="upcoming-order-item">
+                    <p class="font-bold text-lg">${order.orderTime} - ${order.customer?.name || 'N/A'}</p>
+                    <p class="text-sm text-gray-600">${order.projectName || 'כללי'} (${order.warehouse || 'N/A'})</p>
+                    <p class="text-xs text-gray-500">מס' הזמנה: ${order.order_id || order.id}</p>
+                </div>
+                `;
+            }).join('');
+            
+            openModal("הזמנות קרובות להיום", listHtml);
+        }
+        
+        function formatMsToCountdown(ms) {
+            let seconds = Math.floor(ms / 1000);
+            let minutes = Math.floor(seconds / 60);
+            let hours = Math.floor(minutes / 60);
+            
+            seconds = seconds % 60;
+            minutes = minutes % 60;
+            
+            const pad = (n) => n < 10 ? '0' + n : n;
+            return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+        }
+
+        // --- Generic Modal Functions ---
         const genericModal = document.createElement('div');
         genericModal.id = 'generic-modal';
         genericModal.className = 'modal-overlay hidden fixed inset-0 bg-black bg-opacity-50 z-40 flex items-center justify-center p-4';
@@ -2410,12 +2596,13 @@ ${orderData.notes || "--- אין תוכן ---"}
                 ${showHeader ? `
                 <div class="flex justify-between items-center p-4 border-b">
                     <h2 class="text-xl font-semibold">${title}</h2>
-                    <button onclick="closeModal()" class="text-gray-500 hover:text-gray-700">&times;</button>
+                    <button onclick="closeModal()" class="text-gray-500 hover:text-gray-700"><i data-feather="x"></i></button>
                 </div>` : ''}
-                <div id="modal-body">${content}</div>
+                <div id="modal-body" class="p-6 max-h-[70vh] overflow-y-auto">${content}</div>
             `;
             document.getElementById('generic-modal-content-inner').innerHTML = modalContent;
             document.getElementById('generic-modal').classList.remove('hidden');
+            feather.replace();
         }
 
         function closeModal() {
@@ -2453,7 +2640,8 @@ ${orderData.notes || "--- אין תוכן ---"}
         window.closeCustomerHistoryModal = closeCustomerHistoryModal;
         window.closeModal = closeModal;
         window.showEditCustomerModal = showEditCustomerModal;
-        window.showDriverDetailsModal = showDriverDetailsModal; // [v39.0] Expose driver modal
+        window.showDriverDetailsModal = showDriverDetailsModal;
+        window.showUpcomingListPopup = showUpcomingListPopup; // [v40.0] Expose timer popup
 
     </script>
 </body>
