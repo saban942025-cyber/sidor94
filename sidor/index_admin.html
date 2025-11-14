@@ -3,21 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DeliveryMaster v40.2 (Datalist Fix)</title>
+    <title>DeliveryMaster v40.3 (Customer Search Fix)</title>
     <!-- 
-      DeliveryMaster Admin App v40.2
+      DeliveryMaster Admin App v40.3
       
       Changelog:
-      - [CRITICAL FIX v40.2]
+      - [CRITICAL FIX v40.3]
+        - Fixed customer search logic in `handleCustomerSearch`.
+        - It now checks against the `allCustomers` array for an exact match,
+          not just the datalist.
+        - This correctly identifies existing customers even while typing.
+      - [v40.2]
         - Fixed Race Condition in new order form.
         - Customer search input is now DISABLED until the customer list (datalist)
           is fully loaded from Firestore.
-        - This prevents the "New Customer" form from appearing by mistake
-          if the admin types too fast.
-      - [FEATURE v40.1]
+      - [v40.1]
         - Implemented Nominatim (OpenStreetMap) geocoding.
-        - `getLatLngFromAddressString` now hits a live API.
-        - `submitNewOrder` now waits (await) for geocoding *before* creating the order.
     -->
     
     <!-- TailwindCSS -->
@@ -714,7 +715,7 @@
             </div>
             
             <!-- Right Panel: Customer History -->
-            <div id="modal-customer-history" class_alias="no-scrollbar">
+            <div id="modal-customer-history" class="no-scrollbar">
                 <h4 class="text-lg font-bold mb-3">היסטוריית לקוח</h4>
                 <div id="modal-customer-history-list" class="space-y-2">
                     <!-- History injected by JS -->
@@ -985,7 +986,7 @@
 
     <!-- 
       ==========================================================
-      ===               תחילת סקריפט ראשי (v40.2)              ===
+      ===               תחילת סקריפט ראשי (v40.3)              ===
       ==========================================================
     -->
     <script type="module">
@@ -1314,12 +1315,11 @@
                 const displayId = order.orderNumber || order.order_id || `#${order.id.slice(0,6)}`;
                 const customerName = order.customer?.name || 'לקוח לא ידוע';
                 const address = order.address || 'כתובת לא צוינה';
-                const createdTime = order.createdAt?.toDate ? formatTime(order.createdAt.toDate()) : '';
                 const notes = order.notes || order.rawText || '...';
                 
                 const highlightText = isCustomerOrder ? `<span class="text-xs font-bold text-yellow-800"> (הזמנה מאפליקציה)</span>` : '';
                 
-                const displayTime = order.orderTime ? `| ${order.orderTime}` : `| ${createdTime}`;
+                const displayTime = order.orderTime ? `| ${order.orderTime}` : ``;
 
                 card.innerHTML = `
                     <div class="flex-grow">
@@ -1852,32 +1852,27 @@
         function handleCustomerSearch(value) {
             const newCustomerFields = document.getElementById('new-customer-fields');
             const existingCustomerDisplay = document.getElementById('existing-customer-display');
-            const dataListOptions = document.getElementById('customer-list').options;
             
-            let found = false;
-            for (let i = 0; i < dataListOptions.length; i++) {
-                if (dataListOptions[i].value === value) {
-                    const customerId = dataListOptions[i].dataset.id;
-                    const customer = allCustomers.find(c => c.id === customerId);
-                    if (customer) {
-                        existingCustomerDisplay.style.display = 'block';
-                        document.getElementById('customer-id-existing').value = customer.id;
-                        document.getElementById('customer-name-display').innerText = customer.name;
-                        document.getElementById('customer-number-display').innerText = `(${customer.customerNumber || 'N/A'})`;
-                        document.getElementById('customer-address-display').innerText = customer.defaultAddress || 'N/A';
-                        document.getElementById('customer-phone-display').innerText = customer.phone || 'N/A';
-                        newCustomerFields.style.display = 'none';
-                        found = true;
-                    }
-                    break;
-                }
-            }
-
-            if (!found && value.trim() !== '') {
+            // [v40.3 FIX] - Check against the main allCustomers array, not the datalist options.
+            const matchingCustomer = allCustomers.find(c => c.name.toLowerCase() === value.toLowerCase());
+            
+            if (matchingCustomer) {
+                // Found an exact match
+                const customer = matchingCustomer;
+                existingCustomerDisplay.style.display = 'block';
+                document.getElementById('customer-id-existing').value = customer.id;
+                document.getElementById('customer-name-display').innerText = customer.name;
+                document.getElementById('customer-number-display').innerText = `(${customer.customerNumber || 'N/A'})`;
+                document.getElementById('customer-address-display').innerText = customer.defaultAddress || 'N/A';
+                document.getElementById('customer-phone-display').innerText = customer.phone || 'N/A';
+                newCustomerFields.style.display = 'none';
+            } else if (value.trim() !== '') {
+                // No exact match, but text is present - show new customer form
                 newCustomerFields.style.display = 'block';
                 existingCustomerDisplay.style.display = 'none';
                 document.getElementById('customer-name-new').value = value;
-            } else if (value.trim() === '') {
+            } else {
+                // Empty input
                 newCustomerFields.style.display = 'none';
                 existingCustomerDisplay.style.display = 'none';
             }
@@ -1916,14 +1911,16 @@
                 }
                 
                 // [v40.1] Get Coords for new customer
+                btn.innerText = 'מאמת כתובת...';
                 customCoords = await getLatLngFromAddressString(address);
                 
                 try {
+                    btn.innerText = 'יוצר לקוח...';
                     const newCustomerRef = await addDoc(collection(db, "customers"), {
                         ...customerData,
                         customLat: customCoords?.latitude || null,
                         customLon: customCoords?.longitude || null,
-                        auditLog: [{ action: "Created", timestamp: Timestamp.now() }]
+                        auditLog: [{ action: "Created", timestamp: Timestamp.now() }] // [v39.1 FIX]
                     });
                     customerId = newCustomerRef.id;
                     customerData.id = customerId;
@@ -1951,6 +1948,7 @@
                     customCoords.longitude = customer.customLon;
                 } else {
                     // [v40.1] Get coords if missing
+                    btn.innerText = 'מאמת כתובת...';
                     customCoords = await getLatLngFromAddressString(address);
                 }
             } else {
@@ -1984,6 +1982,7 @@
             SmartLog.info("Attempting to create new order...", "CRUD.Order.Create", orderData);
             
             try {
+                btn.innerText = 'יוצר הזמנה...';
                 let orderRef;
                 let finalOrderId = orderData.order_id;
                 let docId;
