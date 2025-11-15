@@ -3,16 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DeliveryMaster v40.4 (Path Fix)</title>
+    <title>DeliveryMaster v40.3 (Customer Search Fix)</title>
     <!-- 
-      DeliveryMaster Admin App v40.4
+      DeliveryMaster Admin App v40.3
       
       Changelog:
-      - [GEMINI STABLE FIX v40.4]
-        - Implemented stable App ID logic: dirtyAppId.split('_').slice(0, 2).join('_')
-        - Patched ALL Firestore collection/doc paths to use the
-          correct `artifacts/{appId}/public/data/...` structure.
-        - This should resolve all "Missing or insufficient permissions" errors.
+      - [GEMINI FIX] Patched all Firestore collection/doc paths to use the
+        correct `artifacts/{appId}/public/data/...` structure to resolve
+        all "Missing or insufficient permissions" errors.
     -->
     
     <!-- TailwindCSS -->
@@ -980,7 +978,7 @@
 
     <!-- 
       ==========================================================
-      ===               תחילת סקריפט ראשי (v40.4)              ===
+      ===               תחילת סקריפט ראשי (v40.3)              ===
       ==========================================================
     -->
     <script type="module">
@@ -1028,11 +1026,9 @@
         };
         
         const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : JSON.stringify(fallbackConfig));
-        
-        // [GEMINI STABLE FIX v40.4] Stabilizing the App ID logic once and for all.
+        // [GEMINI FIX] Clean the appId to prevent path errors
         const dirtyAppId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        // This logic correctly extracts 'c_...' from 'c_..._sidor/index2.html' or 'c_..._index_admin.html'
-        const appId = dirtyAppId.split('_').slice(0, 2).join('_'); 
+        const appId = dirtyAppId.split('/')[0]; // [GEMINI FIX] Use the correct split logic
 
         // [GEMINI FIX] Define collection names centrally
         const ORDERS_COLLECTION = 'orders_v2';
@@ -1092,12 +1088,11 @@
                 await this._logToFirestore("error", error.message || "Unknown error", category, { ...context, stack: error.stack });
             },
             async _logToFirestore(level, message, category, context) {
+                // [FIX v36.3] Disable client-side logging to Firestore to prevent permission errors.
+                // [GEMINI NOTE] Even if re-enabled, path below would need fixing.
                 // [GEMINI FIX] Path corrected just in case it's re-enabled.
                 try {
-                    // This is disabled by default to prevent loops, but the path is now correct.
-                    // await addDoc(collection(db, 'artifacts', appId, 'public', 'data', LOGS_COLLECTION), { 
-                    //     level, message, category, context, timestamp: serverTimestamp(), source: 'AdminPanel' 
-                    // });
+                    // await addDoc(collection(db, 'artifacts', appId, 'public', 'data', LOGS_COLLECTION), { ... });
                 } catch (e) {
                     console.warn("Failed to write log to Firestore (logging is disabled or path error)", e);
                 }
@@ -1160,6 +1155,7 @@
 
 
         // --- Data Fetching & Listeners ---
+        // const ORDERS_COLLECTION = 'orders_v2'; // [GEMINI] Moved up
         
         function attachAllListeners() {
             listenForActiveOrders();
@@ -2298,8 +2294,7 @@ ${orderData.notes || "--- אין תוכן ---"}
                      showToast('שגיאה: להזמנה זו אין "מספר הזמנה" (order_id)', 'error');
                      return;
                 }
-                
-                // [GEMINI FIX] Make sure this file exists, or it will 404
+
                 const customerLink = `customer.html?id=${shortOrderId}`;
                 
                 const tempInput = document.createElement("textarea");
@@ -2499,7 +2494,7 @@ ${orderData.notes || "--- אין תוכן ---"}
                 ${showHeader ? `
                 <div class="flex justify-between items-center p-4 border-b">
                     <h2 class="text-xl font-semibold">${title}</h2>
-                    <button onclick="closeModal()" class="text-gray-500 hover:text-gray-700">×</button>
+                    <button onclick="closeModal()" class="text-gray-500 hover:text-gray-700">&times;</button>
                 </div>` : ''}
                 <div id="modal-body">${content}</div>
             `;
@@ -2547,6 +2542,3 @@ ${orderData.notes || "--- אין תוכן ---"}
     </script>
 </body>
 </html>
-
-
-
