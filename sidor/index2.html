@@ -3,16 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Sidor Mobile v1.7 (מיוצב)</title>
+    <title>Sidor Mobile v1.8 (מיוצב)</title>
     <!-- 
-      Sidor Mobile v1.7 - (ייצוב קריטי)
+      Sidor Mobile v1.8 - (ייצוב שאילתות ו-DOM)
       
       תיקונים:
-      - [קריטי] תקלת אתחול: הוספת הגדרות Firebase קבועות (Hardcoded) במקום להסתמך על '__firebase_config' שלא קיים.
-      - [קריטי] תיקון נתיב: הסרת התלות ב-'__app_id' ובנתיב 'artifacts/'. 
-        הקוד פונה כעת ישירות לקולקציית 'orders' הראשית.
-      - [ייצוב] השארת לוגיקת אימות עם fallback ל-Anonymously.
-      - [ייצוב] השארת שאילתה מפושטת ללא מיון כפול למניעת צורך באינדקס.
+      - [קריטי] ייצוב שאילתה: פישוט שאילתת ברירת המחדל (listenToOrders)
+        ל-orderBy('createdAt') במקום סינון על delivery_date, כדי למנוע
+        צורך באינדקס מורכב שגורם לכשל שקט.
+      - [קריטי] ייצוב שאילתה: הסרת orderBy('warehouse') משאילתת השיתוף
+        (loadOrdersForShare) שדרשה אינדקס. המיון יתבצע כעת ב-JS.
+      - [קריטי] תיקון Race Condition: העברת feather.replace() לתוך
+        DOMContentLoaded כדי להבטיח שהאייקונים ירוצו רק אחרי טעינת ה-DOM.
+      - [ייצוב] הוספת console.log נוספים לאיתור תקלות.
     -->
     
     <!-- PWA & Mobile Specific Tags -->
@@ -393,7 +396,7 @@
     <script type="module">
         import { initializeApp, getApp, getApps } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
-        import { getFirestore, collection, query, where, orderBy, onSnapshot, setLogLevel, getDocs } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, query, where, orderBy, onSnapshot, setLogLevel, getDocs, limit } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
         // --- גלובלי ---
         let db, auth;
@@ -403,7 +406,6 @@
         let userId = null;
         
         // --- [תיקון קריטי v1.7] הגדרות Firebase קבועות ---
-        // הסרנו את התלות ב-'__firebase_config'
         const firebaseConfig = {
           apiKey: "AIzaSyDq0oVwS6zbEfsgrYBRkeBq80dDUKMedzo", 
           authDomain: "saban94-78949.firebaseapp.com", 
@@ -413,8 +415,8 @@
           appId: "1:41553157903:web:cc33d252cff023be97a87a",
           measurementId: "G-XV6RZDESSB"
         };
+        
         // --- [תיקון קריטי v1.7] נתיב הקולקציה ---
-        // אנחנו פונים ישירות ל-'orders', ללא 'artifacts'
         const ORDERS_COLLECTION_PATH = 'orders';
 
 
@@ -458,6 +460,7 @@
 
             // --- 2. אימות ---
             authenticateUser: () => {
+                SmartLog.info("Authenticating...");
                 onAuthStateChanged(auth, async (user) => {
                     if (user) {
                         userId = user.uid;
@@ -496,27 +499,29 @@
                 // [תיקון v1.7] שימוש בנתיב הישיר
                 const collectionPath = ORDERS_COLLECTION_PATH;
                 
-                // [תיקון v1.6] שאילתה מפושטת
+                // [תיקון v1.8] שאילתה סופר-פשוטה לבדיקה.
+                // מביאה את 50 ההזמנות האחרונות שנוצרו.
                 const q = query(
                     collection(db, collectionPath), 
-                    where('delivery_date', '>=', todayStr), 
-                    orderBy('delivery_date')
+                    orderBy('createdAt', 'desc'),
+                    limit(50)
                 );
                 
-                SmartLog.info(`Listening to orders at: ${collectionPath}`);
+                SmartLog.info(`Attaching listener to orders at: ${collectionPath}`);
 
                 ordersListener = onSnapshot(q, 
                     (snapshot) => {
                         SmartLog.info(`Received ${snapshot.size} orders.`);
                         const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                         
-                        const today = new Date().toISOString().split('T')[0];
-                        const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
-                        const twoDays = new Date(Date.now() + 2 * 86400000).toISOString().split('T')[0];
+                        // [תיקון v1.8] המיון לטאבים חייב להתבסס על 'delivery_date'
+                        const todayStr = new Date().toISOString().split('T')[0];
+                        const tomorrowStr = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+                        const twoDaysStr = new Date(Date.now() + 2 * 86400000).toISOString().split('T')[0];
 
-                        const todayOrders = orders.filter(o => o.delivery_date === today);
-                        const tomorrowOrders = orders.filter(o => o.delivery_date === tomorrow);
-                        const twoDaysOrders = orders.filter(o => o.delivery_date === twoDays);
+                        const todayOrders = orders.filter(o => o.delivery_date === todayStr);
+                        const tomorrowOrders = orders.filter(o => o.delivery_date === tomorrowStr);
+                        const twoDaysOrders = orders.filter(o => o.delivery_date === twoDaysStr);
 
                         app.renderOrderList('dashboard-today-list', todayOrders);
                         app.renderOrderList('dashboard-tomorrow-list', tomorrowOrders);
@@ -653,10 +658,12 @@
                 
                 // [תיקון v1.7] שימוש בנתיב הישיר
                 const collectionPath = ORDERS_COLLECTION_PATH;
+                
+                // [תיקון v1.8] הסרת מיון לפי מחסן מהשאילתה
                 const q = query(
                     collection(db, collectionPath), 
-                    where('delivery_date', '==', date), 
-                    orderBy('warehouse')
+                    where('delivery_date', '==', date),
+                    limit(50) // הוספת מגבלה
                 );
                 
                 try {
@@ -668,7 +675,11 @@
                         return;
                     }
                     
-                    const orders = snapshot.docs.map(doc => doc.data());
+                    let orders = snapshot.docs.map(doc => doc.data());
+                    
+                    // [תיקון v1.8] מיון ידני ב-JS
+                    orders.sort((a, b) => (a.warehouse || '').localeCompare(b.warehouse || ''));
+                    
                     listEl.innerHTML = orders.map(order => `
                         <div class="order-card">
                             <div class="order-card-header">
@@ -685,7 +696,16 @@
                 } catch (error) {
                     console.error("Firebase Error in loadOrdersForShare:", error);
                     SmartLog.error(error, "Data.ShareLoadFailed");
-                    listEl.innerHTML = `<p class="text-red-500 p-4">שגיאה בטעינת הזמנות: ${error.message}.</p>`;
+                    // [תיקון v1.8] הצגת הודעת שגיאה על אינדקס חסר
+                    if (error.code === 'failed-precondition') {
+                         listEl.innerHTML = `<p class="text-red-500 p-4"><b>שגיאת Firestore:</b> חסר אינדקס מורכב. 
+                         <br><br>כדי לתקן, צור אינדקס ב-Firestore על הקולקציה 'orders':
+                         <br>1. delivery_date (Ascending)
+                         <br>2. warehouse (Ascending)
+                         </p>`;
+                    } else {
+                        listEl.innerHTML = `<p class="text-red-500 p-4">שגיאה בטעינת הזמנות: ${error.message}.</p>`;
+                    }
                 }
             },
             
@@ -726,9 +746,12 @@
 
         // --- חשיפה גלובלית והפעלה ---
         window.app = app;
-        document.addEventListener('DOMContentLoaded', app.init);
-        // [תיקון] הפעלת האייקונים צריכה לקרות לאחר טעינת ה-DOM
-        feather.replace();
+        
+        // [תיקון v1.8] העברת feather.replace() לתוך ה-DOMContentLoaded
+        document.addEventListener('DOMContentLoaded', () => {
+            app.init();
+            feather.replace();
+        });
     </script>
 </body>
 </html>
