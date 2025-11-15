@@ -3,21 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Sidor Mobile v1.13 (מיוצב)</title>
+    <title>Sidor Mobile v1.14 (מיוצב)</title>
     <!-- 
-      Sidor Mobile v1.13 - (ייצוב שאילתות וסיכות לקוחות)
+      Sidor Mobile v1.14 - (תיקון Race Condition קריטי)
       
       תיקונים:
-      - [קריטי] תיקון טעינה איטית: הסרת 'orderBy('createdAt')'
-        מהשאילתה הראשית (listenToOrders). השאילתה כעת
-        מביאה 50 מסמכים ללא מיון (מהיר מאוד) והמיון
-        מתבצע ב-JavaScript.
-      - [קריטי] תיקון טעינת שיתוף: הסרת 'orderBy('warehouse')'
-        משאילתת השיתוף. הסינון והמיון יתבצעו ב-JS.
-      - [חדש] הוספת סיכות לקוחות: נוסף מאזין חדש
-        (listenForCustomers) שטוען את קולקציית 'customers'.
-      - [חדש] updateMapMarkers עודכן וכעת מצייר גם סיכות הזמנות
-        (כחולות) וגם סיכות לקוחות (אדומות).
+      - [קריטי] תיקון כשל שקט בטעינה: שוחזר אתחול המפה (initMap)
+        כך שיקרה רק בלחיצה על טאב "מפה" (בתוך app.navigate).
+        הקריאה הקודמת ב-app.init גרמה לכשל ב-Leaflet (ניסיון
+        לאתחל מפה על אלמנט מוסתר) שתקע את תהליך האימות.
+      - [קריטי] תיקון "אין מפה": הוספת קריאה ל-app.updateMapMarkers
+        בתוך app.navigate('map') מיד לאחר אתחול המפה,
+        כדי לצייר את כל הסיכות שכבר נטענו.
+      - [שיפור] הוספת אירועי ontouchstart לכפתורי הניווט
+        לתגובתיות מהירה יותר במובייל.
+      - [שיפור] הוספת 'overscroll-behavior: none' ו-
+        '-webkit-overflow-scrolling: touch' לשיפור חווית הגלילה.
     -->
     
     <!-- PWA & Mobile Specific Tags -->
@@ -48,7 +49,7 @@
             --surface: #ffffff;
         }
         html, body {
-            overscroll-behavior: none;
+            overscroll-behavior: none; /* [שיפור v1.14] מונע "קפיצה" של הדף בגלילה */
         }
         body { 
             font-family: 'Rubik', sans-serif; 
@@ -120,12 +121,14 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            flex-shrink: 0; /* [שיפור v1.14] מבטיח שהכותרת לא תתכווץ */
         }
         
         .app-main {
             flex: 1;
             overflow-y: auto;
             position: relative;
+            -webkit-overflow-scrolling: touch; /* [שיפור v1.14] גלילה חלקה ב-iOS */
         }
         
         .app-page {
@@ -144,7 +147,7 @@
             grid-template-columns: repeat(4, 1fr);
             height: 65px;
             z-index: 20;
-            flex-shrink: 0;
+            flex-shrink: 0; /* [שיפור v1.14] מבטיח שהניווט לא יתכווץ */
         }
         .nav-item {
             display: flex;
@@ -316,13 +319,13 @@
             <div id="page-dashboard" class="app-page active">
                 
                 <div class="dashboard-tabs">
-                    <button id="dash-tab-today" class="dashboard-tab active" onclick="app.navigateDashboardTab('today')">
+                    <button id="dash-tab-today" class="dashboard-tab active" onclick="app.navigateDashboardTab('today')" ontouchstart="app.navigateDashboardTab('today')">
                         🔥 היום <span id="today-count" class="tab-count">0</span>
                     </button>
-                    <button id="dash-tab-tomorrow" class="dashboard-tab" onclick="app.navigateDashboardTab('tomorrow')">
+                    <button id="dash-tab-tomorrow" class="dashboard-tab" onclick="app.navigateDashboardTab('tomorrow')" ontouchstart="app.navigateDashboardTab('tomorrow')">
                         ☀️ מחר <span id="tomorrow-count" class="tab-count">0</span>
                     </button>
-                    <button id="dash-tab-twodays" class="dashboard-tab" onclick="app.navigateDashboardTab('twodays')">
+                    <button id="dash-tab-twodays" class="dashboard-tab" onclick="app.navigateDashboardTab('twodays')" ontouchstart="app.navigateDashboardTab('twodays')">
                         🗓️ עוד יומיים <span id="twodays-count" class="tab-count">0</span>
                     </button>
                 </div>
@@ -396,19 +399,19 @@
         
         <!-- Bottom Tab Bar -->
         <nav class="app-nav">
-            <button class="nav-item active" onclick="app.navigate('dashboard')">
+            <button class="nav-item active" onclick="app.navigate('dashboard')" ontouchstart="app.navigate('dashboard')">
                 <i data-feather="home"></i>
                 <span>דשבורד</span>
             </button>
-            <button class="nav-item" onclick="app.navigate('share')">
+            <button class="nav-item" onclick="app.navigate('share')" ontouchstart="app.navigate('share')">
                 <i data-feather="share-2"></i>
                 <span>שיתוף</span>
             </button>
-            <button class="nav-item" onclick="app.navigate('map')">
+            <button class="nav-item" onclick="app.navigate('map')" ontouchstart="app.navigate('map')">
                 <i data-feather="map"></i>
                 <span>מפה</span>
             </button>
-            <button class="nav-item" onclick="app.navigate('settings')">
+            <button class="nav-item" onclick="app.navigate('settings')" ontouchstart="app.navigate('settings')">
                 <i data-feather="settings"></i>
                 <span>הגדרות</span>
             </button>
@@ -426,10 +429,10 @@
         let db, auth;
         let map;
         let ordersListener = null;
-        let customersListener = null; // [חדש v1.13]
+        let customersListener = null; 
         let mapMarkers = [];
         let allOrders = [];
-        let allCustomers = []; // [חדש v1.13]
+        let allCustomers = []; 
         let userId = null;
         
         // --- [תיקון קריטי v1.7] הגדרות Firebase קבועות ---
@@ -445,7 +448,7 @@
         
         // --- [תיקון קריטי v1.9] נתיב הקולקציה ---
         const ORDERS_COLLECTION_PATH = 'orders_v2'; 
-        const CUSTOMERS_COLLECTION_PATH = 'customers'; // [חדש v1.13]
+        const CUSTOMERS_COLLECTION_PATH = 'customers'; 
 
         // --- [חדש v1.13] אייקונים למפה ---
         const orderIcon = L.icon({
@@ -491,6 +494,9 @@
                     auth = getAuth(fbApp);
                     setLogLevel('debug');
 
+                    // [תיקון v1.12] הסרת אתחול מפה מכאן
+                    // app.initMap('map-container'); // <-- הוסר
+
                     app.authenticateUser();
                 } catch (e) {
                     SmartLog.error(e, "Firebase Init Failed");
@@ -528,7 +534,7 @@
             loadInitialData: () => {
                 document.getElementById('header-title').innerText = "דשבורד ראשי";
                 app.listenToOrders();
-                app.listenForCustomers(); // [חדש v1.13]
+                app.listenForCustomers(); 
             },
 
             // --- 4. האזנה להזמנות ---
@@ -573,7 +579,7 @@
                         app.renderOrderList('dashboard-tomorrow-list', tomorrowOrders);
                         app.renderOrderList('dashboard-twodays-list', twoDaysOrders);
                         
-                        app.updateMapMarkers(); // [תיקון v1.13]
+                        app.updateMapMarkers(); 
                         
                         app.hideLoader(); 
 
@@ -610,7 +616,6 @@
                     (error) => {
                         console.error("!!! FATAL: onSnapshot error (Customers):", error);
                         SmartLog.error(error, "Data.CustomerListenFailed");
-                        // לא קריטי כמו הזמנות, אז רק נרשום לוג
                     }
                 );
             },
@@ -660,12 +665,12 @@
                     'settings': 'הגדרות'
                 }[pageId];
 
-                // [תיקון קריטי v1.12]
+                // [תיקון קריטי v1.14]
                 if (pageId === 'map') {
                     app.initMap('map-container'); // אתחל אם לא קיים, או רענן גודל
                     // צייר מחדש את הסיכות שכבר נטענו
                     setTimeout(() => {
-                        app.updateMapMarkers(); // [תיקון v1.13]
+                        app.updateMapMarkers(); 
                     }, 100);
                 }
             },
@@ -703,7 +708,6 @@
                 }
             },
             
-            // [תיקון v1.13] פונקציה זו מציירת עכשיו גם הזמנות וגם לקוחות
             updateMapMarkers: () => {
                 if (!map) {
                     SmartLog.info("Map not ready for markers yet.");
@@ -716,7 +720,6 @@
 
                 // 1. צייר הזמנות (כחול)
                 allOrders.forEach(order => {
-                    // הצג רק הזמנות פעילות על המפה
                     if (['הושלם', 'בוטל', 'סופק'].includes(order.status)) return;
                     
                     if (order.latitude && order.longitude) {
@@ -744,22 +747,34 @@
                 }
             },
             
-            focusOnMapItem: (orderId) => {
-                const order = allOrders.find(o => o.id === orderId);
-                if (order && order.latitude && order.longitude) {
+            focusOnMapItem: (orderId, type) => {
+                let targetOrder = allOrders.find(o => o.id === orderId);
+                let lat, lon;
+                
+                if (type === 'order' && targetOrder && targetOrder.latitude && targetOrder.longitude) {
+                    lat = targetOrder.latitude;
+                    lon = targetOrder.longitude;
+                } else if (type === 'customer' && targetOrder.customer?.id) {
+                    let customer = allCustomers.find(c => c.id === targetOrder.customer.id);
+                    if (customer && customer.customLat && customer.customLon) {
+                        lat = customer.customLat;
+                        lon = customer.customLon;
+                    }
+                }
+
+                if (lat && lon) {
                     app.navigate('map'); 
                     setTimeout(() => { 
-                        map.setView([order.latitude, order.longitude], 16);
-                        // פתח פופאפ
+                        map.setView([lat, lon], 16);
                         mapMarkers.forEach(m => {
-                            if (m.getLatLng().lat == order.latitude) {
+                            if (m.getLatLng().lat == lat && m.getLatLng().lng == lon) {
                                 m.openPopup();
                             }
                         });
                     }, 100);
                 } else {
-                    console.log("No location for this order:", orderId);
-                    showToast("לא קיים מיקום עבור הזמנה זו", "info");
+                    console.log("No location for this item:", orderId);
+                    showToast("לא קיים מיקום עבור פריט זה", "info");
                 }
             },
             
