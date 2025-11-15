@@ -3,16 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Sidor Mobile v1.6 (מיוצב)</title>
+    <title>Sidor Mobile v1.7 (מיוצב)</title>
     <!-- 
-      Sidor Mobile v1.6 - (ייצוב וטיפול בשגיאות)
+      Sidor Mobile v1.7 - (ייצוב קריטי)
       
       תיקונים:
-      - [קריטי] תוקנו כל נתיבי הגישה ל-Firestore לשימוש במבנה '/artifacts/{appId}/public/data/'.
-      - [קריטי] הוספת לוגיקת אימות מלאה כולל __initial_auth_token.
-      - [קריטי] הוספת טיפול בשגיאות (Error Handling) למאזיני onSnapshot.
-      - [קריטי] תיקון לוגיקת הטעינה: ה-Loader מוסתר כעת רק *לאחר* קבלת נתונים או שגיאה.
-      - [ייצוב] הסרת מיון כפול (orderBy('warehouse')) משאילתת ברירת המחדל כדי למנוע צורך באינדקס מורכב.
+      - [קריטי] תקלת אתחול: הוספת הגדרות Firebase קבועות (Hardcoded) במקום להסתמך על '__firebase_config' שלא קיים.
+      - [קריטי] תיקון נתיב: הסרת התלות ב-'__app_id' ובנתיב 'artifacts/'. 
+        הקוד פונה כעת ישירות לקולקציית 'orders' הראשית.
+      - [ייצוב] השארת לוגיקת אימות עם fallback ל-Anonymously.
+      - [ייצוב] השארת שאילתה מפושטת ללא מיון כפול למניעת צורך באינדקס.
     -->
     
     <!-- PWA & Mobile Specific Tags -->
@@ -230,13 +230,12 @@
             padding: 1rem;
         }
         
-        /* [תיקון] Loader מוסתר כברירת מחדל */
         #loader {
             position: fixed;
             inset: 0;
             background: rgba(255,255,255,0.9);
             z-index: 500;
-            display: flex; /* מוצג על ידי JS */
+            display: flex; /* מוצג כברירת מחדל */
             justify-content: center;
             align-items: center;
         }
@@ -276,7 +275,6 @@
 </head>
 <body>
 
-    <!-- [תיקון] ה-Loader מוצג כברירת מחדל עד שה-JS מסתיר אותו -->
     <div id="loader">
         <div class="spinner"></div>
     </div>
@@ -391,22 +389,36 @@
 
     </div> <!-- End App Layout -->
     
-    <!-- [תיקון] כל ה-JS עובר לסוף ה-body -->
     <!-- Firebase SDKs -->
     <script type="module">
         import { initializeApp, getApp, getApps } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
         import { getFirestore, collection, query, where, orderBy, onSnapshot, setLogLevel, getDocs } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
-        // --- [תיקון] הגדרות גלובליות ---
+        // --- גלובלי ---
         let db, auth;
         let map;
         let ordersListener = null;
         let mapMarkers = [];
         let userId = null;
-        let appId = 'default-app-id'; // [תיקון] הגדרת ברירת מחדל
+        
+        // --- [תיקון קריטי v1.7] הגדרות Firebase קבועות ---
+        // הסרנו את התלות ב-'__firebase_config'
+        const firebaseConfig = {
+          apiKey: "AIzaSyDq0oVwS6zbEfsgrYBRkeBq80dDUKMedzo", 
+          authDomain: "saban94-78949.firebaseapp.com", 
+          projectId: "saban94-78949",
+          storageBucket: "saban94-78949.firebasestorage.app",
+          messagingSenderId: "41553157903", 
+          appId: "1:41553157903:web:cc33d252cff023be97a87a",
+          measurementId: "G-XV6RZDESSB"
+        };
+        // --- [תיקון קריטי v1.7] נתיב הקולקציה ---
+        // אנחנו פונים ישירות ל-'orders', ללא 'artifacts'
+        const ORDERS_COLLECTION_PATH = 'orders';
 
-        // --- [תיקון] לוגר ופונקציות טעינה ---
+
+        // --- לוגר ופונקציות טעינה ---
         const SmartLog = {
             info: (msg) => console.log(`[INFO] ${msg}`),
             error: (err, msg) => console.error(`[ERROR] ${msg}`, err),
@@ -426,13 +438,10 @@
             init: () => {
                 app.showLoader(); // הצג טוען מיד
                 
-                // [תיקון] קריאת קונפיגורציה דינמית
                 try {
-                    const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-                    appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-
+                    // [תיקון v1.7] שימוש בקונפיגורציה הקבועה
                     if (!firebaseConfig.projectId) {
-                        throw new Error("Firebase config not loaded");
+                        throw new Error("Firebase config is missing projectId");
                     }
                     
                     const fbApp = !getApps().length ? initializeApp(firebaseConfig) : getApp();
@@ -458,7 +467,6 @@
                     } else {
                         SmartLog.info("No user, signing in...");
                         try {
-                            // [תיקון] שימוש בטוקן אם קיים
                             if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                                 await signInWithCustomToken(auth, __initial_auth_token);
                             } else {
@@ -476,20 +484,19 @@
             loadInitialData: () => {
                 document.getElementById('header-title').innerText = "דשבורד ראשי";
                 app.listenToOrders();
-                // [תיקון] הסתרת הטוען תתבצע בתוך onSnapshot
             },
 
             // --- 4. האזנה להזמנות ---
             listenToOrders: () => {
-                if (ordersListener) ordersListener(); // נתק מאזין קודם
+                if (ordersListener) ordersListener(); 
 
                 const today = new Date();
                 const todayStr = today.toISOString().split('T')[0];
                 
-                // [תיקון] נתיב Firestore מלא
-                const collectionPath = `artifacts/${appId}/public/data/orders`;
+                // [תיקון v1.7] שימוש בנתיב הישיר
+                const collectionPath = ORDERS_COLLECTION_PATH;
                 
-                // [תיקון] שאילתה מפושטת (הסרת orderBy('warehouse'))
+                // [תיקון v1.6] שאילתה מפושטת
                 const q = query(
                     collection(db, collectionPath), 
                     where('delivery_date', '>=', todayStr), 
@@ -503,7 +510,6 @@
                         SmartLog.info(`Received ${snapshot.size} orders.`);
                         const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                         
-                        // [תיקון] מיון הזמנות לטאבים
                         const today = new Date().toISOString().split('T')[0];
                         const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
                         const twoDays = new Date(Date.now() + 2 * 86400000).toISOString().split('T')[0];
@@ -518,11 +524,11 @@
                         
                         app.updateMapMarkers(orders);
                         
-                        app.hideLoader(); // [תיקון] הסתר טוען רק כאן
+                        app.hideLoader(); // [תיקון v1.6] הסתר טוען רק כאן
 
                     }, 
                     (error) => {
-                        // [תיקון] טיפול בשגיאה
+                        // [תיקון v1.6] טיפול בשגיאה
                         console.error("Firebase Error in listenToOrders:", error);
                         SmartLog.error(error, "Data.ListenFailed");
                         app.hideLoader();
@@ -541,7 +547,7 @@
                     return;
                 }
                 
-                // [תיקון] מיון לפי מחסן (ב-JS במקום ב-Query)
+                // [תיקון v1.6] מיון לפי מחסן (ב-JS במקום ב-Query)
                 orders.sort((a, b) => (a.warehouse || '').localeCompare(b.warehouse || ''));
 
                 container.innerHTML = orders.map(order => {
@@ -553,8 +559,8 @@
                                 <span class="font-mono text-xs px-2 py-1 rounded ${statusColor}">${order.status || 'חדש'}</span>
                             </div>
                             <div class="order-card-body space-y-1">
-                                <h3 class="font-semibold text-lg">${order.customer?.name || 'לקוח לא ידוע'}</h3>
-                                <p class="text-sm text-gray-600">${order.address || 'כתובת לא צוינה'}</p>
+                                <h3 class="font-semibold text-lg">${order.customer?.name || order.customer_name || 'לקוח לא ידוע'}</h3>
+                                <p class="text-sm text-gray-600">${order.address || order.customer_address || 'כתובת לא צוינה'}</p>
                                 <p class="text-xs text-gray-500 pt-1">${order.deliveryType || ''} | ${order.order_id || order.id}</p>
                             </div>
                         </div>
@@ -619,7 +625,7 @@
                     if (order.latitude && order.longitude) {
                         const latLng = [order.latitude, order.longitude];
                         const marker = L.marker(latLng).addTo(map)
-                            .bindPopup(`<b>${order.customer?.name || ''}</b><br>${order.address}`);
+                            .bindPopup(`<b>${order.customer?.name || order.customer_name || ''}</b><br>${order.address || order.customer_address}`);
                         mapMarkers.push(marker);
                         bounds.extend(latLng);
                     }
@@ -631,7 +637,6 @@
             },
             
             focusOnMapItem: (orderId) => {
-                // ... (פונקציה זו לא קיימת בקוד המקורי, נוסיף אותה) ...
                 console.log("Focus on map not fully implemented in this version, but order ID is:", orderId);
             },
             
@@ -646,8 +651,8 @@
                 const listEl = document.getElementById('share-order-list');
                 listEl.innerHTML = '<div class="spinner-container"><div class="spinner"></div></div>';
                 
-                // [תיקון] נתיב Firestore מלא
-                const collectionPath = `artifacts/${appId}/public/data/orders`;
+                // [תיקון v1.7] שימוש בנתיב הישיר
+                const collectionPath = ORDERS_COLLECTION_PATH;
                 const q = query(
                     collection(db, collectionPath), 
                     where('delivery_date', '==', date), 
@@ -671,14 +676,13 @@
                                 <span class="font-mono text-xs">${order.status || 'חדש'}</span>
                             </div>
                             <div class="order-card-body">
-                                <h3 class="font-semibold">${order.customer?.name || 'לקוח לא ידוע'}</h3>
-                                <p class="text-sm text-gray-600">${order.address || 'כתובת לא צוינה'}</p>
+                                <h3 class="font-semibold">${order.customer?.name || order.customer_name || 'לקוח לא ידוע'}</h3>
+                                <p class="text-sm text-gray-600">${order.address || order.customer_address || 'כתובת לא צוינה'}</p>
                             </div>
                         </div>
                     `).join('');
 
                 } catch (error) {
-                    // [תיקון] טיפול בשגיאה
                     console.error("Firebase Error in loadOrdersForShare:", error);
                     SmartLog.error(error, "Data.ShareLoadFailed");
                     listEl.innerHTML = `<p class="text-red-500 p-4">שגיאה בטעינת הזמנות: ${error.message}.</p>`;
@@ -723,6 +727,8 @@
         // --- חשיפה גלובלית והפעלה ---
         window.app = app;
         document.addEventListener('DOMContentLoaded', app.init);
+        // [תיקון] הפעלת האייקונים צריכה לקרות לאחר טעינת ה-DOM
+        feather.replace();
     </script>
 </body>
 </html>
