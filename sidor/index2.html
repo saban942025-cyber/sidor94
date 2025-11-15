@@ -3,18 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Sidor Mobile v1.11 (מיוצב)</title>
+    <title>Sidor Mobile v1.12 (מיוצב)</title>
     <!-- 
-      Sidor Mobile v1.11 - (תיקון מפה וטאבים)
+      Sidor Mobile v1.12 - (תיקון Race Condition קריטי)
       
       תיקונים:
-      - [קריטי] תיקון "אין מפה": המפה (initMap) מאותחלת כעת
-        עם טעינת האפליקציה (ב-app.init) במקום לחכות ללחיצה
-        על הטאב. זה פותר "Race Condition" ומבטיח
-        שהסיכות יתווספו למפה ברגע שהנתונים מגיעים.
-      - [שיפור UI] הוספת ספירה (Counter) לטאבים של הדשבורד
-        (היום, מחר, עוד יומיים) כדי שהמשתמש יראה שיש
-        הזמנות גם אם הן לא בטאב הפעיל.
+      - [קריטי] תיקון כשל שקט בטעינה: שוחזר אתחול המפה (initMap)
+        כך שיקרה רק בלחיצה על טאב "מפה" (בתוך app.navigate).
+        הקריאה הקודמת ב-app.init גרמה לכשל ב-Leaflet (ניסיון
+        לאתחל מפה על אלמנט מוסתר) שתקע את תהליך האימות.
+      - [קריטי] תיקון "אין מפה": הוספת קריאה ל-app.updateMapMarkers
+        בתוך app.navigate('map') מיד לאחר אתחול המפה,
+        כדי לצייר את כל הסיכות שכבר נטענו.
     -->
     
     <!-- PWA & Mobile Specific Tags -->
@@ -77,7 +77,6 @@
             color: white;
             box-shadow: 0 2px 5px rgba(37, 99, 235, 0.3);
         }
-        /* [תיקון v1.11] ספירה בטאב */
         .tab-count {
             display: inline-block;
             background-color: rgba(255,255,255,0.2);
@@ -425,6 +424,7 @@
         let map;
         let ordersListener = null;
         let mapMarkers = [];
+        let allOrders = []; // [תיקון v1.12] מערך לשמירת כל ההזמנות שנטענו
         let userId = null;
         
         // --- [תיקון קריטי v1.7] הגדרות Firebase קבועות ---
@@ -439,9 +439,8 @@
         };
         
         // --- [תיקון קריטי v1.9] נתיב הקולקציה ---
-        const ORDERS_COLLECTION_PATH = 'orders_v2'; // <--- !!! התיקון המרכזי !!!
-
-
+        const ORDERS_COLLECTION_PATH = 'orders_v2'; 
+        
         // --- לוגר ופונקציות טעינה ---
         const SmartLog = {
             info: (msg) => console.log(`[INFO] ${msg}`),
@@ -460,11 +459,10 @@
 
             // --- 1. אתחול ---
             init: () => {
-                console.log("Sidor Mobile v1.11 (מיוצב) initializing..."); // [תיקון v1.11]
-                app.showLoader(); // הצג טוען מיד
+                console.log("Sidor Mobile v1.12 (מיוצב) initializing...");
+                app.showLoader(); 
                 
                 try {
-                    // [תיקון v1.7] שימוש בקונפיגורציה הקבועה
                     if (!firebaseConfig.projectId) {
                         throw new Error("Firebase config is missing projectId");
                     }
@@ -473,9 +471,6 @@
                     db = getFirestore(fbApp);
                     auth = getAuth(fbApp);
                     setLogLevel('debug');
-
-                    // [תיקון v1.11] אתחול המפה מיד עם טעינת האפליקציה
-                    app.initMap('map-container'); // אתחול מפת הדשבורד הראשית
 
                     app.authenticateUser();
                 } catch (e) {
@@ -493,7 +488,7 @@
                         userId = user.uid;
                         SmartLog.info(`User authenticated: ${userId}`);
                         document.getElementById('auth-status-indicator').innerText = `מחובר (${userId.slice(0,6)})`;
-                        app.loadInitialData(); // טען נתונים רק לאחר אימות
+                        app.loadInitialData(); 
                     } else {
                         SmartLog.info("No user, signing in...");
                         try {
@@ -520,9 +515,6 @@
             listenToOrders: () => {
                 if (ordersListener) ordersListener(); 
 
-                const today = new Date();
-                const todayStr = today.toISOString().split('T')[0];
-                
                 const collectionPath = ORDERS_COLLECTION_PATH;
                 
                 const q = query(
@@ -537,20 +529,18 @@
                     (snapshot) => {
                         console.log("Snapshot received:", snapshot.size, "docs"); 
                         SmartLog.info(`Received ${snapshot.size} orders.`);
-                        const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        allOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })); // [תיקון v1.12] שמירת כל ההזמנות
                         
                         const todayStr = new Date().toISOString().split('T')[0];
                         const tomorrowStr = new Date(Date.now() + 86400000).toISOString().split('T')[0];
                         const twoDaysStr = new Date(Date.now() + 2 * 86400000).toISOString().split('T')[0];
 
-                        // [תיקון קריטי v1.10] שימוש ב-orderDate
-                        const todayOrders = orders.filter(o => o.orderDate === todayStr);
-                        const tomorrowOrders = orders.filter(o => o.orderDate === tomorrowStr);
-                        const twoDaysOrders = orders.filter(o => o.orderDate === twoDaysStr);
+                        const todayOrders = allOrders.filter(o => o.orderDate === todayStr);
+                        const tomorrowOrders = allOrders.filter(o => o.orderDate === tomorrowStr);
+                        const twoDaysOrders = allOrders.filter(o => o.orderDate === twoDaysStr);
                         
                         SmartLog.info(`Filtered Orders: Today(${todayOrders.length}), Tomorrow(${tomorrowOrders.length}), TwoDays(${twoDaysOrders.length})`);
 
-                        // [תיקון v1.11] עדכון ספירה בטאבים
                         document.getElementById('today-count').innerText = todayOrders.length;
                         document.getElementById('tomorrow-count').innerText = tomorrowOrders.length;
                         document.getElementById('twodays-count').innerText = twoDaysOrders.length;
@@ -559,8 +549,7 @@
                         app.renderOrderList('dashboard-tomorrow-list', tomorrowOrders);
                         app.renderOrderList('dashboard-twodays-list', twoDaysOrders);
                         
-                        // [תיקון v1.11] עדכון המפה שכבר קיימת
-                        app.updateMapMarkers(orders);
+                        app.updateMapMarkers(allOrders); // [תיקון v1.12] שלח את כל ההזמנות למפה
                         
                         app.hideLoader(); 
 
@@ -619,9 +608,13 @@
                     'settings': 'הגדרות'
                 }[pageId];
 
-                // [תיקון v1.11] המפה מאותחלת ב-init, כאן רק מרעננים גודל
-                if (pageId === 'map' && map) {
-                    setTimeout(() => map.invalidateSize(), 50); 
+                // [תיקון קריטי v1.12]
+                if (pageId === 'map') {
+                    app.initMap('map-container'); // אתחל אם לא קיים, או רענן גודל
+                    // צייר מחדש את הסיכות שכבר נטענו
+                    setTimeout(() => {
+                        app.updateMapMarkers(allOrders);
+                    }, 100);
                 }
             },
             
@@ -635,17 +628,15 @@
 
             // --- 7. מפה ---
             initMap: (containerId) => {
-                // [תיקון v1.11] בדיקה אם המפה כבר קיימת
                 if (map) {
                     map.invalidateSize();
                     return;
                 }
                 
                 const mapContainer = document.getElementById(containerId);
-                // [תיקון v1.11] בדיקה שה-container קיים
                 if (!mapContainer) {
-                    SmartLog.info("Map container not found (normal if not on map page)");
-                    return; // יאותחל מאוחר יותר בלחיצה על הטאב
+                    SmartLog.info("Map container not found");
+                    return; 
                 }
                 
                 try {
@@ -661,7 +652,6 @@
             },
             
             updateMapMarkers: (orders) => {
-                // [תיקון v1.11] אם המפה עוד לא אותחלה (כי אנחנו לא בטאב 'מפה'), אל תעשה כלום
                 if (!map) {
                     SmartLog.info("Map not ready for markers yet.");
                     return;
@@ -689,10 +679,9 @@
             focusOnMapItem: (orderId) => {
                 const order = allOrders.find(o => o.id === orderId);
                 if (order && order.latitude && order.longitude) {
-                    app.navigate('map'); // עבור לטאב המפה
-                    setTimeout(() => { // תן למפה זמן להופיע
+                    app.navigate('map'); 
+                    setTimeout(() => { 
                         map.setView([order.latitude, order.longitude], 16);
-                        // מצא את המרקר ופתח פופאפ
                         mapMarkers.forEach(m => {
                             if (m.getLatLng().lat == order.latitude) {
                                 m.openPopup();
@@ -701,6 +690,7 @@
                     }, 100);
                 } else {
                     console.log("No location for this order:", orderId);
+                    showToast("לא קיים מיקום עבור הזמנה זו", "info");
                 }
             },
             
@@ -717,6 +707,7 @@
                 
                 const collectionPath = ORDERS_COLLECTION_PATH;
                 
+                // [תיקון v1.9] שאילתה פשוטה
                 const q = query(
                     collection(db, collectionPath), 
                     orderBy('createdAt', 'desc'),
