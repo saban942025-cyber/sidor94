@@ -3,19 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Sidor Mobile v1.9 (מיוצב)</title>
+    <title>Sidor Mobile v1.10 (מיוצב)</title>
     <!-- 
-      Sidor Mobile v1.9 - (ייצוב קריטי סופי)
+      Sidor Mobile v1.10 - (תיקון שדה נתונים)
       
       תיקונים:
-      - [קריטי] תיקון נתיב נתונים: שונה נתיב הקולקציה
-        מ-'orders' ל-'orders_v2' כדי להתאים לקבצי הניהול
-        הראשיים (כמו index_admin.html v40.3).
-      - [קריטי] ייצוב שאילתת שיתוף: הסרת כל סינון או מיון
-        מ-loadOrdersForShare. הפונקציה טוענת את 200 ההזמנות
-        האחרונות ומסננת ידנית ב-JS. זה מונע כשל שקט
-        עקב חוסר באינדקס.
-      - [ייצוב] הוספת לוגים נוספים לאיתור תקלות עתידי.
+      - [קריטי] תיקון כשל שקט: שונה שם השדה בסינון מ- o.delivery_date
+        ל- o.orderDate כדי להתאים לשם השדה המדויק ב-Firestore
+        כפי שמופיע בלוגים.
+      - [קריטי] תיקון זהה בוצע גם בפונקציית השיתוף (loadOrdersForShare).
     -->
     
     <!-- PWA & Mobile Specific Tags -->
@@ -519,9 +515,12 @@
                         const tomorrowStr = new Date(Date.now() + 86400000).toISOString().split('T')[0];
                         const twoDaysStr = new Date(Date.now() + 2 * 86400000).toISOString().split('T')[0];
 
-                        const todayOrders = orders.filter(o => o.delivery_date === todayStr);
-                        const tomorrowOrders = orders.filter(o => o.delivery_date === tomorrowStr);
-                        const twoDaysOrders = orders.filter(o => o.delivery_date === twoDaysStr);
+                        // [תיקון קריטי v1.10] שינוי שם השדה מ-delivery_date ל-orderDate
+                        const todayOrders = orders.filter(o => o.orderDate === todayStr);
+                        const tomorrowOrders = orders.filter(o => o.orderDate === tomorrowStr);
+                        const twoDaysOrders = orders.filter(o => o.orderDate === twoDaysStr);
+                        
+                        SmartLog.info(`Filtered Orders: Today(${todayOrders.length}), Tomorrow(${tomorrowOrders.length}), TwoDays(${twoDaysOrders.length})`);
 
                         app.renderOrderList('dashboard-today-list', todayOrders);
                         app.renderOrderList('dashboard-tomorrow-list', tomorrowOrders);
@@ -654,22 +653,20 @@
                 const listEl = document.getElementById('share-order-list');
                 listEl.innerHTML = '<div class="spinner-container"><div class="spinner"></div></div>';
                 
-                // [תיקון v1.9] שימוש בנתיב הישיר הנכון
                 const collectionPath = ORDERS_COLLECTION_PATH;
                 
-                // [תיקון v1.9] הסרת סינון ומיון מורכבים מהשאילתה
                 const q = query(
                     collection(db, collectionPath), 
                     orderBy('createdAt', 'desc'),
-                    limit(200) // טעינת 200 ההזמנות האחרונות
+                    limit(200) 
                 );
                 
                 try {
                     const snapshot = await getDocs(q);
                     let allFetchedOrders = snapshot.docs.map(doc => doc.data());
 
-                    // [תיקון v1.9] סינון ומיון ידניים ב-JS
-                    let orders = allFetchedOrders.filter(o => o.delivery_date === date);
+                    // [תיקון קריטי v1.10] סינון ידני לפי orderDate
+                    let orders = allFetchedOrders.filter(o => o.orderDate === date);
                     orders.sort((a, b) => (a.warehouse || '').localeCompare(b.warehouse || ''));
 
                     document.getElementById('share-total-count').innerText = `(${orders.length})`;
