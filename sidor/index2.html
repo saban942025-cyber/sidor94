@@ -3,14 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Sidor Mobile v1.5</title>
+    <title>Sidor Mobile v1.6 (מיוצב)</title>
     <!-- 
-      Sidor Mobile v1.5 - Tabbed Dashboard
+      Sidor Mobile v1.6 - (ייצוב וטיפול בשגיאות)
       
-      Changelog:
-      - [NEW] Dashboard now uses a Tabbed interface for "Today", "Tomorrow", and "2 Days".
-      - [FIX] Removed date-divider logic, replaced with tab panels.
-      - [FIX] Firebase query loads all upcoming orders and JS sorts them into tabs.
+      תיקונים:
+      - [קריטי] תוקנו כל נתיבי הגישה ל-Firestore לשימוש במבנה '/artifacts/{appId}/public/data/'.
+      - [קריטי] הוספת לוגיקת אימות מלאה כולל __initial_auth_token.
+      - [קריטי] הוספת טיפול בשגיאות (Error Handling) למאזיני onSnapshot.
+      - [קריטי] תיקון לוגיקת הטעינה: ה-Loader מוסתר כעת רק *לאחר* קבלת נתונים או שגיאה.
+      - [ייצוב] הסרת מיון כפול (orderBy('warehouse')) משאילתת ברירת המחדל כדי למנוע צורך באינדקס מורכב.
     -->
     
     <!-- PWA & Mobile Specific Tags -->
@@ -50,7 +52,6 @@
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         
-        /* [NEW] Dashboard Tabs */
         .dashboard-tabs {
             display: flex;
             background-color: var(--surface);
@@ -82,8 +83,6 @@
             display: block; /* Shown when active */
         }
 
-
-        /* App Layout */
         .app-layout {
             display: flex;
             flex-direction: column;
@@ -91,7 +90,6 @@
             height: -webkit-fill-available;
         }
         
-        /* Header */
         .app-header {
             background: var(--surface);
             padding: 0.75rem 1rem;
@@ -103,14 +101,12 @@
             align-items: center;
         }
         
-        /* Main Content */
         .app-main {
             flex: 1;
             overflow-y: auto;
             position: relative;
         }
         
-        /* App Page */
         .app-page {
             display: none; /* Hidden by default */
             padding: 1rem;
@@ -119,7 +115,6 @@
             display: block;
         }
         
-        /* Bottom Tab Bar */
         .app-nav {
             background: var(--surface);
             border-top: 1px solid #e2e8f0;
@@ -148,7 +143,6 @@
             margin-bottom: 4px;
         }
         
-        /* Order Card */
         .order-card {
             background: var(--surface);
             border-radius: 12px;
@@ -187,7 +181,6 @@
             border-color: var(--primary);
         }
         
-        /* General Form */
         .form-label {
             display: block;
             font-weight: 500;
@@ -218,7 +211,6 @@
             color: #334155;
         }
         
-        /* Full Screen Modals */
         .modal-fullscreen {
             position: fixed;
             inset: 0;
@@ -238,22 +230,22 @@
             padding: 1rem;
         }
         
-        /* Loader */
+        /* [תיקון] Loader מוסתר כברירת מחדל */
+        #loader {
+            position: fixed;
+            inset: 0;
+            background: rgba(255,255,255,0.9);
+            z-index: 500;
+            display: flex; /* מוצג על ידי JS */
+            justify-content: center;
+            align-items: center;
+        }
         .spinner-container {
             display: flex;
             justify-content: center;
             align-items: center;
             padding: 2rem;
             min-height: 200px;
-        }
-        #loader {
-            position: fixed;
-            inset: 0;
-            background: rgba(255,255,255,0.9);
-            z-index: 500;
-            display: flex;
-            justify-content: center;
-            align-items: center;
         }
         .spinner {
             width: 40px;
@@ -265,7 +257,6 @@
         }
         @keyframes spin { to { transform: rotate(360deg); } }
         
-        /* [NEW] WhatsApp FAB */
         .fab-whatsapp {
             position: absolute;
             bottom: 2rem;
@@ -285,7 +276,7 @@
 </head>
 <body>
 
-    <!-- Global Loader -->
+    <!-- [תיקון] ה-Loader מוצג כברירת מחדל עד שה-JS מסתיר אותו -->
     <div id="loader">
         <div class="spinner"></div>
     </div>
@@ -303,16 +294,14 @@
         <main class="app-main no-scrollbar">
             
             <!-- Page 1: Dashboard (Today's Orders) -->
-            <div id="page-dashboard" class="app-page">
+            <div id="page-dashboard" class="app-page active">
                 
-                <!-- [NEW] Dashboard Tab Navigation -->
                 <div class="dashboard-tabs">
                     <button id="dash-tab-today" class="dashboard-tab active" onclick="app.navigateDashboardTab('today')">🔥 היום</button>
                     <button id="dash-tab-tomorrow" class="dashboard-tab" onclick="app.navigateDashboardTab('tomorrow')">☀️ מחר</button>
                     <button id="dash-tab-twodays" class="dashboard-tab" onclick="app.navigateDashboardTab('twodays')">🗓️ עוד יומיים</button>
                 </div>
                 
-                <!-- [NEW] Tab Content Panels -->
                 <div id="dashboard-page-container">
                     <div id="dashboard-today-list" class="dashboard-page-content active">
                         <div class="spinner-container"><div class="spinner"></div></div>
@@ -351,4 +340,389 @@
                 <button id="whatsapp-share-btn" class="fab-whatsapp" onclick="app.initiateShare()">
                     <!-- WhatsApp Icon SVG -->
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5
+                        <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Page 3: Map -->
+            <div id="page-map" class="app-page" style="padding: 0; height: 100%;">
+                <div id="map-container" class="w-full h-full">
+                    <!-- Map initialized by JS -->
+                </div>
+            </div>
+
+            <!-- Page 4: Settings -->
+            <div id="page-settings" class="app-page">
+                <h2 class="font-bold text-xl mb-4">הגדרות</h2>
+                <div class="space-y-4">
+                    <div class="bg-white p-4 rounded-lg shadow-sm border">
+                        <label for="user-name" class="form-label">שם משתמש</label>
+                        <input type="text" id="user-name" class="form-input" value="מנהל מערכת" readonly>
+                    </div>
+                    <div class="bg-white p-4 rounded-lg shadow-sm border">
+                        <p class="form-label">חיבור למערכת</p>
+                        <p id="auth-status-indicator" class="text-sm text-gray-600">טוען...</p>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+        
+        <!-- Bottom Tab Bar -->
+        <nav class="app-nav">
+            <button class="nav-item active" onclick="app.navigate('dashboard')">
+                <i data-feather="home"></i>
+                <span>דשבורד</span>
+            </button>
+            <button class="nav-item" onclick="app.navigate('share')">
+                <i data-feather="share-2"></i>
+                <span>שיתוף</span>
+            </button>
+            <button class="nav-item" onclick="app.navigate('map')">
+                <i data-feather="map"></i>
+                <span>מפה</span>
+            </button>
+            <button class="nav-item" onclick="app.navigate('settings')">
+                <i data-feather="settings"></i>
+                <span>הגדרות</span>
+            </button>
+        </nav>
+
+    </div> <!-- End App Layout -->
+    
+    <!-- [תיקון] כל ה-JS עובר לסוף ה-body -->
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp, getApp, getApps } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+        import { getFirestore, collection, query, where, orderBy, onSnapshot, setLogLevel, getDocs } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+
+        // --- [תיקון] הגדרות גלובליות ---
+        let db, auth;
+        let map;
+        let ordersListener = null;
+        let mapMarkers = [];
+        let userId = null;
+        let appId = 'default-app-id'; // [תיקון] הגדרת ברירת מחדל
+
+        // --- [תיקון] לוגר ופונקציות טעינה ---
+        const SmartLog = {
+            info: (msg) => console.log(`[INFO] ${msg}`),
+            error: (err, msg) => console.error(`[ERROR] ${msg}`, err),
+        };
+
+        const app = {
+            showLoader: () => {
+                const loader = document.getElementById('loader');
+                if (loader) loader.style.display = 'flex';
+            },
+            hideLoader: () => {
+                const loader = document.getElementById('loader');
+                if (loader) loader.style.display = 'none';
+            },
+
+            // --- 1. אתחול ---
+            init: () => {
+                app.showLoader(); // הצג טוען מיד
+                
+                // [תיקון] קריאת קונפיגורציה דינמית
+                try {
+                    const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+                    appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
+                    if (!firebaseConfig.projectId) {
+                        throw new Error("Firebase config not loaded");
+                    }
+                    
+                    const fbApp = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+                    db = getFirestore(fbApp);
+                    auth = getAuth(fbApp);
+                    setLogLevel('debug');
+                    app.authenticateUser();
+                } catch (e) {
+                    SmartLog.error(e, "Firebase Init Failed");
+                    app.hideLoader();
+                    document.getElementById('dashboard-today-list').innerHTML = `<p class="text-red-500 p-4">שגיאת אתחול קריטית. לא ניתן לטעון Firebase.</p>`;
+                }
+            },
+
+            // --- 2. אימות ---
+            authenticateUser: () => {
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        SmartLog.info(`User authenticated: ${userId}`);
+                        document.getElementById('auth-status-indicator').innerText = `מחובר (${userId.slice(0,6)})`;
+                        app.loadInitialData(); // טען נתונים רק לאחר אימות
+                    } else {
+                        SmartLog.info("No user, signing in...");
+                        try {
+                            // [תיקון] שימוש בטוקן אם קיים
+                            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                                await signInWithCustomToken(auth, __initial_auth_token);
+                            } else {
+                                await signInAnonymously(auth);
+                            }
+                        } catch (e) {
+                            SmartLog.error(e, "Authentication failed");
+                            app.hideLoader();
+                        }
+                    }
+                });
+            },
+
+            // --- 3. טעינת נתונים ראשונית ---
+            loadInitialData: () => {
+                document.getElementById('header-title').innerText = "דשבורד ראשי";
+                app.listenToOrders();
+                // [תיקון] הסתרת הטוען תתבצע בתוך onSnapshot
+            },
+
+            // --- 4. האזנה להזמנות ---
+            listenToOrders: () => {
+                if (ordersListener) ordersListener(); // נתק מאזין קודם
+
+                const today = new Date();
+                const todayStr = today.toISOString().split('T')[0];
+                
+                // [תיקון] נתיב Firestore מלא
+                const collectionPath = `artifacts/${appId}/public/data/orders`;
+                
+                // [תיקון] שאילתה מפושטת (הסרת orderBy('warehouse'))
+                const q = query(
+                    collection(db, collectionPath), 
+                    where('delivery_date', '>=', todayStr), 
+                    orderBy('delivery_date')
+                );
+                
+                SmartLog.info(`Listening to orders at: ${collectionPath}`);
+
+                ordersListener = onSnapshot(q, 
+                    (snapshot) => {
+                        SmartLog.info(`Received ${snapshot.size} orders.`);
+                        const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        
+                        // [תיקון] מיון הזמנות לטאבים
+                        const today = new Date().toISOString().split('T')[0];
+                        const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+                        const twoDays = new Date(Date.now() + 2 * 86400000).toISOString().split('T')[0];
+
+                        const todayOrders = orders.filter(o => o.delivery_date === today);
+                        const tomorrowOrders = orders.filter(o => o.delivery_date === tomorrow);
+                        const twoDaysOrders = orders.filter(o => o.delivery_date === twoDays);
+
+                        app.renderOrderList('dashboard-today-list', todayOrders);
+                        app.renderOrderList('dashboard-tomorrow-list', tomorrowOrders);
+                        app.renderOrderList('dashboard-twodays-list', twoDaysOrders);
+                        
+                        app.updateMapMarkers(orders);
+                        
+                        app.hideLoader(); // [תיקון] הסתר טוען רק כאן
+
+                    }, 
+                    (error) => {
+                        // [תיקון] טיפול בשגיאה
+                        console.error("Firebase Error in listenToOrders:", error);
+                        SmartLog.error(error, "Data.ListenFailed");
+                        app.hideLoader();
+                        document.getElementById('dashboard-today-list').innerHTML = `<p class="text-red-500 p-4">שגיאה בטעינת הזמנות: ${error.message}. ודא שהנתיב ${collectionPath} נכון ושיש אינדקס מתאים.</p>`;
+                    }
+                );
+            },
+            
+            // --- 5. רינדור רשימת הזמנות ---
+            renderOrderList: (listId, orders) => {
+                const container = document.getElementById(listId);
+                if (!container) return;
+
+                if (orders.length === 0) {
+                    container.innerHTML = `<p class="text-center text-gray-500 pt-8">אין הזמנות לתאריך זה.</p>`;
+                    return;
+                }
+                
+                // [תיקון] מיון לפי מחסן (ב-JS במקום ב-Query)
+                orders.sort((a, b) => (a.warehouse || '').localeCompare(b.warehouse || ''));
+
+                container.innerHTML = orders.map(order => {
+                    const statusColor = order.status === 'הושלם' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700';
+                    return `
+                        <div class="order-card" onclick="app.focusOnMapItem('${order.id}')">
+                            <div class="order-card-header">
+                                <span class="font-bold text-sm">${order.warehouse || 'ללא מחסן'}</span>
+                                <span class="font-mono text-xs px-2 py-1 rounded ${statusColor}">${order.status || 'חדש'}</span>
+                            </div>
+                            <div class="order-card-body space-y-1">
+                                <h3 class="font-semibold text-lg">${order.customer?.name || 'לקוח לא ידוע'}</h3>
+                                <p class="text-sm text-gray-600">${order.address || 'כתובת לא צוינה'}</p>
+                                <p class="text-xs text-gray-500 pt-1">${order.deliveryType || ''} | ${order.order_id || order.id}</p>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            },
+
+            // --- 6. ניווט ---
+            navigate: (pageId) => {
+                document.querySelectorAll('.app-page').forEach(p => p.classList.remove('active'));
+                document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+                
+                document.getElementById(`page-${pageId}`).classList.add('active');
+                document.querySelector(`.nav-item[onclick="app.navigate('${pageId}')"]`).classList.add('active');
+                
+                document.getElementById('header-title').innerText = {
+                    'dashboard': 'דשבורד',
+                    'share': 'שיתוף דוח',
+                    'map': 'מפה חיה',
+                    'settings': 'הגדרות'
+                }[pageId];
+
+                if (pageId === 'map') {
+                    app.initMap();
+                }
+            },
+            
+            navigateDashboardTab: (tabId) => {
+                document.querySelectorAll('.dashboard-page-content').forEach(p => p.classList.remove('active'));
+                document.querySelectorAll('.dashboard-tab').forEach(t => t.classList.remove('active'));
+                
+                document.getElementById(`dashboard-${tabId}-list`).classList.add('active');
+                document.getElementById(`dash-tab-${tabId}`).classList.add('active');
+            },
+
+            // --- 7. מפה ---
+            initMap: () => {
+                if (map) {
+                    map.invalidateSize();
+                    return;
+                }
+                try {
+                    map = L.map('map-container').setView([32.1, 34.85], 10);
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        maxZoom: 19, attribution: '© OpenStreetMap'
+                    }).addTo(map);
+                    SmartLog.info("Map initialized.");
+                } catch(e) {
+                    SmartLog.error(e, "Map.Init");
+                    document.getElementById('map-container').innerHTML = '<p class="text-red-500 p-4">שגיאה בטעינת המפה.</p>';
+                }
+            },
+            
+            updateMapMarkers: (orders) => {
+                if (!map) return;
+                
+                mapMarkers.forEach(m => m.remove());
+                mapMarkers = [];
+                const bounds = L.latLngBounds();
+
+                orders.forEach(order => {
+                    if (order.latitude && order.longitude) {
+                        const latLng = [order.latitude, order.longitude];
+                        const marker = L.marker(latLng).addTo(map)
+                            .bindPopup(`<b>${order.customer?.name || ''}</b><br>${order.address}`);
+                        mapMarkers.push(marker);
+                        bounds.extend(latLng);
+                    }
+                });
+
+                if (bounds.isValid()) {
+                    map.fitBounds(bounds, { padding: [20, 20] });
+                }
+            },
+            
+            focusOnMapItem: (orderId) => {
+                // ... (פונקציה זו לא קיימת בקוד המקורי, נוסיף אותה) ...
+                console.log("Focus on map not fully implemented in this version, but order ID is:", orderId);
+            },
+            
+            // --- 8. שיתוף ---
+            loadOrdersForShare: async () => {
+                const date = document.getElementById('share-date-picker').value;
+                if (!date) {
+                    alert('יש לבחור תאריך');
+                    return;
+                }
+                
+                const listEl = document.getElementById('share-order-list');
+                listEl.innerHTML = '<div class="spinner-container"><div class="spinner"></div></div>';
+                
+                // [תיקון] נתיב Firestore מלא
+                const collectionPath = `artifacts/${appId}/public/data/orders`;
+                const q = query(
+                    collection(db, collectionPath), 
+                    where('delivery_date', '==', date), 
+                    orderBy('warehouse')
+                );
+                
+                try {
+                    const snapshot = await getDocs(q);
+                    document.getElementById('share-total-count').innerText = `(${snapshot.size})`;
+                    
+                    if (snapshot.empty) {
+                        listEl.innerHTML = '<p class="text-center text-gray-500 pt-8">אין הזמנות לתאריך זה.</p>';
+                        return;
+                    }
+                    
+                    const orders = snapshot.docs.map(doc => doc.data());
+                    listEl.innerHTML = orders.map(order => `
+                        <div class="order-card">
+                            <div class="order-card-header">
+                                <span class="font-bold text-sm">${order.warehouse || 'ללא מחסן'}</span>
+                                <span class="font-mono text-xs">${order.status || 'חדש'}</span>
+                            </div>
+                            <div class="order-card-body">
+                                <h3 class="font-semibold">${order.customer?.name || 'לקוח לא ידוע'}</h3>
+                                <p class="text-sm text-gray-600">${order.address || 'כתובת לא צוינה'}</p>
+                            </div>
+                        </div>
+                    `).join('');
+
+                } catch (error) {
+                    // [תיקון] טיפול בשגיאה
+                    console.error("Firebase Error in loadOrdersForShare:", error);
+                    SmartLog.error(error, "Data.ShareLoadFailed");
+                    listEl.innerHTML = `<p class="text-red-500 p-4">שגיאה בטעינת הזמנות: ${error.message}.</p>`;
+                }
+            },
+            
+            initiateShare: () => {
+                const date = document.getElementById('share-date-picker').value;
+                if (!date) {
+                    alert('יש לבחור תאריך');
+                    return;
+                }
+                
+                const listEl = document.getElementById('share-order-list');
+                const orders = Array.from(listEl.querySelectorAll('.order-card'));
+                
+                if (orders.length === 0) {
+                    alert('אין הזמנות לשיתוף');
+                    return;
+                }
+
+                let message = `*סידור עבודה ליום ${date}:*\n\n`;
+                let currentWarehouse = '';
+
+                orders.forEach(card => {
+                    const warehouse = card.querySelector('.font-bold').innerText;
+                    const customer = card.querySelector('.font-semibold').innerText;
+                    const address = card.querySelector('.text-sm').innerText;
+                    
+                    if (warehouse !== currentWarehouse) {
+                        message += `*_${warehouse}_*\n`;
+                        currentWarehouse = warehouse;
+                    }
+                    message += `• ${customer} - ${address}\n`;
+                });
+
+                const waLink = `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`;
+                window.open(waLink, '_blank');
+            }
+        };
+
+        // --- חשיפה גלובלית והפעלה ---
+        window.app = app;
+        document.addEventListener('DOMContentLoaded', app.init);
+    </script>
+</body>
+</html>
