@@ -3,22 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Sidor Mobile v1.14 (מיוצב)</title>
+    <title>Sidor Mobile v1.15 (תיקון הפנייה למפה)</title>
     <!-- 
-      Sidor Mobile v1.14 - (תיקון Race Condition קריטי)
+      Sidor Mobile v1.15 - (תיקון הפנייה למפה)
       
       תיקונים:
-      - [קריטי] תיקון כשל שקט בטעינה: שוחזר אתחול המפה (initMap)
-        כך שיקרה רק בלחיצה על טאב "מפה" (בתוך app.navigate).
-        הקריאה הקודמת ב-app.init גרמה לכשל ב-Leaflet (ניסיון
-        לאתחל מפה על אלמנט מוסתר) שתקע את תהליך האימות.
-      - [קריטי] תיקון "אין מפה": הוספת קריאה ל-app.updateMapMarkers
-        בתוך app.navigate('map') מיד לאחר אתחול המפה,
-        כדי לצייר את כל הסיכות שכבר נטענו.
-      - [שיפור] הוספת אירועי ontouchstart לכפתורי הניווט
-        לתגובתיות מהירה יותר במובייל.
-      - [שיפור] הוספת 'overscroll-behavior: none' ו-
-        '-webkit-overflow-scrolling: touch' לשיפור חווית הגלילה.
+      - [קריטי] יישום מלא של פונקציית app.focusOnMapItem.
+        בלחיצה על כרטיס הזמנה, האפליקציה תעבור אוטומטית
+        לטאב "מפה", תמקד את התצוגה על כתובת ההזמנה
+        ותפתח את הפופאפ שלה.
     -->
     
     <!-- PWA & Mobile Specific Tags -->
@@ -745,32 +738,54 @@
             },
             
             focusOnMapItem: (orderId, type) => {
-                let targetOrder = allOrders.find(o => o.id === orderId);
+                // [תיקון v1.15] יישום מלא של הפונקציה
                 let lat, lon;
-                
-                if (type === 'order' && targetOrder && targetOrder.latitude && targetOrder.longitude) {
-                    lat = targetOrder.latitude;
-                    lon = targetOrder.longitude;
-                } else if (type === 'customer' && targetOrder.customer?.id) {
-                    let customer = allCustomers.find(c => c.id === targetOrder.customer.id);
+                let popupContent = "";
+                let targetItem = null;
+
+                if (type === 'order') {
+                    const order = allOrders.find(o => o.id === orderId);
+                    if (order && order.latitude && order.longitude) {
+                        lat = order.latitude;
+                        lon = order.longitude;
+                        popupContent = `<b>(הזמנה) ${order.customer?.name || order.customer_name || ''}</b><br>${order.address || order.customer_address}<br>סטטוס: ${order.status}`;
+                        targetItem = order;
+                    }
+                } else if (type === 'customer') {
+                    // This logic is for the future, but good to have
+                    const customer = allCustomers.find(c => c.id === orderId);
                     if (customer && customer.customLat && customer.customLon) {
                         lat = customer.customLat;
                         lon = customer.customLon;
+                        popupContent = `<b>(לקוח) ${customer.name}</b><br>${customer.defaultAddress}<br>טל: ${customer.phone}`;
+                        targetItem = customer;
                     }
                 }
 
                 if (lat && lon) {
+                    // 1. נווט לדף המפה (זה יאתחל אותה ויצייר את כל הסיכות)
                     app.navigate('map'); 
+                    
+                    // 2. המתן רגע קט עד שהמפה תסיים ציור
                     setTimeout(() => { 
-                        map.setView([lat, lon], 16);
-                        mapMarkers.forEach(m => {
-                            if (m.getLatLng().lat == lat && m.getLatLng().lng == lon) {
-                                m.openPopup();
-                            }
-                        });
-                    }, 100);
+                        if (!map) {
+                            SmartLog.error(new Error("Map object not available after navigation"), "Map.Focus");
+                            return;
+                        }
+                        // 3. מרכז את המפה על הסיכה
+                        map.setView([lat, lon], 16); // 16 = זום קרוב
+                        
+                        // 4. פתח את הפופאפ
+                        // (מכיוון שאנו מציירים מחדש, עדיף פשוט לפתוח פופאפ חדש במיקום)
+                        L.popup()
+                            .setLatLng([lat, lon])
+                            .setContent(popupContent)
+                            .openOn(map);
+                            
+                    }, 200); // 200ms המתנה קטנה
                 } else {
                     console.log("No location for this item:", orderId);
+                    // שימוש בפונקציה הגלובלית שהגדרתי
                     showToast("לא קיים מיקום עבור פריט זה", "info");
                 }
             },
