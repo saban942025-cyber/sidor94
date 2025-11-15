@@ -3,22 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Sidor Mobile v1.17 (ייצוב טעינה ומפה)</title>
+    <title>Sidor Mobile v1.18 (ייצוב חירום)</title>
     <!-- 
-      Sidor Mobile v1.17 - (ייצוב טעינה ומפה)
+      Sidor Mobile v1.18 - (ייצוב חירום - טעינת מפה וסיכות)
       
       תיקונים:
-      - [קריטי] תיקון כשל שקט בטעינה: שוחזר אתחול המפה (initMap)
-        כך שיקרה רק בלחיצה על טאב "מפה" (בתוך app.navigate).
-        הקריאה הקודמת ב-app.init גרמה לכשל ב-Leaflet (ניסיון
-        לאתחל מפה על אלמנט מוסתר) שתקע את תהליך האימות.
-      - [קריטי] תיקון "אין מפה": הוספת קריאה ל-app.updateMapMarkers
-        בתוך app.navigate('map') מיד לאחר אתחול המפה,
-        כדי לצייר את כל הסיכות שכבר נטענו.
-      - [חדש] טעינה חכמה: הדשבורד יקפוץ אוטומטית
-        לטאב הראשון שיש בו הזמנות (למשל "מחר").
-      - [שיפור] הוספת אירועי ontouchstart לכפתורי הניווט
-        לתגובתיות מהירה יותר במובייל.
+      - [קריטי] תיקון "כשל שקט" (Silent Failure) בטעינה שזוהה בלוגים.
+        אתחול המפה (initMap) קורה אך ורק בלחיצה על טאב "מפה" (בתוך app.navigate).
+      - [קריטי] תיקון "אין מפה / אין סיכות": הוספת קריאה ל-app.updateMapMarkers
+        מיד לאחר אתחול המפה (בתוך app.navigate('map')), 
+        כדי לצייר את כל הסיכות שכבר נטענו (allOrders, allCustomers).
+      - [קריטי] פונקציית focusOnMapItem עודכנה במלואה כדי לנווט, 
+        למרכז מפה, ולפתוח פופאפ על הסיכה הנכונה.
+      - [חדש] הוספת פונקציית 'showToast' למתן משוב למשתמש.
     -->
     
     <!-- PWA & Mobile Specific Tags -->
@@ -186,25 +183,6 @@
         .order-card-body {
             padding: 1rem;
         }
-        .order-card-footer {
-            background: #f8fafc;
-            padding: 0.75rem 1rem;
-            display: flex;
-            justify-content: flex-end;
-            gap: 0.5rem;
-        }
-        .btn-sm {
-            padding: 0.25rem 0.75rem;
-            font-size: 0.8rem;
-            border-radius: 6px;
-            font-weight: 500;
-            border: 1px solid #e2e8f0;
-        }
-        .btn-sm-primary {
-            background-color: var(--primary);
-            color: white;
-            border-color: var(--primary);
-        }
         
         .form-label {
             display: block;
@@ -230,29 +208,6 @@
             background-color: var(--primary);
             color: white;
             width: 100%;
-        }
-        .btn-secondary {
-            background-color: #e2e8f0;
-            color: #334155;
-        }
-        
-        .modal-fullscreen {
-            position: fixed;
-            inset: 0;
-            background-color: var(--bg-app);
-            z-index: 100;
-            display: flex;
-            flex-direction: column;
-            transform: translateY(100%);
-            transition: transform 0.3s ease-out;
-        }
-        .modal-fullscreen.open {
-            transform: translateY(0);
-        }
-        .modal-body {
-            flex: 1;
-            overflow-y: auto;
-            padding: 1rem;
         }
         
         #loader {
@@ -482,7 +437,7 @@
 
             // --- 1. אתחול ---
             init: () => {
-                console.log("Sidor Mobile v1.14 (מיוצב) initializing...");
+                console.log("Sidor Mobile v1.17 (מיוצב) initializing...");
                 app.showLoader(); 
                 
                 try {
@@ -495,7 +450,7 @@
                     auth = getAuth(fbApp);
                     setLogLevel('debug');
 
-                    // [תיקון v1.14] לא מאתחלים מפה כאן
+                    // [תיקון v1.17] לא מאתחלים מפה כאן
                     app.authenticateUser();
                 } catch (e) {
                     SmartLog.error(e, "Firebase Init Failed");
