@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sidor - הספר הדיגיטלי | הדינמיקה של המערכת</title>
+    <title>Sidor - הספר הדיגיטלי v2</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/feather-icons"></script>
@@ -12,109 +12,347 @@
             font-family: 'Rubik', sans-serif;
             background-color: #f3f4f6; /* gray-100 */
         }
-        .prose h1 { @apply text-3xl font-bold text-gray-900 mb-4; }
-        .prose h2 { @apply text-2xl font-semibold text-gray-800 mt-8 mb-3 border-b-2 border-blue-500 pb-2; }
-        .prose h3 { @apply text-xl font-semibold text-gray-700 mt-6 mb-2; }
+        /* סגנונות הדפדפן (ניווט צד) */
+        .book-browser {
+            display: grid;
+            grid-template-columns: 280px 1fr; /* ניווט | תוכן */
+            height: 100vh;
+        }
+        .book-nav {
+            background-color: #1f2937; /* gray-800 */
+            color: #d1d5db; /* gray-300 */
+            padding: 1.5rem;
+            overflow-y: auto;
+        }
+        .book-nav h2 {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: white;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .nav-link {
+            display: block;
+            padding: 0.75rem 1rem;
+            border-radius: 0.5rem;
+            text-decoration: none;
+            color: #d1d5db;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        .nav-link:hover {
+            background-color: #374151; /* gray-700 */
+            color: white;
+        }
+        .nav-link.active {
+            background-color: #3b82f6; /* blue-500 */
+            color: white;
+        }
+        .nav-section-title {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            color: #6b7280; /* gray-500 */
+            margin-top: 1.5rem;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+        }
+        
+        /* סגנונות תוכן (Prose) */
+        .book-content {
+            overflow-y: auto;
+            background-color: white;
+            padding: 2.5rem 3rem;
+        }
+        .prose h1 { @apply text-4xl font-bold text-gray-900 mb-6; }
+        .prose h2 { @apply text-3xl font-semibold text-gray-800 mt-10 mb-4 border-b-2 border-blue-500 pb-2; }
+        .prose h3 { @apply text-2xl font-semibold text-gray-700 mt-8 mb-3; }
+        .prose h4 { @apply text-xl font-semibold text-gray-700 mt-6 mb-2; }
         .prose p { @apply text-base text-gray-700 leading-relaxed mb-4; }
-        .prose ul { @apply list-disc list-outside pr-6 space-y-2 text-gray-700; }
+        .prose ul, .prose ol { @apply list-disc list-outside pr-6 space-y-2 text-gray-700 mb-4; }
+        .prose ol { @apply list-decimal; }
         .prose code { @apply bg-gray-200 text-red-600 font-mono px-2 py-0.5 rounded-md text-sm; }
-        .prose .actor-card {
+        
+        .actor-card {
             @apply bg-white p-6 rounded-lg shadow-md border border-gray-200;
         }
-        .prose .actor-card h3 {
-            @apply mt-0 mb-2 text-blue-600 flex items-center;
+        .actor-card h3 {
+            @apply mt-0 mb-2 text-blue-600 flex items-center text-xl;
         }
-        .prose .step-card {
+        .step-card {
             @apply bg-white p-6 rounded-lg shadow-lg border-l-4 border-blue-500 mt-6;
+        }
+        .db-schema {
+            @apply bg-gray-50 p-4 rounded-md border border-gray-200 font-mono text-sm;
+        }
+        
+        /* [חדש] כרטיס תיקון קריטי */
+        .fix-card {
+            @apply bg-red-50 p-6 rounded-lg shadow-lg border-l-4 border-red-500 mt-6;
+        }
+        .fix-card h3 {
+            @apply mt-0 mb-2 text-red-700 text-2xl font-bold;
+        }
+        
+        /* רספונסיביות */
+        @media (max-width: 768px) {
+            .book-browser {
+                grid-template-columns: 1fr; /* עמודה אחת במובייל */
+            }
+            .book-nav {
+                height: auto;
+                position: sticky;
+                top: 0;
+                z-index: 10;
+            }
+            .book-content {
+                padding: 1.5rem;
+            }
         }
     </style>
 </head>
-<body class="p-4 md:p-8">
-    <div class="max-w-4xl mx-auto bg-white shadow-2xl rounded-lg overflow-hidden">
-        <header class="bg-gray-800 text-white p-8">
-            <h1 class="text-4xl font-bold">הספר הדיגיטלי: Sidor</h1>
-            <p class="text-xl text-gray-300 mt-2">הדינמיקה של זרימת הזמנות: מהשטח ועד האספקה</p>
-        </header>
-        
-        <article class="prose max-w-none p-8 md:p-12">
-            <h2>הקדמה: הבעיה והפתרון</h2>
-            <p>
-                תהליך קבלת הזמנות מאתרי בנייה (השטח) למערך הלוגיסטי (המשרד) הוא תהליך כאוטי, מלא בטעויות אנוש ועיכובים. "הבנתי בלוק 10, לא 20", "שכחתי להוסיף מק"ט", "שלחתי בווטסאפ וזה נעלם" — כל אלו גורמים לבזבוז זמן וכסף.
-            </p>
-            <p>
-                מערכת **Sidor** פותרת את הכאוס הזה על ידי יצירת "פיירוול" (Firewall) אנושי וחכם בין השטח למשרד. הדינמיקה מבוססת על שלושה שחקנים מרכזיים.
-            </p>
+<body>
 
-            <h2>1. השחקנים (מי עושה מה?)</h2>
+    <div class="book-browser">
+        <nav class="book-nav">
+            <h2>
+                <i data-feather="book-open"></i>
+                הספר הדיגיטלי v2
+            </h2>
+            <a href="#intro" class="nav-link active">מבוא: הדינמיקה המושלמת</a>
             
-            <div class="grid md:grid-cols-3 gap-4">
-                <div class="actor-card">
-                    <h3><i data-feather="smartphone" class="ml-2"></i>עלאא (מנהל שטח)</h3>
-                    <p><b>תפקיד:</b> ליצור "בקשת הזמנה" גולמית מהשטח.</p>
-                    <p><b>כלי:</b> אפליקציית שטח (PWA) <code>sidor/site_app.html</code>.</p>
-                    <p><b>מה הוא עושה:</b> שולף פריטים מקטלוג, מקליט הודעות קוליות, מצלם תמונות, וכותב הערות חופשיות. הוא שולח את הבקשה לאישור יוסי.</p>
-                </div>
+            <div class="nav-section-title">השחקנים (Actors)</div>
+            <a href="#actor-site-manager" class="nav-link">👷 מנהל שטח (עלאא)</a>
+            <a href="#actor-purchasing-manager" class="nav-link">👨‍💼 מנהל רכש (יוסי)</a>
+            <a href="#actor-warehouse" class="nav-link">📦 מחסנאי</a>
+            <a href="#actor-dispatcher" class="nav-link">👨‍✈️ סדרן (ח.סבן)</a>
+            <a href="#actor-driver" class="nav-link">🚚 נהג</a>
+            <a href="#actor-customer" class="nav-link">📱 לקוח קצה</a>
+            <a href="#actor-org" class="nav-link">🏢 מנהל (ארגון)</a>
+
+            <div class="nav-section-title">בסיס הנתונים (Firestore)</div>
+            <a href="#db-schema" class="nav-link">🏛️ סכמת האוספים (Collections)</a>
+            
+            <div class="nav-section-title">סימולציות זרימה</div>
+            <a href="#sim-zebulun" class="nav-link">1. סימולציית "זבולון" (שטח ← רכש)</a>
+            <a href="#sim-saban" class="nav-link">2. סימולציית "ח.סבן" (רכש ← אספקה)</a>
+            <a href="#sim-customer" class="nav-link">3. סימולציית "לקוח" (מעקב ← הזמנה)</a>
+            
+            <div class="nav-section-title">ייצוב המערכת</div>
+            <a href="#critical-fix" class="nav-link">🚨 תיקון קריטי: Orders vs Orders_v2</a>
+            <a href="#stabilization" class="nav-link">📈 נקודות לייצוב נוסף</a>
+
+        </nav>
+
+        <div class="book-content">
+            <article class="prose max-w-none">
                 
-                <div class="actor-card">
-                    <h3><i data-feather="check-square" class="ml-2"></i>יוסי (מנהל רכש)</h3>
-                    <p><b>תפקיד:</b> ה"פיירוול". הוא המתרגם והמאשר.</p>
-                    <p><b>כלי:</b> פורטל הניהול <code>sidor/Zebulun-Portal/index.html</code>.</p>
-                    <p><b>מה הוא עושה:</b> מקבל את הבקשה הגולמית מעלאא, מאזין להקלטות, "מתרגם" את הבקשה להזמנה רשמית עם מק"טים נכונים של ח.סבן, ורק אז לוחץ "אשר".</p>
-                </div>
+                <section id="intro">
+                    <h1>מבוא: הדינמיקה המושלמת</h1>
+                    <p>
+                        תהליך קבלת הזמנות מאתרי בנייה (השטח) למערך הלוגיסטי (המשרד) הוא תהליך כאוטי, מלא בטעויות אנוש ועיכובים. "הבנתי בלוק 10, לא 20", "שכחתי להוסיף מק"ט", "שלחתי בווטסאפ וזה נעלם" — כל אלו גורמים לבזבוז זמן וכסף.
+                    </p>
+                    <p>
+                        מערכת <strong>DeliveryMaster</strong> פותרת את הכאוס הזה על ידי יצירת "פיירוול" (Firewall) אנושי וחכם בין השטח למשרד, ומעגל תקשורת מלא מול הלקוח והנהג. הדינמיקה מבוססת על מספר שחקנים מרכזיים, שלכל אחד מהם אפליקציה ייעודית.
+                    </p>
+                </section>
+
+                <section id="actors">
+                    <h2>השחקנים (מי עושה מה?)</h2>
+                    
+                    <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        
+                        <div id="actor-site-manager" class="actor-card">
+                            <h3><i data-feather="smartphone" class="ml-2"></i>1. מנהל שטח (עלאא)</h3>
+                            <p><b>תפקיד:</b> ליצור "בקשת הזמנה" גולמית מהשטח.</p>
+                            <p><b>אפליקציה:</b> <code>site_app.html</code></p>
+                            <p><b>פעולה:</b> שולף מקטלוג, מקליט קול, מצלם ושולח טקסט חופשי.</p>
+                            <p><b>כותב ל-DB:</b> <code>pending_orders</code></p>
+                        </div>
+                        
+                        <div id="actor-purchasing-manager" class="actor-card">
+                            <h3><i data-feather="check-square" class="ml-2"></i>2. מנהל רכש (יוסי)</h3>
+                            <p><b>תפקיד:</b> ה"פיירוול". מתרגם ומאשר בקשות.</p>
+                            <p><b>אפליקציה:</b> <code>Zebulun-Portal/app.html</code></p>
+                            <p><b>פעולה:</b> מאזין להקלטות ומתרגם את הבקשה להזמנה רשמית עם מק"טים.</p>
+                            <p><b>קורא מ-DB:</b> <code>pending_orders</code></p>
+                            <p><b>כותב ל-DB:</b> <code>orders</code>, <code>teamChats</code></p>
+                        </div>
+                        
+                        <div id="actor-warehouse" class="actor-card">
+                            <h3><i data-feather="archive" class="ml-2"></i>3. מחסנאי</h3>
+                            <p><b>תפקיד:</b> ללקט סחורה שהוזמנה.</p>
+                            <p><b>אפליקציה:</b> <code>new/warehouse-app/index.html</code></p>
+                            <p><b>פעולה:</b> רואה הזמנות מאושרות ("חדש") ומסמן אותן כ"מוכן לטעינה".</p>
+                            <p><b>קורא/מעדכן:</b> <code>orders</code></p>
+                        </div>
+
+                        <div id="actor-dispatcher" class="actor-card">
+                            <h3><i data-feather="clipboard" class="ml-2"></i>4. סדרן (ח.סבן)</h3>
+                            <p><b>תפקיד:</b> שיבוץ הזמנות לנהגים.</p>
+                            <p><b>אפליקציה:</b> <code>index_admin.html</code></p>
+                            <p><b>פעולה:</b> רואה הזמנות "מוכן לטעינה", משייך נהג, ושולח ללקוח לינק מעקב.</p>
+                            <p><b>קורא/מעדכן:</b> <code>orders</code>, <code>drivers</code></p>
+                        </div>
+                        
+                        <div id="actor-driver" class="actor-card">
+                            <h3><i data-feather="truck" class="ml-2"></i>5. נהג (אבי)</h3>
+                            <p><b>תפקיד:</b> ביצוע האספקה.</p>
+                            <p><b>אפליקציה:</b> (אפליקציית נהג - לא במאגר זה)</p>
+                            <p><b>פעולה:</b> מקבל משימה, משדר מיקום, מעדכן סטטוס "בדרך" ו"הושלם".</p>
+                            <p><b>כותב ל-DB:</b> <code>driverLocations</code></p>
+                            <p><b>מעדכן:</b> <code>orders</code> (סטטוס)</p>
+                        </div>
+                        
+                        <div id="actor-customer" class="actor-card">
+                            <h3><i data-feather="user" class="ml-2"></i>6. לקוח קצה</h3>
+                            <p><b>תפקיד:</b> מעקב ויצירת הזמנה חוזרת.</p>
+                            <p><b>אפליקציה:</b> <code>customer.html</code></p>
+                            <p><b>פעולה:</b> צופה במיקום הנהג. בכניסות הבאות, רואה היסטוריה ומזמין שוב.</p>
+                            <p><b>קורא מ-DB:</b> <code>orders</code>, <code>driverLocations</code></p>
+                            <p><b>כותב ל-DB:</b> <code>orders</code> (סטטוס "חדש (מלקוח)")</p>
+                        </div>
+                        
+                        <div id="actor-org" class="actor-card">
+                            <h3><i data-feather="eye" class="ml-2"></i>7. מנהל (ארגון)</h3>
+                            <p><b>תפקיד:</b> צפייה, ניטור וניהול כללי.</p>
+                            <p><b>אפליקציות:</b> <code>Viewer.html</code>, <code>admin/customers_manager.html</code>, <code>messages_viewer.html</code></p>
+                        </div>
+
+                    </div>
+                </section>
                 
-                <div class="actor-card">
-                    <h3><i data-feather="truck" class="ml-2"></i>צוות ח.סבן (לוגיסטיקה)</h3>
-                    <p><b>תפקיד:</b> ביצוע ההזמנה.</p>
-                    <p><b>כלי:</b> פאנל הניהול <code>sidor/index_admin.html</code>.</p>
-                    <p><b>מה הם עושים:</b> מקבלים **רק** הזמנות נקיות, בדוקות ומאושרות (עם מק"טים) שיוסי אישר. הם לא רואים את הבקשות הגולמיות של עלאא לעולם.</p>
-                </div>
-            </div>
+                <section id="db-schema">
+                    <h2>🏛️ סכמת האוספים (Firestore Collections)</h2>
+                    <p>התקשורת בין כל האפליקציות אינה ישירה; היא מתבצעת 100% דרך בסיס הנתונים. להלן האוספים המרכזיים:</p>
+                    <div class="db-schema">
+                        <p><strong>customers</strong> - <i>(מנהל לקוחות)</i>: רשימת הלקוחות, פרטי התקשרות, כתובות.</p>
+                        <p><strong>projects</strong> - <i>(פורטל יוסי)</i>: רשימת הפרויקטים ומפתחות ההתקנה (`setupKey`) לאפליקציית השטח.</p>
+                        <p><strong>pending_orders</strong> - <i>(אפליקציית שטח)</i>: "מגירת הבקשות" של יוסי. מכילה בקשות גולמיות.</p>
+                        <p><strong>orders</strong> - <i>(הקולקציה המרכזית)</i>: כל ההזמנות הרשמיות וה"נקיות" שמוכנות לביצוע.</p>
+                        <p><strong>drivers</strong> - <i>(ניהול)</i>: רשימת הנהגים המורשים.</p>
+                        <p><strong>driverLocations</strong> - <i>(אפליקציית נהג)</i>: מיקומי GPS חיים של הנהגים.</p>
+                        <p><strong>teamChats/{chatId}/messages</strong> - <i>(צ'אט)</i>: צ'אט פנימי לצוות הלוגיסטי.</p>
+                        <p><strong>orders/{orderId}/messages</strong> - <i>(צ'אט לקוח)</i>: צ'אט ספציפי בין הלקוח למנהל עבור הזמנה.</p>
+                    </div>
+                </section>
+                
+                <section id="simulations">
+                    <h2>סימולציות זרימה (Flow Simulations)</h2>
+                    
+                    <h3 id="sim-zebulun">1. סימולציית "זבולון" (שטח ← רכש)</h3>
+                    <div class="step-card">
+                        <p><b>שלב 1: עלאא (מנהל שטח)</b> פותח <code>site_app.html</code>. הוא מקליט "צריך 50 בלוק 20 ו-10 מלט".</p>
+                        <p><b>כתיבה ל-DB:</b> נוצר מסמך חדש ב-<code>pending_orders</code> עם ה-`raw_text` וההקלטה.</p>
+                        <br>
+                        <p><b>שלב 2: יוסי (מנהל רכש)</b> רואה ב-<code>Zebulun-Portal/app.html</code> בקשה ממתינה. הוא פותח אותה.</p>
+                        <p><b>פעולה:</b> יוסי מאזין להקלטה, ומוסיף בצד ה"רשמי" את הפריטים הנכונים מהקטלוג: "בלוק איטונג 20" (50 יח'), "מלט נשר" (10 יח').</p>
+                        <p><b>כתיבה ל-DB (לחיצה על "אשר"):</b></p>
+                        <ol>
+                            <li>המסמך ב-<code>pending_orders</code> מתעדכן ל-<code>status: "approved"</code>.</li>
+                            <li>נוצר מסמך חדש ב-<code>orders</code> עם הפריטים הנכונים (מק"טים) ו-<code>status: "חדש"</code>.</li>
+                            <li>(אופציונלי) נשלחת הודעה ל-<code>teamChats</code>: "הזמנה חדשה אושרה".</li>
+                        </ol>
+                    </div>
 
-            <h2>2. הסימולציה: דינמיקת הזמנה מלאה</h2>
+                    <h3 id="sim-saban">2. סימולציית "ח.סבן" (רכש ← אספקה)</h3>
+                    <div class="step-card">
+                        <p><b>שלב 3: מחסנאי</b> רואה ב-<code>new/warehouse-app/index.html</code> את ההזמנה החדשה (סטטוס "חדש"). הוא מלקט את הסחורה.</p>
+                        <p><b>עדכון ב-DB:</b> המחסנאי לוחץ "מוכן". הסטטוס ב-<code>orders</code> משתנה ל-<code>"מוכן לטעינה"</code>.</p>
+                        <br>
+                        <p><b>שלב 4: סדרן</b> רואה ב-<code>index_admin.html</code> את ההזמנה "מוכן לטעינה". הוא משבץ אותה לנהג "אבי לוי".</p>
+                        <p><b>עדכון ב-DB:</b> הסטטוס ב-<code>orders</code> משתנה ל-<code>"שויך"</code> ונוסף שדה <code>driver: {id: 'avi_levi_id', name: 'אבי לוי'}</code>.</p>
+                        <br>
+                        <p><b>שלב 5: נהג (אבי)</b> מתחיל נסיעה.</p>
+                        <p><b>כתיבה/עדכון ב-DB:</b></p>
+                        <ol>
+                            <li>האפליקציה של אבי מתחילה לשדר מיקום ל-<code>driverLocations</code> (ב-doc בשם 'avi_levi_id').</li>
+                            <li>הסטטוס ב-<code>orders</code> משתנה ל-<code>"בדרך"</code>.</li>
+                        </ol>
+                    </div>
+                    
+                    <h3 id="sim-customer">3. סימולציית "לקוח" (מעקב ← הזמנה)</h3>
+                    <div class="step-card">
+                        <p><b>שלב 6: לקוח (כניסה ראשונה)</b> מקבל לינק מהסדרן: `.../customer.html?id=AUTO-123456`.</p>
+                        <p><b>קריאה מ-DB:</b></p>
+                        <ol>
+                            <li>האפליקציה מחפשת ב-<code>orders</code> הזמנה עם <code>order_id == "AUTO-123456"</code>.</li>
+                            <li>היא מוצאת את ההזמנה, רואה שהיא משויכת ל-'avi_levi_id' וסטטוס "בדרך".</li>
+                            <li>היא מתחילה להאזין למסמך 'avi_levi_id' ב-<code>driverLocations</code> ומציגה את מיקום הנהג על המפה.</li>
+                            <li>**במקביל:** האפליקציה שומרת את <code>customer.id</code> (למשל 'cust_789') ב-`localStorage`.</li>
+                        </ol>
+                        <br>
+                        <p><b>שלב 7: לקוח (כניסה שנייה, לאחר שבוע)</b> פותח שוב את האפליקציה (גם אם דרך הלינק הישן).</p>
+                        <p><b>פעולה:</b> האפליקציה מזהה את 'cust_789' ב-`localStorage`. היא נטענת כ"פורטל לקוח" מלא.</p>
+                        <p><b>קריאה מ-DB:</b> היא טוענת את כל ההזמנות מ-<code>orders</code> כאשר <code>customer.id == "cust_789"</code> (עבור טאב "היסטוריה").</p>
+                        <br>
+                        <p><b>שלב 8: לקוח (יצירת הזמנה חדשה)</b> הלקוח לוחץ על "הזמנה חדשה" בפורטל שלו וממלא פרטים.</p>
+                        <p><b>כתיבה ל-DB:</b> נוצר מסמך חדש ב-<code>orders</code> עם <code>status: "חדש (מלקוח)"</code>.</p>
+                        <p><b>תוצאה:</b> ההזמנה מופיעה מיד ב-<code>index_admin.html</code> (פאנל הסדרן) וב-<code>new/warehouse-app/index.html</code> (אפליקציית המחסן) עם הדגשה צהובה, מוכנה לטיפול מיידי.</p>
+                    </div>
+                </section>
+                
+                <section id="critical-fix">
+                    <div class="fix-card">
+                        <h3>🚨 תיקון קריטי לייצוב המערכת</h3>
+                        <p>במהלך הניתוח, זוהתה אי-התאמה קריטית שגורמת לנתק במערכת.</p>
+                        <h4>הבעיה: חוסר התאמה בשם קולקציית ההזמנות</h4>
+                        <p>
+                            פורטל מנהל הרכש (יוסי, <code>Zebulun-Portal/app.html</code>) כותב הזמנות מאושרות לקולקציה בשם <strong><code>orders</code></strong>.
+                            <br>
+                            עם זאת, פאנל הניהול הראשי (הסדרן, <code>sidor/index_admin.html</code>) מאזין לקולקציה בשם <strong><code>orders_v2</code></strong>.
+                        </p>
+                        <h4>המשמעות</h4>
+                        <p>
+                            <strong>המערכת שבורה.</strong> הזמנות שיוסי מאשר לעולם לא יגיעו לסדרן, למחסנאי, או לנהג.
+                        </p>
+                        <h4>התיקון (חובה)</h4>
+                        <p>
+                            יש לאחד את כל האפליקציות לעבוד מול קולקציה אחת. ההמלצה היא להשתמש ב-<strong><code>orders</code></strong>.
+                        </p>
+                        <ol>
+                            <li>פתח את הקובץ: <code>sidor/index_admin.html</code> (v40.3).</li>
+                            <li>מצא את השורה (סביב 1705): <code>const ORDERS_COLLECTION = 'orders_v2';</code></li>
+                            <li>שנה אותה ל: <code>const ORDERS_COLLECTION = 'orders';</code></li>
+                            <li>(יש לוודא שגם <code>sidor/new/warehouse-app/index.html</code> וקבצים רלוונטיים אחרים מאזינים ל-<code>orders</code>, כפי שהם אכן מוגדרים).</li>
+                        </ol>
+                    </div>
+                </section>
+                
+                <section id="stabilization">
+                    <h2>📈 נקודות לייצוב נוסף</h2>
+                    <h4>תלות ב-API חיצוני (קטלוג)</h4>
+                    <p>
+                        האפליקציות של יוסי ושל עלאא תלויות ב-API חיצוני של Google Apps Script עבור קטלוג המוצרים. אם ה-API נופל או שההרשאות משתנות, המערכת נשברת.
+                        <br>
+                        <strong>המלצה:</strong> להעביר את קטלוג המוצרים מ-Google Sheets לקולקציה ייעודית בתוך Firestore (למשל, <code>products</code>).
+                    </p>
+                    <h4>ריכוז לוגיקה עסקית</h4>
+                    <p>
+                        כרגע, האפליקציה של יוסי (<code>app.html</code>) אחראית גם על עדכון <code>pending_orders</code>, גם על יצירת <code>orders</code> וגם על שליחת הודעה ל-<code>teamChats</code>.
+                        <br>
+                        <strong>המלצה:</strong> להעביר את הלוגיקה הזו ל-Firebase Functions (כמו בקובץ <code>sidor/functions/index.js</code>). יש להגדיר פונקציה שמאזינה לשינויים ב-<code>pending_orders</code>. כאשר סטטוס משתנה ל-"approved", הפונקציה תבצע את שתי הפעולות האחרות (יצירת הזמנה ושליחת צ'אט) באופן אוטומטי ואמין בצד השרת.
+                    </p>
+                </section>
 
-            <div class="step-card">
-                <h3>שלב 1: הבקשה (עלאא בשטח)</h3>
-                <p>עלאא צריך "100 מלט" ו-"20 בלוק 20".</p>
-                <ol class="list-decimal list-outside pr-6 space-y-1 text-gray-700">
-                    <li>הוא פותח את <code>site_app.html</code>.</li>
-                    <li>הוא בוחר מהקטלוג: "מלט 25 ק"ג" (כמות 100).</li>
-                    <li>הוא מקליט הודעה: "אחי, תוסיף לי גם 20 בלוק 20, אין לי כוח לחפש מק"ט".</li>
-                    <li>הוא לוחץ <b>"שלח לאישור יוסי"</b>.</li>
-                </ol>
-                <p class="font-semibold text-red-600 mt-3"><b>סטטוס מערכת:</b> ההזמנה נמצאת ב-<code>pending_orders</code>. צוות ח.סבן לא רואה כלום!</p>
-            </div>
-
-            <div class="step-card">
-                <h3>שלב 2: ה"פיירוול" (יוסי במשרד)</h3>
-                <p>יוסי מקבל התראה בפורטל <code>Zebulun-Portal</code> על הזמנה ממתינה.</p>
-                <ol class="list-decimal list-outside pr-6 space-y-1 text-gray-700">
-                    <li>הוא פותח את ה-"Workbench".</li>
-                    <li>בצד ימין (בקשת עלאא): הוא רואה 100 מלט ומאזין להקלטה ("...20 בלוק 20...").</li>
-                    <li>בצד שמאל (הזמנה רשמית): הקוד מעתיק לו אוטומטית את 100 המלט.</li>
-                    <li><b>הפעולה של יוסי:</b> הוא משתמש בחיפוש הקטלוג (בצד שמאל) ומוסיף: "בלוק 20 איטונג" (כמות 20).</li>
-                    <li>הוא לוחץ <b>"אשר ושלח ל-DeliveryMaster"</b>.</li>
-                </ol>
-            </div>
-
-            <div class="step-card">
-                <h3>שלב 3: הביצוע (צוות ח.סבן בלוגיסטיקה)</h3>
-                <p>ברגע שיוסי לחץ "אשר", קורות 3 פעולות בו-זמנית:</p>
-                <ol class="list-decimal list-outside pr-6 space-y-1 text-gray-700">
-                    <li><b>ללוגיסטיקה:</b> ההזמנה הנקייה (מלט + בלוקים) נכתבת ב-<code>orders</code>. פאנל הניהול <code>index_admin.html</code> קולט אותה מיד ומוסיף אותה לרשימת ההזמנות לביצוע.</li>
-                    <li><b>לצוות:</b> נשלחת הודעה לצ'אט <code>team_viewer.html</code>: "הזמנה חדשה (פרויקט סמדרי) אושרה על ידי יוסי".</li>
-                    <li><b>לעלאא:</b> הסטטוס ב-<code>site_app.html</code> מתעדכן ל"אושר".</li>
-                </ol>
-                <p class="font-semibold text-green-600 mt-3"><b>סטטוס מערכת:</b> ההזמנה רשמית. הלוגיסטיקה מטפלת בה, הצוות מודע, והשטח מעודכן.</p>
-            </div>
-
-            <h2>סיכום</h2>
-            <p>הדינמיקה הזו מבטיחה שצוות ח.סבן מקבל **אפס טעויות** מהשטח. יוסי משמש כשומר סף חכם שמסנן, מתרגם ומאשר כל בקשה לפני שהיא הופכת להזמנה רשמית במערכת הלוגיסטית.</p>
-
-        </article>
+            </article>
+        </div>
     </div>
 
     <script>
         feather.replace();
+        
+        // לוגיקת ניווט פשוטה
+        document.querySelectorAll('.nav-link').forEach(link => {
+            link.addEventListener('click', (e) => {
+                document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+                e.currentTarget.classList.add('active');
+                // גלילה חלקה במקום קפיצה (אופציונלי)
+                // const targetId = e.currentTarget.getAttribute('href').substring(1);
+                // document.getElementById(targetId).scrollIntoView({ behavior: 'smooth' });
+            });
+        });
     </script>
 </body>
 </html>
