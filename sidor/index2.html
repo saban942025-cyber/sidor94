@@ -3,17 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Sidor Mobile v1.16 (ייצוב טעינה)</title>
+    <title>Sidor Mobile v1.17 (ייצוב טעינה ומפה)</title>
     <!-- 
-      Sidor Mobile v1.16 - (ייצוב טעינה)
+      Sidor Mobile v1.17 - (ייצוב טעינה ומפה)
       
       תיקונים:
-      - [קריטי] בנייה מחדש של סדר הפעולות (app.init) כדי למנוע "כשל שקט" (Silent Failure)
-        בתהליך האימות (Authentication) שזוהה בלוגים.
-      - [קריטי] אתחול המפה (initMap) נדחה לפונקציית הניווט (app.navigate) 
-        כדי למנוע Race Condition.
-      - [קריטי] הוספת לוגיקה לטעינת סיכות (Markers) על המפה 
-        מייד לאחר שהיא נוצרת (בתוך app.navigate).
+      - [קריטי] תיקון כשל שקט בטעינה: שוחזר אתחול המפה (initMap)
+        כך שיקרה רק בלחיצה על טאב "מפה" (בתוך app.navigate).
+        הקריאה הקודמת ב-app.init גרמה לכשל ב-Leaflet (ניסיון
+        לאתחל מפה על אלמנט מוסתר) שתקע את תהליך האימות.
+      - [קריטי] תיקון "אין מפה": הוספת קריאה ל-app.updateMapMarkers
+        בתוך app.navigate('map') מיד לאחר אתחול המפה,
+        כדי לצייר את כל הסיכות שכבר נטענו.
+      - [חדש] טעינה חכמה: הדשבורד יקפוץ אוטומטית
+        לטאב הראשון שיש בו הזמנות (למשל "מחר").
       - [שיפור] הוספת אירועי ontouchstart לכפתורי הניווט
         לתגובתיות מהירה יותר במובייל.
     -->
@@ -171,6 +174,7 @@
             box-shadow: 0 2px 4px rgba(0,0,0,0.03);
             border: 1px solid #e2e8f0;
             overflow: hidden;
+            cursor: pointer;
         }
         .order-card-header {
             padding: 0.75rem 1rem;
@@ -574,6 +578,15 @@
                         app.renderOrderList('dashboard-tomorrow-list', tomorrowOrders);
                         app.renderOrderList('dashboard-twodays-list', twoDaysOrders);
                         
+                        // [תיקון v1.17] קפיצה לטאב רלוונטי
+                        if (todayOrders.length > 0) {
+                            app.navigateDashboardTab('today');
+                        } else if (tomorrowOrders.length > 0) {
+                            app.navigateDashboardTab('tomorrow');
+                        } else if (twoDaysOrders.length > 0) {
+                            app.navigateDashboardTab('twodays');
+                        }
+
                         app.updateMapMarkers(); 
                         
                         app.hideLoader(); 
@@ -781,7 +794,6 @@
                         map.setView([lat, lon], 16); // 16 = זום קרוב
                         
                         // 4. פתח את הפופאפ
-                        // (מכיוון שאנו מציירים מחדש, עדיף פשוט לפתוח פופאפ חדש במיקום)
                         L.popup()
                             .setLatLng([lat, lon])
                             .setContent(popupContent)
@@ -790,7 +802,6 @@
                     }, 200); // 200ms המתנה קטנה
                 } else {
                     console.log("No location for this item:", orderId);
-                    // שימוש בפונקציה הגלובלית שהגדרתי
                     showToast("לא קיים מיקום עבור פריט זה", "info");
                 }
             },
