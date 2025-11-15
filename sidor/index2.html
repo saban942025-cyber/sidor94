@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Sidor Mobile v1.18 (ייצוב חירום)</title>
+    <title>Sidor Mobile v1.19 (ייצוב טעינה ומפה)</title>
     <!-- 
-      Sidor Mobile v1.18 - (ייצוב חירום - טעינת מפה וסיכות)
+      Sidor Mobile v1.19 - (ייצוב חירום - טעינת מפה וסיכות)
       
       תיקונים:
       - [קריטי] תיקון "כשל שקט" (Silent Failure) בטעינה שזוהה בלוגים.
@@ -15,6 +15,8 @@
         כדי לצייר את כל הסיכות שכבר נטענו (allOrders, allCustomers).
       - [קריטי] פונקציית focusOnMapItem עודכנה במלואה כדי לנווט, 
         למרכז מפה, ולפתוח פופאפ על הסיכה הנכונה.
+      - [חדש] טעינה חכמה: הדשבורד יקפוץ אוטומטית
+        לטאב הראשון שיש בו הזמנות (למשל "מחר").
       - [חדש] הוספת פונקציית 'showToast' למתן משוב למשתמש.
     -->
     
@@ -437,7 +439,7 @@
 
             // --- 1. אתחול ---
             init: () => {
-                console.log("Sidor Mobile v1.18 (מיוצב) initializing..."); // [תיקון v1.18]
+                console.log("Sidor Mobile v1.19 (מיוצב) initializing..."); // [תיקון v1.19]
                 app.showLoader(); 
                 
                 try {
@@ -450,7 +452,7 @@
                     auth = getAuth(fbApp);
                     setLogLevel('debug');
 
-                    // [תיקון v1.18] לא מאתחלים מפה כאן
+                    // [תיקון v1.19] לא מאתחלים מפה כאן
                     app.authenticateUser();
                 } catch (e) {
                     SmartLog.error(e, "Firebase Init Failed");
@@ -853,7 +855,8 @@
 
         // --- [חדש v1.15] פונקציית עזר גלובלית לטוסט ---
         function showToast(message, type = 'info') {
-            const container = document.getElementById('loader').parentNode; // Add to body
+            // ודא שה-container קיים. אם לא, חבר ל-body
+            let container = document.getElementById('loader')?.parentNode || document.body;
             const toast = document.createElement('div');
             toast.style = "position:fixed; top:20px; left:50%; transform:translateX(-50%); z-index:9999; padding: 10px 20px; border-radius: 8px; font-weight: 500; color: white;";
             toast.style.backgroundColor = type === 'error' ? 'var(--danger)' : (type === 'success' ? 'var(--secondary)' : 'var(--primary)');
