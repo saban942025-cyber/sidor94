@@ -3,18 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Sidor Mobile v1.12 (מיוצב)</title>
+    <title>Sidor Mobile v1.13 (מיוצב)</title>
     <!-- 
-      Sidor Mobile v1.12 - (תיקון Race Condition קריטי)
+      Sidor Mobile v1.13 - (ייצוב שאילתות וסיכות לקוחות)
       
       תיקונים:
-      - [קריטי] תיקון כשל שקט בטעינה: שוחזר אתחול המפה (initMap)
-        כך שיקרה רק בלחיצה על טאב "מפה" (בתוך app.navigate).
-        הקריאה הקודמת ב-app.init גרמה לכשל ב-Leaflet (ניסיון
-        לאתחל מפה על אלמנט מוסתר) שתקע את תהליך האימות.
-      - [קריטי] תיקון "אין מפה": הוספת קריאה ל-app.updateMapMarkers
-        בתוך app.navigate('map') מיד לאחר אתחול המפה,
-        כדי לצייר את כל הסיכות שכבר נטענו.
+      - [קריטי] תיקון טעינה איטית: הסרת 'orderBy('createdAt')'
+        מהשאילתה הראשית (listenToOrders). השאילתה כעת
+        מביאה 50 מסמכים ללא מיון (מהיר מאוד) והמיון
+        מתבצע ב-JavaScript.
+      - [קריטי] תיקון טעינת שיתוף: הסרת 'orderBy('warehouse')'
+        משאילתת השיתוף. הסינון והמיון יתבצעו ב-JS.
+      - [חדש] הוספת סיכות לקוחות: נוסף מאזין חדש
+        (listenForCustomers) שטוען את קולקציית 'customers'.
+      - [חדש] updateMapMarkers עודכן וכעת מצייר גם סיכות הזמנות
+        (כחולות) וגם סיכות לקוחות (אדומות).
     -->
     
     <!-- PWA & Mobile Specific Tags -->
@@ -40,6 +43,7 @@
         :root {
             --primary: #2563eb;
             --secondary: #10b981; /* green-500 for WA */
+            --danger: #dc2626; /* red-600 */
             --bg-app: #f1f5f9;
             --surface: #ffffff;
         }
@@ -312,7 +316,6 @@
             <div id="page-dashboard" class="app-page active">
                 
                 <div class="dashboard-tabs">
-                    <!-- [תיקון v1.11] הוספת span לספירה -->
                     <button id="dash-tab-today" class="dashboard-tab active" onclick="app.navigateDashboardTab('today')">
                         🔥 היום <span id="today-count" class="tab-count">0</span>
                     </button>
@@ -423,8 +426,10 @@
         let db, auth;
         let map;
         let ordersListener = null;
+        let customersListener = null; // [חדש v1.13]
         let mapMarkers = [];
-        let allOrders = []; // [תיקון v1.12] מערך לשמירת כל ההזמנות שנטענו
+        let allOrders = [];
+        let allCustomers = []; // [חדש v1.13]
         let userId = null;
         
         // --- [תיקון קריטי v1.7] הגדרות Firebase קבועות ---
@@ -440,7 +445,21 @@
         
         // --- [תיקון קריטי v1.9] נתיב הקולקציה ---
         const ORDERS_COLLECTION_PATH = 'orders_v2'; 
-        
+        const CUSTOMERS_COLLECTION_PATH = 'customers'; // [חדש v1.13]
+
+        // --- [חדש v1.13] אייקונים למפה ---
+        const orderIcon = L.icon({
+            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-blue.png',
+            iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34],
+            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png', shadowSize: [41, 41]
+        });
+        const customerIcon = L.icon({
+            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png',
+            iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34],
+            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png', shadowSize: [41, 41]
+        });
+
+
         // --- לוגר ופונקציות טעינה ---
         const SmartLog = {
             info: (msg) => console.log(`[INFO] ${msg}`),
@@ -459,7 +478,7 @@
 
             // --- 1. אתחול ---
             init: () => {
-                console.log("Sidor Mobile v1.12 (מיוצב) initializing...");
+                console.log("Sidor Mobile v1.13 (מיוצב) initializing...");
                 app.showLoader(); 
                 
                 try {
@@ -509,6 +528,7 @@
             loadInitialData: () => {
                 document.getElementById('header-title').innerText = "דשבורד ראשי";
                 app.listenToOrders();
+                app.listenForCustomers(); // [חדש v1.13]
             },
 
             // --- 4. האזנה להזמנות ---
@@ -517,9 +537,9 @@
 
                 const collectionPath = ORDERS_COLLECTION_PATH;
                 
+                // [תיקון v1.13] הסרת מיון createdAt
                 const q = query(
-                    collection(db, collectionPath), 
-                    orderBy('createdAt', 'desc'),
+                    collection(db, collectionPath),
                     limit(50)
                 );
                 
@@ -527,10 +547,14 @@
 
                 ordersListener = onSnapshot(q, 
                     (snapshot) => {
-                        console.log("Snapshot received:", snapshot.size, "docs"); 
+                        console.log("Snapshot received (Orders):", snapshot.size, "docs"); 
                         SmartLog.info(`Received ${snapshot.size} orders.`);
-                        allOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })); // [תיקון v1.12] שמירת כל ההזמנות
                         
+                        allOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        
+                        // [תיקון v1.13] מיון ידני
+                        allOrders.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
+
                         const todayStr = new Date().toISOString().split('T')[0];
                         const tomorrowStr = new Date(Date.now() + 86400000).toISOString().split('T')[0];
                         const twoDaysStr = new Date(Date.now() + 2 * 86400000).toISOString().split('T')[0];
@@ -549,16 +573,44 @@
                         app.renderOrderList('dashboard-tomorrow-list', tomorrowOrders);
                         app.renderOrderList('dashboard-twodays-list', twoDaysOrders);
                         
-                        app.updateMapMarkers(allOrders); // [תיקון v1.12] שלח את כל ההזמנות למפה
+                        app.updateMapMarkers(); // [תיקון v1.13]
                         
                         app.hideLoader(); 
 
                     }, 
                     (error) => {
-                        console.error("!!! FATAL: onSnapshot error:", error); 
+                        console.error("!!! FATAL: onSnapshot error (Orders):", error); 
                         SmartLog.error(error, "Data.ListenFailed");
                         app.hideLoader();
-                        document.getElementById('dashboard-today-list').innerHTML = `<p class="text-red-500 p-4">שגיאה בטעינת הזמנות: ${error.message}. ודא שהנתיב ${collectionPath} נכון ושיש אינדקס מתאים.</p>`;
+                        document.getElementById('dashboard-today-list').innerHTML = `<p class="text-red-500 p-4">שגיאה בטעינת הזמנות: ${error.message}.</p>`;
+                    }
+                );
+            },
+            
+            // --- [חדש v1.13] האזנה ללקוחות ---
+            listenForCustomers: () => {
+                if (customersListener) customersListener();
+
+                const collectionPath = CUSTOMERS_COLLECTION_PATH;
+                SmartLog.info(`Attaching listener to customers at: ${collectionPath}`);
+
+                const q = query(
+                    collection(db, collectionPath),
+                    limit(200) // הגבלה למניעת טעינת יתר
+                );
+
+                customersListener = onSnapshot(q,
+                    (snapshot) => {
+                        console.log("Snapshot received (Customers):", snapshot.size, "docs");
+                        SmartLog.info(`Received ${snapshot.size} customers.`);
+                        
+                        allCustomers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        app.updateMapMarkers(); // עדכן מפה עם הלקוחות החדשים
+                    },
+                    (error) => {
+                        console.error("!!! FATAL: onSnapshot error (Customers):", error);
+                        SmartLog.error(error, "Data.CustomerListenFailed");
+                        // לא קריטי כמו הזמנות, אז רק נרשום לוג
                     }
                 );
             },
@@ -578,7 +630,7 @@
                 container.innerHTML = orders.map(order => {
                     const statusColor = order.status === 'הושלם' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700';
                     return `
-                        <div class="order-card" onclick="app.focusOnMapItem('${order.id}')">
+                        <div class="order-card" onclick="app.focusOnMapItem('${order.id}', 'order')">
                             <div class="order-card-header">
                                 <span class="font-bold text-sm">${order.warehouse || 'ללא מחסן'}</span>
                                 <span class="font-mono text-xs px-2 py-1 rounded ${statusColor}">${order.status || 'חדש'}</span>
@@ -613,7 +665,7 @@
                     app.initMap('map-container'); // אתחל אם לא קיים, או רענן גודל
                     // צייר מחדש את הסיכות שכבר נטענו
                     setTimeout(() => {
-                        app.updateMapMarkers(allOrders);
+                        app.updateMapMarkers(); // [תיקון v1.13]
                     }, 100);
                 }
             },
@@ -651,7 +703,8 @@
                 }
             },
             
-            updateMapMarkers: (orders) => {
+            // [תיקון v1.13] פונקציה זו מציירת עכשיו גם הזמנות וגם לקוחות
+            updateMapMarkers: () => {
                 if (!map) {
                     SmartLog.info("Map not ready for markers yet.");
                     return;
@@ -661,11 +714,26 @@
                 mapMarkers = [];
                 const bounds = L.latLngBounds();
 
-                orders.forEach(order => {
+                // 1. צייר הזמנות (כחול)
+                allOrders.forEach(order => {
+                    // הצג רק הזמנות פעילות על המפה
+                    if (['הושלם', 'בוטל', 'סופק'].includes(order.status)) return;
+                    
                     if (order.latitude && order.longitude) {
                         const latLng = [order.latitude, order.longitude];
-                        const marker = L.marker(latLng).addTo(map)
-                            .bindPopup(`<b>${order.customer?.name || order.customer_name || ''}</b><br>${order.address || order.customer_address}`);
+                        const marker = L.marker(latLng, { icon: orderIcon }).addTo(map)
+                            .bindPopup(`<b>(הזמנה) ${order.customer?.name || order.customer_name || ''}</b><br>${order.address || order.customer_address}<br>סטטוס: ${order.status}`);
+                        mapMarkers.push(marker);
+                        bounds.extend(latLng);
+                    }
+                });
+
+                // 2. צייר לקוחות (אדום)
+                allCustomers.forEach(customer => {
+                    if (customer.customLat && customer.customLon) {
+                        const latLng = [customer.customLat, customer.customLon];
+                        const marker = L.marker(latLng, { icon: customerIcon }).addTo(map)
+                            .bindPopup(`<b>(לקוח) ${customer.name}</b><br>${customer.defaultAddress}<br>טל: ${customer.phone}`);
                         mapMarkers.push(marker);
                         bounds.extend(latLng);
                     }
@@ -682,6 +750,7 @@
                     app.navigate('map'); 
                     setTimeout(() => { 
                         map.setView([order.latitude, order.longitude], 16);
+                        // פתח פופאפ
                         mapMarkers.forEach(m => {
                             if (m.getLatLng().lat == order.latitude) {
                                 m.openPopup();
@@ -707,10 +776,9 @@
                 
                 const collectionPath = ORDERS_COLLECTION_PATH;
                 
-                // [תיקון v1.9] שאילתה פשוטה
+                // [תיקון v1.13] שאילתה פשוטה ללא מיון
                 const q = query(
                     collection(db, collectionPath), 
-                    orderBy('createdAt', 'desc'),
                     limit(200) 
                 );
                 
@@ -718,8 +786,9 @@
                     const snapshot = await getDocs(q);
                     let allFetchedOrders = snapshot.docs.map(doc => doc.data());
 
-                    // [תיקון קריטי v1.10] סינון ידני לפי orderDate
+                    // [תיקון v1.10] סינון ידני לפי orderDate
                     let orders = allFetchedOrders.filter(o => o.orderDate === date);
+                    // [תיקון v1.13] מיון ידני
                     orders.sort((a, b) => (a.warehouse || '').localeCompare(b.warehouse || ''));
 
                     document.getElementById('share-total-count').innerText = `(${orders.length})`;
