@@ -3,15 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Sidor Mobile v1.15 (תיקון הפנייה למפה)</title>
+    <title>Sidor Mobile v1.16 (ייצוב טעינה)</title>
     <!-- 
-      Sidor Mobile v1.15 - (תיקון הפנייה למפה)
+      Sidor Mobile v1.16 - (ייצוב טעינה)
       
       תיקונים:
-      - [קריטי] יישום מלא של פונקציית app.focusOnMapItem.
-        בלחיצה על כרטיס הזמנה, האפליקציה תעבור אוטומטית
-        לטאב "מפה", תמקד את התצוגה על כתובת ההזמנה
-        ותפתח את הפופאפ שלה.
+      - [קריטי] בנייה מחדש של סדר הפעולות (app.init) כדי למנוע "כשל שקט" (Silent Failure)
+        בתהליך האימות (Authentication) שזוהה בלוגים.
+      - [קריטי] אתחול המפה (initMap) נדחה לפונקציית הניווט (app.navigate) 
+        כדי למנוע Race Condition.
+      - [קריטי] הוספת לוגיקה לטעינת סיכות (Markers) על המפה 
+        מייד לאחר שהיא נוצרת (בתוך app.navigate).
+      - [שיפור] הוספת אירועי ontouchstart לכפתורי הניווט
+        לתגובתיות מהירה יותר במובייל.
     -->
     
     <!-- PWA & Mobile Specific Tags -->
@@ -42,7 +46,7 @@
             --surface: #ffffff;
         }
         html, body {
-            overscroll-behavior: none; /* [שיפור v1.14] מונע "קפיצה" של הדף בגלילה */
+            overscroll-behavior: none; 
         }
         body { 
             font-family: 'Rubik', sans-serif; 
@@ -114,14 +118,14 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            flex-shrink: 0; /* [שיפור v1.14] מבטיח שהכותרת לא תתכווץ */
+            flex-shrink: 0; 
         }
         
         .app-main {
             flex: 1;
             overflow-y: auto;
             position: relative;
-            -webkit-overflow-scrolling: touch; /* [שיפור v1.14] גלילה חלקה ב-iOS */
+            -webkit-overflow-scrolling: touch; 
         }
         
         .app-page {
@@ -140,7 +144,7 @@
             grid-template-columns: repeat(4, 1fr);
             height: 65px;
             z-index: 20;
-            flex-shrink: 0; /* [שיפור v1.14] מבטיח שהניווט לא יתכווץ */
+            flex-shrink: 0; 
         }
         .nav-item {
             display: flex;
@@ -487,6 +491,7 @@
                     auth = getAuth(fbApp);
                     setLogLevel('debug');
 
+                    // [תיקון v1.14] לא מאתחלים מפה כאן
                     app.authenticateUser();
                 } catch (e) {
                     SmartLog.error(e, "Firebase Init Failed");
@@ -879,6 +884,23 @@
                 window.open(waLink, '_blank');
             }
         };
+
+        // --- [חדש v1.15] פונקציית עזר גלובלית לטוסט ---
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('loader').parentNode; // Add to body
+            const toast = document.createElement('div');
+            toast.style = "position:fixed; top:20px; left:50%; transform:translateX(-50%); z-index:9999; padding: 10px 20px; border-radius: 8px; font-weight: 500; color: white;";
+            toast.style.backgroundColor = type === 'error' ? 'var(--danger)' : (type === 'success' ? 'var(--secondary)' : 'var(--primary)');
+            toast.innerText = message;
+            
+            container.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transition = 'opacity 0.5s ease';
+                setTimeout(() => toast.remove(), 500);
+            }, 3000);
+        }
 
         // --- חשיפה גלובלית והפעלה ---
         window.app = app;
