@@ -3,19 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Sidor Mobile v1.8 (מיוצב)</title>
+    <title>Sidor Mobile v1.9 (מיוצב)</title>
     <!-- 
-      Sidor Mobile v1.8 - (ייצוב שאילתות ו-DOM)
+      Sidor Mobile v1.9 - (ייצוב קריטי סופי)
       
       תיקונים:
-      - [קריטי] ייצוב שאילתה: פישוט שאילתת ברירת המחדל (listenToOrders)
-        ל-orderBy('createdAt') במקום סינון על delivery_date, כדי למנוע
-        צורך באינדקס מורכב שגורם לכשל שקט.
-      - [קריטי] ייצוב שאילתה: הסרת orderBy('warehouse') משאילתת השיתוף
-        (loadOrdersForShare) שדרשה אינדקס. המיון יתבצע כעת ב-JS.
-      - [קריטי] תיקון Race Condition: העברת feather.replace() לתוך
-        DOMContentLoaded כדי להבטיח שהאייקונים ירוצו רק אחרי טעינת ה-DOM.
-      - [ייצוב] הוספת console.log נוספים לאיתור תקלות.
+      - [קריטי] תיקון נתיב נתונים: שונה נתיב הקולקציה
+        מ-'orders' ל-'orders_v2' כדי להתאים לקבצי הניהול
+        הראשיים (כמו index_admin.html v40.3).
+      - [קריטי] ייצוב שאילתת שיתוף: הסרת כל סינון או מיון
+        מ-loadOrdersForShare. הפונקציה טוענת את 200 ההזמנות
+        האחרונות ומסננת ידנית ב-JS. זה מונע כשל שקט
+        עקב חוסר באינדקס.
+      - [ייצוב] הוספת לוגים נוספים לאיתור תקלות עתידי.
     -->
     
     <!-- PWA & Mobile Specific Tags -->
@@ -416,8 +416,8 @@
           measurementId: "G-XV6RZDESSB"
         };
         
-        // --- [תיקון קריטי v1.7] נתיב הקולקציה ---
-        const ORDERS_COLLECTION_PATH = 'orders';
+        // --- [תיקון קריטי v1.9] נתיב הקולקציה ---
+        const ORDERS_COLLECTION_PATH = 'orders_v2'; // <--- !!! התיקון המרכזי !!!
 
 
         // --- לוגר ופונקציות טעינה ---
@@ -438,6 +438,7 @@
 
             // --- 1. אתחול ---
             init: () => {
+                console.log("Sidor Mobile v1.9 (מיוצב) initializing..."); // [תיקון v1.9] לוג נוסף
                 app.showLoader(); // הצג טוען מיד
                 
                 try {
@@ -496,11 +497,10 @@
                 const today = new Date();
                 const todayStr = today.toISOString().split('T')[0];
                 
-                // [תיקון v1.7] שימוש בנתיב הישיר
+                // [תיקון v1.9] שימוש בנתיב הישיר הנכון
                 const collectionPath = ORDERS_COLLECTION_PATH;
                 
                 // [תיקון v1.8] שאילתה סופר-פשוטה לבדיקה.
-                // מביאה את 50 ההזמנות האחרונות שנוצרו.
                 const q = query(
                     collection(db, collectionPath), 
                     orderBy('createdAt', 'desc'),
@@ -511,10 +511,10 @@
 
                 ordersListener = onSnapshot(q, 
                     (snapshot) => {
+                        console.log("Snapshot received:", snapshot.size, "docs"); // [תיקון v1.9] לוג נוסף
                         SmartLog.info(`Received ${snapshot.size} orders.`);
                         const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                         
-                        // [תיקון v1.8] המיון לטאבים חייב להתבסס על 'delivery_date'
                         const todayStr = new Date().toISOString().split('T')[0];
                         const tomorrowStr = new Date(Date.now() + 86400000).toISOString().split('T')[0];
                         const twoDaysStr = new Date(Date.now() + 2 * 86400000).toISOString().split('T')[0];
@@ -529,12 +529,11 @@
                         
                         app.updateMapMarkers(orders);
                         
-                        app.hideLoader(); // [תיקון v1.6] הסתר טוען רק כאן
+                        app.hideLoader(); 
 
                     }, 
                     (error) => {
-                        // [תיקון v1.6] טיפול בשגיאה
-                        console.error("Firebase Error in listenToOrders:", error);
+                        console.error("!!! FATAL: onSnapshot error:", error); // [תיקון v1.9] לוג שגיאה ברור
                         SmartLog.error(error, "Data.ListenFailed");
                         app.hideLoader();
                         document.getElementById('dashboard-today-list').innerHTML = `<p class="text-red-500 p-4">שגיאה בטעינת הזמנות: ${error.message}. ודא שהנתיב ${collectionPath} נכון ושיש אינדקס מתאים.</p>`;
@@ -552,7 +551,6 @@
                     return;
                 }
                 
-                // [תיקון v1.6] מיון לפי מחסן (ב-JS במקום ב-Query)
                 orders.sort((a, b) => (a.warehouse || '').localeCompare(b.warehouse || ''));
 
                 container.innerHTML = orders.map(order => {
@@ -656,29 +654,30 @@
                 const listEl = document.getElementById('share-order-list');
                 listEl.innerHTML = '<div class="spinner-container"><div class="spinner"></div></div>';
                 
-                // [תיקון v1.7] שימוש בנתיב הישיר
+                // [תיקון v1.9] שימוש בנתיב הישיר הנכון
                 const collectionPath = ORDERS_COLLECTION_PATH;
                 
-                // [תיקון v1.8] הסרת מיון לפי מחסן מהשאילתה
+                // [תיקון v1.9] הסרת סינון ומיון מורכבים מהשאילתה
                 const q = query(
                     collection(db, collectionPath), 
-                    where('delivery_date', '==', date),
-                    limit(50) // הוספת מגבלה
+                    orderBy('createdAt', 'desc'),
+                    limit(200) // טעינת 200 ההזמנות האחרונות
                 );
                 
                 try {
                     const snapshot = await getDocs(q);
-                    document.getElementById('share-total-count').innerText = `(${snapshot.size})`;
+                    let allFetchedOrders = snapshot.docs.map(doc => doc.data());
+
+                    // [תיקון v1.9] סינון ומיון ידניים ב-JS
+                    let orders = allFetchedOrders.filter(o => o.delivery_date === date);
+                    orders.sort((a, b) => (a.warehouse || '').localeCompare(b.warehouse || ''));
+
+                    document.getElementById('share-total-count').innerText = `(${orders.length})`;
                     
-                    if (snapshot.empty) {
+                    if (orders.length === 0) {
                         listEl.innerHTML = '<p class="text-center text-gray-500 pt-8">אין הזמנות לתאריך זה.</p>';
                         return;
                     }
-                    
-                    let orders = snapshot.docs.map(doc => doc.data());
-                    
-                    // [תיקון v1.8] מיון ידני ב-JS
-                    orders.sort((a, b) => (a.warehouse || '').localeCompare(b.warehouse || ''));
                     
                     listEl.innerHTML = orders.map(order => `
                         <div class="order-card">
@@ -696,16 +695,7 @@
                 } catch (error) {
                     console.error("Firebase Error in loadOrdersForShare:", error);
                     SmartLog.error(error, "Data.ShareLoadFailed");
-                    // [תיקון v1.8] הצגת הודעת שגיאה על אינדקס חסר
-                    if (error.code === 'failed-precondition') {
-                         listEl.innerHTML = `<p class="text-red-500 p-4"><b>שגיאת Firestore:</b> חסר אינדקס מורכב. 
-                         <br><br>כדי לתקן, צור אינדקס ב-Firestore על הקולקציה 'orders':
-                         <br>1. delivery_date (Ascending)
-                         <br>2. warehouse (Ascending)
-                         </p>`;
-                    } else {
-                        listEl.innerHTML = `<p class="text-red-500 p-4">שגיאה בטעינת הזמנות: ${error.message}.</p>`;
-                    }
+                    listEl.innerHTML = `<p class="text-red-500 p-4">שגיאה בטעינת הזמנות: ${error.message}.</p>`;
                 }
             },
             
@@ -747,7 +737,6 @@
         // --- חשיפה גלובלית והפעלה ---
         window.app = app;
         
-        // [תיקון v1.8] העברת feather.replace() לתוך ה-DOMContentLoaded
         document.addEventListener('DOMContentLoaded', () => {
             app.init();
             feather.replace();
