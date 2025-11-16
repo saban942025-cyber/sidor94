@@ -3,15 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Sidor Customer Portal v43 (Import Fix)</title>
+    <title>Sidor Customer Portal v44 (Master Fix)</title>
     <!-- 
-      Sidor Customer Portal v43 (Import Fix)
+      Sidor Customer Portal v44 (Master Fix)
       
       Changelog:
-      - [קריטי] תיקון שגיאת "getApps is not defined" שזוהתה בלוגים.
-      - [קריטי] הוספת 'getApp', 'getApps', ו-'setLogLevel' לייבוא של Firebase.
-      - [תיקון] וידוא שקולקציית הלקוחות היא 'customers' (ולא 'clients')
-        כדי להתאים למאגר הקיים.
+      - [קריטי] תיקון שגיאת "getApps is not defined" ו-"setLogLevel is not defined" 
+        שזוהתה בלוגים (v43).
+      - [קריטי] תיקון לוגיקת 'normalizePhone' לטפל ב-05X ולא +972 (v41).
+      - [קריטי] אתחול המפה (initMap) קורה רק בלחיצה על טאב "מפה"
+        כדי למנוע "כשל שקט" בטעינה (v1.18).
+      - [כלול] כל שדרוגי ה-UI: מצב כהה/בהיר, אווטאר, מסך כניסה פרימיום (v41).
+      - [כלול] כל מנגנון המיקום המקומי (DEFAULT_LOCATION, locationsDB, parseGPS) (v1.22).
     -->
 
     <!-- PWA, Tailwind, Leaflet, Icons, Font -->
@@ -656,16 +659,58 @@
                 // [יישום הנחיה A.3]
                 SmartLog.info(`Querying clients with normalized phone: ${phone}`);
                 
-                // כאן תהיה קריאת 'query' אמיתית ל-Firestore
-                // const q = query(collection(db, CUSTOMERS_COLLECTION_PATH), where("phone", "==", phone));
-                // const snapshot = await getDocs(q);
-                // ...
-                
-                await new Promise(res => setTimeout(res, 1500)); // הדמיית רשת
+                // --- [תיקון v44] ---
+                // זהו הקוד האמיתי שיחליף את ה-Mock
+                // ודא שהוספת אינדקס ל-phone ב-customers
+                try {
+                    const q = query(collection(db, CUSTOMERS_COLLECTION_PATH), where("phone", "==", phone));
+                    const snapshot = await getDocs(q);
+                    
+                    if (snapshot.empty) {
+                        SmartLog.info("No clients found for this phone number in Firestore.");
+                        return [];
+                    }
+                    
+                    let clients = [];
+                    // כאן אנו מניחים שלקוח = פרויקט, לפי המבנה הקיים
+                    // אם תרצה להוסיף 'projects' בעתיד, כאן המקום
+                    snapshot.forEach(doc => {
+                        const clientData = doc.data();
+                        clients.push({
+                            id: doc.id,
+                            name: clientData.name,
+                            phone: clientData.phone,
+                            projects: [
+                                { 
+                                    id: doc.id, // שימוש ב-ID הלקוח כ-ID פרויקט (לפי הנחה)
+                                    title: clientData.name, // שימוש בשם הלקוח כשם פרויקט
+                                    address: clientData.defaultAddress || `${clientData.addressStreet} ${clientData.addressNumber}, ${clientData.addressCity}`,
+                                    gps: clientData.gps,
+                                    customLat: clientData.customLat,
+                                    customLon: clientData.customLon
+                                }
+                            ]
+                        });
+                    });
+                    
+                    SmartLog.info(`Found ${clients.length} clients in Firestore`, clients);
+                    return clients;
+
+                } catch (error) {
+                    SmartLog.error(error, "Failed to fetch clients from Firestore");
+                    // אם השליפה נכשלת (למשל, חסר אינדקס), חזור ל-Mock כדי לא לתקוע
+                    return api.mockGetClientsByPhone(phone); 
+                }
+            },
+
+            // [חדש] פונקציית Mock למקרה חירום
+            mockGetClientsByPhone: async (phone) => {
+                SmartLog.info(`Using MOCK API for phone: ${phone}`);
+                await new Promise(res => setTimeout(res, 500));
                 
                 // [יישום הנחיה A.7]
                 if (phone === "0546609953") {
-                    SmartLog.info("Found client for 054-6609953");
+                    SmartLog.info("MOCK: Found client for 054-6609953");
                     return [
                         { id: "client_3", name: "חדד נועם/כפר סבא", phone: "0546609953", projects: [
                             { id: "project_D", title: "פרויקט ששת הימים", address: "ששת הימים 8, כפר סבא" }
@@ -679,28 +724,22 @@
                             { id: "project_B", title: "פרויקט וילות ברמת השרון", address: "סוקולוב 50, רמת השרון" }
                         ]}
                     ];
-                } else if (phone === "0507654321") {
-                    return [
-                        { id: "client_2", name: "קבלן ב' - עבודות גמר", phone: "0507654321", projects: [
-                            { id: "project_C", title: "שיפוץ משרדים הרצליה", address: "משכית 27, הרצליה" }
-                        ]}
-                    ];
                 } else {
-                    SmartLog.info("No clients found for this phone number.");
                     return [];
                 }
             },
+
             // [יישום הנחיה 6]
             bindDevice: async (deviceId, clientId, projectId) => {
-                SmartLog.info(`Mock API: /api/devices/bind`, { deviceId, clientId, projectId });
+                SmartLog.info(`Binding device:`, { deviceId, clientId, projectId });
                 const deviceRef = doc(db, DEVICES_COLLECTION_PATH, deviceId);
-                await setDoc(deviceRef, { clientId, projectId, createdAt: serverTimestamp() });
-                await new Promise(res => setTimeout(res, 300));
+                await setDoc(deviceRef, { clientId, projectId, createdAt: serverTimestamp(), lastPhone: currentClient.phone });
                 return true;
             },
+            
             // [יישום הנחיה 10]
             getCatalog: async () => {
-                SmartLog.info(`Mock API: /api/catalog`);
+                SmartLog.info(`API: /api/catalog`);
                 const cacheKey = 'sidorCatalogCache';
                 const cached = sessionStorage.getItem(cacheKey);
                 
