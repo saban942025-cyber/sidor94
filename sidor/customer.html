@@ -3,647 +3,1251 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>מעקב הזמנה - v38 (Customer Portal)</title>
+    <title>Sidor Customer Portal v39</title>
     <!-- 
-      DeliveryMaster Customer Portal v38.0
+      Sidor Customer Portal v39 (Full Refactor)
       
       Changelog:
-      - [MAJOR REFACTOR v38] - יישום אפיון "Full Customer Lifecycle".
-        - 'loadCustomerPortal()': לוגיקה חדשה לזיהוי לקוח קיים מ-localStorage.
-        - 'loadSingleOrderTracking()': לוגיקה קיימת למעקב הזמנה בודדת (לקוח חדש).
-        - 'localStorage.setItem('customerId', ...)': שמירת מזהה הלקוח בכניסה ראשונה.
-        - 'renderPortalHistory()': טאב חדש להיסטוריית הזמנות.
-        - 'renderPortalNewOrder()': טאב חדש ליצירת הזמנה (Smart Paste + Project Select).
-        - 'submitNewOrder()': לוגיקה לשמירת הזמנה חדשה ושיתוף מיידי ל-WhatsApp.
-      - [UI v38] - החלפת טאב "צ'אט" ב-"היסטוריה" לפי האפיון.
+      - [קריטי] יישום מלא של "דרישות פונקציונליות" חדשות.
+      - [חדש] החלפת לוגיקת localStorage הישנה במנגנון כניסה מבוסס טלפון (Maps Landing).
+      - [חדש] הוספת דפי UI: page-login, page-project-select.
+      - [חדש] הוספת מודל שיוך מכשיר (modal-device-bind) (הנחיה 6).
+      - [חדש] הוספת מודל (+) להזמנה חדשה עם 2 אופציות: "הדבקה חכמה" ו"טופס" (הנחיה 7).
+      - [חדש] הוספת סרגל ניווט תחתון 5-כפתורים (הנחיה 9).
+      - [חדש] הוספת פונקציית שיתוף מיקום ממכשיר (navigator.geolocation) (הנחיה 8).
+      - [קריטי] הסרה מלאה של Google Geocoding API.
+      - [שילוב] שילוב מנגנון איתור מיקום מקומי (v1.22) עם DEFAULT_LOCATION, 
+        locationsDB, ו-parseGPS (הנחיה 8).
+      - [חדש] הוספת Mock API לטעינת קטלוג (עם Cache) וטעינת לקוחות (הנחיה 10).
     -->
 
     <!-- PWA, Tailwind, Leaflet, Icons, Font -->
     <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#3b82f6">
+    <meta name="theme-color" content="#ffffff">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default-translucent">
+    <link rel="apple-touch-icon" href="https://placehold.co/192x192/3498db/white?text=Sidor">
+    
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/feather-icons"></script>
     <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700&display=swap" rel="stylesheet">
-
+    
     <style>
-        body { font-family: 'Rubik', sans-serif; background-color: #f4f7f6; padding-bottom: 80px; }
-        .app-view { display: none; }
-        .app-view.active { display: block; }
-        #map { height: 300px; width: 100%; border-radius: 8px; background-color: #eee; }
-        .loader { border: 4px solid #f3f3f3; border-top: 4px solid #3b82f6; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 20px auto; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        :root {
+            --primary: #3498db;
+            --primary-dark: #2980b9;
+            --secondary: #2c3e50;
+            --danger: #e74c3c;
+            --light: #ecf0f1;
+            --bg-app: #f5f7fa;
+            --surface: #ffffff;
+        }
+        html, body {
+            overscroll-behavior-y: none;
+            height: 100%;
+            max-height: 100vh;
+        }
+        body { 
+            font-family: 'Rubik', sans-serif; 
+            background-color: var(--bg-app); 
+            color: var(--secondary);
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            height: -webkit-fill-available;
+        }
         
-        /* Status Tracker */
-        .status-tracker { display: flex; justify-content: space-between; align-items: flex-start; position: relative; margin-bottom: 2.5rem; }
-        .status-tracker::before { content: ''; position: absolute; top: 16px; right: 0; left: 0; height: 4px; background-color: #e5e7eb; z-index: 1; }
-        .status-tracker-progress { position: absolute; top: 16px; right: 0; height: 4px; background-color: #3b82f6; z-index: 2; width: 0%; transition: width 0.5s ease; }
-        .status-step { display: flex; flex-direction: column; align-items: center; text-align: center; width: 60px; z-index: 3; }
-        .status-dot { width: 36px; height: 36px; border-radius: 50%; background-color: #e5e7eb; border: 4px solid #f4f7f6; color: #9ca3af; display: flex; align-items: center; justify-content: center; font-weight: 700; transition: all 0.3s ease; }
-        .status-label { font-size: 0.75rem; font-weight: 500; color: #9ca3af; margin-top: 0.5rem; line-height: 1.2; }
-        .status-step.completed .status-dot { background-color: #3b82f6; color: white; border-color: #dbeafe; }
-        .status-step.completed .status-label { color: #1f2937; }
-        .status-step.active .status-dot { background-color: white; border-color: #3b82f6; color: #3b82f6; transform: scale(1.1); }
-        .status-step.active .status-label { color: #3b82f6; font-weight: 700; }
+        .form-input {
+            @apply w-full p-3 border border-gray-300 rounded-lg bg-gray-50 text-base focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all duration-200 ease-in-out;
+        }
+        .form-textarea {
+            @apply w-full p-3 border border-gray-300 rounded-lg bg-gray-50 text-base focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all duration-200 ease-in-out h-32;
+        }
+        .btn {
+            @apply text-white font-bold py-3 px-6 rounded-lg shadow-md transition-all duration-300 ease-in-out;
+        }
+        .btn-primary { @apply bg-blue-500 hover:bg-blue-600; }
+        .btn-secondary { @apply bg-gray-500 hover:bg-gray-600; }
+        .btn-success { @apply bg-green-500 hover:bg-green-600; }
+        .btn:disabled { @apply bg-gray-400 cursor-not-allowed; }
+
+        /* --- [חדש] מבנה אפליקציה --- */
+        .app-container {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            width: 100%;
+            overflow: hidden;
+        }
+
+        .app-page {
+            display: none;
+            flex-direction: column;
+            height: 100%;
+            width: 100%;
+        }
+        .app-page.active {
+            display: flex;
+        }
         
-        dialog::backdrop { background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(2px); }
+        .app-header {
+            background: var(--surface);
+            padding: 0.75rem 1rem;
+            padding-top: calc(0.75rem + env(safe-area-inset-top));
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            z-index: 20;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0; 
+        }
         
-        /* Bottom Navigation */
-        #bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; height: 70px; background-color: white; border-top: 1px solid #e5e7eb; box-shadow: 0 -2px 10px rgba(0,0,0,0.05); display: flex; justify-content: space-around; align-items: center; z-index: 1000; padding-bottom: env(safe-area-inset-bottom); }
-        .nav-button { display: flex; flex-direction: column; align-items: center; justify-content: center; flex-grow: 1; color: #6b7280; background: none; border: none; padding: 0.5rem 0; font-size: 0.75rem; font-weight: 500; }
-        .nav-button svg { width: 24px; height: 24px; margin-bottom: 4px; }
-        .nav-button.active { color: #3b82f6; }
+        .app-main {
+            flex: 1;
+            overflow-y: auto;
+            position: relative;
+            -webkit-overflow-scrolling: touch; 
+            padding: 1rem;
+        }
+        
+        /* [חדש] סרגל ניווט תחתון (הנחיה 9) */
+        .app-nav {
+            background: var(--surface);
+            border-top: 1px solid #e2e8f0;
+            padding-bottom: env(safe-area-inset-bottom);
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            height: 65px;
+            z-index: 20;
+            flex-shrink: 0; 
+        }
+        .nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #64748b;
+            font-size: 0.7rem;
+            font-weight: 500;
+        }
+        .nav-item.active {
+            color: var(--primary);
+        }
+        .nav-item svg {
+            width: 22px;
+            height: 22px;
+            margin-bottom: 4px;
+        }
+        .nav-item-center {
+            transform: translateY(-15px);
+        }
+        .nav-item-center button {
+            background-color: var(--primary);
+            color: white;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 12px rgba(52, 152, 219, 0.4);
+        }
+        .nav-item-center svg { width: 28px; height: 28px; margin: 0; }
+        
+        /* [חדש] דף כניסה (הנחיה 1) */
+        #page-login {
+            background-color: var(--surface);
+            justify-content: center;
+            align-items: center;
+            padding: 2rem;
+            text-align: center;
+        }
+        .login-logo {
+            width: 100px;
+            height: 100px;
+            background-color: var(--primary);
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 2rem;
+            color: white;
+        }
+        .login-logo svg { width: 50px; height: 50px; }
+
+        /* [חדש] מודלים */
+        .modal {
+            @apply fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 transition-opacity duration-300;
+        }
+        .modal-content {
+            @apply bg-white rounded-lg shadow-2xl p-6 w-full max-w-md;
+        }
+        .toast {
+            @apply fixed top-5 left-1/2 -translate-x-1/2 p-4 rounded-lg shadow-lg text-white font-semibold z-[100] transition-all duration-300;
+        }
+        .toast.success { @apply bg-green-500; }
+        .toast.error { @apply bg-red-500; }
+        .toast.info { @apply bg-blue-500; }
     </style>
 </head>
-<body class="bg-gray-100">
+<body>
 
-    <!-- מודל הזמנה חדשה (עבור פורטל) -->
-    <dialog id="portal-new-order-modal" class="p-0 rounded-lg shadow-xl w-11/12 max-w-lg">
-        <form id="new-order-form" onsubmit="event.preventDefault(); app.submitNewOrder()">
-            <div class="sticky top-0 bg-white p-4 border-b flex justify-between items-center">
-                <h2 class="text-xl font-bold text-gray-800">יצירת הזמנה חדשה</h2>
-                <button type="button" onclick="document.getElementById('portal-new-order-modal').close()" class="text-gray-500 hover:text-gray-800">
+    <!-- [חדש] מבנה אפליקציה -->
+    <div class="app-container">
+
+        <!-- [חדש] דף כניסה (הנחיה 1) -->
+        <div id="page-login" class="app-page active">
+            <div class="login-logo">
+                <i data-feather="truck"></i>
+            </div>
+            <h1 class="text-3xl font-bold mb-2">DeliveryMaster</h1>
+            <p class="text-lg text-gray-600 mb-8">אנא הזן את מספר הטלפון שלך</p>
+            
+            <div class="w-full max-w-sm">
+                <input type="tel" id="phone-input" placeholder="05X-XXXXXXX" class="form-input text-center text-2xl" style="direction: ltr;">
+                <button id="login-btn" class="btn btn-primary w-full mt-4 text-lg">
+                    כניסה
+                </button>
+                <p id="login-error" class="text-red-500 text-sm mt-2 hidden"></p>
+            </div>
+        </div>
+
+        <!-- [חדש] דף בחירת פרויקט (הנחיה 3) -->
+        <div id="page-project-select" class="app-page">
+            <header class="app-header">
+                <h1 class="font-bold text-lg">בחירת פרויקט</h1>
+            </header>
+            <main class="app-main">
+                <p class="text-gray-600 mb-4">נמצאו מספר פרויקטים המשויכים למספר זה. אנא בחר פרויקט:</p>
+                <div id="project-list-container" class="space-y-3">
+                    <!-- רשימת פרויקטים תטען כאן -->
+                </div>
+            </main>
+        </div>
+
+        <!-- [חדש] פורטל ראשי (מחליף את הקובץ הישן) -->
+        <div id="page-portal" class="app-page">
+            <header class="app-header">
+                <h1 id="header-title" class="font-bold text-lg">מעקב הזמנה</h1>
+                <div class="flex items-center gap-2">
+                    <span id="header-project-name" class="text-sm font-medium text-gray-500"></span>
+                    <i data-feather="user" class="text-gray-600"></i>
+                </div>
+            </header>
+            
+            <main class="app-main no-scrollbar">
+                
+                <!-- טאב 1: מעקב חי -->
+                <div id="portal-tracking" class="portal-page active" style="padding: 0; height: 100%;">
+                    <div id="map-container" class="w-full h-full z-0"></div>
+                    <!-- (אלמנטים נוספים של סטטוס יתווספו כאן בעתיד) -->
+                </div>
+
+                <!-- טאב 2: פרויקטים -->
+                <div id="portal-projects" class="portal-page" style="display: none;">
+                    <h2 class="text-2xl font-bold mb-4">פרויקטים</h2>
+                    <div id="portal-project-list" class="space-y-3">
+                        <!-- רשימת פרויקטים תטען כאן -->
+                    </div>
+                </div>
+
+                <!-- טאב 3: היסטוריה -->
+                <div id="portal-history" class="portal-page" style="display: none;">
+                    <h2 class="text-2xl font-bold mb-4">היסטוריית הזמנות</h2>
+                    <div id="history-list-container" class="space-y-3">
+                        <!-- היסטוריה תטען כאן -->
+                    </div>
+                </div>
+
+                <!-- טאב 4: חשבון -->
+                <div id="portal-account" class="portal-page" style="display: none;">
+                    <h2 class="text-2xl font-bold mb-4">החשבון שלי</h2>
+                    <div class="bg-white p-4 rounded-lg shadow-sm border">
+                        <p class="font-medium">לקוח: <span id="account-name" class="font-normal">...</span></p>
+                        <p class="font-medium">טלפון: <span id="account-phone" class="font-normal">...</span></p>
+                        <p class="font-medium">מכשיר: <span id="account-device" class="font-normal">...</span></p>
+                        <button id="logout-btn" class="btn btn-secondary w-full mt-6 text-sm">התנתק ושכח מכשיר זה</button>
+                    </div>
+                </div>
+            </main>
+
+            <!-- [חדש] ניווט תחתון (הנחיה 9) -->
+            <nav class="app-nav">
+                <button class="nav-item active" onclick="app.navigatePortalTab('portal-tracking')" ontouchstart="app.navigatePortalTab('portal-tracking')">
+                    <i data-feather="map-pin"></i>
+                    <span>מעקב</span>
+                </button>
+                <button class="nav-item" onclick="app.navigatePortalTab('portal-projects')" ontouchstart="app.navigatePortalTab('portal-projects')">
+                    <i data-feather="briefcase"></i>
+                    <span>פרויקטים</span>
+                </button>
+                <div class="nav-item nav-item-center">
+                    <button onclick="app.openNewOrderModal()" ontouchstart="app.openNewOrderModal()">
+                        <i data-feather="plus"></i>
+                    </button>
+                </div>
+                <button class="nav-item" onclick="app.navigatePortalTab('portal-history')" ontouchstart="app.navigatePortalTab('portal-history')">
+                    <i data-feather="clock"></i>
+                    <span>היסטוריה</span>
+                </button>
+                <button class="nav-item" onclick="app.navigatePortalTab('portal-account')" ontouchstart="app.navigatePortalTab('portal-account')">
+                    <i data-feather="user"></i>
+                    <span>חשבון</span>
+                </button>
+            </nav>
+        </div>
+    </div>
+    
+    <!-- [חדש] מודל שיוך מכשיר (הנחיה 6) -->
+    <div id="modal-device-bind" class="modal hidden opacity-0">
+        <div class="modal-content transform scale-90 transition-transform duration-300">
+            <h3 class="text-xl font-bold mb-4">שיוך מכשיר</h3>
+            <p class="mb-6">אנו מזהים שזו כניסה ראשונה ממכשיר זה. האם תרצה לשייך מכשיר זה לחשבונך (כניסה אוטומטית בעתיד)?</p>
+            <div class="flex justify-end gap-3">
+                <button onclick="app.denyBindDevice()" class="btn btn-secondary w-auto">לא, תודה</button>
+                <button onclick="app.confirmBindDevice()" class="btn btn-primary w-auto">כן, שמור מכשיר</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- [חדש] מודל הזמנה חדשה (הנחיה 7) -->
+    <div id="modal-new-order" class="modal hidden opacity-0" onclick="app.closeNewOrderModal(event)">
+        <div class="modal-content w-full max-w-lg max-h-[80vh] flex flex-col" onclick="event.stopPropagation()">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-bold">יצירת הזמנה חדשה</h3>
+                <button onclick="app.closeNewOrderModal()" class="text-gray-500 hover:text-gray-800">
                     <i data-feather="x"></i>
                 </button>
             </div>
-            <div class="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
-                <p class="text-sm text-gray-600">שלום <span id="modal-customer-name" class="font-semibold"></span>, ההזמנה תקושר אוטומטית לחשבון שלך.</p>
+            
+            <!-- טאבים של המודל -->
+            <div class="flex border-b mb-4">
+                <button id="tab-btn-smart" class="py-2 px-4 font-semibold border-b-2 border-blue-500 text-blue-500">הדבקה חכמה</button>
+                <button id="tab-btn-form" class="py-2 px-4 font-semibold text-gray-500">טופס ידני</button>
+            </div>
+            
+            <div class="overflow-y-auto pr-2">
+                <!-- טאב 1: הדבקה חכמה (הנחיה 7) -->
+                <div id="tab-content-smart" class="space-y-4">
+                    <p class="text-sm text-gray-600">הדבק כאן הודעת וואטסאפ או טקסט הזמנה. המערכת תנסה לנתח ולמלא את הפרטים אוטומטית.</p>
+                    <textarea id="smart-paste-input" class="form-textarea" rows="8" placeholder="..."></textarea>
+                    <button id="submit-smart-paste" class="btn btn-primary w-full">נתח וצור הזמנה</button>
+                </div>
                 
-                <div>
-                    <label for="order-project-select" class="block text-sm font-medium text-gray-700">בחר פרויקט (או צור חדש)</label>
-                    <select id="order-project-select" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500" onchange="app.handleProjectSelect(this.value)">
-                        <option value="">-- טוען פרויקטים --</option>
-                    </select>
-                </div>
-                <div id="order-project-new-wrapper" style="display: none;">
-                    <label for="order-project-new" class="block text-sm font-medium text-gray-700">שם פרויקט חדש</label>
-                    <input type="text" id="order-project-new" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm" placeholder="הקלד שם פרויקט חדש">
-                </div>
-
-                <div>
-                    <label for="paste-content" class="block text-sm font-medium text-gray-700">הדבק תוכן הזמנה (או הקלד פריטים)</label>
-                    <textarea id="paste-content" rows="5" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500" placeholder="לדוגמה: 10 בלוק 20, 5 מלט..."></textarea>
+                <!-- טאב 2: טופס ידני (הנחיה 7) -->
+                <div id="tab-content-form" class="space-y-4 hidden">
+                    <div>
+                        <label for="order-form-project" class="form-label">בחר פרויקט</label>
+                        <select id="order-form-project" class="form-input"></select>
+                    </div>
+                    <div>
+                        <label for="order-form-catalog" class="form-label">בחר פריטים (מהקטלוג)</label>
+                        <select id="order-form-catalog" class="form-input" multiple size="5">
+                            <option>טוען קטלוג...</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="order-form-date" class="form-label">תאריך אספקה</label>
+                        <input type="date" id="order-form-date" class="form-input">
+                    </div>
+                    <div>
+                        <label for="order-form-notes" class="form-label">הערות</label>
+                        <textarea id="order-form-notes" class="form-textarea" rows="3" placeholder="הערות לנהג או למחסן..."></textarea>
+                    </div>
+                    
+                    <!-- [חדש] שדות מיקום (הנחיה 8) -->
+                    <div class="bg-gray-50 p-3 rounded-lg border">
+                        <label class="form-label">מיקום אספקה</label>
+                        <button onclick="app.shareDeviceLocation()" class="btn bg-green-500 hover:bg-green-600 w-full text-sm py-2">
+                            <i data-feather="map-pin" class="inline w-4 h-4"></i> שתף מיקום מדויק מהמכשיר
+                        </button>
+                        <p class="text-center text-xs text-gray-500 my-2">או</p>
+                        <input type="text" id="order-form-gps" class="form-input text-left text-sm" style="direction: ltr;" placeholder="הדבק GPS ידני (לדוגמה: 32.0, 34.7)">
+                        <p id="location-status" class="text-green-600 text-sm font-medium mt-2 hidden"></p>
+                    </div>
+                    
+                    <button id="submit-order-form" class="btn btn-primary w-full">שלח הזמנה</button>
                 </div>
             </div>
-            <div class="p-4 bg-gray-50 border-t flex justify-end gap-3">
-                <button type="button" onclick="document.getElementById('portal-new-order-modal').close()" class="py-2 px-4 bg-white border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50">
-                    ביטול
-                </button>
-                <button type="submit" id="submit-order-btn" class="py-2 px-4 bg-blue-600 border rounded-md text-sm font-medium text-white hover:bg-blue-700">
-                    שלח ושתף ב-WhatsApp
-                </button>
-            </div>
-        </form>
-    </dialog>
-
-    <!-- Header -->
-    <header class="text-center my-6 flex flex-col items-center">
-        <img src="https://i.postimg.cc/ryPT3r29/image.png" alt="Company Logo" class="w-20 h-20 mx-auto mb-4 rounded-lg shadow-sm">
-        <h1 id="main-header" class="text-3xl font-bold text-gray-800">מעקב משלוח</h1>
-        <p id="order-id-display" class="text-gray-600">טוען פרטי הזמנה...</p>
-    </header>
-
-    <!-- Loader -->
-    <div id="loader" class="text-center py-10">
-        <div class="loader"></div>
-        <p class="text-gray-600">מאתר נתונים...</p>
+        </div>
     </div>
 
-    <!-- Error Message -->
-    <div id="error-message" class="hidden text-center py-10">
-        <i data-feather="alert-triangle" class="w-12 h-12 mx-auto text-red-500"></i>
-        <p class="text-red-600 mt-4" id="error-text">שגיאה בטעינת הנתונים.</p>
-    </div>
-
-    <!-- Main Content Area (Container for views) -->
-    <div id="main-content-area" class="container mx-auto max-w-lg p-4">
-
-        <!-- View 1: Single Order Tracker (for new customers) -->
-        <main id="view-single-order" class="app-view active bg-white p-6 rounded-lg shadow-lg space-y-6">
-            <!-- Content injected by loadSingleOrderTracking() -->
-        </main>
-
-        <!-- View 2: Portal - Tracker (for existing customers) -->
-        <main id="view-portal-tracker" class="app-view space-y-6">
-            <!-- Content injected by renderPortalTracker() -->
-        </main>
-        
-        <!-- View 3: Portal - History (for existing customers) -->
-        <main id="view-portal-history" class="app-view space-y-3">
-            <!-- Content injected by renderPortalHistory() -->
-        </main>
-        
-        <!-- View 4: Portal - New Order (Placeholder, triggers modal) -->
-        <main id="view-portal-new-order" class="app-view">
-            <!-- This view triggers the modal -->
-        </main>
+    <!-- Toast container -->
+    <div id="toast-container"></div>
     
-    </div> <!-- End of main-content-area -->
-
-    <!-- Bottom Navigation Bar (Hidden for new customers) -->
-    <nav id="bottom-nav" style="display: none;">
-        <button id="nav-tracker" class="nav-button active" onclick="app.navigate('tracker')">
-            <i data-feather="truck"></i>
-            <span>מעקב</span>
-        </button>
-        <button id="nav-history" class="nav-button" onclick="app.navigate('history')">
-            <i data-feather="archive"></i>
-            <span>היסטוריה</span>
-        </button>
-        <button id="nav-new-order" class="nav-button" onclick="app.navigate('new-order')">
-            <i data-feather="plus-circle"></i>
-            <span>הזמנה חדשה</span>
-        </button>
-    </nav>
-
-
-    <!-- Firebase SDKs -->
     <script type="module">
-        // --- Firebase SDK Imports ---
-        import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
-        import { getFirestore, collection, doc, onSnapshot, query, orderBy, addDoc, serverTimestamp, where, getDocs, getDoc, limit } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-        
-        // --- Config ---
-        const firebaseConfig = {
-          apiKey: "AIzaSyDq0oVwS6zbEfsgrYBRkeBq80dDUKMedzo", authDomain: "saban94-78949.firebaseapp.com", projectId: "saban94-78949",
-          storageBucket: "saban94-78949.appspot.com",
-          messagingSenderId: "41553157903", appId: "1:41553157903:web:cc33d2cff023be97a87a"
-        };
-        let app, auth, db;
-        try {
-            app = getApps().length ? getApp() : initializeApp(firebaseConfig);
-            auth = getAuth(app); 
-            db = getFirestore(app);
-            await signInAnonymously(auth);
-        } catch (error) { console.error("CRITICAL: Firebase init failed!", error); }
+        // Import all required functions
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getFirestore, collection, addDoc, getDocs, query, where, serverTimestamp, setDoc, doc, onSnapshot, orderBy, limit } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
 
-        // --- Map & State ---
+        // --- [יישום הנחיה 1] מיקום ברירת מחדל ---
+        const DEFAULT_LOCATION = { lat: 32.0750544, lng: 34.826251 };
+        
+        // --- [יישום הנחיה 3] מאגר כתובות מקומי ---
+        const locationsDB = {
+            "האגדה 15, רמת גן": { lat: 32.0750544, lng: 34.826251 },
+            "שקד 2, רשפון": { lat: 32.199149, lng: 34.827883 },
+            "קפלנסקי 18, כפר סבא": { lat: 32.188991, lng: 34.903732 },
+            "הוורדים 19, סביון": { lat: 32.0716, lng: 34.8733 },
+            "חופי 81, רמת גן": { lat: 32.0833, lng: 34.8211 }
+        };
+
+        // --- גלובלי ---
+        let db, auth;
         let map;
-        let driverMarker, orderMarker;
-        let orderListenerUnsubscribe = null;
-        let locationListenerUnsubscribe = null;
+        let ordersListener = null;
+        let historyListener = null;
+        let allOrders = [];
+        let allHistoryOrders = [];
+        let allProjects = [];
+        let currentClient = null;
+        let currentProject = null;
+        let clientDeviceId = localStorage.getItem('sidorDeviceId') || null;
+        let sharedLocation = null; // ישמש לשמירת מיקום מהמכשיר
         
-        // --- Global App State (for Portal) ---
-        const state = {
-            customerId: null,
-            customerName: "לקוח",
-            customerProjects: new Set(),
-            whatsappNumber: "+972508860896"
+        // --- [יישום הנחיה 1] משתנים גלובליים למפה ---
+        let mapReady = false;
+        let mapMarkers = []; 
+
+        
+        // --- [תיקון קריטי v1.7] הגדרות Firebase קבועות ---
+        const firebaseConfig = {
+          apiKey: "AIzaSyDq0oVwS6zbEfsgrYBRkeBq80dDUKMedzo", 
+          authDomain: "saban94-78949.firebaseapp.com", 
+          projectId: "saban94-78949",
+          storageBucket: "saban94-78949.appspot.com",
+          messagingSenderId: "41553157903", 
+          appId: "1:41553157903:web:cc33d252cff023be97a87a",
+          measurementId: "G-XV6RZDESSB"
         };
         
-        // --- Icons ---
-        const driverIcon = L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png', shadowSize: [41, 41] });
-        const orderIcon = L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-blue.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png', shadowSize: [41, 41] });
+        // --- [תיקון קריטי v1.9] נתיב הקולקציה ---
+        const ORDERS_COLLECTION_PATH = 'orders_v2'; 
+        const CLIENTS_COLLECTION_PATH = 'clients'; // לפי המפרט החדש
+        const PROJECTS_COLLECTION_PATH = 'projects'; // לפי המפרט החדש
+        const DEVICES_COLLECTION_PATH = 'devices'; // (הנחיה 6)
 
-        // --- UI Functions ---
-        function showLoader(show) { document.getElementById('loader').style.display = show ? 'block' : 'none'; }
-        function showError(message) {
-            showLoader(false);
-            document.getElementById('main-content-area').style.display = 'none';
-            document.getElementById('error-message').style.display = 'block';
-            document.getElementById('error-text').innerText = message || 'אירעה שגיאה.';
-        }
-        function showContent() {
-            showLoader(false);
-            document.getElementById('error-message').style.display = 'none';
-            document.getElementById('main-content-area').style.display = 'block';
-            feather.replace();
-        }
+        // --- [חדש v1.13] אייקונים למפה ---
+        const orderIcon = L.icon({
+            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-blue.png',
+            iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34],
+            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png', shadowSize: [41, 41]
+        });
 
-        /**
-         * ----------------------------------------------------------------
-         * MAIN INITIALIZATION - (Spec Part 2)
-         * ----------------------------------------------------------------
-         */
-        async function initializeApp() {
-            state.customerId = localStorage.getItem('customerId');
-            
-            if (state.customerId) {
-                // 2. Customer is Known (Existing User)
-                console.log("Customer identified from localStorage:", state.customerId);
-                await loadCustomerPortal(state.customerId);
-            } else {
-                // 1. Customer is Unknown (New User)
-                console.log("New customer. Loading from URL.");
-                await loadSingleOrderTracking();
-            }
-        }
 
-        /**
-         * ----------------------------------------------------------------
-         * 1. NEW CUSTOMER FLOW (Spec Part 2, Section 1)
-         * ----------------------------------------------------------------
-         */
-        async function loadSingleOrderTracking() {
-            const params = new URLSearchParams(window.location.search);
-            const orderIdFromUrl = params.get('id'); // e.g., ZEB-1001
-            
-            if (!orderIdFromUrl) {
-                showError("קישור לא תקין. חסר מזהה הזמנה.");
-                return;
-            }
-
-            // Find the order by its 'order_id' field
-            const q = query(collection(db, "orders"), where("order_id", "==", orderIdFromUrl), limit(1));
-            const snapshot = await getDocs(q);
-
-            if (snapshot.empty) {
-                showError("ההזמנה לא נמצאה. אנא בדוק את הקישור.");
-                return;
-            }
-
-            const orderDoc = snapshot.docs[0];
-            const orderData = orderDoc.data();
-            const firestoreDocId = orderDoc.id; // The actual doc ID
-            
-            // --- CRITICAL STEP (Spec Part 2, Section 1, Step 5) ---
-            // Save customerId for future visits
-            if (orderData.customer && orderData.customer.id) {
-                localStorage.setItem('customerId', orderData.customer.id);
-                console.log("New customer identified and saved to localStorage:", orderData.customer.id);
-            }
-            // ------------------------------------------------------
-
-            // Render the tracker UI
-            const container = document.getElementById('view-single-order');
-            container.innerHTML = createTrackerUI(orderData);
-            updateStatusTracker(orderData.status);
-            
-            const orderLatLng = (orderData.latitude && orderData.longitude) ? [orderData.latitude, orderData.longitude] : null;
-            if (orderLatLng) initializeMap(orderLatLng);
-            
-            showContent();
-            
-            // Listen to this specific order for live updates
-            listenToSingleOrder(firestoreDocId);
-        }
+        // --- לוגר ("מלשינון") ופונקציות טעינה ---
+        const SmartLog = {
+            info: (msg, data = '') => console.log(`[INFO | ${new Date().toISOString()}] ${msg}`, data),
+            error: (err, msg, data = '') => console.error(`[ERROR | ${new Date().toISOString()}] ${msg}`, data, err),
+        };
         
-        function listenToSingleOrder(firestoreDocId) {
-            if (orderListenerUnsubscribe) orderListenerUnsubscribe();
-            
-            orderListenerUnsubscribe = onSnapshot(doc(db, "orders", firestoreDocId), (docSnap) => {
-                if (!docSnap.exists()) {
-                    showError("ההזמנה נמחקה.");
-                    return;
-                }
-                const orderData = docSnap.data();
+        // --- פונקציות Mock API (יישום הנחיות) ---
+        const api = {
+            // [יישום הנחיה 2]
+            getClientsByPhone: async (phone) => {
+                SmartLog.info(`Mock API: /api/clients?phone=${phone}`);
+                await new Promise(res => setTimeout(res, 500)); // הדמיית רשת
                 
-                // Re-render UI
-                const container = document.getElementById(state.customerId ? 'view-portal-tracker' : 'view-single-order');
-                container.innerHTML = createTrackerUI(orderData);
-                updateStatusTracker(orderData.status);
+                // כאן תהיה קריאת 'query' אמיתית ל-Firestore
+                // const q = query(collection(db, CLIENTS_COLLECTION_PATH), where("phone", "==", phone));
+                // const snapshot = await getDocs(q);
+                // ...
                 
-                const orderLatLng = (orderData.latitude && orderData.longitude) ? [orderData.latitude, orderData.longitude] : null;
-                const driverId = orderData.driver?.id;
-
-                if (driverId && (orderData.status === 'שויך' || orderData.status === 'בדרך')) {
-                    listenToDriverLocation(driverId, orderLatLng, orderData.status);
+                // החזרת נתונים מדומים לצורך הדגמה
+                if (phone === "0501234567") {
+                    return [
+                        { id: "client_1", name: "חברת א' בע\"מ", phone: "0501234567", projects: [
+                            { id: "project_A", title: "פרויקט מגדלי תל אביב", address: "דרך ששת הימים 30, תל אביב" },
+                            { id: "project_B", title: "פרויקט וילות ברמת השרון", address: "סוקולוב 50, רמת השרון" }
+                        ]}
+                    ];
+                } else if (phone === "0507654321") {
+                    return [
+                        { id: "client_2", name: "קבלן ב' - עבודות גמר", phone: "0507654321", projects: [
+                            { id: "project_C", title: "שיפוץ משרדים הרצליה", address: "משכית 27, הרצליה" }
+                        ]}
+                    ];
                 } else {
-                    if (locationListenerUnsubscribe) { locationListenerUnsubscribe(); locationListenerUnsubscribe = null; }
-                    updateMap(orderLatLng, null);
+                    return [];
                 }
+            },
+            // [יישום הנחיה 6]
+            bindDevice: async (deviceId, clientId, projectId) => {
+                SmartLog.info(`Mock API: /api/devices/bind`, { deviceId, clientId, projectId });
+                // const deviceRef = doc(db, DEVICES_COLLECTION_PATH, deviceId);
+                // await setDoc(deviceRef, { clientId, projectId, createdAt: serverTimestamp() });
+                await new Promise(res => setTimeout(res, 300));
+                return true;
+            },
+            // [יישום הנחיה 10]
+            getCatalog: async () => {
+                SmartLog.info(`Mock API: /api/catalog`);
+                const cacheKey = 'sidorCatalogCache';
+                const cached = sessionStorage.getItem(cacheKey);
                 
-                feather.replace();
-            });
-        }
-
-        /**
-         * ----------------------------------------------------------------
-         * 2. EXISTING CUSTOMER FLOW (Spec Part 2, Section 2)
-         * ----------------------------------------------------------------
-         */
-        async function loadCustomerPortal(customerId) {
-            // Fetch customer name once
-            try {
-                const customerDoc = await getDoc(doc(db, "customers", customerId));
-                if (customerDoc.exists()) {
-                    state.customerName = customerDoc.data().name || "לקוח";
+                if (cached) {
+                    SmartLog.info("Catalog loaded from cache");
+                    return JSON.parse(cached);
                 }
-            } catch (e) { console.error("Could not fetch customer name", e); }
 
-            document.getElementById('bottom-nav').style.display = 'flex';
-            document.getElementById('view-single-order').style.display = 'none'; // Hide single tracker
-            
-            // Fetch projects from history
-            await fetchCustomerProjects(customerId);
-            
-            // Start on the tracker tab
-            app.navigate('tracker');
-        }
-        
-        async function fetchCustomerProjects(customerId) {
-            const q = query(
-                collection(db, "orders"), 
-                where("customer.id", "==", customerId),
-                orderBy("createdAt", "desc"),
-                limit(20) // Get projects from last 20 orders
-            );
-            const snapshot = await getDocs(q);
-            snapshot.forEach(doc => {
-                const proj = doc.data().projectName;
-                if (proj) state.customerProjects.add(proj);
-            });
-        }
+                // הדמיית שליפה מ-Google Sheet
+                await new Promise(res => setTimeout(res, 800)); 
+                const catalog = [
+                    { sku: '1001', name: 'מלט שחור (25 ק\"ג)', price: 15 },
+                    { sku: '1002', name: 'בלוק איטונג 20', price: 8 },
+                    { sku: '2005', name: 'חול ים (באללה)', price: 120 },
+                ];
+                
+                sessionStorage.setItem(cacheKey, JSON.stringify(catalog));
+                return catalog;
+            }
+        };
 
-        // --- Portal: Navigation ---
+
         const app = {
-            navigate: (view) => {
-                // Hide all portal views
-                document.getElementById('view-portal-tracker').classList.remove('active');
-                document.getElementById('view-portal-history').classList.remove('active');
-                
-                // Deactivate all nav buttons
-                document.getElementById('nav-tracker').classList.remove('active');
-                document.getElementById('nav-history').classList.remove('active');
-                document.getElementById('nav-new-order').classList.remove('active');
-
-                if (view === 'tracker') {
-                    document.getElementById('view-portal-tracker').classList.add('active');
-                    document.getElementById('nav-tracker').classList.add('active');
-                    document.getElementById('main-header').innerText = 'מעקב חי';
-                    app.renderPortalTracker(state.customerId);
-                } 
-                else if (view === 'history') {
-                    document.getElementById('view-portal-history').classList.add('active');
-                    document.getElementById('nav-history').classList.add('active');
-                    document.getElementById('main-header').innerText = 'היסטוריית הזמנות';
-                    app.renderPortalHistory(state.customerId);
-                }
-                else if (view === 'new-order') {
-                    document.getElementById('nav-new-order').classList.add('active');
-                    // This tab just opens the modal
-                    app.renderPortalNewOrder();
-                }
-                showContent();
+            showLoader: () => {
+                const loader = document.getElementById('loader');
+                if (loader) loader.style.display = 'flex';
             },
-            
-            renderPortalTracker: async (customerId) => {
-                const container = document.getElementById('view-portal-tracker');
-                container.innerHTML = '<div class="loader"></div><p class="text-center text-gray-500">מחפש הזמנה פעילה...</p>';
-                
-                // Find latest *active* order
-                const q = query(
-                    collection(db, "orders"),
-                    where("customer.id", "==", customerId),
-                    where("status", "in", ["חדש", "שויך", "בדרך", "חדש (מלקוח)", "בטיפול", "מוכן לטעינה"]),
-                    orderBy("createdAt", "desc"),
-                    limit(1)
-                );
-                const snapshot = await getDocs(q);
-
-                if (snapshot.empty) {
-                    container.innerHTML = `<div class="bg-white p-6 rounded-lg shadow-lg text-center">
-                        <i data-feather="check-circle" class="w-12 h-12 mx-auto text-green-500"></i>
-                        <h3 class="font-bold text-lg mt-4">אין הזמנות פעילות כרגע</h3>
-                        <p class="text-gray-600 mt-2">באפשרותך ליצור הזמנה חדשה דרך הטאב "הזמנה חדשה".</p>
-                    </div>`;
-                    feather.replace();
-                    return;
-                }
-                
-                const orderDoc = snapshot.docs[0];
-                const orderData = orderDoc.data();
-                
-                // Render the UI in the correct view
-                container.innerHTML = createTrackerUI(orderData);
-                updateStatusTracker(orderData.status);
-                
-                const orderLatLng = (orderData.latitude && orderData.longitude) ? [orderData.latitude, orderData.longitude] : null;
-                if (orderLatLng) initializeMap(orderLatLng);
-
-                // Start listening to this specific order
-                listenToSingleOrder(orderDoc.id); 
-            },
-            
-            renderPortalHistory: async (customerId) => {
-                const container = document.getElementById('view-portal-history');
-                container.innerHTML = '<div class="loader"></div>';
-                
-                const q = query(
-                    collection(db, "orders"),
-                    where("customer.id", "==", customerId),
-                    orderBy("createdAt", "desc"),
-                    limit(20)
-                );
-                const snapshot = await getDocs(q);
-
-                if (snapshot.empty) {
-                    container.innerHTML = '<p class="text-center text-gray-500 p-4">לא נמצאו הזמנות קודמות.</p>';
-                    return;
-                }
-                
-                container.innerHTML = snapshot.docs.map(doc => {
-                    const d = doc.data();
-                    const statusColor = (d.status === 'הושלם' || d.status === 'סופק') ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800';
-                    return `
-                    <div class="bg-white p-4 rounded-lg shadow-sm border">
-                        <div class="flex justify-between items-center mb-2">
-                            <span class="text-xs font-bold ${statusColor} px-2 py-1 rounded">${d.status}</span>
-                            <span class="text-xs text-gray-500">${new Date(d.createdAt?.seconds * 1000).toLocaleDateString('he-IL')}</span>
-                        </div>
-                        <h4 class="font-semibold">${d.projectName || d.order_id || 'הזמנה'}</h4>
-                        <p class="text-sm text-gray-600 mt-1 truncate">${d.notes || d.rawText || 'ללא פירוט'}</p>
-                    </div>`;
-                }).join('');
-            },
-            
-            // --- Portal: New Order (Spec Part 3) ---
-            renderPortalNewOrder: () => {
-                document.getElementById('modal-customer-name').innerText = state.customerName;
-                
-                const projectSelect = document.getElementById('order-project-select');
-                projectSelect.innerHTML = '<option value="">-- בחר פרויקט קיים --</option>';
-                state.customerProjects.forEach(proj => {
-                    projectSelect.innerHTML += `<option value="${proj}">${proj}</option>`;
-                });
-                projectSelect.innerHTML += '<option value="--new--">** פרויקט חדש **</option>';
-                
-                // Reset form
-                document.getElementById('new-order-form').reset();
-                document.getElementById('order-project-new-wrapper').style.display = 'none';
-
-                document.getElementById('portal-new-order-modal').showModal();
-                feather.replace();
+            hideLoader: () => {
+                const loader = document.getElementById('loader');
+                if (loader) loader.style.display = 'none';
             },
 
-            handleProjectSelect: (value) => {
-                document.getElementById('order-project-new-wrapper').style.display = (value === '--new--') ? 'block' : 'none';
-            },
-
-            submitNewOrder: async () => {
-                const btn = document.getElementById('submit-order-btn');
-                btn.disabled = true;
-                btn.innerText = "שולח...";
-
-                const projectSelect = document.getElementById('order-project-select');
-                let projectName;
-                if (projectSelect.value === '--new--') {
-                    projectName = document.getElementById('order-project-new').value.trim();
-                } else {
-                    projectName = projectSelect.value;
-                }
-                
-                const rawText = document.getElementById('paste-content').value;
-
-                if (!projectName && !rawText) {
-                    alert("חובה לבחור פרויקט או להזין תוכן הזמנה.");
-                    btn.disabled = false; btn.innerText = "שלח ושתף ב-WhatsApp";
-                    return;
-                }
-
-                // 1. Create Firestore Document (Spec Part 3, Step 1)
-                const newOrder = {
-                    customer: { id: state.customerId, name: state.customerName },
-                    projectName: projectName,
-                    rawText: rawText,
-                    status: "חדש (מלקוח)", // Special status
-                    createdBy: "customer", 
-                    createdAt: serverTimestamp(),
-                    lastModified: serverTimestamp(),
-                    order_id: `AUTO-${Date.now().toString().slice(-6)}`
-                };
+            // --- 1. אתחול (לפי לוגיקה חדשה) ---
+            init: () => {
+                SmartLog.info("Sidor Customer Portal v39 (Full Refactor) initializing...");
+                app.showLoader(); 
                 
                 try {
-                    await addDoc(collection(db, "orders"), newOrder);
+                    if (!firebaseConfig.projectId) {
+                        throw new Error("Firebase config is missing projectId");
+                    }
                     
-                    // 2. Open WhatsApp Share (Spec Part 3, Step 2)
-                    const text = `*הזמנה חדשה מאת ${state.customerName}*
-*פרויקט:* ${projectName || 'לא צוין'}
-*תוכן:* ${rawText || 'ללא פירוט'}
-                    `;
-                    const waLink = `https://api.whatsapp.com/send?phone=${state.whatsappNumber}&text=${encodeURIComponent(text)}`;
-                    window.open(waLink, '_blank');
+                    const fbApp = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+                    db = getFirestore(fbApp);
+                    auth = getAuth(fbApp);
+                    setLogLevel('debug');
 
-                    document.getElementById('portal-new-order-modal').close();
-                    app.navigate('history'); // Show history so they see the new order
-                    
+                    app.authenticateUser();
                 } catch (e) {
-                    console.error("Failed to create new order:", e);
-                    alert("שגיאה בשליחת ההזמנה.");
-                } finally {
-                    btn.disabled = false; btn.innerText = "שלח ושתף ב-WhatsApp";
+                    SmartLog.error(e, "Firebase Init Failed");
+                    app.hideLoader();
+                    showToast("שגיאת אתחול קריטית", "error");
                 }
-            }
-        };
-        window.app = app; // Expose to global scope
+            },
 
-        // --- Helper Functions (Shared) ---
-        function createTrackerUI(order) {
-            const displayId = order.orderNumber || order.order_id || `...${order.id?.slice(-6)}`;
-            document.getElementById('order-id-display').innerText = `הזמנה ${displayId}`;
-            setDynamicGreeting(order.customer?.name);
+            // --- 2. אימות (לפי לוגיקה חדשה) ---
+            authenticateUser: () => {
+                SmartLog.info("Authenticating...");
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        SmartLog.info(`User authenticated: ${userId}`);
+                        
+                        // [יישום הנחיה 1] בדיקת שיוך קיים
+                        const boundPhone = localStorage.getItem('sidorBoundPhone');
+                        if (boundPhone && clientDeviceId) {
+                            SmartLog.info(`Device is bound to phone ${boundPhone}. Logging in...`);
+                            await app.login(boundPhone);
+                        } else {
+                            SmartLog.info("Device not bound. Showing login page.");
+                            app.showPage('page-login');
+                            app.hideLoader();
+                        }
 
-            return `
-                <div>
-                    <h2 id="dynamic-greeting" class="text-2xl font-bold text-gray-800 mb-2">...</h2>
-                    <p class="text-gray-600 text-lg">ההזמנה שלך בסטטוס:</p>
+                    } else {
+                        SmartLog.info("No user, signing in anonymously...");
+                        try {
+                            await signInAnonymously(auth);
+                        } catch (e) {
+                            SmartLog.error(e, "Authentication failed");
+                            app.hideLoader();
+                        }
+                    }
+                });
+            },
+
+            // [חדש] פונקציית כניסה (הנחיה 2)
+            login: async (phone = null) => {
+                app.showLoader();
+                const phoneInput = document.getElementById('phone-input');
+                const phoneToLogin = phone || phoneInput.value;
+                
+                if (!app.validatePhone(phoneToLogin)) {
+                    document.getElementById('login-error').innerText = "מספר טלפון לא תקין. (נדרש 05X-XXXXXXX)";
+                    document.getElementById('login-error').classList.remove('hidden');
+                    app.hideLoader();
+                    return;
+                }
+                
+                document.getElementById('login-error').classList.add('hidden');
+                
+                try {
+                    const clients = await api.getClientsByPhone(phoneToLogin);
                     
-                    <div class="status-tracker mt-6">
-                        <div class="status-tracker-progress" id="status-progress-bar"></div>
-                        <div class="status-step" id="step-new"><div class="status-dot"><i data-feather="check"></i></div><div class="status-label">התקבלה</div></div>
-                        <div class="status-step" id="step-assigned"><div class="status-dot"><i data-feather="user-check"></i></div><div class="status-label">שויכה</div></div>
-                        <div class="status-step" id="step-onway"><div class="status-dot"><i data-feather="truck"></i></div><div class="status-label">בדרך</div></div>
-                        <div class="status-step" id="step-completed"><div class="status-dot"><i data-feather="flag"></i></div><div class="status-label">הושלמה</div></div>
-                    </div>
-                </div>
-                
-                <div id="map-container" class="${(order.latitude && order.longitude) ? '' : 'hidden'}">
-                    <h3 class="font-semibold mb-3 text-lg">מעקב חי</h3>
-                    <div id="map"></div>
-                </div>
+                    if (clients.length === 0) {
+                        document.getElementById('login-error').innerText = "מספר זה לא משויך לאף לקוח. צור קשר ליצירת חשבון.";
+                        document.getElementById('login-error').classList.remove('hidden');
+                        app.hideLoader();
+                        return;
+                    }
 
-                <div id="driver-details" class="bg-gray-50 p-4 rounded-lg items-center space-x-4 space-x-reverse ${order.driver?.name ? 'flex' : 'hidden'}">
-                    <div class="bg-blue-100 p-3 rounded-full"><i data-feather="truck" class="w-6 h-6 text-blue-600"></i></div>
-                    <div>
-                        <p class="font-semibold">הנהג שלך: <span id="driver-name">${order.driver?.name || ''}</span></p>
-                        <a href="tel:${order.driver?.phone || ''}" id="driver-phone-link" class="text-blue-600 text-sm font-medium">
-                            <i data-feather="phone" class="w-4 h-4 inline-block ml-1"></i>
-                            <span id="driver-phone">${order.driver?.phone || ''}</span>
-                        </a>
-                    </div>
-                </div>
+                    if (clients.length === 1 && clients[0].projects.length === 1) {
+                        // [יישום הנחיה 2] כניסה ישירה לפרויקט יחיד
+                        SmartLog.info("Single client & project found. Binding device...");
+                        currentClient = clients[0];
+                        currentProject = clients[0].projects[0];
+                        allProjects = clients[0].projects;
+                        await app.bindDeviceIfNeeded(phoneToLogin);
+                    } else {
+                        // [יישום הנחיה 3] הצג רשימת פרויקטים
+                        SmartLog.info(`Multiple projects (${clients[0].projects.length}) found. Showing selection screen.`);
+                        currentClient = clients[0];
+                        allProjects = clients[0].projects;
+                        app.renderProjectSelection(clients[0].projects, phoneToLogin);
+                        app.showPage('page-project-select');
+                        app.hideLoader();
+                    }
+                    
+                } catch (error) {
+                    SmartLog.error(error, "Login failed");
+                    document.getElementById('login-error').innerText = `שגיאת שרת: ${error.message}`;
+                    document.getElementById('login-error').classList.remove('hidden');
+                    app.hideLoader();
+                }
+            },
+            
+            // [חדש] שיוך מכשיר (הנחיה 6)
+            bindDeviceIfNeeded: async (phone) => {
+                if (!clientDeviceId) {
+                    clientDeviceId = generateUUID();
+                    localStorage.setItem('sidorDeviceId', clientDeviceId);
+                    SmartLog.info(`New deviceId generated: ${clientDeviceId}. Showing bind modal.`);
+                    // הצג מודל אישור
+                    document.getElementById('modal-device-bind').classList.remove('hidden', 'opacity-0');
+                    document.getElementById('modal-device-bind').querySelector('.modal-content').classList.remove('scale-90');
+                    // שמירת הטלפון זמנית
+                    document.getElementById('modal-device-bind').dataset.phone = phone;
+                } else {
+                    SmartLog.info(`Device ${clientDeviceId} already bound. Loading portal.`);
+                    localStorage.setItem('sidorBoundPhone', phone); // רענון השיוך
+                    await app.loadPortal();
+                }
+            },
+            
+            confirmBindDevice: async () => {
+                const phone = document.getElementById('modal-device-bind').dataset.phone;
+                try {
+                    await api.bindDevice(clientDeviceId, currentClient.id, currentProject.id);
+                    localStorage.setItem('sidorBoundPhone', phone);
+                    document.getElementById('modal-device-bind').classList.add('hidden', 'opacity-0');
+                    await app.loadPortal();
+                } catch (error) {
+                    SmartLog.error(error, "Device bind failed");
+                    showToast("שגיאה בשיוך המכשיר", "error");
+                }
+            },
+            
+            denyBindDevice: async () => {
+                const phone = document.getElementById('modal-device-bind').dataset.phone;
+                localStorage.removeItem('sidorDeviceId');
+                clientDeviceId = null;
+                document.getElementById('modal-device-bind').classList.add('hidden', 'opacity-0');
+                await app.loadPortal(); // המשך ללא שיוך (שיוך זמני)
+            },
+
+            // [חדש] טעינת פורטל מלא
+            loadPortal: async () => {
+                SmartLog.info(`Loading portal for client ${currentClient.id}, project ${currentProject.id}`);
+                app.showPage('page-portal');
                 
-                <div id="notes-container" class="${order.notes || order.rawText ? '' : 'hidden'}">
-                    <h3 class="font-semibold mb-2 text-lg">פרטי הזמנה</h3>
-                    <p id="order-notes" class="text-gray-700 bg-gray-50 p-3 rounded-md">${order.notes || order.rawText}</p>
-                </div>
-            `;
+                // עדכון UI
+                document.getElementById('header-project-name').innerText = currentProject.title;
+                document.getElementById('account-name').innerText = currentClient.name;
+                document.getElementById('account-phone').innerText = currentClient.phone;
+                document.getElementById('account-device').innerText = clientDeviceId ? clientDeviceId.slice(0, 8) : 'לא משויך';
+
+                // טעינת נתונים
+                app.listenToOrders(currentProject.id); // רק הזמנות פעילות לפרויקט
+                app.listenToHistory(currentClient.id); // כל ההזמנות של הלקוח
+                
+                // טעינת קטלוג מראש
+                app.loadCatalogToForm();
+                
+                app.hideLoader();
+            },
+            
+            logout: () => {
+                localStorage.removeItem('sidorBoundPhone');
+                localStorage.removeItem('sidorDeviceId');
+                currentClient = null;
+                currentProject = null;
+                clientDeviceId = null;
+                allOrders = [];
+                allProjects = [];
+                SmartLog.info("User logged out and device unbound.");
+                app.showPage('page-login');
+            },
+            
+            // [חדש] הצגת עמוד
+            showPage: (pageId) => {
+                document.querySelectorAll('.app-page').forEach(p => p.classList.remove('active'));
+                document.getElementById(pageId).classList.add('active');
+            },
+
+            // [חדש] רשימת פרויקטים (הנחיה 3)
+            renderProjectSelection: (projects, phone) => {
+                const container = document.getElementById('project-list-container');
+                container.innerHTML = projects.map(p => `
+                    <div class="bg-white p-4 rounded-lg shadow border border-gray-200">
+                        <h3 class="font-bold text-lg">${p.title}</h3>
+                        <p class="text-gray-600 text-sm">${p.address}</p>
+                        <button class="btn btn-primary w-full mt-3" onclick="app.selectProject('${p.id}', '${phone}')">בחר בפרויקט זה</button>
+                    </div>
+                `).join('');
+            },
+            
+            selectProject: async (projectId, phone) => {
+                currentProject = allProjects.find(p => p.id === projectId);
+                SmartLog.info(`Project ${projectId} selected.`);
+                app.showLoader();
+                await app.bindDeviceIfNeeded(phone);
+            },
+
+
+            // --- 4. האזנה להזמנות (מעקב חי) ---
+            listenToOrders: (projectId) => {
+                if (ordersListener) ordersListener(); 
+                const collectionPath = ORDERS_COLLECTION_PATH;
+                
+                const q = query(
+                    collection(db, collectionPath),
+                    where("projectId", "==", projectId),
+                    where("status", "in", ["חדש", "בטיפול", "שויך", "בדרך", "חדש (מלקוח)"]),
+                    orderBy("createdAt", "desc"),
+                    limit(10)
+                );
+                
+                SmartLog.info(`Attaching LIVE listener to orders at: ${collectionPath} for project ${projectId}`);
+
+                ordersListener = onSnapshot(q, (snapshot) => { 
+                        SmartLog.info(`Snapshot received (Live Orders): ${snapshot.size} docs`);
+                        
+                        let ordersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        
+                        ordersData.forEach(order => {
+                            const location = app.resolveLocation(order, 'order');
+                            order.latitude = location.lat; 
+                            order.longitude = location.lng;
+                        });
+                        
+                        allOrders = ordersData; 
+                        app.renderMarkersOnMap(); // עדכון סיכות מפה
+                    }, 
+                    (error) => {
+                        SmartLog.error(error, "!!! FATAL: onSnapshot error (Live Orders)");
+                    }
+                );
+            },
+            
+            // [חדש] האזנה להיסטוריה (טאב היסטוריה)
+            listenToHistory: (clientId) => {
+                if (historyListener) historyListener();
+                
+                const collectionPath = ORDERS_COLLECTION_PATH;
+                const q = query(
+                    collection(db, collectionPath),
+                    where("clientId", "==", clientId), // שים לב: זה דורש שהשדה clientId יתווסף להזמנות
+                    orderBy("createdAt", "desc"),
+                    limit(30)
+                );
+
+                SmartLog.info(`Attaching HISTORY listener to orders at: ${collectionPath} for client ${clientId}`);
+
+                historyListener = onSnapshot(q, (snapshot) => {
+                    SmartLog.info(`Snapshot received (History): ${snapshot.size} docs`);
+                    allHistoryOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    app.renderPortalHistory(allHistoryOrders);
+                }, (error) => {
+                    SmartLog.error(error, "!!! FATAL: onSnapshot error (History)");
+                });
+            },
+            
+            // [חדש] אין צורך ב-listenForCustomers, אנו כבר מחזיקים את הלקוח
+            
+            
+            // --- 5. רינדור ---
+            renderPortalHistory: (orders) => {
+                const container = document.getElementById('history-list-container');
+                if (!container) return;
+                if (orders.length === 0) {
+                    container.innerHTML = `<p class="text-center text-gray-500 pt-8">לא נמצאו הזמנות קודמות.</p>`;
+                    return;
+                }
+                
+                container.innerHTML = orders.map(order => {
+                    const statusColor = order.status === 'הושלם' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700';
+                    return `
+                        <div class="order-card" onclick="app.focusOnMapItem('${order.id}', 'order')">
+                            <div class="order-card-header">
+                                <span class="font-bold text-sm">${new Date(order.createdAt?.toDate() || Date.now()).toLocaleDateString('he-IL')}</span>
+                                <span class="font-mono text-xs px-2 py-1 rounded ${statusColor}">${order.status || 'חדש'}</span>
+                            </div>
+                            <div class="order-card-body space-y-1">
+                                <h3 class="font-semibold text-lg">${order.customer?.name || order.customer_name || 'לקוח לא ידוע'}</h3>
+                                <p class="text-sm text-gray-600">${order.address || order.customer_address || 'כתובת לא צוינה'}</p>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            },
+
+            // --- 6. ניווט ---
+            navigatePortalTab: (pageId) => {
+                document.querySelectorAll('.portal-page').forEach(p => p.style.display = 'none');
+                document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+                
+                document.getElementById(pageId).style.display = 'block';
+                document.querySelector(`.nav-item[onclick*="'${pageId}'"]`).classList.add('active');
+                
+                document.getElementById('header-title').innerText = {
+                    'portal-tracking': 'מעקב הזמנה',
+                    'portal-projects': 'פרויקטים',
+                    'portal-history': 'היסטוריית הזמנות',
+                    'portal-account': 'החשבון שלי'
+                }[pageId];
+
+                if (pageId === 'portal-tracking') {
+                    app.initMap('map-container'); // אתחל (בבטחה)
+                    app.waitForMap(() => {
+                        app.renderMarkersOnMap();
+                    });
+                }
+            },
+
+            // --- 7. פונקציות מפה (לפי הנחיות 1, 2, 3, 5, 6) ---
+            
+            // [יישום הנחיה 1 ו-2] פונקציית אתחול המפה
+            initMap: (containerId) => {
+                if (map) {
+                    map.invalidateSize();
+                    if (!mapReady) mapReady = true; // ודא שהדגל תמיד נכון
+                    return;
+                }
+                
+                const mapContainer = document.getElementById(containerId);
+                if (!mapContainer) {
+                    SmartLog.info("Map container not found");
+                    return; 
+                }
+                
+                try {
+                    map = L.map(containerId).setView([DEFAULT_LOCATION.lat, DEFAULT_LOCATION.lng], 10);
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        maxZoom: 19, attribution: '© OpenStreetMap'
+                    }).addTo(map);
+                    
+                    SmartLog.info("Map initialized successfully.");
+                    mapReady = true; // [יישום הנחיה 2]
+                } catch(e) {
+                    SmartLog.error(e, "Map.Init");
+                    mapContainer.innerHTML = '<p class="text-red-500 p-4">שגיאה בטעינת המפה.</p>';
+                    mapReady = false;
+                }
+            },
+            
+            // [יישום הנחיה 3] מנגנון המתנה למפה
+            waitForMap: (callback) => {
+                SmartLog.info("Waiting for map...");
+                if (mapReady && map) {
+                    SmartLog.info("Map is ready. Executing callback.");
+                    callback();
+                    return;
+                }
+                // [יישום הנחיה 2] המתנה וחזרה
+                setTimeout(() => app.waitForMap(callback), 300);
+            },
+
+            // [יישום הנחיה 1] פונקציית הוספת סיכה
+            addMarkerToMap: (lat, lng, icon, popupContent) => {
+                const marker = L.marker([lat, lng], { icon }).addTo(map)
+                    .bindPopup(popupContent);
+                mapMarkers.push(marker);
+                return marker;
+            },
+
+            // [יישום הנחיה 5 ו-6] פונקציית רינדור מרכזית
+            renderMarkersOnMap: () => {
+                // [יישום הנחיה 4] בדיקה לפני רינדור
+                if (!mapReady || !map) {
+                    SmartLog.info("renderMarkersOnMap called, but map is not ready. Waiting...", { mapReady, mapExists: !!map });
+                    return;
+                }
+                
+                SmartLog.info("Rendering markers on map...");
+
+                // [יישום הנחיה 5] ניקוי מרקרים ישנים
+                mapMarkers.forEach(m => m.remove());
+                mapMarkers = [];
+                const bounds = L.latLngBounds();
+
+                // 1. צייר הזמנות (כחול)
+                allOrders.forEach(order => {
+                    // [יישום הנחיה 5]
+                    const lat = order.latitude;
+                    const lng = order.longitude;
+                    
+                    if (!lat || !lng) {
+                        // [יישום הנחיה 6] לוג זה בסדר כי איתור המיקום עדיין רץ
+                        console.warn(`[WARN] Skipping order ${order.id}, location not yet available.`);
+                        return; 
+                    }
+                    
+                    const popupContent = `<b>(הזמנה) ${order.customer_name || 'לקוח'}</b><br>
+                                          ${order.customer_address || 'כתובת לא ידועה'}<br>
+                                          <b>סטטוס: ${order.status || 'חדש'}</b>`;
+                    
+                    const marker = app.addMarkerToMap(lat, lng, orderIcon, popupContent);
+                    bounds.extend([lat, lng]);
+                });
+
+                if (bounds.isValid() && mapMarkers.length > 0) {
+                    map.fitBounds(bounds, { padding: [20, 20] });
+                }
+                SmartLog.info(`Rendered ${mapMarkers.length} markers on map.`);
+            },
+            
+            focusOnMapItem: (orderId, type) => {
+                let lat, lon;
+                let popupContent = "";
+
+                if (type === 'order') {
+                    // חפש גם בהיסטוריה וגם בהזמנות הפעילות
+                    const order = allOrders.find(o => o.id === orderId) || allHistoryOrders.find(o => o.id === orderId);
+                    if (!order) {
+                        SmartLog.error(null, "Order not found for focus", orderId);
+                        return;
+                    }
+                    
+                    const location = app.resolveLocation(order, 'order');
+                    lat = location.lat;
+                    lon = location.lng;
+                    
+                    if (!lat || !lon) {
+                        SmartLog.error(null, "Cannot focus, order missing location", order);
+                        showToast("לא קיים מיקום עבור הזמנה זו", "info");
+                        return;
+                    }
+                    popupContent = `<b>(הזמנה) ${order.customer?.name || order.customer_name || ''}</b><br>${order.address || order.customer_address}<br>סטטוס: ${order.status}`;
+                } 
+
+                if (lat && lon) {
+                    app.navigatePortalTab('portal-tracking'); 
+                    app.waitForMap(() => {
+                        SmartLog.info(`Focusing map on [${lat}, ${lon}]`);
+                        map.setView([lat, lon], 16); // 16 = זום קרוב
+                        L.popup().setLatLng([lat, lon]).setContent(popupContent).openOn(map);
+                    });
+                } else {
+                    SmartLog.info("No location for this item:", orderId);
+                    showToast("לא קיים מיקום עבור פריט זה", "info");
+                }
+            },
+
+            // --- [חדש v1.22] פונקציות איתור מיקום (הועתקו מ-index2.html) ---
+            
+            // [יישום הנחיה 2]
+            parseGPS: (gpsString) => {
+                if (!gpsString || typeof gpsString !== 'string') return null;
+                const parts = gpsString.split(',');
+                if (parts.length < 2) return null;
+                
+                const lat = parseFloat(parts[0].trim());
+                const lng = parseFloat(parts[1].trim());
+                
+                if (isNaN(lat) || isNaN(lng)) return null;
+                return { lat, lng };
+            },
+
+            // [יישום הנחיה 3]
+            findLocationInDB: (address) => {
+                if (!address || typeof address !== 'string') return null;
+                const normalizedAddress = address.trim(); 
+                if (locationsDB[normalizedAddress]) {
+                    SmartLog.info("Local DB HIT", normalizedAddress);
+                    return locationsDB[normalizedAddress];
+                }
+                return null;
+            },
+
+            // [יישום הנחיה 4]
+            resolveLocation: (doc, type) => {
+                let lat, lng, source, address;
+
+                // עדיפות 1: שדה GPS ידני (מהנחיה 2)
+                if (doc.gps) {
+                    const parsed = app.parseGPS(doc.gps);
+                    if (parsed) {
+                        return { lat: parsed.lat, lng: parsed.lng, source: 'manual_gps' };
+                    }
+                }
+
+                // עדיפות 2: שדות קיימים (Cache של Firestore)
+                if (type === 'order' && doc.latitude && doc.longitude) {
+                    return { lat: doc.latitude, lng: doc.longitude, source: 'firestore_cache' };
+                }
+                if (type === 'customer' && doc.customLat && doc.customLon) {
+                    return { lat: doc.customLat, lng: doc.customLon, source: 'firestore_cache' };
+                }
+
+                // עדיפות 3: מאגר מקומי (הנחיה 3)
+                address = (type === 'order') ? (doc.address || doc.customer_address) : doc.defaultAddress;
+                if (address) {
+                    const fromDB = app.findLocationInDB(address);
+                    if (fromDB) {
+                        return { lat: fromDB.lat, lng: fromDB.lng, source: 'local_db' };
+                    }
+                }
+
+                // עדיפות 4: Fallback (הנחיה 4)
+                return { lat: DEFAULT_LOCATION.lat, lng: DEFAULT_LOCATION.lng, source: 'fallback' };
+            },
+            
+            // --- 8. [חדש] לוגיקת הזמנה חדשה ---
+            
+            openNewOrderModal: () => {
+                sharedLocation = null; // איפוס מיקום
+                document.getElementById('location-status').classList.add('hidden');
+                document.getElementById('order-form-gps').value = '';
+                
+                // טען פרויקטים לבחירה
+                const projectSelect = document.getElementById('order-form-project');
+                projectSelect.innerHTML = allProjects.map(p => `<option value="${p.id}">${p.title} (${p.address})</option>`).join('');
+                projectSelect.value = currentProject.id; // בחר את הפרויקט הנוכחי
+                
+                document.getElementById('modal-new-order').classList.remove('hidden', 'opacity-0');
+            },
+            
+            closeNewOrderModal: (e = null) => {
+                if(e && e.target.id !== 'modal-new-order') return;
+                document.getElementById('modal-new-order').classList.add('hidden', 'opacity-0');
+            },
+
+            loadCatalogToForm: async () => {
+                try {
+                    const catalog = await api.getCatalog();
+                    const catalogSelect = document.getElementById('order-form-catalog');
+                    catalogSelect.innerHTML = catalog.map(item => `<option value="${item.sku}">${item.name}</option>`).join('');
+                } catch (error) {
+                    SmartLog.error(error, "Failed to load catalog");
+                }
+            },
+            
+            // [חדש] הנחיה 8: שיתוף מיקום מהמכשיר
+            shareDeviceLocation: () => {
+                if (!navigator.geolocation) {
+                    showToast("שיתוף מיקום לא נתמך בדפדפן זה", "error");
+                    return;
+                }
+                
+                const statusEl = document.getElementById('location-status');
+                statusEl.innerText = "מאחזר מיקום...";
+                statusEl.className = "text-blue-600 text-sm font-medium mt-2";
+                statusEl.classList.remove('hidden');
+
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        sharedLocation = {
+                            lat: position.coords.latitude,
+                            lng: position.coords.longitude
+                        };
+                        SmartLog.info("Device location shared:", sharedLocation);
+                        statusEl.innerText = `מיקום מדויק נשמר! (${sharedLocation.lat.toFixed(4)}, ${sharedLocation.lng.toFixed(4)})`;
+                        statusEl.className = "text-green-600 text-sm font-medium mt-2";
+                        document.getElementById('order-form-gps').value = ''; // נקה GPS ידני אם קיים
+                    },
+                    (error) => {
+                        SmartLog.error(error, "Geolocation failed");
+                        statusEl.innerText = `שגיאה באחזור מיקום: ${error.message}`;
+                        statusEl.className = "text-red-600 text-sm font-medium mt-2";
+                        sharedLocation = null;
+                    },
+                    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                );
+            },
+            
+            // [חדש] הנחיה 7: שמירת הזמנה
+            submitOrderForm: async () => {
+                const btn = document.getElementById('submit-order-form');
+                btn.disabled = true;
+                btn.innerText = "שומר...";
+                
+                try {
+                    const projectId = document.getElementById('order-form-project').value;
+                    const selectedProject = allProjects.find(p => p.id === projectId);
+                    const items = Array.from(document.getElementById('order-form-catalog').selectedOptions).map(opt => ({ sku: opt.value, name: opt.text, qty: 1 }));
+                    const orderDate = document.getElementById('order-form-date').value;
+                    const notes = document.getElementById('order-form-notes').value;
+                    const manualGps = document.getElementById('order-form-gps').value;
+
+                    if (!orderDate || items.length === 0) {
+                        showToast("חובה לבחור פריטים ותאריך אספקה", "error");
+                        throw new Error("Missing fields");
+                    }
+                    
+                    let orderLocation = { lat: null, lng: null, gps: null };
+
+                    // [יישום הנחיה 8] סדר עדיפויות למיקום
+                    if (sharedLocation) {
+                        // 1. מיקום מהמכשיר
+                        orderLocation = { ...sharedLocation, gps: `${sharedLocation.lat}, ${sharedLocation.lng}` };
+                    } else if (manualGps) {
+                        // 2. GPS ידני
+                        const parsed = app.parseGPS(manualGps);
+                        if (parsed) {
+                            orderLocation = { ...parsed, gps: manualGps };
+                        } else {
+                            showToast("פורמט GPS ידני שגוי", "error");
+                            throw new Error("Invalid GPS format");
+                        }
+                    } else {
+                        // 3. Fallback לכתובת הפרויקט
+                        const resolved = app.resolveLocation(selectedProject, 'project'); // נשתמש בלוגיקה הקיימת
+                        orderLocation = { lat: resolved.lat, lng: resolved.lng, gps: resolved.source };
+                    }
+
+                    const newOrderData = {
+                        clientId: currentClient.id,
+                        projectId: projectId,
+                        items: items, // [יישום הנחיה 10]
+                        status: "חדש (מלקוח)",
+                        createdByDevice: clientDeviceId,
+                        createdAt: serverTimestamp(),
+                        lastModified: serverTimestamp(),
+                        orderDate: orderDate,
+                        notes: notes,
+                        gps: orderLocation.gps, // [יישום הנחיה 8]
+                        latitude: orderLocation.lat,
+                        longitude: orderLocation.lng,
+                        // העתקת פרטי לקוח ופרויקט
+                        customer_name: currentClient.name,
+                        customer_address: selectedProject.address,
+                        projectName: selectedProject.title,
+                        customer: {
+                            id: currentClient.id,
+                            name: currentClient.name,
+                            phone: currentClient.phone,
+                            address: selectedProject.address
+                        }
+                    };
+
+                    const orderDocRef = await addDoc(collection(db, ORDERS_COLLECTION_PATH), newOrderData);
+                    SmartLog.info(`New order created by customer: ${orderDocRef.id}`, newOrderData);
+                    
+                    showToast("הזמנה חדשה נוצרה בהצלחה!", "success");
+                    app.closeNewOrderModal();
+                    app.navigatePortalTab('portal-history'); // עבור להיסטוריה לראות את ההזמנה
+
+                } catch (error) {
+                    SmartLog.error(error, "Failed to submit new order");
+                    if (error.message !== "Missing fields" && error.message !== "Invalid GPS format") {
+                        showToast("שגיאה בשמירת הזמנה", "error");
+                    }
+                } finally {
+                    btn.disabled = false;
+                    btn.innerText = "שלח הזמנה";
+                }
+            },
+            
+            // [חדש] הנחיה 7: הדבקה חכמה
+            submitSmartPaste: () => {
+                const text = document.getElementById('smart-paste-input').value;
+                if (!text) {
+                    showToast("השדה ריק", "error");
+                    return;
+                }
+                
+                SmartLog.info("Parsing smart paste (Not Implemented)", text);
+                showToast("ניתוח הדבקה חכמה - בבנייה", "info");
+                // TODO: להוסיף כאן לוגיקת NLP לניתוח הטקסט
+                // ...
+                // בסיום, למלא את טופס 2 ולעבור אליו
+                // app.navigateNewOrderTab('form');
+            },
+
+            navigateNewOrderTab: (tabId) => {
+                if (tabId === 'form') {
+                    document.getElementById('tab-content-smart').classList.add('hidden');
+                    document.getElementById('tab-content-form').classList.remove('hidden');
+                    document.getElementById('tab-btn-smart').classList.remove('border-blue-500', 'text-blue-500');
+                    document.getElementById('tab-btn-smart').classList.add('text-gray-500');
+                    document.getElementById('tab-btn-form').classList.add('border-blue-500', 'text-blue-500');
+                    document.getElementById('tab-btn-form').classList.remove('text-gray-500');
+                } else {
+                    document.getElementById('tab-content-smart').classList.remove('hidden');
+                    document.getElementById('tab-content-form').classList.add('hidden');
+                    document.getElementById('tab-btn-smart').classList.add('border-blue-500', 'text-blue-500');
+                    document.getElementById('tab-btn-smart').classList.remove('text-gray-500');
+                    document.getElementById('tab-btn-form').classList.remove('border-blue-500', 'text-blue-500');
+                    document.getElementById('tab-btn-form').classList.add('text-gray-500');
+                }
+            },
+
+            // --- 9. כלי עזר ---
+            validatePhone: (phone) => {
+                if (!phone) return false;
+                const israeliPhoneRegex = /^(05\d-?\d{7}|\+972-?5\d-?\d{7})$/;
+                return israeliPhoneRegex.test(phone.trim());
+            }
+
+        };
+
+        // --- פונקציית עזר גלובלית לטוסט ---
+        function showToast(message, type = 'info') {
+            let container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type} opacity-0 transform -translate-y-5`;
+            toast.innerText = message;
+            
+            container.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.classList.remove('opacity-0', '-translate-y-5');
+            }, 50);
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', '-translate-y-5');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
         }
         
-        function listenToDriverLocation(driverId, orderLatLng, orderStatus) {
-            if (locationListenerUnsubscribe) { locationListenerUnsubscribe(); locationListenerUnsubscribe = null; }
-            
-            locationListenerUnsubscribe = onSnapshot(doc(db, "driverLocations", driverId), (docSnap) => {
-                 if (docSnap.exists() && orderStatus === 'בדרך') {
-                     const locData = docSnap.data();
-                     updateMap(orderLatLng, [locData.latitude, locData.longitude]);
-                 } else {
-                     updateMap(orderLatLng, null);
-                 }
-            }, (error) => {
-                console.error("Driver location listener error:", error);
-                updateMap(orderLatLng, null); // Stop showing driver on error
+        function generateUUID() {
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
             });
         }
-        
-        function updateMap(orderLatLng, driverLatLng) {
-            if (!map) return;
-            const bounds = L.latLngBounds();
-            if (orderLatLng) {
-                if (orderMarker) { orderMarker.setLatLng(orderLatLng); } 
-                else { orderMarker = L.marker(orderLatLng, { icon: orderIcon }).addTo(map).bindPopup("כתובת האספקה"); }
-                bounds.extend(orderLatLng);
-            }
-            if (driverLatLng) {
-                document.getElementById('map-container').classList.remove('hidden');
-                if (driverMarker) { driverMarker.setLatLng(driverLatLng); } 
-                else { driverMarker = L.marker(driverLatLng, { icon: driverIcon }).addTo(map).bindPopup("מיקום הנהג"); }
-                bounds.extend(driverLatLng);
-            } else {
-                if (driverMarker) { map.removeLayer(driverMarker); driverMarker = null; }
-            }
-            if (bounds.isValid()) { setTimeout(() => map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 }), 50); }
-        }
 
-        function updateStatusTracker(status) {
-            // [SPEC IMPLEMENTATION] Added new statuses
-            const steps = { 'חדש': 0, 'חדש (מלקוח)': 0, 'בטיפול': 1, 'שויך': 1, 'מוכן לטעינה': 1, 'בדרך': 2, 'הושלם': 3, 'סופק': 3, 'בוטל': -1 };
-            const stepIndex = steps[status] ?? 0;
-            if (stepIndex === -1) return;
-            
-            const progressBar = document.getElementById('status-progress-bar');
-            if(progressBar) progressBar.style.width = `${(stepIndex / 3) * 100}%`;
-            
-            document.getElementById('step-new')?.classList.toggle('completed', stepIndex >= 0);
-            document.getElementById('step-assigned')?.classList.toggle('completed', stepIndex >= 1);
-            document.getElementById('step-onway')?.classList.toggle('completed', stepIndex >= 2);
-            document.getElementById('step-completed')?.classList.toggle('completed', stepIndex >= 3);
-            
-            document.querySelectorAll('.status-step').forEach(step => step.classList.remove('active'));
-            if (stepIndex === 0) document.getElementById('step-new')?.classList.add('active');
-            if (stepIndex === 1) document.getElementById('step-assigned')?.classList.add('active');
-            if (stepIndex === 2) document.getElementById('step-onway')?.classList.add('active');
-            if (stepIndex === 3) document.getElementById('step-completed')?.classList.add('active');
-        }
+        // --- חשיפה גלובלית והפעלה ---
+        window.app = app; // חשיפה גלובלית כדי שכפתורי HTML יוכלו לקרוא לזה
         
-        function setDynamicGreeting(customerName) {
-            const greetingEl = document.getElementById('dynamic-greeting');
-            if (!greetingEl) return;
-            const hour = new Date().getHours();
-            let greeting = "ברוך הבא";
-            if (hour < 12) greeting = "בוקר טוב";
-            else if (hour < 18) greeting = "צהריים טובים";
-            else greeting = "ערב טוב";
-            const firstName = (customerName || 'לקוח').split(' ')[0].replace(',', '');
-            greetingEl.innerText = `${greeting}, ${firstName}!`;
-        }
-
-        // --- Init ---
-        document.addEventListener('DOMContentLoaded', initializeApp);
+        document.addEventListener('DOMContentLoaded', () => {
+            app.init();
+            feather.replace();
+            
+            // חיבור Event Listeners ידני
+            document.getElementById('login-btn').addEventListener('click', () => app.login());
+            document.getElementById('logout-btn').addEventListener('click', app.logout);
+            document.getElementById('tab-btn-smart').addEventListener('click', () => app.navigateNewOrderTab('smart'));
+            document.getElementById('tab-btn-form').addEventListener('click', () => app.navigateNewOrderTab('form'));
+            document.getElementById('submit-smart-paste').addEventListener('click', app.submitSmartPaste);
+            document.getElementById('submit-order-form').addEventListener('click', app.submitOrderForm);
+        });
     </script>
 </body>
 </html>
