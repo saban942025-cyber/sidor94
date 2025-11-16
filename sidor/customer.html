@@ -3,19 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Sidor Customer Portal v40</title>
+    <title>Sidor Customer Portal v41</title>
     <!-- 
-      Sidor Customer Portal v40 (Premium Login Refactor)
+      Sidor Customer Portal v41 (Stability & Theme)
       
       Changelog:
-      - [קריטי] יישום מלא של "דרישות פונקציונליות" חדשות (A-I).
-      - [חדש] דף כניסה (page-login) הוחלף בעיצוב "פרימיום" חדש (הנחיה B).
-      - [חדש] הוספת פונקציות 'normalizePhone' ו-'extractPhoneFromText' (הנחיה A, F).
-      - [חדש] הוספת "מלשינון" (Paste Detector) לשדה הטלפון לחילוץ אוטומטי (הנחיה F).
-      - [חדש] הוספת שדה להדבקת אווטאר/אימוג'י ותצוגה מקדימה (הנחיה D).
-      - [חדש] הוספת אנימציית טעינה משופרת בכניסה (הנחיה C).
-      - [עדכון] Mock API עודכן לזהות '054-6609953' לאחר נורמליזציה (הנחיה A).
-      - [נקי] כל שאר הפונקציות (מפה, מיקום מקומי, הזמנות) נשמרו מ-v39/v1.22.
+      - [קריטי] תיקון שליפת טלפון (הנחיה A): 
+        - 'normalizePhone' שוכתב. הוא כבר לא כופה '+972'.
+        - המערכת מנרמלת כעת הכל לפורמט 10 ספרות (05X) וזה הפורמט 
+          ש-api.getClientsByPhone יחפש.
+      - [חדש] הוספת כפתור "מצב כהה / בהיר" בטאב "חשבון" (הנחיה C).
+      - [חדש] הוספת סגנונות CSS עבור '.dark'.
+      - [חדש] שילוב לינק האווטאר (בצבע לבן) במסך הכניסה ובראש הפורטל 
+        כברירת מחדל (הנחיה D).
     -->
 
     <!-- PWA, Tailwind, Leaflet, Icons, Font -->
@@ -41,8 +41,21 @@
             --light: #ecf0f1;
             --bg-app: #f5f7fa;
             --surface: #ffffff;
+            --text-color: #2c3e50;
+            --text-muted: #64748b;
+            --border-color: #e2e8f0;
             --accent: #FF6B35; /* [חדש] צבע הדגשה לכפתור (הנחיה B.3) */
         }
+        
+        /* [חדש] עיצוב כהה (הנחיה B) */
+        .dark {
+            --bg-app: #111827;
+            --surface: #1f2937;
+            --text-color: #f3f4f6;
+            --text-muted: #9ca3af;
+            --border-color: #374151;
+        }
+
         html, body {
             overscroll-behavior-y: none;
             height: 100%;
@@ -51,24 +64,48 @@
         body { 
             font-family: 'Rubik', sans-serif; 
             background-color: var(--bg-app); 
-            color: var(--secondary);
+            color: var(--text-color);
             display: flex;
             flex-direction: column;
             height: 100vh;
             height: -webkit-fill-available;
+            transition: background-color 0.3s, color 0.3s;
         }
         
         .form-input {
-            @apply w-full p-3 border border-gray-300 rounded-lg bg-gray-50 text-base focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all duration-200 ease-in-out;
+            @apply w-full p-3 border rounded-lg text-base transition-all duration-200 ease-in-out;
+            background-color: var(--bg-app);
+            border-color: var(--border-color);
+            color: var(--text-color);
         }
+        .form-input:focus {
+            @apply ring-1 ring-blue-500;
+            background-color: var(--surface);
+            border-color: var(--primary);
+        }
+        
         .form-textarea {
-            @apply w-full p-3 border border-gray-300 rounded-lg bg-gray-50 text-base focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all duration-200 ease-in-out h-32;
+            @apply w-full p-3 border rounded-lg text-base h-32;
+            background-color: var(--bg-app);
+            border-color: var(--border-color);
+            color: var(--text-color);
         }
+        
         .btn {
             @apply text-white font-bold py-3 px-6 rounded-lg shadow-md transition-all duration-300 ease-in-out;
         }
         .btn-primary { @apply bg-blue-500 hover:bg-blue-600; }
-        .btn-secondary { @apply bg-gray-500 hover:bg-gray-600; }
+        .btn-secondary { 
+            background-color: var(--light);
+            color: var(--secondary);
+            border: 1px solid var(--border-color);
+        }
+        .dark .btn-secondary {
+            background-color: #374151;
+            color: var(--light);
+            border-color: #4b5563;
+        }
+        
         .btn-success { @apply bg-green-500 hover:bg-green-600; }
         .btn:disabled { @apply bg-gray-400 cursor-not-allowed; }
 
@@ -101,6 +138,8 @@
             justify-content: space-between;
             align-items: center;
             flex-shrink: 0; 
+            border-bottom: 1px solid var(--border-color);
+            transition: background-color 0.3s, border-color 0.3s;
         }
         
         .app-main {
@@ -114,20 +153,21 @@
         /* [חדש] סרגל ניווט תחתון (הנחיה 9) */
         .app-nav {
             background: var(--surface);
-            border-top: 1px solid #e2e8f0;
+            border-top: 1px solid var(--border-color);
             padding-bottom: env(safe-area-inset-bottom);
             display: grid;
             grid-template-columns: repeat(5, 1fr);
             height: 65px;
             z-index: 20;
             flex-shrink: 0; 
+            transition: background-color 0.3s, border-color 0.3s;
         }
         .nav-item {
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            color: #64748b;
+            color: var(--text-muted);
             font-size: 0.7rem;
             font-weight: 500;
         }
@@ -280,8 +320,39 @@
             @apply fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 transition-opacity duration-300;
         }
         .modal-content {
-            @apply bg-white rounded-lg shadow-2xl p-6 w-full max-w-md;
+            @apply rounded-lg shadow-2xl p-6 w-full max-w-md;
+            background-color: var(--surface);
+            color: var(--text-color);
         }
+        
+        /* כרטיסים */
+        .card {
+            background: var(--surface);
+            border-radius: 12px;
+            margin-bottom: 0.75rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.03);
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+            transition: background-color 0.3s, border-color 0.3s;
+        }
+        .card-header {
+            padding: 0.75rem 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .card-body {
+            padding: 1rem;
+        }
+
+        /* [חדש] כפתור החלפת עיצוב */
+        .theme-toggle-btn {
+            @apply w-full flex items-center justify-between p-3 rounded-lg;
+            background-color: var(--bg-app);
+            border: 1px solid var(--border-color);
+        }
+
         .toast {
             @apply fixed top-5 left-1/2 -translate-x-1/2 p-4 rounded-lg shadow-lg text-white font-semibold z-[100] transition-all duration-300;
         }
@@ -303,8 +374,9 @@
                 <span>DeliveryMaster ללקוחו ח.סבן חומרי בנין</span>
             </header>
 
+            <!-- [עדכון v41] שימוש בלינק שסופק (בצבע לבן) -->
             <div class="avatar-preview" id="avatar-preview">
-                <i data-feather="image"></i>
+                <img src="https://img.icons8.com/?size=100&id=36m26sAM2RfO&format=png&color=FFFFFF" alt="avatar" class="w-12 h-12 opacity-30">
             </div>
             
             <h1 class="hero-title">ברוכים הבאים ל־DeliveryMaster</h1>
@@ -332,7 +404,7 @@
 
             <!-- [חדש] הנחיה E: הערת שחרור -->
             <footer class="release-note">
-                DeliveryMaster — ח.סבן חומרי בנין (v40)
+                DeliveryMaster — ח.סבן חומרי בנין (v41)
             </footer>
         </div>
 
@@ -385,10 +457,26 @@
                 <!-- טאב 4: חשבון -->
                 <div id="portal-account" class="portal-page" style="display: none;">
                     <h2 class="text-2xl font-bold mb-4">החשבון שלי</h2>
-                    <div class="bg-white p-4 rounded-lg shadow-sm border">
+                    <div class="card card-body space-y-3">
                         <p class="font-medium">לקוח: <span id="account-name" class="font-normal">...</span></p>
                         <p class="font-medium">טלפון: <span id="account-phone" class="font-normal">...</span></p>
                         <p class="font-medium">מכשיר: <span id="account-device" class="font-normal">...</span></p>
+                        
+                        <!-- [חדש] הנחיה B: כפתור עיצוב -->
+                        <div class="pt-4">
+                            <label class="form-label">העדפות תצוגה</label>
+                            <button id="theme-toggle-btn" class="theme-toggle-btn">
+                                <span class="flex items-center gap-2">
+                                    <i data-feather="moon" id="theme-icon-dark"></i>
+                                    <i data-feather="sun" id="theme-icon-light" class="hidden"></i>
+                                    <span id="theme-text">מצב כהה</span>
+                                </span>
+                                <div class="w-10 h-6 bg-gray-300 dark:bg-blue-600 rounded-full p-1 flex items-center transition-all duration-300" id="theme-toggle-switch">
+                                    <div class="w-4 h-4 bg-white rounded-full transform transition-transform duration-300" id="theme-toggle-dot"></div>
+                                </div>
+                            </button>
+                        </div>
+
                         <button id="logout-btn" class="btn btn-secondary w-full mt-6 text-sm">התנתק ושכח מכשיר זה</button>
                     </div>
                 </div>
@@ -444,15 +532,15 @@
             </div>
             
             <!-- טאבים של המודל -->
-            <div class="flex border-b mb-4">
+            <div class="flex border-b mb-4" style="border-color: var(--border-color);">
                 <button id="tab-btn-smart" class="py-2 px-4 font-semibold border-b-2 border-blue-500 text-blue-500">הדבקה חכמה</button>
-                <button id="tab-btn-form" class="py-2 px-4 font-semibold text-gray-500">טופס ידני</button>
+                <button id="tab-btn-form" class="py-2 px-4 font-semibold text-gray-500" style="color: var(--text-muted);">טופס ידני</button>
             </div>
             
             <div class="overflow-y-auto pr-2">
                 <!-- טאב 1: הדבקה חכמה (הנחיה 7) -->
                 <div id="tab-content-smart" class="space-y-4">
-                    <p class="text-sm text-gray-600">הדבק כאן הודעת וואטסאפ או טקסט הזמנה. המערכת תנסה לנתח ולמלא את הפרטים אוטומטית.</p>
+                    <p class="text-sm" style="color: var(--text-muted);">הדבק כאן הודעת וואטסאפ או טקסט הזמנה. המערכת תנסה לנתח ולמלא את הפרטים אוטומטית.</p>
                     <textarea id="smart-paste-input" class="form-textarea" rows="8" placeholder="..."></textarea>
                     <button id="submit-smart-paste" class="btn btn-primary w-full">נתח וצור הזמנה</button>
                 </div>
@@ -479,12 +567,12 @@
                     </div>
                     
                     <!-- [חדש] שדות מיקום (הנחיה 8) -->
-                    <div class="bg-gray-50 p-3 rounded-lg border">
+                    <div class="p-3 rounded-lg border" style="background-color: var(--bg-app); border-color: var(--border-color);">
                         <label class="form-label">מיקום אספקה</label>
                         <button onclick="app.shareDeviceLocation()" class="btn bg-green-500 hover:bg-green-600 w-full text-sm py-2">
                             <i data-feather="map-pin" class="inline w-4 h-4"></i> שתף מיקום מדויק מהמכשיר
                         </button>
-                        <p class="text-center text-xs text-gray-500 my-2">או</p>
+                        <p class="text-center text-xs my-2" style="color: var(--text-muted);">או</p>
                         <input type="text" id="order-form-gps" class="form-input text-left text-sm" style="direction: ltr;" placeholder="הדבק GPS ידני (לדוגמה: 32.0, 34.7)">
                         <p id="location-status" class="text-green-600 text-sm font-medium mt-2 hidden"></p>
                     </div>
@@ -580,24 +668,24 @@
                 await new Promise(res => setTimeout(res, 1500)); // הדמיית רשת
                 
                 // [יישום הנחיה A.7]
-                if (phone === "+972546609953") {
+                if (phone === "0546609953") {
                     SmartLog.info("Found client for 054-6609953");
                     return [
-                        { id: "client_3", name: "חדד נועם/כפר סבא", phone: "+972546609953", projects: [
+                        { id: "client_3", name: "חדד נועם/כפר סבא", phone: "0546609953", projects: [
                             { id: "project_D", title: "פרויקט ששת הימים", address: "ששת הימים 8, כפר סבא" }
                         ]}
                     ];
                 }
-                if (phone === "+972501234567") {
+                if (phone === "0501234567") {
                     return [
-                        { id: "client_1", name: "חברת א' בע\"מ", phone: "+972501234567", projects: [
+                        { id: "client_1", name: "חברת א' בע\"מ", phone: "0501234567", projects: [
                             { id: "project_A", title: "פרויקט מגדלי תל אביב", address: "דרך ששת הימים 30, תל אביב" },
                             { id: "project_B", title: "פרויקט וילות ברמת השרון", address: "סוקולוב 50, רמת השרון" }
                         ]}
                     ];
-                } else if (phone === "+972507654321") {
+                } else if (phone === "0507654321") {
                     return [
-                        { id: "client_2", name: "קבלן ב' - עבודות גמר", phone: "+972507654321", projects: [
+                        { id: "client_2", name: "קבלן ב' - עבודות גמר", phone: "0507654321", projects: [
                             { id: "project_C", title: "שיפוץ משרדים הרצליה", address: "משכית 27, הרצליה" }
                         ]}
                     ];
@@ -654,7 +742,7 @@
 
             // --- 1. אתחול (לפי לוגיקה חדשה) ---
             init: () => {
-                SmartLog.info("Sidor Customer Portal v40 (Premium Login) initializing...");
+                SmartLog.info("Sidor Customer Portal v41 (Premium Login) initializing...");
                 app.showLoader("מתחבר למערכת..."); 
                 
                 try {
@@ -667,6 +755,7 @@
                     auth = getAuth(fbApp);
                     setLogLevel('debug');
 
+                    app.initTheme(); // [חדש] אתחול עיצוב
                     app.authenticateUser();
                 } catch (e) {
                     SmartLog.error(e, "Firebase Init Failed");
@@ -818,13 +907,9 @@
                 document.getElementById('account-device').innerText = clientDeviceId ? clientDeviceId.slice(0, 8) : 'לא משויך';
                 
                 // [יישום הנחיה D] הצג אווטאר
-                const avatarUrl = localStorage.getItem('sidorAvatarUrl');
-                if (avatarUrl) {
-                    document.getElementById('header-avatar-img').src = avatarUrl;
-                } else {
-                    document.getElementById('header-avatar-img').src = `https://placehold.co/40x40/e0e7ff/4338ca?text=${currentClient.name.charAt(0)}`;
-                }
-
+                const avatarUrl = localStorage.getItem('sidorAvatarUrl') || "https://img.icons8.com/?size=100&id=36m26sAM2RfO&format=png&color=FFFFFF";
+                document.getElementById('header-avatar-img').src = avatarUrl;
+                
                 // טעינת נתונים
                 app.listenToOrders(currentProject.id); // רק הזמנות פעילות לפרויקט
                 app.listenToHistory(currentClient.id); // כל ההזמנות של הלקוח
@@ -947,12 +1032,12 @@
                 container.innerHTML = orders.map(order => {
                     const statusColor = order.status === 'הושלם' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700';
                     return `
-                        <div class="order-card" onclick="app.focusOnMapItem('${order.id}', 'order')">
-                            <div class="order-card-header">
+                        <div class="card" onclick="app.focusOnMapItem('${order.id}', 'order')">
+                            <div class="card-header">
                                 <span class="font-bold text-sm">${new Date(order.createdAt?.toDate() || Date.now()).toLocaleDateString('he-IL')}</span>
                                 <span class="font-mono text-xs px-2 py-1 rounded ${statusColor}">${order.status || 'חדש'}</span>
                             </div>
-                            <div class="order-card-body space-y-1">
+                            <div class="card-body space-y-1">
                                 <h3 class="font-semibold text-lg">${order.customer?.name || order.customer_name || 'לקוח לא ידוע'}</h3>
                                 <p class="text-sm text-gray-600">${order.address || order.customer_address || 'כתובת לא צוינה'}</p>
                             </div>
@@ -1357,19 +1442,21 @@
             // [יישום הנחיה A.2]
             normalizePhone: (raw) => {
                 if (!raw) return null;
-                let s = String(raw).replace(/[^0-9+]/g, "");
-                if (s.startsWith("0") && !s.startsWith("00") && !s.startsWith("+")) {
-                    s = "+972" + s.slice(1);
+                let s = String(raw).replace(/[^0-9]/g, ""); // "0546609953" or "972546609953"
+                if (s.startsWith("972")) {
+                    s = "0" + s.slice(3); // "0546609953"
                 }
-                if (s.startsWith("972") && !s.startsWith("+")) s = "+" + s;
-                return s;
+                if (s.startsWith("05") && s.length === 10) {
+                    return s; // מחזיר "0546609953"
+                }
+                return null; // לא תקין
             },
             
             // [יישום הנחיה F.2]
             extractPhoneFromText: (text) => {
                 if (!text) return null;
-                // ביטוי רגולרי משופר שתופס מספרי טלפון ישראליים בתוך טקסט
-                const re = /(?:^|\s|:|\n)(\+972-?5\d-?\d{7}|05\d-?\d{7})(?:$|\s|,|\n)/;
+                // [עדכון v41] חפש פורמט ישראלי
+                const re = /(?:^|\s|:|\n)(05\d-?\d{7})(?:$|\s|,|\n)/;
                 const matches = text.match(re);
                 if (!matches || !matches[1]) return null;
                 // החזר את ההתאמה הראשונה הנקייה
@@ -1378,9 +1465,43 @@
 
             validatePhone: (phone) => {
                 if (!phone) return false;
-                // Regex שתומך רק בפורמט בינלאומי +972
-                const internationalPhoneRegex = /^\+9725\d{8}$/;
-                return internationalPhoneRegex.test(phone.trim());
+                // [עדכון v41] Regex שתומך רק בפורמט 05X
+                const israeliPhoneRegex = /^05\d{8}$/;
+                return israeliPhoneRegex.test(phone.trim());
+            },
+
+            // [חדש] הנחיה C: החלפת עיצוב
+            initTheme: () => {
+                const theme = localStorage.getItem('sidorTheme') || 'light';
+                app.setTheme(theme);
+            },
+            
+            toggleTheme: () => {
+                const currentTheme = document.body.classList.contains('dark') ? 'light' : 'dark';
+                app.setTheme(currentTheme);
+            },
+            
+            setTheme: (theme) => {
+                const toggleDot = document.getElementById('theme-toggle-dot');
+                const themeText = document.getElementById('theme-text');
+                const iconDark = document.getElementById('theme-icon-dark');
+                const iconLight = document.getElementById('theme-icon-light');
+
+                if (theme === 'dark') {
+                    document.body.classList.add('dark');
+                    if (toggleDot) toggleDot.style.transform = 'translateX(20px)';
+                    if (themeText) themeText.innerText = 'מצב בהיר';
+                    if (iconDark) iconDark.classList.add('hidden');
+                    if (iconLight) iconLight.classList.remove('hidden');
+                } else {
+                    document.body.classList.remove('dark');
+                    if (toggleDot) toggleDot.style.transform = 'translateX(0)';
+                    if (themeText) themeText.innerText = 'מצב כהה';
+                    if (iconDark) iconDark.classList.remove('hidden');
+                    if (iconLight) iconLight.classList.add('hidden');
+                }
+                localStorage.setItem('sidorTheme', theme);
+                feather.replace(); // רענון אייקונים
             }
 
         };
@@ -1425,6 +1546,7 @@
             document.getElementById('tab-btn-form').addEventListener('click', () => app.navigateNewOrderTab('form'));
             document.getElementById('submit-smart-paste').addEventListener('click', app.submitSmartPaste);
             document.getElementById('submit-order-form').addEventListener('click', app.submitOrderForm);
+            document.getElementById('theme-toggle-btn').addEventListener('click', app.toggleTheme);
             
             // [יישום הנחיה F.3] "מלשינון" הדבקה
             document.getElementById('phone-input').addEventListener('paste', (e) => {
