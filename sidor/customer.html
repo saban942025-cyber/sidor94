@@ -3,37 +3,34 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Sidor Customer Portal v39</title>
+    <title>Sidor Customer Portal v40</title>
     <!-- 
-      Sidor Customer Portal v39 (Full Refactor)
+      Sidor Customer Portal v40 (Premium Login Refactor)
       
       Changelog:
-      - [קריטי] יישום מלא של "דרישות פונקציונליות" חדשות.
-      - [חדש] החלפת לוגיקת localStorage הישנה במנגנון כניסה מבוסס טלפון (Maps Landing).
-      - [חדש] הוספת דפי UI: page-login, page-project-select.
-      - [חדש] הוספת מודל שיוך מכשיר (modal-device-bind) (הנחיה 6).
-      - [חדש] הוספת מודל (+) להזמנה חדשה עם 2 אופציות: "הדבקה חכמה" ו"טופס" (הנחיה 7).
-      - [חדש] הוספת סרגל ניווט תחתון 5-כפתורים (הנחיה 9).
-      - [חדש] הוספת פונקציית שיתוף מיקום ממכשיר (navigator.geolocation) (הנחיה 8).
-      - [קריטי] הסרה מלאה של Google Geocoding API.
-      - [שילוב] שילוב מנגנון איתור מיקום מקומי (v1.22) עם DEFAULT_LOCATION, 
-        locationsDB, ו-parseGPS (הנחיה 8).
-      - [חדש] הוספת Mock API לטעינת קטלוג (עם Cache) וטעינת לקוחות (הנחיה 10).
+      - [קריטי] יישום מלא של "דרישות פונקציונליות" חדשות (A-I).
+      - [חדש] דף כניסה (page-login) הוחלף בעיצוב "פרימיום" חדש (הנחיה B).
+      - [חדש] הוספת פונקציות 'normalizePhone' ו-'extractPhoneFromText' (הנחיה A, F).
+      - [חדש] הוספת "מלשינון" (Paste Detector) לשדה הטלפון לחילוץ אוטומטי (הנחיה F).
+      - [חדש] הוספת שדה להדבקת אווטאר/אימוג'י ותצוגה מקדימה (הנחיה D).
+      - [חדש] הוספת אנימציית טעינה משופרת בכניסה (הנחיה C).
+      - [עדכון] Mock API עודכן לזהות '054-6609953' לאחר נורמליזציה (הנחיה A).
+      - [נקי] כל שאר הפונקציות (מפה, מיקום מקומי, הזמנות) נשמרו מ-v39/v1.22.
     -->
 
     <!-- PWA, Tailwind, Leaflet, Icons, Font -->
     <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#ffffff">
+    <meta name="theme-color" content="#0f172a">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="default-translucent">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="apple-touch-icon" href="https://placehold.co/192x192/3498db/white?text=Sidor">
     
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/feather-icons"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;800&display=swap" rel="stylesheet">
     
     <style>
         :root {
@@ -44,6 +41,7 @@
             --light: #ecf0f1;
             --bg-app: #f5f7fa;
             --surface: #ffffff;
+            --accent: #FF6B35; /* [חדש] צבע הדגשה לכפתור (הנחיה B.3) */
         }
         html, body {
             overscroll-behavior-y: none;
@@ -157,26 +155,125 @@
         }
         .nav-item-center svg { width: 28px; height: 28px; margin: 0; }
         
-        /* [חדש] דף כניסה (הנחיה 1) */
+        /* [חדש] דף כניסה פרימיום (הנחיה B) */
         #page-login {
-            background-color: var(--surface);
-            justify-content: center;
-            align-items: center;
-            padding: 2rem;
+            display:flex; flex-direction:column; align-items:center; justify-content:center;
+            height:100vh; background: linear-gradient(135deg,#0f172a 0%, #0b1220 100%);
+            color:#fff;
             text-align: center;
+            padding: 1rem;
         }
-        .login-logo {
-            width: 100px;
-            height: 100px;
-            background-color: var(--primary);
-            border-radius: 20px;
+        .login-header {
             display: flex;
             align-items: center;
             justify-content: center;
+            gap: 0.75rem;
+            position: absolute;
+            top: calc(1.5rem + env(safe-area-inset-top));
+            color: #94a3b8;
+        }
+        .login-logo { 
+            width: 32px;
+            height: 32px;
+            color: var(--primary);
+        }
+        .hero-title { 
+            font-size: 30px; 
+            font-weight:800; 
+            letter-spacing:0.5px; 
+            margin-bottom:8px; 
+        }
+        .hero-subtitle {
+            font-size: 1rem;
+            color: #cbd5e1;
             margin-bottom: 2rem;
+        }
+        .phone-card { 
+            background: rgba(255,255,255,0.06); 
+            padding: 1.5rem; 
+            border-radius:14px; 
+            box-shadow: 0 8px 30px rgba(2,6,23,0.7); 
+            width: 420px; 
+            max-width:95%; 
+        }
+        .input-phone { 
+            width:100%; 
+            padding:14px 16px; 
+            border-radius:10px; 
+            border: 1px solid rgba(255,255,255,0.1); 
+            outline:none; 
+            font-size:18px; 
+            background: rgba(255,255,255,0.03); 
+            color:#fff; 
+            text-align: center;
+            direction: ltr;
+        }
+        .btn-enter { 
+            margin-top:12px; 
+            width:100%; 
+            padding:14px; 
+            border-radius:12px; 
+            font-weight:700; 
+            font-size:16px; 
+            cursor:pointer; 
+            border:none; 
+            transition: transform .08s ease;
+            background-color: var(--accent);
             color: white;
         }
-        .login-logo svg { width: 50px; height: 50px; }
+        .btn-enter:active { transform: scale(0.98); }
+        .login-loader { 
+            width:32px; 
+            height:32px; 
+            border-radius:50%; 
+            border:4px solid rgba(255,255,255,0.08); 
+            border-top-color: var(--accent); 
+            animation: spin 1s linear infinite; 
+            margin: 12px auto; 
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        
+        .avatar-preview {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            margin: 0 auto 1.5rem auto;
+            background-color: rgba(255,255,255,0.1);
+            border: 2px dashed rgba(255,255,255,0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+        .avatar-preview img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .avatar-preview i {
+            width: 32px;
+            height: 32px;
+            color: rgba(255,255,255,0.3);
+        }
+        .input-avatar {
+            width:100%; 
+            padding:8px 10px; 
+            border-radius:8px; 
+            border: 1px solid rgba(255,255,255,0.1); 
+            outline:none; 
+            font-size:12px; 
+            background: rgba(255,255,255,0.03); 
+            color:#fff;
+            direction: ltr;
+            margin-top: 0.5rem;
+        }
+        
+        .release-note {
+            position: absolute;
+            bottom: env(safe-area-inset-bottom, 1rem);
+            font-size: 0.75rem;
+            color: #475569;
+        }
 
         /* [חדש] מודלים */
         .modal {
@@ -198,21 +295,45 @@
     <!-- [חדש] מבנה אפליקציה -->
     <div class="app-container">
 
-        <!-- [חדש] דף כניסה (הנחיה 1) -->
+        <!-- [חדש] דף כניסה פרימיום (הנחיה B) -->
         <div id="page-login" class="app-page active">
-            <div class="login-logo">
-                <i data-feather="truck"></i>
-            </div>
-            <h1 class="text-3xl font-bold mb-2">DeliveryMaster</h1>
-            <p class="text-lg text-gray-600 mb-8">אנא הזן את מספר הטלפון שלך</p>
             
-            <div class="w-full max-w-sm">
-                <input type="tel" id="phone-input" placeholder="05X-XXXXXXX" class="form-input text-center text-2xl" style="direction: ltr;">
-                <button id="login-btn" class="btn btn-primary w-full mt-4 text-lg">
-                    כניסה
-                </button>
-                <p id="login-error" class="text-red-500 text-sm mt-2 hidden"></p>
+            <header class="login-header">
+                <i data-feather="truck" class="login-logo"></i>
+                <span>DeliveryMaster ללקוחו ח.סבן חומרי בנין</span>
+            </header>
+
+            <div class="avatar-preview" id="avatar-preview">
+                <i data-feather="image"></i>
             </div>
+            
+            <h1 class="hero-title">ברוכים הבאים ל־DeliveryMaster</h1>
+            <p class="hero-subtitle">אנא הזן את מספר הטלפון שלך</p>
+            
+            <div class="phone-card">
+                <div id="loader-container" class="hidden text-center mb-3">
+                    <div class="loader"></div>
+                    <p id="loader-text" class="text-sm text-gray-400">מאמת מספר טלפון...</p>
+                </div>
+                
+                <div id="login-form">
+                    <input type="tel" id="phone-input" placeholder="הקלד מספר טלפון או הדבק">
+                    <p id="paste-helper" class="text-green-400 text-sm mt-2 hidden"></p>
+                    
+                    <!-- [חדש] הנחיה D: שדה אווטאר -->
+                    <input type="text" id="avatar-url-input" class="input-avatar mt-3" placeholder="הדבק לינק לאווטאר / אימוג'י (אופציונלי)">
+
+                    <button id="login-btn" class="btn-enter">
+                        כניסה
+                    </button>
+                    <p id="login-error" class="text-red-500 text-sm mt-2 hidden"></p>
+                </div>
+            </div>
+
+            <!-- [חדש] הנחיה E: הערת שחרור -->
+            <footer class="release-note">
+                DeliveryMaster — ח.סבן חומרי בנין (v40)
+            </footer>
         </div>
 
         <!-- [חדש] דף בחירת פרויקט (הנחיה 3) -->
@@ -234,7 +355,7 @@
                 <h1 id="header-title" class="font-bold text-lg">מעקב הזמנה</h1>
                 <div class="flex items-center gap-2">
                     <span id="header-project-name" class="text-sm font-medium text-gray-500"></span>
-                    <i data-feather="user" class="text-gray-600"></i>
+                    <img id="header-avatar-img" class="w-8 h-8 rounded-full bg-gray-200">
                 </div>
             </header>
             
@@ -243,7 +364,6 @@
                 <!-- טאב 1: מעקב חי -->
                 <div id="portal-tracking" class="portal-page active" style="padding: 0; height: 100%;">
                     <div id="map-container" class="w-full h-full z-0"></div>
-                    <!-- (אלמנטים נוספים של סטטוס יתווספו כאן בעתיד) -->
                 </div>
 
                 <!-- טאב 2: פרויקטים -->
@@ -449,37 +569,48 @@
         const api = {
             // [יישום הנחיה 2]
             getClientsByPhone: async (phone) => {
-                SmartLog.info(`Mock API: /api/clients?phone=${phone}`);
-                await new Promise(res => setTimeout(res, 500)); // הדמיית רשת
+                // [יישום הנחיה A.3]
+                SmartLog.info(`Querying clients with normalized phone: ${phone}`);
                 
                 // כאן תהיה קריאת 'query' אמיתית ל-Firestore
                 // const q = query(collection(db, CLIENTS_COLLECTION_PATH), where("phone", "==", phone));
                 // const snapshot = await getDocs(q);
                 // ...
                 
-                // החזרת נתונים מדומים לצורך הדגמה
-                if (phone === "0501234567") {
+                await new Promise(res => setTimeout(res, 1500)); // הדמיית רשת
+                
+                // [יישום הנחיה A.7]
+                if (phone === "+972546609953") {
+                    SmartLog.info("Found client for 054-6609953");
                     return [
-                        { id: "client_1", name: "חברת א' בע\"מ", phone: "0501234567", projects: [
+                        { id: "client_3", name: "חדד נועם/כפר סבא", phone: "+972546609953", projects: [
+                            { id: "project_D", title: "פרויקט ששת הימים", address: "ששת הימים 8, כפר סבא" }
+                        ]}
+                    ];
+                }
+                if (phone === "+972501234567") {
+                    return [
+                        { id: "client_1", name: "חברת א' בע\"מ", phone: "+972501234567", projects: [
                             { id: "project_A", title: "פרויקט מגדלי תל אביב", address: "דרך ששת הימים 30, תל אביב" },
                             { id: "project_B", title: "פרויקט וילות ברמת השרון", address: "סוקולוב 50, רמת השרון" }
                         ]}
                     ];
-                } else if (phone === "0507654321") {
+                } else if (phone === "+972507654321") {
                     return [
-                        { id: "client_2", name: "קבלן ב' - עבודות גמר", phone: "0507654321", projects: [
+                        { id: "client_2", name: "קבלן ב' - עבודות גמר", phone: "+972507654321", projects: [
                             { id: "project_C", title: "שיפוץ משרדים הרצליה", address: "משכית 27, הרצליה" }
                         ]}
                     ];
                 } else {
+                    SmartLog.info("No clients found for this phone number.");
                     return [];
                 }
             },
             // [יישום הנחיה 6]
             bindDevice: async (deviceId, clientId, projectId) => {
                 SmartLog.info(`Mock API: /api/devices/bind`, { deviceId, clientId, projectId });
-                // const deviceRef = doc(db, DEVICES_COLLECTION_PATH, deviceId);
-                // await setDoc(deviceRef, { clientId, projectId, createdAt: serverTimestamp() });
+                const deviceRef = doc(db, DEVICES_COLLECTION_PATH, deviceId);
+                await setDoc(deviceRef, { clientId, projectId, createdAt: serverTimestamp() });
                 await new Promise(res => setTimeout(res, 300));
                 return true;
             },
@@ -509,9 +640,12 @@
 
 
         const app = {
-            showLoader: () => {
+            showLoader: (text = "טוען...") => {
                 const loader = document.getElementById('loader');
                 if (loader) loader.style.display = 'flex';
+                // [יישום הנחיה C] - אנימציית טקסט בטעינה
+                const loaderText = document.getElementById('loader-text');
+                if(loaderText) loaderText.innerText = text;
             },
             hideLoader: () => {
                 const loader = document.getElementById('loader');
@@ -520,8 +654,8 @@
 
             // --- 1. אתחול (לפי לוגיקה חדשה) ---
             init: () => {
-                SmartLog.info("Sidor Customer Portal v39 (Full Refactor) initializing...");
-                app.showLoader(); 
+                SmartLog.info("Sidor Customer Portal v40 (Premium Login) initializing...");
+                app.showLoader("מתחבר למערכת..."); 
                 
                 try {
                     if (!firebaseConfig.projectId) {
@@ -574,26 +708,36 @@
 
             // [חדש] פונקציית כניסה (הנחיה 2)
             login: async (phone = null) => {
-                app.showLoader();
+                // [יישום הנחיה C] הצג Loader
+                document.getElementById('login-form').classList.add('hidden');
+                document.getElementById('loader-container').classList.remove('hidden');
+                app.showLoader("מאמת מספר טלפון...");
+                
                 const phoneInput = document.getElementById('phone-input');
                 const phoneToLogin = phone || phoneInput.value;
                 
-                if (!app.validatePhone(phoneToLogin)) {
+                // [יישום הנחיה A.2]
+                const normalizedPhone = app.normalizePhone(phoneToLogin);
+                
+                if (!normalizedPhone || !app.validatePhone(normalizedPhone)) {
                     document.getElementById('login-error').innerText = "מספר טלפון לא תקין. (נדרש 05X-XXXXXXX)";
                     document.getElementById('login-error').classList.remove('hidden');
-                    app.hideLoader();
+                    document.getElementById('login-form').classList.remove('hidden');
+                    document.getElementById('loader-container').classList.add('hidden');
                     return;
                 }
                 
                 document.getElementById('login-error').classList.add('hidden');
+                app.showLoader("מחפש לקוחות..."); // [יישום הנחיה C.1]
                 
                 try {
-                    const clients = await api.getClientsByPhone(phoneToLogin);
+                    const clients = await api.getClientsByPhone(normalizedPhone);
                     
                     if (clients.length === 0) {
                         document.getElementById('login-error').innerText = "מספר זה לא משויך לאף לקוח. צור קשר ליצירת חשבון.";
                         document.getElementById('login-error').classList.remove('hidden');
-                        app.hideLoader();
+                        document.getElementById('login-form').classList.remove('hidden');
+                        document.getElementById('loader-container').classList.add('hidden');
                         return;
                     }
 
@@ -603,13 +747,13 @@
                         currentClient = clients[0];
                         currentProject = clients[0].projects[0];
                         allProjects = clients[0].projects;
-                        await app.bindDeviceIfNeeded(phoneToLogin);
+                        await app.bindDeviceIfNeeded(normalizedPhone);
                     } else {
                         // [יישום הנחיה 3] הצג רשימת פרויקטים
                         SmartLog.info(`Multiple projects (${clients[0].projects.length}) found. Showing selection screen.`);
                         currentClient = clients[0];
                         allProjects = clients[0].projects;
-                        app.renderProjectSelection(clients[0].projects, phoneToLogin);
+                        app.renderProjectSelection(clients[0].projects, normalizedPhone);
                         app.showPage('page-project-select');
                         app.hideLoader();
                     }
@@ -618,7 +762,8 @@
                     SmartLog.error(error, "Login failed");
                     document.getElementById('login-error').innerText = `שגיאת שרת: ${error.message}`;
                     document.getElementById('login-error').classList.remove('hidden');
-                    app.hideLoader();
+                    document.getElementById('login-form').classList.remove('hidden');
+                    document.getElementById('loader-container').classList.add('hidden');
                 }
             },
             
@@ -671,6 +816,14 @@
                 document.getElementById('account-name').innerText = currentClient.name;
                 document.getElementById('account-phone').innerText = currentClient.phone;
                 document.getElementById('account-device').innerText = clientDeviceId ? clientDeviceId.slice(0, 8) : 'לא משויך';
+                
+                // [יישום הנחיה D] הצג אווטאר
+                const avatarUrl = localStorage.getItem('sidorAvatarUrl');
+                if (avatarUrl) {
+                    document.getElementById('header-avatar-img').src = avatarUrl;
+                } else {
+                    document.getElementById('header-avatar-img').src = `https://placehold.co/40x40/e0e7ff/4338ca?text=${currentClient.name.charAt(0)}`;
+                }
 
                 // טעינת נתונים
                 app.listenToOrders(currentProject.id); // רק הזמנות פעילות לפרויקט
@@ -685,12 +838,15 @@
             logout: () => {
                 localStorage.removeItem('sidorBoundPhone');
                 localStorage.removeItem('sidorDeviceId');
+                localStorage.removeItem('sidorAvatarUrl');
                 currentClient = null;
                 currentProject = null;
                 clientDeviceId = null;
                 allOrders = [];
                 allProjects = [];
                 SmartLog.info("User logged out and device unbound.");
+                document.getElementById('login-form').classList.remove('hidden');
+                document.getElementById('loader-container').classList.add('hidden');
                 app.showPage('page-login');
             },
             
@@ -715,7 +871,7 @@
             selectProject: async (projectId, phone) => {
                 currentProject = allProjects.find(p => p.id === projectId);
                 SmartLog.info(`Project ${projectId} selected.`);
-                app.showLoader();
+                app.showLoader("טוען פרויקט...");
                 await app.bindDeviceIfNeeded(phone);
             },
 
@@ -777,9 +933,7 @@
                     SmartLog.error(error, "!!! FATAL: onSnapshot error (History)");
                 });
             },
-            
-            // [חדש] אין צורך ב-listenForCustomers, אנו כבר מחזיקים את הלקוח
-            
+                        
             
             // --- 5. רינדור ---
             renderPortalHistory: (orders) => {
@@ -903,8 +1057,8 @@
                     const lng = order.longitude;
                     
                     if (!lat || !lng) {
-                        // [יישום הנחיה 6] לוג זה בסדר כי איתור המיקום עדיין רץ
-                        console.warn(`[WARN] Skipping order ${order.id}, location not yet available.`);
+                        // [יישום הנחיה 6]
+                        SmartLog.error(null, "[RED-ALERT] Skipping order, missing lat/lng", order);
                         return; 
                     }
                     
@@ -927,7 +1081,6 @@
                 let popupContent = "";
 
                 if (type === 'order') {
-                    // חפש גם בהיסטוריה וגם בהזמנות הפעילות
                     const order = allOrders.find(o => o.id === orderId) || allHistoryOrders.find(o => o.id === orderId);
                     if (!order) {
                         SmartLog.error(null, "Order not found for focus", orderId);
@@ -1001,12 +1154,13 @@
                 if (type === 'order' && doc.latitude && doc.longitude) {
                     return { lat: doc.latitude, lng: doc.longitude, source: 'firestore_cache' };
                 }
-                if (type === 'customer' && doc.customLat && doc.customLon) {
+                // [תיקון] שדה לקוח הוא customLat/customLon
+                if (type === 'project' && doc.customLat && doc.customLon) {
                     return { lat: doc.customLat, lng: doc.customLon, source: 'firestore_cache' };
                 }
 
                 // עדיפות 3: מאגר מקומי (הנחיה 3)
-                address = (type === 'order') ? (doc.address || doc.customer_address) : doc.defaultAddress;
+                address = (type === 'order') ? (doc.address || doc.customer_address) : doc.address;
                 if (address) {
                     const fromDB = app.findLocationInDB(address);
                     if (fromDB) {
@@ -1199,10 +1353,34 @@
             },
 
             // --- 9. כלי עזר ---
+            
+            // [יישום הנחיה A.2]
+            normalizePhone: (raw) => {
+                if (!raw) return null;
+                let s = String(raw).replace(/[^0-9+]/g, "");
+                if (s.startsWith("0") && !s.startsWith("00") && !s.startsWith("+")) {
+                    s = "+972" + s.slice(1);
+                }
+                if (s.startsWith("972") && !s.startsWith("+")) s = "+" + s;
+                return s;
+            },
+            
+            // [יישום הנחיה F.2]
+            extractPhoneFromText: (text) => {
+                if (!text) return null;
+                // ביטוי רגולרי משופר שתופס מספרי טלפון ישראליים בתוך טקסט
+                const re = /(?:^|\s|:|\n)(\+972-?5\d-?\d{7}|05\d-?\d{7})(?:$|\s|,|\n)/;
+                const matches = text.match(re);
+                if (!matches || !matches[1]) return null;
+                // החזר את ההתאמה הראשונה הנקייה
+                return app.normalizePhone(matches[1]);
+            },
+
             validatePhone: (phone) => {
                 if (!phone) return false;
-                const israeliPhoneRegex = /^(05\d-?\d{7}|\+972-?5\d-?\d{7})$/;
-                return israeliPhoneRegex.test(phone.trim());
+                // Regex שתומך רק בפורמט בינלאומי +972
+                const internationalPhoneRegex = /^\+9725\d{8}$/;
+                return internationalPhoneRegex.test(phone.trim());
             }
 
         };
@@ -1247,6 +1425,32 @@
             document.getElementById('tab-btn-form').addEventListener('click', () => app.navigateNewOrderTab('form'));
             document.getElementById('submit-smart-paste').addEventListener('click', app.submitSmartPaste);
             document.getElementById('submit-order-form').addEventListener('click', app.submitOrderForm);
+            
+            // [יישום הנחיה F.3] "מלשינון" הדבקה
+            document.getElementById('phone-input').addEventListener('paste', (e) => {
+                e.preventDefault();
+                const text = (e.clipboardData || window.clipboardData).getData('text');
+                const extractedPhone = app.extractPhoneFromText(text);
+                
+                if (extractedPhone) {
+                    e.target.value = extractedPhone;
+                    const helper = document.getElementById('paste-helper');
+                    helper.innerText = `מספר חולץ: ${extractedPhone}`;
+                    helper.classList.remove('hidden');
+                    setTimeout(() => helper.classList.add('hidden'), 3000);
+                } else {
+                    e.target.value = text; // הדבק רגיל אם לא נמצא מספר
+                }
+            });
+
+            // [יישום הנחיה D] "מלשינון" אווטאר
+            document.getElementById('avatar-url-input').addEventListener('paste', (e) => {
+                const url = (e.clipboardData || window.clipboardData).getData('text');
+                if (url && (url.startsWith('http') || url.startsWith('data:image'))) {
+                    document.getElementById('avatar-preview').innerHTML = `<img src="${url}" class="w-full h-full object-cover" alt="Avatar Preview">`;
+                    localStorage.setItem('sidorAvatarUrl', url); // שמור לשימוש עתידי
+                }
+            });
         });
     </script>
 </body>
