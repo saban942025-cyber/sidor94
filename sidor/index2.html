@@ -3,23 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Sidor Mobile v1.21 (Geocoding)</title>
+    <title>Sidor Mobile v1.22 (Local GPS)</title>
     <!-- 
-      Sidor Mobile v1.21 - (Geocoding & Cache)
+      Sidor Mobile v1.22 - (Local GPS & DB Fallback)
       
       תיקונים:
-      - [קריטי] יישום מלא של הנחיות Geocoding (סעיפים 1-8).
-      - [חדש] הוספת משתנה גלובלי 'GOOGLE_MAPS_API_KEY' (יש להחליף!).
-      - [חדש] הוספת 'geocodeCache = {}' לניהול Cache.
-      - [חדש] הוספת פונקציית 'app.geocodeAddress(address)' המבצעת קריאת API.
-      - [חדש] הוספת פונקציית 'app.updateLocationInFirestore(path, id, coords)'.
-      - [קריטי] 'listenToOrders' ו-'listenForCustomers' שוכתבו:
-        -> בודקים אם חסר lat/lng.
-        -> אם חסר, מנסים geocode.
-        -> אם מצליח, שומרים ב-Firestore וב-Cache המקומי.
-        -> אם נכשל, מדפיסים לוג אדום (לפי הנחיה 6).
-      - [נקי] כל הלוגיקה של המפה (waitForMap, renderMarkersOnMap) נשמרה 
-        כדי להבטיח רינדור בטוח לאחר טעינת הנתונים.
+      - [קריטי] יישום מלא של הנחיות איתור מיקום ללא API.
+      - [הסרה] הוסרו כל הפונקציות הקשורות ל-Google Geocoding API 
+        (geocodeAddress, updateLocationInFirestore, GOOGLE_MAPS_API_KEY, geocodeCache).
+      - [חדש] הוספת מיקום ברירת מחדל 'DEFAULT_LOCATION' (הנחיה 1).
+      - [חדש] הוספת מאגר כתובות מקומי 'locationsDB' (הנחיה 3).
+      - [חדש] הוספת פונקציית 'app.parseGPS(gpsString)' לטיפול בשדה 'gps' ידני (הנחיה 2).
+      - [חדש] הוספת פונקציית 'app.findLocationInDB(address)' לחיפוש במאגר (הנחיה 3).
+      - [חדש] הוספת פונקציית 'app.resolveLocation(doc, type)' המיישמת את 
+        סדר העדיפויות החדש (GPS -> Cache -> DB -> Default) (הנחיה 4).
+      - [עדכון] 'listenToOrders' ו-'listenForCustomers' מעדכנים כעת כל מסמך
+        עם מיקום מהמנגנון החדש (הנחיה 5).
+      - [נקי] 'renderMarkersOnMap' נשאר נקי ומצייר את הנתונים המעובדים (הנחיה 6).
     -->
     
     <!-- PWA & Mobile Specific Tags -->
@@ -385,12 +385,18 @@
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
         import { getFirestore, collection, query, where, orderBy, onSnapshot, setLogLevel, getDocs, limit, doc, updateDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
-        // --- [יישום הנחיה 3] מפתח API של גוגל ---
-        // !!! החלף את המפתח שלך כאן !!!
-        const GOOGLE_MAPS_API_KEY = "YOUR_GOOGLE_MAPS_API_KEY_HERE"; 
+        // --- [יישום הנחיה 1] מיקום ברירת מחדל ---
+        const DEFAULT_LOCATION = { lat: 32.0750544, lng: 34.826251 };
         
-        // --- [יישום הנחיה 5] Cache ל-Geocoding ---
-        let geocodeCache = {};
+        // --- [יישום הנחיה 3] מאגר כתובות מקומי ---
+        const locationsDB = {
+            "האגדה 15, רמת גן": { lat: 32.0750544, lng: 34.826251 },
+            "שקד 2, רשפון": { lat: 32.199149, lng: 34.827883 },
+            "קפלנסקי 18, כפר סבא": { lat: 32.188991, lng: 34.903732 },
+            "הוורדים 19, סביון": { lat: 32.0716, lng: 34.8733 }, // הערכה, יש לעדכן
+            "חופי 81, רמת גן": { lat: 32.0833, lng: 34.8211 } // הערכה, יש לעדכן
+            // ... הוסף כאן עוד כתובות ידועות
+        };
 
         // --- גלובלי ---
         let db, auth;
@@ -401,7 +407,7 @@
         let allCustomers = []; 
         let userId = null;
         
-        // --- [יישום הנחיה 2] משתנים גלובליים למפה ---
+        // --- [יישום הנחיה 1] משתנים גלובליים למפה ---
         let mapReady = false;
         let mapMarkers = []; 
 
@@ -452,7 +458,7 @@
 
             // --- 1. אתחול ---
             init: () => {
-                SmartLog.info("Sidor Mobile v1.21 (Geocoding) initializing...");
+                SmartLog.info("Sidor Mobile v1.22 (Local GPS) initializing...");
                 app.showLoader(); 
                 
                 try {
@@ -505,7 +511,7 @@
                 app.listenForCustomers(); 
             },
 
-            // --- 4. האזנה להזמנות (יישום הנחיה 4) ---
+            // --- 4. האזנה להזמנות (יישום הנחיה 5) ---
             listenToOrders: () => {
                 if (ordersListener) ordersListener(); 
 
@@ -515,34 +521,21 @@
                 SmartLog.info(`Attaching listener to orders at: ${collectionPath}`);
 
                 ordersListener = onSnapshot(q, 
-                    async (snapshot) => { // הפך ל-async
+                    (snapshot) => { 
                         SmartLog.info(`Snapshot received (Orders): ${snapshot.size} docs`);
                         
                         let ordersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                         
-                        // [יישום הנחיה 2, 4] לולאת Geocoding
-                        for (let order of ordersData) {
-                            // [יישום הנחיה 5] שימוש ב-latitude/longitude
-                            if (!order.latitude || !order.longitude) {
-                                const address = order.address || order.customer_address;
-                                if (address) {
-                                    SmartLog.info(`Geocoding missing location for order: ${order.id}`, address);
-                                    const coords = await app.geocodeAddress(address);
-                                    if (coords) {
-                                        order.latitude = coords.lat; // עדכון אובייקט מקומי
-                                        order.longitude = coords.lng;
-                                        // [יישום הנחיה 4] עדכון Firestore
-                                        app.updateLocationInFirestore(collectionPath, order.id, { latitude: coords.lat, longitude: coords.lng });
-                                    } else {
-                                        // [יישום הנחיה 6] לוג אדום
-                                        SmartLog.error(null, "[RED-ALERT] Geocode FAILED for order", order);
-                                    }
-                                } else {
-                                    // [יישום הנחיה 6] לוג אדום
-                                    SmartLog.error(null, "[RED-ALERT] Cannot geocode order, missing address", order);
-                                }
+                        // [יישום הנחיה 5] עדכון מיקומים לפי הלוגיקה החדשה
+                        ordersData.forEach(order => {
+                            const location = app.resolveLocation(order, 'order');
+                            order.latitude = location.lat; // עדכון אובייקט מקומי
+                            order.longitude = location.lng;
+                            if (location.source === 'fallback') {
+                                // [יישום הנחיה 6] לוג אדום רק אם נכשלנו לגמרי
+                                SmartLog.error(null, "[RED-ALERT] Using FALLBACK location for order", order);
                             }
-                        }
+                        });
                         
                         allOrders = ordersData; // שמור את הנתונים המעודכנים
                         allOrders.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
@@ -569,7 +562,7 @@
                             app.navigateDashboardTab('tomorrow');
                         }
 
-                        // [יישום הנחיה 4] קרא לפונקציית הרינדור (שתמתין למפה במידת הצורך)
+                        // קרא לפונקציית הרינדור (שתמתין למפה במידת הצורך)
                         app.renderMarkersOnMap(); 
                         
                         app.hideLoader(); 
@@ -583,7 +576,7 @@
                 );
             },
             
-            // --- 4. האזנה ללקוחות (יישום הנחיה 4) ---
+            // --- 4. האזנה ללקוחות (יישום הנחיה 5) ---
             listenForCustomers: () => {
                 if (customersListener) customersListener();
 
@@ -593,37 +586,25 @@
                 const q = query(collection(db, collectionPath), limit(200));
 
                 customersListener = onSnapshot(q,
-                    async (snapshot) => { // הפך ל-async
+                    (snapshot) => { 
                         SmartLog.info(`Snapshot received (Customers): ${snapshot.size} docs`);
                         
                         let customersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-                        // [יישום הנחיה 2, 4] לולאת Geocoding
-                        for (let customer of customersData) {
-                            if (!customer.customLat || !customer.customLon) {
-                                const address = customer.defaultAddress;
-                                if (address) {
-                                    SmartLog.info(`Geocoding missing location for customer: ${customer.id}`, address);
-                                    const coords = await app.geocodeAddress(address);
-                                    if (coords) {
-                                        customer.customLat = coords.lat; // עדכון אובייקט מקומי
-                                        customer.customLon = coords.lng;
-                                        // [יישום הנחיה 4] עדכון Firestore
-                                        app.updateLocationInFirestore(collectionPath, customer.id, { customLat: coords.lat, customLon: coords.lng });
-                                    } else {
-                                        // [יישום הנחיה 6] לוג אדום
-                                        SmartLog.error(null, "[RED-ALERT] Geocode FAILED for customer", customer);
-                                    }
-                                } else {
-                                    // [יישום הנחיה 6] לוג אדום
-                                    SmartLog.error(null, "[RED-ALERT] Cannot geocode customer, missing address", customer);
-                                }
+                        // [יישום הנחיה 5] עדכון מיקומים לפי הלוגיקה החדשה
+                        customersData.forEach(customer => {
+                            const location = app.resolveLocation(customer, 'customer');
+                            customer.customLat = location.lat; // עדכון אובייקט מקומי
+                            customer.customLon = location.lng;
+                            if (location.source === 'fallback') {
+                                // [יישום הנחיה 6] לוג אדום רק אם נכשלנו לגמרי
+                                SmartLog.error(null, "[RED-ALERT] Using FALLBACK location for customer", customer);
                             }
-                        }
+                        });
                         
                         allCustomers = customersData; // שמור את הנתונים המעודכנים
                         
-                        // [יישום הנחיה 4] קרא לפונקציית הרינדור (שתמתין למפה במידת הצורך)
+                        // קרא לפונקציית הרינדור (שתמתין למפה במידת הצורך)
                         app.renderMarkersOnMap();
                     },
                     (error) => {
@@ -713,7 +694,7 @@
                 }
                 
                 try {
-                    map = L.map(containerId).setView([32.1, 34.85], 10);
+                    map = L.map(containerId).setView([DEFAULT_LOCATION.lat, DEFAULT_LOCATION.lng], 10);
                     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                         maxZoom: 19, attribution: '© OpenStreetMap'
                     }).addTo(map);
@@ -771,7 +752,7 @@
                     const lng = order.longitude;
                     
                     if (!lat || !lng) {
-                        // [יישום הנחיה 6] לוג זה בסדר כי Geocoding אולי עוד רץ
+                        // [יישום הנחיה 6] לוג זה בסדר כי איתור המיקום עדיין רץ
                         console.warn(`[WARN] Skipping order ${order.id}, location not yet available.`);
                         return; 
                     }
@@ -791,7 +772,7 @@
                     const lng = customer.customLon;
 
                     if (!lat || !lng) {
-                        // [יישום הנחיה 6] לוג זה בסדר כי Geocoding אולי עוד רץ
+                         // [יישום הנחיה 6] לוג זה בסדר כי איתור המיקום עדיין רץ
                         console.warn(`[WARN] Skipping customer ${customer.id}, location not yet available.`);
                         return; 
                     }
@@ -854,47 +835,66 @@
                 }
             },
 
-            // --- [חדש v1.21] פונקציות Geocoding ---
+            // --- [חדש v1.22] פונקציות איתור מיקום ---
             
-            // [יישום הנחיה 3]
-            geocodeAddress: async (address) => {
-                if (geocodeCache[address]) {
-                    SmartLog.info("Geocode cache HIT", address);
-                    return geocodeCache[address];
-                }
+            // [יישום הנחיה 2]
+            parseGPS: (gpsString) => {
+                if (!gpsString || typeof gpsString !== 'string') return null;
+                const parts = gpsString.split(',');
+                if (parts.length < 2) return null;
                 
-                SmartLog.info("Geocode cache MISS, calling API for:", address);
-                const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${GOOGLE_MAPS_API_KEY}&language=iw`;
+                const lat = parseFloat(parts[0].trim());
+                const lng = parseFloat(parts[1].trim());
                 
-                try {
-                    const response = await fetch(url);
-                    const data = await response.json();
-                    
-                    if (data.status === 'OK' && data.results[0]) {
-                        const location = data.results[0].geometry.location; // { lat, lng }
-                        geocodeCache[address] = location; // שמור ב-Cache
-                        return location;
-                    } else {
-                        SmartLog.error(new Error(data.status), "Geocode API Error", data);
-                        return null;
-                    }
-                } catch (error) {
-                    SmartLog.error(error, "Geocode Fetch Error");
-                    return null;
-                }
-            },
-            
-            // [יישום הנחיה 4]
-            updateLocationInFirestore: async (collectionPath, docId, coords) => {
-                SmartLog.info(`Updating Firestore for doc ${docId} with new coords`, coords);
-                try {
-                    const docRef = doc(db, collectionPath, docId);
-                    await updateDoc(docRef, coords); // 'coords' יהיה {latitude, longitude} או {customLat, customLon}
-                } catch (error) {
-                    SmartLog.error(error, "Failed to update location in Firestore", { docId, coords });
-                }
+                if (isNaN(lat) || isNaN(lng)) return null;
+                return { lat, lng };
             },
 
+            // [יישום הנחיה 3]
+            findLocationInDB: (address) => {
+                if (!address || typeof address !== 'string') return null;
+                // נרמול בסיסי של הכתובת
+                const normalizedAddress = address.trim(); 
+                if (locationsDB[normalizedAddress]) {
+                    SmartLog.info("Local DB HIT", normalizedAddress);
+                    return locationsDB[normalizedAddress];
+                }
+                return null;
+            },
+
+            // [יישום הנחיה 4]
+            resolveLocation: (doc, type) => {
+                let lat, lng, source, address;
+
+                // עדיפות 1: שדה GPS ידני (מהנחיה 2)
+                if (doc.gps) {
+                    const parsed = app.parseGPS(doc.gps);
+                    if (parsed) {
+                        return { lat: parsed.lat, lng: parsed.lng, source: 'manual_gps' };
+                    }
+                }
+
+                // עדיפות 2: שדות קיימים (Cache של Firestore)
+                if (type === 'order' && doc.latitude && doc.longitude) {
+                    return { lat: doc.latitude, lng: doc.longitude, source: 'firestore_cache' };
+                }
+                if (type === 'customer' && doc.customLat && doc.customLon) {
+                    return { lat: doc.customLat, lng: doc.customLon, source: 'firestore_cache' };
+                }
+
+                // עדיפות 3: מאגר מקומי (הנחיה 3)
+                address = (type === 'order') ? (doc.address || doc.customer_address) : doc.defaultAddress;
+                if (address) {
+                    const fromDB = app.findLocationInDB(address);
+                    if (fromDB) {
+                        return { lat: fromDB.lat, lng: fromDB.lng, source: 'local_db' };
+                    }
+                }
+
+                // עדיפות 4: Fallback (הנחיה 4)
+                SmartLog.error(null, `[RED-ALERT] Using FALLBACK location for ${type}`, doc);
+                return { lat: DEFAULT_LOCATION.lat, lng: DEFAULT_LOCATION.lng, source: 'fallback' };
+            },
             
             // --- 8. שיתוף ---
             loadOrdersForShare: async () => {
