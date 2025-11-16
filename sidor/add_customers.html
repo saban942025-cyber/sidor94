@@ -2,827 +2,1014 @@
 <html lang="he" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>הקמת הזמנה (v3.1 - Fix & Style)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Sidor Mobile v1.22 (Local GPS)</title>
     <!-- 
-      DeliveryMaster CRM Form v3.1 (Fix & Style)
+      Sidor Mobile v1.22 - (Local GPS & DB Fallback)
       
-      Changelog:
-      - [CRITICAL FIX v3.1]:
-        - תיקון השגיאה "serverTimestamp() is not currently supported inside arrays".
-        - הוחלף `serverTimestamp()` בתוך `auditLog` ב-`new Date()`.
-      - [STYLE v3.1]:
-        - שינוי עיצוב טופס: רקע צבעוני עדין לכל שלב (תכלת/ירקרק).
-        - שינוי עיצוב שדות: גופן גדול יותר, רקע אטום.
-        - שינוי עיצוב WhatsApp: תבנית חדשה וקלילה עם אימוג'ים 👤 🚚 📦.
-      - [v3.0]:
-        - שילוב העלאת קבצים ל-Google Drive.
-        - הוספת פונקציית `handleFileUpload`.
-        - שדרוג `submitFullOrder` לטפל בקבצים.
-        - הוספת אתחול Firebase מלא.
+      תיקונים:
+      - [קריטי] יישום מלא של הנחיות איתור מיקום ללא API.
+      - [הסרה] הוסרו כל הפונקציות הקשורות ל-Google Geocoding API 
+        (geocodeAddress, updateLocationInFirestore, GOOGLE_MAPS_API_KEY, geocodeCache).
+      - [חדש] הוספת מיקום ברירת מחדל 'DEFAULT_LOCATION' (הנחיה 1).
+      - [חדש] הוספת מאגר כתובות מקומי 'locationsDB' (הנחיה 3).
+      - [חדש] הוספת פונקציית 'app.parseGPS(gpsString)' לטיפול בשדה 'gps' ידני (הנחיה 2).
+      - [חדש] הוספת פונקציית 'app.findLocationInDB(address)' לחיפוש במאגר (הנחיה 3).
+      - [חדש] הוספת פונקציית 'app.resolveLocation(doc, type)' המיישמת את 
+        סדר העדיפויות החדש (GPS -> Cache -> DB -> Default) (הנחיה 4).
+      - [עדכון] 'listenToOrders' ו-'listenForCustomers' מעדכנים כעת כל מסמך
+        עם מיקום מהמנגנון החדש (הנחיה 5).
+      - [נקי] 'renderMarkersOnMap' נשאר נקי ומצייר את הנתונים המעובדים (הנחיה 6).
     -->
-
-    <!-- TailwindCSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- Icons (Feather) -->
+    <!-- PWA & Mobile Specific Tags -->
+    <meta name="theme-color" content="#ffffff">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <link rel="apple-touch-icon" href="https://placehold.co/192x192/2563eb/white?text=Sidor">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📲</text></svg>">
+
+    <!-- TailwindCSS & Icons -->
+    <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/feather-icons"></script>
     
+    <!-- LeafletJS (Map) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
     <!-- Google Font: Rubik -->
     <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700&display=swap" rel="stylesheet">
 
     <style>
         :root {
-            --step-inactive: #9ca3af; /* gray-400 */
-            --step-active: #3b82f6;   /* blue-500 */
-            --step-complete: #16a34a; /* green-600 */
-            --line-inactive: #e5e7eb;  /* gray-200 */
-            --line-active: #dbeafe;    /* blue-100 */
-            --line-complete: #dcfce7;  /* green-100 */
-            
-            /* [NEW v3.1] Step background colors */
-            --step-1-bg: #f0f9ff; /* sky-50 */
-            --step-2-bg: #f0fdf4; /* green-50 */
+            --primary: #2563eb;
+            --secondary: #10b981; /* green-500 for WA */
+            --danger: #dc2626; /* red-600 */
+            --bg-app: #f1f5f9;
+            --surface: #ffffff;
         }
-        
         html, body {
-            height: 100%;
+            overscroll-behavior: none; 
         }
-        body {
-            font-family: 'Rubik', sans-serif;
-            background-color: #f3f4f6; /* gray-100 */
-            color: #1f2937; /* gray-800 */
-            transition: background-color 0.3s, color 0.3s;
+        body { 
+            font-family: 'Rubik', sans-serif; 
+            background-color: var(--bg-app); 
+            color: #1e293b;
         }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         
-        /* Dark Mode */
-        html.dark {
-            background-color: #1f2937; /* gray-800 */
-            color: #f3f4f6; /* gray-100 */
+        .dashboard-tabs {
+            display: flex;
+            background-color: var(--surface);
+            border-radius: 10px;
+            padding: 0.25rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            border: 1px solid #e2e8f0;
         }
-        html.dark body {
-            background-color: #1f2937;
-            color: #f3f4f6;
+        .dashboard-tab {
+            flex: 1;
+            padding: 0.6rem 0.5rem;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #475569; /* gray-600 */
+            text-align: center;
+            border-radius: 8px;
+            transition: all 0.2s ease-in-out;
         }
-        html.dark .form-card {
-            background-color: #374151; /* gray-700 */
-            border-color: #4b5563; /* gray-600 */
+        .dashboard-tab.active {
+            background-color: var(--primary);
+            color: white;
+            box-shadow: 0 2px 5px rgba(37, 99, 235, 0.3);
         }
-        html.dark .form-input {
-            background-color: #4b5563; /* gray-600 */
-            border-color: #5e6875; /* gray-500 */
-            color: #f3f4f6;
+        .tab-count {
+            display: inline-block;
+            background-color: rgba(255,255,255,0.2);
+            color: white;
+            font-size: 0.7rem;
+            font-weight: 700;
+            padding: 0 6px;
+            border-radius: 99px;
+            margin-right: 4px;
         }
-        html.dark .form-input::placeholder {
-            color: #9ca3af; /* gray-400 */
+        .dashboard-tab:not(.active) .tab-count {
+            background-color: #e2e8f0;
+            color: #475569;
         }
-        html.dark .tag-badge {
-            background-color: #1d4ed8; /* blue-700 */
-            color: #eff6ff; /* blue-50 */
-        }
-        html.dark .tag-remove {
-            color: #93c5fd; /* blue-300 */
-        }
-        html.dark .btn-secondary {
-            background-color: #4b5563; /* gray-600 */
-            color: #f3f4f6;
-        }
-        html.dark .btn-secondary:hover {
-            background-color: #5e6875; /* gray-500 */
-        }
-        /* [NEW v3.1] Dark mode step backgrounds */
-        html.dark #step-1-customer { background-color: #1e3a8a; } /* blue-800 */
-        html.dark #step-2-order { background-color: #064e3b; } /* green-900 */
 
-        
-        /* Stepper */
-        .stepper-line {
-            height: 4px;
-            background-color: var(--line-inactive);
-            transition: background-color 0.4s;
+        .dashboard-page-content {
+            display: none; /* Hidden by default */
+            padding-top: 1rem;
         }
-        .stepper-dot {
+        .dashboard-page-content.active {
+            display: block; /* Shown when active */
+        }
+
+        .app-layout {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            height: -webkit-fill-available;
+        }
+        
+        .app-header {
+            background: var(--surface);
+            padding: 0.75rem 1rem;
+            padding-top: calc(0.75rem + env(safe-area-inset-top));
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            z-index: 20;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0; 
+        }
+        
+        .app-main {
+            flex: 1;
+            overflow-y: auto;
+            position: relative;
+            -webkit-overflow-scrolling: touch; 
+        }
+        
+        .app-page {
+            display: none; /* Hidden by default */
+            padding: 1rem;
+        }
+        .app-page.active {
+            display: block;
+        }
+        
+        .app-nav {
+            background: var(--surface);
+            border-top: 1px solid #e2e8f0;
+            padding-bottom: env(safe-area-inset-bottom);
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            height: 65px;
+            z-index: 20;
+            flex-shrink: 0; 
+        }
+        .nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #64748b;
+            font-size: 0.7rem;
+            font-weight: 500;
+        }
+        .nav-item.active {
+            color: var(--primary);
+        }
+        .nav-item svg {
+            width: 22px;
+            height: 22px;
+            margin-bottom: 4px;
+        }
+        
+        .order-card {
+            background: var(--surface);
+            border-radius: 12px;
+            margin-bottom: 0.75rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.03);
+            border: 1px solid #e2e8f0;
+            overflow: hidden;
+            cursor: pointer;
+        }
+        .order-card-header {
+            padding: 0.75rem 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        .order-card-body {
+            padding: 1rem;
+        }
+        
+        .form-label {
+            display: block;
+            font-weight: 500;
+            font-size: 0.8rem;
+            margin-bottom: 0.25rem;
+            color: #334155;
+        }
+        .form-input, .form-select {
+            width: 100%;
+            padding: 0.6rem 0.9rem;
+            border: 1px solid #cbd5e1;
+            border-radius: 0.5rem;
+            background-color: var(--surface);
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+        }
+        .btn {
+            padding: 0.6rem 1.25rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            background-color: var(--primary);
+            color: white;
+            width: 100%;
+        }
+        
+        #loader {
+            position: fixed;
+            inset: 0;
+            background: rgba(255,255,255,0.9);
+            z-index: 500;
+            display: flex; /* מוצג כברירת מחדל */
+            justify-content: center;
+            align-items: center;
+        }
+        .spinner-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 2rem;
+            min-height: 200px;
+        }
+        .spinner {
             width: 40px;
             height: 40px;
+            border: 4px solid #e2e8f0;
+            border-top-color: var(--primary);
             border-radius: 50%;
-            background-color: var(--line-inactive);
-            color: var(--step-inactive);
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        
+        .fab-whatsapp {
+            position: absolute;
+            bottom: 2rem;
+            left: 1rem;
+            background-color: var(--secondary);
+            color: white;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-weight: 700;
-            font-size: 1.125rem;
-            transition: all 0.4s;
-            border: 4px solid #f3f4f6; /* gray-100 */
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+            z-index: 30;
         }
-        html.dark .stepper-dot {
-            border-color: #1f2937; /* gray-800 */
-        }
-        
-        .stepper-label {
-            color: var(--step-inactive);
-            font-weight: 500;
-            transition: color 0.4s;
-        }
-        
-        /* Step Complete */
-        .step.complete .stepper-line { background-color: var(--line-complete); }
-        .step.complete .stepper-dot { background-color: var(--step-complete); color: white; border-color: var(--line-complete); }
-        .step.complete .stepper-label { color: var(--step-complete); }
-        
-        /* Step Active */
-        .step.active .stepper-line { background-color: var(--line-active); }
-        .step.active .stepper-dot { background-color: var(--step-active); color: white; border-color: var(--line-active); transform: scale(1.1); }
-        .step.active .stepper-label { color: var(--step-active); font-weight: 700; }
-        
-        /* [NEW v3.1] Step Content Backgrounds */
-        .step-content {
-            padding: 2rem;
-            border-radius: 1rem;
-            transition: background-color 0.3s;
-        }
-        #step-1-customer {
-            background-color: var(--step-1-bg);
-        }
-        #step-2-order {
-            background-color: var(--step-2-bg);
-        }
-        
-        /* [NEW v3.1] Upgraded Inputs */
-        .form-input {
-            background-color: #ffffff;
-            border: 2px solid #e5e7eb; /* gray-200 */
-            border-radius: 0.5rem; /* 8px */
-            padding: 0.75rem 1rem; /* 12px 16px */
-            font-size: 1rem; /* 16px */
-            font-weight: 500;
-            transition: all 0.2s ease;
-        }
-        .form-input:focus {
-            outline: none;
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
-        }
-        
-        /* Project Tags */
-        .tag-badge {
-            background-color: #dbeafe; /* blue-100 */
-            color: #1e40af; /* blue-800 */
-            padding: 4px 8px 4px 12px;
-            border-radius: 9999px;
-            font-weight: 500;
-            display: flex;
-            align-items: center;
-            gap: 4px;
-            font-size: 0.875rem;
-        }
-        .tag-remove {
-            color: #60a5fa; /* blue-400 */
-            cursor: pointer;
-            border-radius: 50%;
-        }
-        .tag-remove:hover {
-            background-color: rgba(255,255,255,0.3);
-            color: #ef4444; /* red-500 */
-        }
-        
-        /* Toast Notification */
-        #toast-container {
-            position: fixed;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 5000;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-        .toast {
-            padding: 12px 20px;
-            background-color: #1f2937; /* gray-800 */
-            color: white;
-            border-radius: 8px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-            opacity: 0;
-            transform: translateY(20px);
-            transition: all 0.3s ease;
-        }
-        .toast.show {
-            opacity: 1;
-            transform: translateY(0);
-        }
-        .toast.success { background-color: #16a34a; } /* green-600 */
-        .toast.error { background-color: #dc2626; } /* red-600 */
-        .toast.info { background-color: #3b82f6; } /* blue-500 */
-        
-        /* Loader */
-        .loader {
-            border: 2px solid #f3f3f3;
-            border-top: 2px solid var(--primary-color);
-            border-radius: 50%;
-            width: 20px;
-            height: 20px;
-            animation: spin 1s linear infinite;
-        }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-
     </style>
 </head>
-<body class="flex items-center justify-center min-h-screen p-4">
+<body>
 
-    <!-- Toast Container -->
-    <div id="toast-container"></div>
+    <div id="loader">
+        <div class="spinner"></div>
+    </div>
 
-    <div class="w-full max-w-4xl mx-auto">
-        <!-- Dark Mode Toggle -->
-        <button id="theme-toggle" class="absolute top-5 right-5 p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700">
-            <i data-feather="moon" class="w-6 h-6 hidden dark:block"></i>
-            <i data-feather="sun" class="w-6 h-6 block dark:hidden"></i>
-        </button>
-
+    <!-- Main App Layout -->
+    <div class="app-layout">
+        
         <!-- Header -->
-        <div class="text-center mb-10">
-            <h1 class="text-5xl font-bold mb-3 text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-sky-400">טופס הקמה מהיר</h1>
-            <p class="text-xl text-gray-600 dark:text-gray-400">הקמת לקוח והזמנה בשני שלבים פשוטים</p>
-        </div>
+        <header class="app-header">
+            <h1 id="header-title" class="font-bold text-lg">טוען...</h1>
+            <img id="header-avatar" src="https://placehold.co/40x40/e0e7ff/4338ca?text=S" class="w-8 h-8 rounded-full">
+        </header>
 
-        <!-- Stepper -->
-        <div class="flex items-center w-full max-w-xl mx-auto mb-12">
-            <!-- Step 1 -->
-            <div id="stepper-1" class="step active flex-1">
-                <div class="flex flex-col items-center">
-                    <div class="stepper-dot">1</div>
-                    <div class="stepper-label mt-2 text-center text-sm sm:text-base">פרטי לקוח</div>
-                </div>
-            </div>
+        <!-- Main Content (Pages) -->
+        <main class="app-main no-scrollbar">
             
-            <div class="stepper-line flex-1"></div>
-            
-            <!-- Step 2 -->
-            <div id="stepper-2" class="step flex-1">
-                <div class="flex flex-col items-center">
-                    <div class="stepper-dot">2</div>
-                    <div class="stepper-label mt-2 text-center text-sm sm:text-base">פרטי הזמנה</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Form Card -->
-        <div class="form-card bg-white dark:bg-gray-700 shadow-2xl rounded-2xl p-2 sm:p-4 border border-gray-200 dark:border-gray-600">
-
-            <!-- Step 1: Customer Details -->
-            <div id="step-1-customer" class="step-content">
-                <h2 class="text-3xl font-semibold mb-6 text-blue-600 dark:text-blue-400">שלב 1: פרטי לקוח</h2>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
-                    <!-- Customer Number -->
-                    <div>
-                        <label for="customer-number" class="block text-lg font-medium mb-2">מספר לקוח (חובה)</label>
-                        <input type="text" id="customer-number" class="form-input w-full" placeholder="לדוגמה: 601524">
-                    </div>
-                    <!-- Customer Name -->
-                    <div>
-                        <label for="customer-name" class="block text-lg font-medium mb-2">שם לקוח (חובה)</label>
-                        <input type="text" id="customer-name" class="form-input w-full" placeholder="שם מלא של הלקוח/חברה">
-                    </div>
-                    <!-- Phone -->
-                    <div>
-                        <label for="customer-phone" class="block text-lg font-medium mb-2">טלפון ראשי</label>
-                        <input type="tel" id="customer-phone" class="form-input w-full" placeholder="05X-XXXXXXX">
-                    </div>
-                    <!-- Contact Person -->
-                    <div>
-                        <label for="customer-contact" class="block text-lg font-medium mb-2">איש קשר (רשות)</label>
-                        <input type="text" id="customer-contact" class="form-input w-full" placeholder="שם איש קשר בשטח">
-                    </div>
-                    <!-- Address: Street -->
-                    <div class="md:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-5">
-                        <div>
-                            <label for="customer-street" class="block text-lg font-medium mb-2">רחוב</label>
-                            <input type="text" id="customer-street" class="form-input w-full" placeholder="החשמונאים">
-                        </div>
-                        <div>
-                            <label for="customer-street-num" class="block text-lg font-medium mb-2">מספר</label>
-                            <input type="text" id="customer-street-num" class="form-input w-full" placeholder="90">
-                        </div>
-                        <div>
-                            <label for="customer-city" class="block text-lg font-medium mb-2">עיר</label>
-                            <input type="text" id="customer-city" class="form-input w-full" placeholder="תל אביב">
-                        </div>
-                    </div>
-                </div>
-                <!-- Navigation -->
-                <div class="mt-10 flex justify-end">
-                    <button id="btn-next-step" class="btn-primary py-3 px-8 bg-blue-600 text-white text-lg font-semibold rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
-                        המשך לשלב 2: פרטי הזמנה <i data-feather="arrow-left" class="inline-block w-5 h-5"></i>
+            <!-- Page 1: Dashboard (Today's Orders) -->
+            <div id="page-dashboard" class="app-page active">
+                
+                <div class="dashboard-tabs">
+                    <button id="dash-tab-today" class="dashboard-tab active" onclick="app.navigateDashboardTab('today')" ontouchstart="app.navigateDashboardTab('today')">
+                        🔥 היום <span id="today-count" class="tab-count">0</span>
+                    </button>
+                    <button id="dash-tab-tomorrow" class="dashboard-tab" onclick="app.navigateDashboardTab('tomorrow')" ontouchstart="app.navigateDashboardTab('tomorrow')">
+                        ☀️ מחר <span id="tomorrow-count" class="tab-count">0</span>
+                    </button>
+                    <button id="dash-tab-twodays" class="dashboard-tab" onclick="app.navigateDashboardTab('twodays')" ontouchstart="app.navigateDashboardTab('twodays')">
+                        🗓️ עוד יומיים <span id="twodays-count" class="tab-count">0</span>
                     </button>
                 </div>
+                
+                <div id="dashboard-page-container">
+                    <div id="dashboard-today-list" class="dashboard-page-content active">
+                        <div class="spinner-container"><div class="spinner"></div></div>
+                    </div>
+                    <div id="dashboard-tomorrow-list" class="dashboard-page-content">
+                        <div class="spinner-container"><div class="spinner"></div></div>
+                    </div>
+                    <div id="dashboard-twodays-list" class="dashboard-page-content">
+                        <div class="spinner-container"><div class="spinner"></div></div>
+                    </div>
+                </div>
+
             </div>
-
-            <!-- Step 2: Order Details -->
-            <div id="step-2-order" class="step-content" style="display: none;">
-                <h2 class="text-3xl font-semibold mb-6 text-green-600 dark:text-green-400">שלב 2: פרטי הזמנה</h2>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
-                    
-                    <!-- Projects -->
-                    <div class="md:col-span-2">
-                        <label class="block text-lg font-medium mb-2">ניהול פרויקטים</label>
-                        <div class="flex gap-2">
-                            <input type="text" id="project-input" class="form-input w-full" placeholder="הקלד שם פרויקט ולחץ +">
-                            <button id="btn-add-project" type="button" class="btn-primary p-4 bg-blue-600 text-white rounded-lg shadow-md hover:bg-blue-700">
-                                <i data-feather="plus" class="w-6 h-6"></i>
-                            </button>
-                        </div>
-                        <div id="project-tags-container" class="flex flex-wrap gap-2 mt-3">
-                            <!-- Project tags will be injected here -->
-                        </div>
-                    </div>
-                    
-                    <!-- Transport Type -->
-                    <div>
-                        <label for="order-transport-type" class="block text-lg font-medium mb-2">סוג הובלה</label>
-                        <select id="order-transport-type" class="form-input w-full">
-                            <option value="">-- בחר סוג --</option>
-                            <option value="משאית ">משאית </option>
-                            <option value="מנוף 15 מטר">מנוף 15 מטר</option>
-                            <option value="מנוף">מנוף</option>
-                            <option value="הצבת מכולה">הצבת מכולה</option>
-                            <option value="פינוי מכולה">פינוי מכולה</option>
-                            <option value="החלפת מכולה">החלפת מכולה</option>
-                            <option value="איסוף עצמי">איסוף עצמי</option>
-                            <option value="אחר">אחר</option>
-                        </select>
-                    </div>
-                    
-                    <!-- Order Number -->
-                    <div>
-                        <label for="order-number" class="block text-lg font-medium mb-2">מספר הזמנה (רשות)</label>
-                        <input type="text" id="order-number" class="form-input w-full" placeholder="השאר ריק לאוטומטי">
-                    </div>
-
-                    <!-- Order Content -->
-                    <div class="md:col-span-2">
-                        <label for="order-content" class="block text-lg font-medium mb-2">תוכן ההזמנה</label>
-                        <textarea id="order-content" rows="4" class="form-input w-full" placeholder="לדוגמה: 10 בלוק 20, 5 מלט..."></textarea>
-                    </div>
-
-                    <!-- [NEW v3.0] File Upload Section -->
-                    <div class="md:col-span-2">
-                        <label for="file-upload" class="block text-lg font-medium mb-2">צירוף מסמך (אופציונלי)</label>
-                        <input type="file" id="file-upload" class="block w-full text-lg text-gray-700 dark:text-gray-300
-                            file:mr-4 file:py-3 file:px-5 file:rounded-lg file:border-0
-                            file:text-md file:font-semibold file:bg-blue-50 file:text-blue-700
-                            hover:file:bg-blue-100 dark:file:bg-slate-700 dark:file:text-blue-300 dark:hover:file:bg-slate-600"/>
-                        <div id="upload-status" class="text-sm text-blue-600 dark:text-blue-400 mt-2 hidden"></div>
+            
+            <!-- Page 2: Share Report (Was "Tomorrow") -->
+            <div id="page-share" class="app-page">
+                <div class="bg-white p-4 rounded-lg shadow-sm border mb-4">
+                    <label for="share-date-picker" class="form-label">בחר תאריך לסידור עבודה</label>
+                    <div class="flex gap-2">
+                        <input type="date" id="share-date-picker" class="form-input flex-grow">
+                        <button class="btn" style="width: auto;" onclick="app.loadOrdersForShare()">
+                            <i data-feather="search" class="w-5 h-5"></i>
+                        </button>
                     </div>
                 </div>
                 
-                <!-- Navigation -->
-                <div class="mt-10 flex justify-between">
-                    <button id="btn-prev-step" class="btn-secondary py-3 px-8 bg-gray-200 text-gray-700 text-lg font-semibold rounded-lg shadow-md hover:bg-gray-300 dark:bg-gray-600 dark:text-gray-200 dark:hover:bg-gray-500">
-                        <i data-feather="arrow-right" class="inline-block w-5 h-5"></i> חזור לפרטי לקוח
-                    </button>
-                    <button id="btn-submit-full" class="btn-primary py-3 px-8 bg-green-600 text-white text-lg font-semibold rounded-lg shadow-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2">
-                        <i data-feather="check-circle" class="inline-block w-5 h-5"></i> שמור הכל ושלח ל-WhatsApp
-                    </button>
+                <h3 class="font-bold text-lg mb-2">
+                    הזמנות לטעינה 
+                    <span id="share-total-count" class="text-sm font-medium text-gray-500">(0)</span>
+                </h3>
+                
+                <div id="share-order-list" class="space-y-3">
+                    <p class="text-center text-gray-500 pt-8">אנא בחר תאריך ולחץ "טען"</p>
+                </div>
+                
+                <button id="whatsapp-share-btn" class="fab-whatsapp" onclick="app.initiateShare()">
+                    <!-- WhatsApp Icon SVG -->
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Page 3: Map -->
+            <div id="page-map" class="app-page" style="padding: 0; height: 100%;">
+                <div id="map-container" class="w-full h-full">
+                    <!-- Map initialized by JS -->
                 </div>
             </div>
-        </div>
-    </div>
 
+            <!-- Page 4: Settings -->
+            <div id="page-settings" class="app-page">
+                <h2 class="font-bold text-xl mb-4">הגדרות</h2>
+                <div class="space-y-4">
+                    <div class="bg-white p-4 rounded-lg shadow-sm border">
+                        <label for="user-name" class="form-label">שם משתמש</label>
+                        <input type="text" id="user-name" class="form-input" value="מנהל מערכת" readonly>
+                    </div>
+                    <div class="bg-white p-4 rounded-lg shadow-sm border">
+                        <p class="form-label">חיבור למערכת</p>
+                        <p id="auth-status-indicator" class="text-sm text-gray-600">טוען...</p>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+        
+        <!-- Bottom Tab Bar -->
+        <nav class="app-nav">
+            <button class="nav-item active" onclick="app.navigate('dashboard')" ontouchstart="app.navigate('dashboard')">
+                <i data-feather="home"></i>
+                <span>דשבורד</span>
+            </button>
+            <button class="nav-item" onclick="app.navigate('share')" ontouchstart="app.navigate('share')">
+                <i data-feather="share-2"></i>
+                <span>שיתוף</span>
+            </button>
+            <button class="nav-item" onclick="app.navigate('map')" ontouchstart="app.navigate('map')">
+                <i data-feather="map"></i>
+                <span>מפה</span>
+            </button>
+            <button class="nav-item" onclick="app.navigate('settings')" ontouchstart="app.navigate('settings')">
+                <i data-feather="settings"></i>
+                <span>הגדרות</span>
+            </button>
+        </nav>
+
+    </div> <!-- End App Layout -->
+    
     <!-- Firebase SDKs -->
     <script type="module">
-        // [FIX v3.0] הוספת אתחול Firebase מלא
-        import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
-        import { 
-            getFirestore, collection, doc, onSnapshot, query, orderBy, addDoc, updateDoc, 
-            serverTimestamp, deleteDoc, arrayUnion, where, getDocs, getDoc, limit, setDoc 
-        } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { initializeApp, getApp, getApps } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+        import { getFirestore, collection, query, where, orderBy, onSnapshot, setLogLevel, getDocs, limit, doc, updateDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
-        // --- Inlined Config Logic ---
+        // --- [יישום הנחיה 1] מיקום ברירת מחדל ---
+        const DEFAULT_LOCATION = { lat: 32.0750544, lng: 34.826251 };
+        
+        // --- [יישום הנחיה 3] מאגר כתובות מקומי ---
+        const locationsDB = {
+            "האגדה 15, רמת גן": { lat: 32.0750544, lng: 34.826251 },
+            "שקד 2, רשפון": { lat: 32.199149, lng: 34.827883 },
+            "קפלנסקי 18, כפר סבא": { lat: 32.188991, lng: 34.903732 },
+            "הוורדים 19, סביון": { lat: 32.0716, lng: 34.8733 }, // הערכה, יש לעדכן
+            "חופי 81, רמת גן": { lat: 32.0833, lng: 34.8211 } // הערכה, יש לעדכן
+            // ... הוסף כאן עוד כתובות ידועות
+        };
+
+        // --- גלובלי ---
+        let db, auth;
+        let map;
+        let ordersListener = null;
+        let customersListener = null; 
+        let allOrders = [];
+        let allCustomers = []; 
+        let userId = null;
+        
+        // --- [יישום הנחיה 1] משתנים גלובליים למפה ---
+        let mapReady = false;
+        let mapMarkers = []; 
+
+        
+        // --- [תיקון קריטי v1.7] הגדרות Firebase קבועות ---
         const firebaseConfig = {
           apiKey: "AIzaSyDq0oVwS6zbEfsgrYBRkeBq80dDUKMedzo", 
           authDomain: "saban94-78949.firebaseapp.com", 
           projectId: "saban94-78949",
-          storageBucket: "saban94-78949.firebasestorage.app", // [FIX v34.9] Corrected bucket name
+          storageBucket: "saban94-78949.firebasestorage.app",
           messagingSenderId: "41553157903", 
-          appId: "1:41553157903:web:cc33d252cff023be97a87a", 
+          appId: "1:41553157903:web:cc33d252cff023be97a87a",
           measurementId: "G-XV6RZDESSB"
         };
-        let app, auth, db; 
-        let initializationError = null;
-        try {
-            app = getApps().length ? getApp() : initializeApp(firebaseConfig);
-            auth = getAuth(app); 
-            db = getFirestore(app);
-            
-            // Sign in anonymously
-            onAuthStateChanged(auth, (user) => {
-                if (user) {
-                    console.log("Firebase Initialized and Signed In Anonymously.");
-                } else {
-                    signInAnonymously(auth).catch(err => console.error("Anonymous sign-in failed", err));
-                }
-            });
-
-        } catch (error) { 
-            console.error("CRITICAL: Firebase init failed!", error); 
-            initializationError = error; 
-            showToast("שגיאת התחברות קריטית לשרת", "error");
-        }
-
-        // [NEW v3.0] Google Apps Script Web App URL
-        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzwWherCt8LsMCmd9dQ__1RdN4OXb3BBcwYezJG0qVkFKbxowefqBLWbXHTft1QlXhprg/exec"; 
-
-        // --- SmartLog (Minimal) ---
-        const SmartLog = {
-            info: (msg, ctx) => console.log("[INFO]", msg, ctx || ''),
-            warn: (msg, ctx) => console.warn("[WARN]", msg, ctx || ''),
-            error: (err, cat, ctx) => console.error(`[ERROR|${cat}]`, err, ctx || ''),
-        };
-
-        // --- State ---
-        let projectTags = [];
-        let newCustomerData = {};
-
-        // --- Dark Mode ---
-        const themeToggle = document.getElementById('theme-toggle');
-        if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-            document.documentElement.classList.add('dark');
-        } else {
-            document.documentElement.classList.remove('dark');
-        }
-        themeToggle.addEventListener('click', () => {
-            document.documentElement.classList.toggle('dark');
-            localStorage.setItem('theme', document.documentElement.classList.contains('dark') ? 'dark' : 'light');
-            feather.replace();
-        });
-
-        // --- Stepper Navigation ---
-        const step1 = document.getElementById('step-1-customer');
-        const step2 = document.getElementById('step-2-order');
-        const stepper1 = document.getElementById('stepper-1');
-        const stepper2 = document.getElementById('stepper-2');
-
-        document.getElementById('btn-next-step').addEventListener('click', () => {
-            // Validate Step 1
-            const customerNumber = document.getElementById('customer-number').value.trim();
-            const customerName = document.getElementById('customer-name').value.trim();
-            const customerStreet = document.getElementById('customer-street').value.trim();
-            const customerStreetNum = document.getElementById('customer-street-num').value.trim();
-            const customerCity = document.getElementById('customer-city').value.trim();
-
-            if (!customerNumber || !customerName || !customerStreet || !customerStreetNum || !customerCity) {
-                showToast("יש למלא את כל שדות החובה של הלקוח (מספר, שם, כתובת מלאה).", "error");
-                return;
-            }
-            
-            // Save Step 1 data
-            newCustomerData = {
-                customerNumber: customerNumber,
-                name: customerName,
-                phone: document.getElementById('customer-phone').value.trim(),
-                contactPerson: document.getElementById('customer-contact').value.trim(),
-                addressStreet: customerStreet,
-                addressNumber: customerStreetNum,
-                addressCity: customerCity,
-                defaultAddress: `${customerStreet} ${customerStreetNum}, ${customerCity}`
-            };
-
-            // Move to Step 2
-            step1.style.display = 'none';
-            step2.style.display = 'block';
-            stepper1.classList.remove('active');
-            stepper1.classList.add('complete');
-            stepper2.classList.add('active');
-            feather.replace();
-        });
-
-        document.getElementById('btn-prev-step').addEventListener('click', () => {
-            step2.style.display = 'none';
-            step1.style.display = 'block';
-            stepper2.classList.remove('active');
-            stepper1.classList.remove('complete');
-            stepper1.classList.add('active');
-        });
-
-        // --- Project Tags Logic ---
-        const projectInput = document.getElementById('project-input');
-        const addProjectBtn = document.getElementById('btn-add-project');
-        const tagsContainer = document.getElementById('project-tags-container');
-
-        const addProjectTag = () => {
-            const tagText = projectInput.value.trim();
-            if (tagText && !projectTags.includes(tagText)) {
-                projectTags.push(tagText);
-                renderProjectTags();
-                projectInput.value = '';
-            }
-        };
-
-        const renderProjectTags = () => {
-            tagsContainer.innerHTML = '';
-            projectTags.forEach(tag => {
-                const tagEl = document.createElement('div');
-                tagEl.className = 'tag-badge';
-                tagEl.innerHTML = `
-                    <span>${tag}</span>
-                    <button type="button" class="tag-remove" data-tag="${tag}">
-                        <i data-feather="x" class="w-4 h-4"></i>
-                    </button>
-                `;
-                tagsContainer.appendChild(tagEl);
-            });
-            feather.replace();
-        };
-
-        tagsContainer.addEventListener('click', (e) => {
-            const removeBtn = e.target.closest('.tag-remove');
-            if (removeBtn) {
-                const tagToRemove = removeBtn.dataset.tag;
-                projectTags = projectTags.filter(tag => tag !== tagToRemove);
-                renderProjectTags();
-            }
-        });
-
-        addProjectBtn.addEventListener('click', addProjectTag);
-        projectInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                addProjectTag();
-            }
-        });
-
-        // --- [NEW v3.0] File Upload Logic ---
-        /**
-         * Uploads a file to Google Apps Script.
-         * @param {File} file - The file object to upload.
-         * @param {string} customerId - The customer ID.
-         * @returns {Promise<object>} - The result object from the server.
-         */
-        async function handleFileUpload(file, customerId) {
-            if (WEB_APP_URL === "YOUR_APPS_SCRIPT_WEB_APP_URL_HERE") {
-                throw new Error("שגיאת תצורה: יש להגדיר את כתובת ה-Web App בקוד תחילה.");
-            }
-            if (!file) throw new Error("לא נבחר קובץ.");
-            
-            // 1. Convert file to Base64
-            const base64Data = await new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = () => resolve(reader.result.split(',')[1]);
-                reader.onerror = error => reject(error);
-                reader.readAsDataURL(file);
-            });
-
-            // 2. Prepare payload for Apps Script
-            const payload = {
-                fileData: base64Data,
-                fileName: file.name,
-                mimeType: file.type,
-                customerId: customerId || 'unknown'
-            };
-            
-            // 3. Send to Apps Script Web App
-            const response = await fetch(WEB_APP_URL, {
-                method: 'POST',
-                mode: 'cors', // Required for cross-domain request
-                body: JSON.stringify(payload),
-                headers: {
-                    'Content-Type': 'text/plain;charset=utf-8', // Apps Script quirk
-                }
-            });
-
-            if (!response.ok) {
-                throw new Error(`שגיאת שרת: ${response.statusText}`);
-            }
-
-            const result = await response.json();
-            
-            if (result.success && result.url) {
-                SmartLog.info("File uploaded to Drive", { url: result.url, name: result.name });
-                return result; // Return the full result (success, url, waUrl)
-            } else {
-                throw new Error(result.error || "שגיאה לא ידועה בשרת");
-            }
-        }
         
-        // --- [NEW v3.0] Toast Notification ---
-        function showToast(message, type = 'info') {
-            const container = document.getElementById('toast-container');
-            if (!container) return;
+        // --- [תיקון קריטי v1.9] נתיב הקולקציה ---
+        const ORDERS_COLLECTION_PATH = 'orders_v2'; 
+        const CUSTOMERS_COLLECTION_PATH = 'customers'; 
+
+        // --- [חדש v1.13] אייקונים למפה ---
+        const orderIcon = L.icon({
+            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-blue.png',
+            iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34],
+            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png', shadowSize: [41, 41]
+        });
+        const customerIcon = L.icon({
+            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png',
+            iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34],
+            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png', shadowSize: [41, 41]
+        });
+
+
+        // --- לוגר ("מלשינון") ופונקציות טעינה ---
+        const SmartLog = {
+            info: (msg, data = '') => console.log(`[INFO | ${new Date().toISOString()}] ${msg}`, data),
+            error: (err, msg, data = '') => console.error(`[ERROR | ${new Date().toISOString()}] ${msg}`, data, err),
+        };
+
+        const app = {
+            showLoader: () => {
+                const loader = document.getElementById('loader');
+                if (loader) loader.style.display = 'flex';
+            },
+            hideLoader: () => {
+                const loader = document.getElementById('loader');
+                if (loader) loader.style.display = 'none';
+            },
+
+            // --- 1. אתחול ---
+            init: () => {
+                SmartLog.info("Sidor Mobile v1.22 (Local GPS) initializing...");
+                app.showLoader(); 
+                
+                try {
+                    if (!firebaseConfig.projectId) {
+                        throw new Error("Firebase config is missing projectId");
+                    }
+                    
+                    const fbApp = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+                    db = getFirestore(fbApp);
+                    auth = getAuth(fbApp);
+                    setLogLevel('debug');
+
+                    app.authenticateUser();
+                } catch (e) {
+                    SmartLog.error(e, "Firebase Init Failed");
+                    app.hideLoader();
+                    document.getElementById('dashboard-today-list').innerHTML = `<p class="text-red-500 p-4">שגיאת אתחול קריטית. לא ניתן לטעון Firebase.</p>`;
+                }
+            },
+
+            // --- 2. אימות ---
+            authenticateUser: () => {
+                SmartLog.info("Authenticating...");
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        SmartLog.info(`User authenticated: ${userId}`);
+                        document.getElementById('auth-status-indicator').innerText = `מחובר (${userId.slice(0,6)})`;
+                        app.loadInitialData(); 
+                    } else {
+                        SmartLog.info("No user, signing in...");
+                        try {
+                            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                                await signInWithCustomToken(auth, __initial_auth_token);
+                            } else {
+                                await signInAnonymously(auth);
+                            }
+                        } catch (e) {
+                            SmartLog.error(e, "Authentication failed");
+                            app.hideLoader();
+                        }
+                    }
+                });
+            },
+
+            // --- 3. טעינת נתונים ראשונית ---
+            loadInitialData: () => {
+                document.getElementById('header-title').innerText = "דשבורד ראשי";
+                app.listenToOrders();
+                app.listenForCustomers(); 
+            },
+
+            // --- 4. האזנה להזמנות (יישום הנחיה 5) ---
+            listenToOrders: () => {
+                if (ordersListener) ordersListener(); 
+
+                const collectionPath = ORDERS_COLLECTION_PATH;
+                const q = query(collection(db, collectionPath), limit(50));
+                
+                SmartLog.info(`Attaching listener to orders at: ${collectionPath}`);
+
+                ordersListener = onSnapshot(q, 
+                    (snapshot) => { 
+                        SmartLog.info(`Snapshot received (Orders): ${snapshot.size} docs`);
+                        
+                        let ordersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        
+                        // [יישום הנחיה 5] עדכון מיקומים לפי הלוגיקה החדשה
+                        ordersData.forEach(order => {
+                            const location = app.resolveLocation(order, 'order');
+                            order.latitude = location.lat; // עדכון אובייקט מקומי
+                            order.longitude = location.lng;
+                            if (location.source === 'fallback') {
+                                // [יישום הנחיה 6] לוג אדום רק אם נכשלנו לגמרי
+                                SmartLog.error(null, "[RED-ALERT] Using FALLBACK location for order", order);
+                            }
+                        });
+                        
+                        allOrders = ordersData; // שמור את הנתונים המעודכנים
+                        allOrders.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
+
+                        const todayStr = new Date().toISOString().split('T')[0];
+                        const tomorrowStr = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+                        const twoDaysStr = new Date(Date.now() + 2 * 86400000).toISOString().split('T')[0];
+
+                        const todayOrders = allOrders.filter(o => o.orderDate === todayStr);
+                        const tomorrowOrders = allOrders.filter(o => o.orderDate === tomorrowStr);
+                        const twoDaysOrders = allOrders.filter(o => o.orderDate === twoDaysStr);
+                        
+                        SmartLog.info(`Filtered Orders: Today(${todayOrders.length}), Tomorrow(${tomorrowOrders.length}), TwoDays(${twoDaysOrders.length})`);
+
+                        document.getElementById('today-count').innerText = todayOrders.length;
+                        document.getElementById('tomorrow-count').innerText = tomorrowOrders.length;
+                        document.getElementById('twodays-count').innerText = twoDaysOrders.length;
+
+                        app.renderOrderList('dashboard-today-list', todayOrders);
+                        app.renderOrderList('dashboard-tomorrow-list', tomorrowOrders);
+                        app.renderOrderList('dashboard-twodays-list', twoDaysOrders);
+                        
+                        if (todayOrders.length === 0 && tomorrowOrders.length > 0) {
+                            app.navigateDashboardTab('tomorrow');
+                        }
+
+                        // קרא לפונקציית הרינדור (שתמתין למפה במידת הצורך)
+                        app.renderMarkersOnMap(); 
+                        
+                        app.hideLoader(); 
+
+                    }, 
+                    (error) => {
+                        SmartLog.error(error, "!!! FATAL: onSnapshot error (Orders)");
+                        app.hideLoader();
+                        document.getElementById('dashboard-today-list').innerHTML = `<p class="text-red-500 p-4">שגיאה בטעינת הזמנות: ${error.message}.</p>`;
+                    }
+                );
+            },
             
+            // --- 4. האזנה ללקוחות (יישום הנחיה 5) ---
+            listenForCustomers: () => {
+                if (customersListener) customersListener();
+
+                const collectionPath = CUSTOMERS_COLLECTION_PATH;
+                SmartLog.info(`Attaching listener to customers at: ${collectionPath}`);
+
+                const q = query(collection(db, collectionPath), limit(200));
+
+                customersListener = onSnapshot(q,
+                    (snapshot) => { 
+                        SmartLog.info(`Snapshot received (Customers): ${snapshot.size} docs`);
+                        
+                        let customersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+                        // [יישום הנחיה 5] עדכון מיקומים לפי הלוגיקה החדשה
+                        customersData.forEach(customer => {
+                            const location = app.resolveLocation(customer, 'customer');
+                            customer.customLat = location.lat; // עדכון אובייקט מקומי
+                            customer.customLon = location.lng;
+                            if (location.source === 'fallback') {
+                                // [יישום הנחיה 6] לוג אדום רק אם נכשלנו לגמרי
+                                SmartLog.error(null, "[RED-ALERT] Using FALLBACK location for customer", customer);
+                            }
+                        });
+                        
+                        allCustomers = customersData; // שמור את הנתונים המעודכנים
+                        
+                        // קרא לפונקציית הרינדור (שתמתין למפה במידת הצורך)
+                        app.renderMarkersOnMap();
+                    },
+                    (error) => {
+                        SmartLog.error(error, "!!! FATAL: onSnapshot error (Customers)");
+                    }
+                );
+            },
+            
+            // --- 5. רינדור רשימת הזמנות ---
+            renderOrderList: (listId, orders) => {
+                const container = document.getElementById(listId);
+                if (!container) return;
+
+                if (orders.length === 0) {
+                    container.innerHTML = `<p class="text-center text-gray-500 pt-8">אין הזמנות לתאריך זה.</p>`;
+                    return;
+                }
+                
+                orders.sort((a, b) => (a.warehouse || '').localeCompare(b.warehouse || ''));
+
+                container.innerHTML = orders.map(order => {
+                    const statusColor = order.status === 'הושלם' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700';
+                    return `
+                        <div class="order-card" onclick="app.focusOnMapItem('${order.id}', 'order')">
+                            <div class="order-card-header">
+                                <span class="font-bold text-sm">${order.warehouse || 'ללא מחסן'}</span>
+                                <span class="font-mono text-xs px-2 py-1 rounded ${statusColor}">${order.status || 'חדש'}</span>
+                            </div>
+                            <div class="order-card-body space-y-1">
+                                <h3 class="font-semibold text-lg">${order.customer?.name || order.customer_name || 'לקוח לא ידוע'}</h3>
+                                <p class="text-sm text-gray-600">${order.address || order.customer_address || 'כתובת לא צוינה'}</p>
+                                <p class="text-xs text-gray-500 pt-1">${order.deliveryType || ''} | ${order.order_id || order.id}</p>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            },
+
+            // --- 6. ניווט ---
+            navigate: (pageId) => {
+                document.querySelectorAll('.app-page').forEach(p => p.classList.remove('active'));
+                document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+                
+                document.getElementById(`page-${pageId}`).classList.add('active');
+                document.querySelector(`.nav-item[onclick="app.navigate('${pageId}')"]`).classList.add('active');
+                
+                document.getElementById('header-title').innerText = {
+                    'dashboard': 'דשבורד',
+                    'share': 'שיתוף דוח',
+                    'map': 'מפה חיה',
+                    'settings': 'הגדרות'
+                }[pageId];
+
+                // [תיקון קריטי v1.20]
+                if (pageId === 'map') {
+                    app.initMap('map-container'); // אתחל (בבטחה)
+                    
+                    // [יישום הנחיה 4] לאחר שהמפה אותחלה, קרא לרינדור
+                    app.waitForMap(() => {
+                        app.renderMarkersOnMap();
+                    });
+                }
+            },
+            
+            navigateDashboardTab: (tabId) => {
+                document.querySelectorAll('.dashboard-page-content').forEach(p => p.classList.remove('active'));
+                document.querySelectorAll('.dashboard-tab').forEach(t => t.classList.remove('active'));
+                
+                document.getElementById(`dashboard-${tabId}-list`).classList.add('active');
+                document.getElementById(`dash-tab-${tabId}`).classList.add('active');
+            },
+
+            // --- 7. פונקציות מפה (לפי הנחיות 1, 2, 3, 5, 6) ---
+            
+            // [יישום הנחיה 1 ו-2] פונקציית אתחול המפה
+            initMap: (containerId) => {
+                if (map) {
+                    map.invalidateSize();
+                    if (!mapReady) mapReady = true; // ודא שהדגל תמיד נכון
+                    return;
+                }
+                
+                const mapContainer = document.getElementById(containerId);
+                if (!mapContainer) {
+                    SmartLog.info("Map container not found");
+                    return; 
+                }
+                
+                try {
+                    map = L.map(containerId).setView([DEFAULT_LOCATION.lat, DEFAULT_LOCATION.lng], 10);
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        maxZoom: 19, attribution: '© OpenStreetMap'
+                    }).addTo(map);
+                    
+                    SmartLog.info("Map initialized successfully.");
+                    mapReady = true; // [יישום הנחיה 2]
+                } catch(e) {
+                    SmartLog.error(e, "Map.Init");
+                    mapContainer.innerHTML = '<p class="text-red-500 p-4">שגיאה בטעינת המפה.</p>';
+                    mapReady = false;
+                }
+            },
+            
+            // [יישום הנחיה 3] מנגנון המתנה למפה
+            waitForMap: (callback) => {
+                SmartLog.info("Waiting for map...");
+                if (mapReady && map) {
+                    SmartLog.info("Map is ready. Executing callback.");
+                    callback();
+                    return;
+                }
+                // [יישום הנחיה 2] המתנה וחזרה
+                setTimeout(() => app.waitForMap(callback), 300);
+            },
+
+            // [יישום הנחיה 1] פונקציית הוספת סיכה
+            addMarkerToMap: (lat, lng, icon, popupContent) => {
+                const marker = L.marker([lat, lng], { icon }).addTo(map)
+                    .bindPopup(popupContent);
+                mapMarkers.push(marker);
+                return marker;
+            },
+
+            // [יישום הנחיה 5 ו-6] פונקציית רינדור מרכזית
+            renderMarkersOnMap: () => {
+                // [יישום הנחיה 4] בדיקה לפני רינדור
+                if (!mapReady || !map) {
+                    SmartLog.info("renderMarkersOnMap called, but map is not ready. Waiting...", { mapReady, mapExists: !!map });
+                    return;
+                }
+                
+                SmartLog.info("Rendering markers on map...");
+
+                // [יישום הנחיה 5] ניקוי מרקרים ישנים
+                mapMarkers.forEach(m => m.remove());
+                mapMarkers = [];
+                const bounds = L.latLngBounds();
+
+                // 1. צייר הזמנות (כחול)
+                allOrders.forEach(order => {
+                    if (['הושלם', 'בוטל', 'סופק'].includes(order.status)) return;
+                    
+                    // [יישום הנחיה 5]
+                    const lat = order.latitude;
+                    const lng = order.longitude;
+                    
+                    if (!lat || !lng) {
+                        // [יישום הנחיה 6] לוג זה בסדר כי איתור המיקום עדיין רץ
+                        console.warn(`[WARN] Skipping order ${order.id}, location not yet available.`);
+                        return; 
+                    }
+                    
+                    const popupContent = `<b>(הזמנה) ${order.customer?.name || order.customer_name || 'לקוח'}</b><br>
+                                          ${order.address || order.customer_address || 'כתובת לא ידועה'}<br>
+                                          <b>סטטוס: ${order.status || 'חדש'}</b>`;
+                    
+                    const marker = app.addMarkerToMap(lat, lng, orderIcon, popupContent);
+                    bounds.extend([lat, lng]);
+                });
+
+                // 2. צייר לקוחות (אדום)
+                allCustomers.forEach(customer => {
+                    // [יישום הנחיה 5]
+                    const lat = customer.customLat;
+                    const lng = customer.customLon;
+
+                    if (!lat || !lng) {
+                         // [יישום הנחיה 6] לוג זה בסדר כי איתור המיקום עדיין רץ
+                        console.warn(`[WARN] Skipping customer ${customer.id}, location not yet available.`);
+                        return; 
+                    }
+                    
+                    const popupContent = `<b>(לקוח) ${customer.name}</b><br>
+                                          ${customer.defaultAddress || 'כתובת לא ידועה'}<br>
+                                          טל: ${customer.phone || 'לא ידוע'}`;
+                                          
+                    const marker = app.addMarkerToMap(lat, lng, customerIcon, popupContent);
+                    bounds.extend([lat, lng]);
+                });
+
+                if (bounds.isValid() && mapMarkers.length > 0) {
+                    map.fitBounds(bounds, { padding: [20, 20] });
+                }
+                SmartLog.info(`Rendered ${mapMarkers.length} markers on map.`);
+            },
+            
+            focusOnMapItem: (orderId, type) => {
+                let lat, lon;
+                let popupContent = "";
+
+                if (type === 'order') {
+                    const order = allOrders.find(o => o.id === orderId);
+                    if (!order) {
+                        SmartLog.error(null, "Order not found for focus", orderId);
+                        return;
+                    }
+                    // [יישום הנחיה 6]
+                    if (!order.latitude || !order.longitude) {
+                        SmartLog.error(null, "Cannot focus, order missing location", order);
+                        showToast("לא קיים מיקום עבור הזמנה זו", "info");
+                        return;
+                    }
+                    lat = order.latitude;
+                    lon = order.longitude;
+                    popupContent = `<b>(הזמנה) ${order.customer?.name || order.customer_name || ''}</b><br>${order.address || order.customer_address}<br>סטטוס: ${order.status}`;
+                } 
+                // (ניתן להוסיף לוגיקה ללקוח בעתיד)
+
+                if (lat && lon) {
+                    // 1. נווט לדף המפה (זה יאתחל אותה)
+                    app.navigate('map'); 
+                    
+                    // 2. [יישום הנחיה 3] המתן למפה שתהיה מוכנה
+                    app.waitForMap(() => {
+                        SmartLog.info(`Focusing map on [${lat}, ${lon}]`);
+                        // 3. מרכז את המפה על הסיכה
+                        map.setView([lat, lon], 16); // 16 = זום קרוב
+                        
+                        // 4. פתח את הפופאפ
+                        L.popup()
+                            .setLatLng([lat, lon])
+                            .setContent(popupContent)
+                            .openOn(map);
+                    });
+                } else {
+                    SmartLog.info("No location for this item:", orderId);
+                    showToast("לא קיים מיקום עבור פריט זה", "info");
+                }
+            },
+
+            // --- [חדש v1.22] פונקציות איתור מיקום ---
+            
+            // [יישום הנחיה 2]
+            parseGPS: (gpsString) => {
+                if (!gpsString || typeof gpsString !== 'string') return null;
+                const parts = gpsString.split(',');
+                if (parts.length < 2) return null;
+                
+                const lat = parseFloat(parts[0].trim());
+                const lng = parseFloat(parts[1].trim());
+                
+                if (isNaN(lat) || isNaN(lng)) return null;
+                return { lat, lng };
+            },
+
+            // [יישום הנחיה 3]
+            findLocationInDB: (address) => {
+                if (!address || typeof address !== 'string') return null;
+                // נרמול בסיסי של הכתובת
+                const normalizedAddress = address.trim(); 
+                if (locationsDB[normalizedAddress]) {
+                    SmartLog.info("Local DB HIT", normalizedAddress);
+                    return locationsDB[normalizedAddress];
+                }
+                return null;
+            },
+
+            // [יישום הנחיה 4]
+            resolveLocation: (doc, type) => {
+                let lat, lng, source, address;
+
+                // עדיפות 1: שדה GPS ידני (מהנחיה 2)
+                if (doc.gps) {
+                    const parsed = app.parseGPS(doc.gps);
+                    if (parsed) {
+                        return { lat: parsed.lat, lng: parsed.lng, source: 'manual_gps' };
+                    }
+                }
+
+                // עדיפות 2: שדות קיימים (Cache של Firestore)
+                if (type === 'order' && doc.latitude && doc.longitude) {
+                    return { lat: doc.latitude, lng: doc.longitude, source: 'firestore_cache' };
+                }
+                if (type === 'customer' && doc.customLat && doc.customLon) {
+                    return { lat: doc.customLat, lng: doc.customLon, source: 'firestore_cache' };
+                }
+
+                // עדיפות 3: מאגר מקומי (הנחיה 3)
+                address = (type === 'order') ? (doc.address || doc.customer_address) : doc.defaultAddress;
+                if (address) {
+                    const fromDB = app.findLocationInDB(address);
+                    if (fromDB) {
+                        return { lat: fromDB.lat, lng: fromDB.lng, source: 'local_db' };
+                    }
+                }
+
+                // עדיפות 4: Fallback (הנחיה 4)
+                SmartLog.error(null, `[RED-ALERT] Using FALLBACK location for ${type}`, doc);
+                return { lat: DEFAULT_LOCATION.lat, lng: DEFAULT_LOCATION.lng, source: 'fallback' };
+            },
+            
+            // --- 8. שיתוף ---
+            loadOrdersForShare: async () => {
+                const date = document.getElementById('share-date-picker').value;
+                if (!date) {
+                    alert('יש לבחור תאריך');
+                    return;
+                }
+                
+                const listEl = document.getElementById('share-order-list');
+                listEl.innerHTML = '<div class="spinner-container"><div class="spinner"></div></div>';
+                
+                const collectionPath = ORDERS_COLLECTION_PATH;
+                
+                // [תיקון v1.13] שאילתה פשוטה ללא מיון
+                const q = query(
+                    collection(db, collectionPath), 
+                    limit(200) 
+                );
+                
+                try {
+                    const snapshot = await getDocs(q);
+                    let allFetchedOrders = snapshot.docs.map(doc => doc.data());
+
+                    // [תיקון v1.10] סינון ידני לפי orderDate
+                    let orders = allFetchedOrders.filter(o => o.orderDate === date);
+                    // [תיקון v1.13] מיון ידני
+                    orders.sort((a, b) => (a.warehouse || '').localeCompare(b.warehouse || ''));
+
+                    document.getElementById('share-total-count').innerText = `(${orders.length})`;
+                    
+                    if (orders.length === 0) {
+                        listEl.innerHTML = '<p class="text-center text-gray-500 pt-8">אין הזמנות לתאריך זה.</p>';
+                        return;
+                    }
+                    
+                    listEl.innerHTML = orders.map(order => `
+                        <div class="order-card">
+                            <div class="order-card-header">
+                                <span class="font-bold text-sm">${order.warehouse || 'ללא מחסן'}</span>
+                                <span class="font-mono text-xs">${order.status || 'חדש'}</span>
+                            </div>
+                            <div class="order-card-body">
+                                <h3 class="font-semibold">${order.customer?.name || order.customer_name || 'לקוח לא ידוע'}</h3>
+                                <p class="text-sm text-gray-600">${order.address || order.customer_address || 'כתובת לא צוינה'}</p>
+                            </div>
+                        </div>
+                    `).join('');
+
+                } catch (error) {
+                    console.error("Firebase Error in loadOrdersForShare:", error);
+                    SmartLog.error(error, "Data.ShareLoadFailed");
+                    listEl.innerHTML = `<p class="text-red-500 p-4">שגיאה בטעינת הזמנות: ${error.message}.</p>`;
+                }
+            },
+            
+            initiateShare: () => {
+                const date = document.getElementById('share-date-picker').value;
+                if (!date) {
+                    alert('יש לבחור תאריך');
+                    return;
+                }
+                
+                const listEl = document.getElementById('share-order-list');
+                const orders = Array.from(listEl.querySelectorAll('.order-card'));
+                
+                if (orders.length === 0) {
+                    alert('אין הזמנות לשיתוף');
+                    return;
+                }
+
+                let message = `*סידור עבודה ליום ${date}:*\n\n`;
+                let currentWarehouse = '';
+
+                orders.forEach(card => {
+                    const warehouse = card.querySelector('.font-bold').innerText;
+                    const customer = card.querySelector('.font-semibold').innerText;
+                    const address = card.querySelector('.text-sm').innerText;
+                    
+                    if (warehouse !== currentWarehouse) {
+                        message += `*_${warehouse}_*\n`;
+                        currentWarehouse = warehouse;
+                    }
+                    message += `• ${customer} - ${address}\n`;
+                });
+
+                const waLink = `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`;
+                window.open(waLink, '_blank');
+            }
+        };
+
+        // --- פונקציית עזר גלובלית לטוסט ---
+        function showToast(message, type = 'info') {
+            let container = document.getElementById('loader')?.parentNode || document.body;
             const toast = document.createElement('div');
-            toast.className = `toast ${type}`;
+            toast.style = "position:fixed; top:20px; left:50%; transform:translateX(-50%); z-index:9999; padding: 10px 20px; border-radius: 8px; font-weight: 500; color: white;";
+            toast.style.backgroundColor = type === 'error' ? 'var(--danger)' : (type === 'success' ? 'var(--secondary)' : 'var(--primary)');
             toast.innerText = message;
             
             container.appendChild(toast);
             
-            // Animate in
             setTimeout(() => {
-                toast.classList.add('show');
-            }, 100);
-            
-            // Animate out
-            setTimeout(() => {
-                toast.classList.remove('show');
-                setTimeout(() => {
-                    if (container.contains(toast)) {
-                        container.removeChild(toast);
-                    }
-                }, 300);
+                toast.style.opacity = '0';
+                toast.style.transition = 'opacity 0.5s ease';
+                setTimeout(() => toast.remove(), 500);
             }, 3000);
         }
 
-        // --- [NEW v3.1] Modified WhatsApp Share ---
-        /**
-         * Generates a WhatsApp share URL.
-         * @param {object} orderData - The order data object.
-         * @param {string|null} attachmentUrl - Optional URL of the uploaded file.
-         * @returns {string} - The full WhatsApp URL.
-         */
-        function shareToWhatsApp(orderData, attachmentUrl = null) {
-            const phone = "972508860896"; // יעד מחלקת הזמנות
-            
-            const customerContact = newCustomerData.contactPerson || newCustomerData.name;
-            
-            // Create attachment text if URL exists
-            const attachmentText = attachmentUrl 
-                ? `\n\n📎 *קובץ מצורף:*\n${attachmentUrl}` 
-                : '';
-
-            const template = `
-*✅ הזמנה חדשה (מטופס CRM)*
-
-👤 *פרטי לקוח:*
-*שם:* ${newCustomerData.name}
-*מס' לקוח:* ${newCustomerData.customerNumber}
-*טלפון:* ${newCustomerData.phone}
-*איש קשר:* ${customerContact}
-
-🚚 *פרטי אספקה:*
-*פרויקט:* ${orderData.projectName.join(', ') || 'לא צוין'}
-*סוג הובלה:* ${orderData.deliveryType || 'לא צוין'}
-*מיקום:* ${newCustomerData.defaultAddress}
-*תאריך:* ${orderData.orderDate}
-
-📦 *תוכן ההזמנה:*
-${orderData.notes || "--- אין תוכן ---"}
-${attachmentText}
-            `;
-            
-            const waUrl = `https://api.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(template.trim())}`;
-            SmartLog.info("Generated WhatsApp URL", { url: waUrl });
-            return waUrl;
-        }
+        // --- חשיפה גלובלית והפעלה ---
+        window.app = app;
         
-        // --- Main Submit Logic ---
-        document.getElementById('btn-submit-full').addEventListener('click', async (e) => {
-            const btn = e.target.closest('button'); // Ensure we get the button
-            btn.disabled = true;
-            btn.innerHTML = '<div class="loader"></div>';
-
-            try {
-                if (!db) throw new Error("Firebase DB not initialized.");
-                
-                // --- Step 1: Create or Find Customer ---
-                // Using Auto-ID as discussed (v2.2 logic)
-                const customerRef = doc(collection(db, "customers"));
-                
-                // [FIX v3.1] Use `new Date()` inside arrays
-                const customerData = {
-                    ...newCustomerData,
-                    createdAt: serverTimestamp(),
-                    auditLog: [{
-                        action: "Created (via CRM Form)",
-                        timestamp: new Date() // [FIX v3.1]
-                    }]
-                };
-                
-                // Check if customer *number* already exists (to prevent duplicates)
-                const q = query(collection(db, "customers"), where("customerNumber", "==", newCustomerData.customerNumber), limit(1));
-                const existingSnap = await getDocs(q);
-                
-                if (!existingSnap.empty) {
-                    // Customer with this NUMBER already exists
-                    showToast("שגיאה: מספר לקוח זה כבר קיים במערכת.", "error");
-                    throw new Error("Customer number already exists.");
-                }
-                
-                await setDoc(customerRef, customerData);
-                const newCustomerId = customerRef.id; // This is the Auto-ID
-                SmartLog.info("Customer created successfully", { id: newCustomerId });
-                showToast("שלב 1: לקוח נוצר בהצלחה!", "success");
-
-                // --- Step 2: Handle File Upload (if any) ---
-                const file = document.getElementById('file-upload').files[0];
-                let attachmentUrl = null;
-                let whatsAppUrl = null; // This will be the main WA link
-
-                if (file) {
-                    showToast('מעלה קובץ... אנא המתן', 'info');
-                    document.getElementById('upload-status').innerText = 'מעלה קובץ...';
-                    document.getElementById('upload-status').classList.remove('hidden');
-                    
-                    try {
-                        // Pass the customer *number* to the Apps Script
-                        const uploadResult = await handleFileUpload(file, newCustomerData.customerNumber);
-                        attachmentUrl = uploadResult.url; // GDrive URL
-                        whatsAppUrl = uploadResult.waUrl; // WA link with GDrive URL
-                        
-                        document.getElementById('upload-status').innerText = 'קובץ צורף בהצלחה!';
-                        showToast('קובץ צורף בהצלחה!', 'success');
-                        
-                    } catch (uploadError) {
-                        SmartLog.error(uploadError, "Upload.AppsScript");
-                        showToast(`שגיאה בהעלאת קובץ: ${uploadError.message}`, 'error');
-                        // Don't block the order, just log the error
-                        document.getElementById('upload-status').innerText = 'שגיאה בהעלאת קובץ. ההזמנה תיווצר ללא הקובץ.';
-                    }
-                }
-
-                // --- Step 3: Create Order ---
-                const customOrderNumber = document.getElementById('order-number').value.trim();
-                const orderId = customOrderNumber || `AUTO-${Date.now().toString().slice(-6)}`;
-                
-                const orderData = {
-                    order_id: orderId,
-                    customer: {
-                        id: newCustomerId,
-                        name: newCustomerData.name,
-                        phone: newCustomerData.phone,
-                        customerNumber: newCustomerData.customerNumber
-                    },
-                    address: newCustomerData.defaultAddress,
-                    projectName: projectTags, // Save array of projects
-                    deliveryType: document.getElementById('order-transport-type').value,
-                    notes: document.getElementById('order-content').value,
-                    attachmentUrl: attachmentUrl, // Add the GDrive link
-                    orderDate: new Date().toISOString().split('T')[0], // Use today's date
-                    status: "חדש",
-                    createdBy: "CRM-Form",
-                    createdAt: serverTimestamp(),
-                    lastModified: serverTimestamp()
-                };
-
-                const orderRef = doc(db, "orders", orderId);
-                await setDoc(orderRef, orderData);
-                SmartLog.info("Order created successfully", { id: orderId });
-
-                // --- Step 4: Share to WhatsApp ---
-                if (whatsAppUrl) {
-                    // We already have the WA link from the file upload (which includes the file URL)
-                    window.open(whatsAppUrl, '_blank');
-                    showToast('הזמנה וקובץ נוצרו! פותח WhatsApp...', 'success');
-                } else {
-                    // No file was attached, so we generate a WA link for the order *only*
-                    const orderWaUrl = shareToWhatsApp(orderData, null); // Pass null for attachment
-                    window.open(orderWaUrl, '_blank');
-                    showToast('הזמנה נוצרה! פותח WhatsApp...', 'success');
-                }
-
-                // --- Step 5: Reset Form ---
-                setTimeout(() => {
-                    // Reset all fields
-                    document.getElementById('customer-number').value = '';
-                    document.getElementById('customer-name').value = '';
-                    document.getElementById('customer-phone').value = '';
-                    document.getElementById('customer-contact').value = '';
-                    document.getElementById('customer-street').value = '';
-                    document.getElementById('customer-street-num').value = '';
-                    document.getElementById('customer-city').value = '';
-                    document.getElementById('order-number').value = '';
-                    document.getElementById('order-transport-type').value = '';
-                    document.getElementById('order-content').value = '';
-                    document.getElementById('project-input').value = '';
-                    document.getElementById('file-upload').value = '';
-                    document.getElementById('upload-status').classList.add('hidden');
-                    projectTags = [];
-                    renderProjectTags();
-                    
-                    // Go back to step 1
-                    step2.style.display = 'none';
-                    step1.style.display = 'block';
-                    stepper2.classList.remove('active');
-                    stepper1.classList.remove('complete');
-                    stepper1.classList.add('active');
-                    
-                    btn.disabled = false;
-                    btn.innerHTML = '<i data-feather="check-circle" class="inline-block w-5 h-5"></i> שמור הכל ושלח ל-WhatsApp';
-                    feather.replace();
-                }, 2000); // Short delay to let user see success
-
-            } catch (error) {
-                SmartLog.error(error, "Submit.FullOrder");
-                showToast(`שגיאה קריטית: ${error.message}`, "error");
-                btn.disabled = false;
-                btn.innerHTML = '<i data-feather="check-circle" class="inline-block w-5 h-5"></i> שמור הכל ושלח ל-WhatsApp';
-                feather.replace();
-            }
+        document.addEventListener('DOMContentLoaded', () => {
+            app.init();
+            feather.replace();
         });
-
-        // --- Init Icons ---
-        feather.replace();
     </script>
 </body>
 </html>
-
