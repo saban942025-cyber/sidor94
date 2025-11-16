@@ -3,19 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Sidor Customer Portal v41</title>
+    <title>Sidor Customer Portal v43 (Import Fix)</title>
     <!-- 
-      Sidor Customer Portal v41 (Stability & Theme)
+      Sidor Customer Portal v43 (Import Fix)
       
       Changelog:
-      - [קריטי] תיקון שליפת טלפון (הנחיה A): 
-        - 'normalizePhone' שוכתב. הוא כבר לא כופה '+972'.
-        - המערכת מנרמלת כעת הכל לפורמט 10 ספרות (05X) וזה הפורמט 
-          ש-api.getClientsByPhone יחפש.
-      - [חדש] הוספת כפתור "מצב כהה / בהיר" בטאב "חשבון" (הנחיה C).
-      - [חדש] הוספת סגנונות CSS עבור '.dark'.
-      - [חדש] שילוב לינק האווטאר (בצבע לבן) במסך הכניסה ובראש הפורטל 
-        כברירת מחדל (הנחיה D).
+      - [קריטי] תיקון שגיאת "getApps is not defined" שזוהתה בלוגים.
+      - [קריטי] הוספת 'getApp', 'getApps', ו-'setLogLevel' לייבוא של Firebase.
+      - [תיקון] וידוא שקולקציית הלקוחות היא 'customers' (ולא 'clients')
+        כדי להתאים למאגר הקיים.
     -->
 
     <!-- PWA, Tailwind, Leaflet, Icons, Font -->
@@ -404,7 +400,7 @@
 
             <!-- [חדש] הנחיה E: הערת שחרור -->
             <footer class="release-note">
-                DeliveryMaster — ח.סבן חומרי בנין (v41)
+                DeliveryMaster — ח.סבן חומרי בנין (v43)
             </footer>
         </div>
 
@@ -585,12 +581,12 @@
 
     <!-- Toast container -->
     <div id="toast-container"></div>
-    <!-- Firebase SDKs -->
+    
     <script type="module">
-        // [תיקון v42] הוספת getApp ו- getApps לייבוא
+        // [תיקון v43] הוספת getApp, getApps, ו- setLogLevel לייבוא
         import { initializeApp, getApp, getApps } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, addDoc, getDocs, query, where, serverTimestamp, setDoc, doc, onSnapshot, orderBy, limit } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+        import { getFirestore, collection, addDoc, getDocs, query, where, serverTimestamp, setDoc, doc, onSnapshot, orderBy, limit, setLogLevel } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
 
         // --- [יישום הנחיה 1] מיקום ברירת מחדל ---
         const DEFAULT_LOCATION = { lat: 32.0750544, lng: 34.826251 };
@@ -633,9 +629,9 @@
           measurementId: "G-XV6RZDESSB"
         };
         
-        // --- [תיקון קריטי v1.9] נתיב הקולקציה ---
+        // --- [תיקון v43] נתיב קולקציית לקוחות ---
         const ORDERS_COLLECTION_PATH = 'orders_v2'; 
-        const CLIENTS_COLLECTION_PATH = 'clients'; // לפי המפרט החדש
+        const CUSTOMERS_COLLECTION_PATH = 'customers'; // [תיקון] שימוש ב-customers הקיים
         const PROJECTS_COLLECTION_PATH = 'projects'; // לפי המפרט החדש
         const DEVICES_COLLECTION_PATH = 'devices'; // (הנחיה 6)
 
@@ -661,7 +657,7 @@
                 SmartLog.info(`Querying clients with normalized phone: ${phone}`);
                 
                 // כאן תהיה קריאת 'query' אמיתית ל-Firestore
-                // const q = query(collection(db, CLIENTS_COLLECTION_PATH), where("phone", "==", phone));
+                // const q = query(collection(db, CUSTOMERS_COLLECTION_PATH), where("phone", "==", phone));
                 // const snapshot = await getDocs(q);
                 // ...
                 
@@ -742,7 +738,7 @@
 
             // --- 1. אתחול (לפי לוגיקה חדשה) ---
             init: () => {
-                SmartLog.info("Sidor Customer Portal v41 (Premium Login) initializing...");
+                SmartLog.info("Sidor Customer Portal v43 (Import Fix) initializing...");
                 app.showLoader("מתחבר למערכת..."); 
                 
                 try {
@@ -750,10 +746,11 @@
                         throw new Error("Firebase config is missing projectId");
                     }
                     
+                    // [תיקון v43]
                     const fbApp = !getApps().length ? initializeApp(firebaseConfig) : getApp();
                     db = getFirestore(fbApp);
                     auth = getAuth(fbApp);
-                    setLogLevel('debug');
+                    setLogLevel('debug'); // [תיקון v43]
 
                     app.initTheme(); // [חדש] אתחול עיצוב
                     app.authenticateUser();
@@ -1439,12 +1436,13 @@
 
             // --- 9. כלי עזר ---
             
-            // [יישום הנחיה A.2]
+            // [יישום הנחיה A.2] - [עדכון v41]
             normalizePhone: (raw) => {
                 if (!raw) return null;
+                // מנקה הכל חוץ מספרות
                 let s = String(raw).replace(/[^0-9]/g, ""); // "0546609953" or "972546609953"
                 if (s.startsWith("972")) {
-                    s = "0" + s.slice(3); // "0546609953"
+                    s = "0" + s.slice(3); // הופך ל "0546609953"
                 }
                 if (s.startsWith("05") && s.length === 10) {
                     return s; // מחזיר "0546609953"
