@@ -3,169 +3,362 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>מחסן - DeliveryMaster</title>
-    <!-- 
-       אפליקציית מחסן v1.0
-       - יישום חלק 4, סעיף 3 באפיון
-      - מאזין ל-onSnapshot לקולקציית 'orders'
-      - מציג הזמנות שרלוונטיות למחסן (סטטוס "חדש", "בטיפול")
-      - מאפשר למחסנאי לשנות סטטוס ל-"מוכן לטעינה"
-    -->
+    <title>Sidor | אפליקציית מחסן</title>
+
+    <!-- 1. Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- 2. Icons (Feather) -->
     <script src="https://unpkg.com/feather-icons"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700&display=swap" rel="stylesheet">
-    <style>
-        body { font-family: 'Rubik', sans-serif; background-color: #f1f5f9; }
-        .order-card { background-color: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; }
-        .btn-ready { background-color: #10b981; color: white; transition: background-color 0.2s; }
-        .btn-ready:hover { background-color: #059669; }
-        .btn-ready:disabled { background-color: #9ca3af; }
-    </style>
-</head>
-<body class="p-4 md:p-8">
+    
+    <!-- 3. Google Font: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
 
-    <header class="flex justify-between items-center mb-6 pb-4 border-b">
-        <div>
-            <h1 class="text-2xl font-bold text-gray-800">מערכת מחסן</h1>
-            <p class="text-gray-600">הזמנות חדשות לליקוט</p>
-        </div>
-        <div id="auth-status" class="text-sm text-gray-500">
-            <span id="auth-text">מתחבר...</span>
-            <span id="ping-dot" class="inline-block w-3 h-3 bg-gray-400 rounded-full ml-2"></span>
-        </div>
-    </header>
-
-    <main id="orders-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        <!-- Loader -->
-        <div id="loader" class="text-center p-8 col-span-full">
-            <p class="text-gray-500">טוען הזמנות רלוונטיות...</p>
-        </div>
-        <!-- Orders will be injected here -->
-    </main>
-
-    <!-- Firebase SDKs -->
+    <!-- 4. Firebase SDK (Modern Modular v9+) -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
-        import { getFirestore, collection, doc, onSnapshot, query, where, orderBy, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+        import { getFirestore, collection, doc, onSnapshot, query, orderBy, where, getDoc, addDoc, serverTimestamp, updateDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
+        // --- Config & Init ---
         const firebaseConfig = {
           apiKey: "AIzaSyDq0oVwS6zbEfsgrYBRkeBq80dDUKMedzo", authDomain: "saban94-78949.firebaseapp.com", projectId: "saban94-78949",
-          storageBucket: "saban94-78949.appspot.com",
-          messagingSenderId: "41553157903", appId: "1:41553157903:web:cc33d2cff023be97a87a"
+          storageBucket: "saban94-78949.firebasestorage.app", messagingSenderId: "41553157903", appId: "1:41553157903:web:cc33d252cff023be97a87a", measurementId: "G-XV6RZDESSB"
         };
-
-        let db;
         
-        // --- App Object ---
-        const app = {
-            init: () => {
-                try {
-                    const fbApp = initializeApp(firebaseConfig);
-                    db = getFirestore(fbApp);
-                    const auth = getAuth(fbApp);
-                    
-                    onAuthStateChanged(auth, (user) => {
-                        if (user) {
-                            document.getElementById('auth-text').innerText = "מחובר";
-                            document.getElementById('ping-dot').classList.replace('bg-gray-400', 'bg-green-500');
-                            app.listenToWarehouseOrders();
-                        } else {
-                            signInAnonymously(auth);
-                        }
-                    });
-                } catch (e) {
-                    console.error("Firebase init failed", e);
-                    document.getElementById('auth-text').innerText = "שגיאת התחברות";
-                    document.getElementById('ping-dot').classList.replace('bg-gray-400', 'bg-red-500');
-                }
-            },
-            
-            listenToWarehouseOrders: () => {
-                const container = document.getElementById('orders-container');
-                const loader = document.getElementById('loader');
-                
-                // מאזין להזמנות שהסדרן אישר (בטיפול) או שהגיעו ישירות מהלקוח
-                const relevantStatuses = ["חדש", "חדש (מלקוח)", "בטיפול"];
-                
-                const q = query(
-                    collection(db, "orders"),
-                    where("status", "in", relevantStatuses),
-                    orderBy("createdAt", "asc")
-                );
+        // זהה לאפליקציית הניהול
+        const appId = 'sidor';
+        
+        let db, auth;
 
-                onSnapshot(q, (snapshot) => {
-                    loader.style.display = 'none';
-                    
-                    if (snapshot.empty) {
-                        container.innerHTML = '<p class="text-center p-8 col-span-full text-gray-500">אין הזמנות חדשות שממתינות לליקוט.</p>';
-                        return;
-                    }
-                    
-                    container.innerHTML = ''; // Clear container
-                    snapshot.forEach(doc => {
-                        const order = doc.data();
-                        const orderId = doc.id;
-                        
-                        const card = document.createElement('div');
-                        card.className = "order-card flex flex-col p-4";
-                        card.innerHTML = `
-                            <div class="flex-grow">
-                                <div class="flex justify-between items-center mb-2">
-                                    <span class="font-bold text-blue-600">${order.order_id || orderId.slice(-6)}</span>
-                                    <span class="text-xs font-medium text-gray-500">${order.orderDate || new Date(order.createdAt?.seconds * 1000).toLocaleDateString('he-IL')}</span>
-                                </div>
-                                <h3 class="font-semibold text-lg text-gray-800">${order.customer?.name || 'לקוח לא ידוע'}</h3>
-                                <p class="text-sm text-gray-600 mb-1">${order.projectName || 'ללא פרויקט'}</p>
-                                <p class="text-sm text-gray-500 mb-3">${order.address || 'לא צוינה כתובת'}</p>
-                                
-                                <div class="bg-gray-50 p-3 rounded-md border max-h-32 overflow-y-auto">
-                                    <pre class="text-sm text-gray-700 whitespace-pre-wrap font-sans">${order.notes || order.rawText || 'אין פירוט פריטים'}</pre>
-                                </div>
-                            </div>
-                            
-                            <button id="btn-${orderId}" class="btn-ready w-full font-bold py-3 px-4 rounded-md mt-4" onclick="app.markAsReady('${orderId}')">
-                                <i data-feather="check-circle" class="inline-block w-5 h-5 ml-2"></i>
-                                סמן כ"מוכן לטעינה"
-                            </button>
-                        `;
-                        container.appendChild(card);
-                    });
-                    
-                    feather.replace();
-                    
-                }, (error) => {
-                    console.error("Error listening to orders:", error);
-                    container.innerHTML = '<p class="text-center p-8 col-span-full text-red-500">שגיאה בטעינת הזמנות.</p>';
-                });
-            },
+        // --- Global State ---
+        let currentUser = {
+            uid: null,
+            name: "אלמוני"
+        };
+        let currentRoom = {
+            id: null,
+            name: "טוען..."
+        };
+        let unsubscribeMessages = () => {};
+
+        // --- UI & Utility ---
+        const SmartLog = (module, message, level = 'info') => {
+            console[level](`[${module}] ${level.toUpperCase()}:`, message);
+        };
+        
+        const showView = (viewName) => {
+            document.getElementById('login-view').style.display = 'none';
+            document.getElementById('chat-view').style.display = 'none';
+            document.getElementById('loading-view').style.display = 'none';
             
-            markAsReady: async (orderId) => {
-                const btn = document.getElementById(`btn-${orderId}`);
-                if (!btn) return;
-                
-                btn.disabled = true;
-                btn.innerText = "מעדכן...";
-                
-                try {
-                    const orderRef = doc(db, "orders", orderId);
-                    await updateDoc(orderRef, {
-                        status: "מוכן לטעינה",
-                        lastModified: serverTimestamp(),
-                        warehouse_marked_at: serverTimestamp()
-                    });
-                    // ההאזנה תגרום לכרטיס להיעלם אוטומטית
-                } catch (error) {
-                    console.error("Failed to update status:", error);
-                    alert("שגיאה בעדכון הסטטוס.");
-                    btn.disabled = false;
-                    btn.innerText = "סמן כ'מוכן לטעינה'";
-                }
+            if (viewName === 'login') {
+                document.getElementById('login-view').style.display = 'flex';
+            } else if (viewName === 'chat') {
+                document.getElementById('chat-view').style.display = 'flex';
+            } else {
+                document.getElementById('loading-view').style.display = 'flex';
             }
         };
 
-        window.app = app; // Expose to global scope for onclick events
-        app.init();
+        const showLoginError = (message) => {
+            const errorEl = document.getElementById('login-error');
+            errorEl.textContent = message;
+            errorEl.style.display = 'block';
+        };
+
+        const renderChatMessage = (msg) => {
+            const listEl = document.getElementById('message-list');
+            if (!listEl) return;
+            
+            const isSent = msg.senderId === currentUser.uid;
+            
+            const alignClass = isSent ? 'justify-end' : 'justify-start';
+            const bubbleClass = isSent ? 'chat-bubble-sent' : 'chat-bubble-received';
+            
+            const time = msg.createdAt ? new Date(msg.createdAt.seconds * 1000).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' }) : '';
+            
+            const msgEl = document.createElement('div');
+            msgEl.className = `flex ${alignClass} mb-3`;
+            msgEl.innerHTML = `
+                <div class="max-w-xs lg:max-w-md">
+                    <div class="${bubbleClass} rounded-lg py-2 px-4 shadow-sm">
+                        ${!isSent ? `<div class="font-semibold text-xs mb-1">${msg.senderName || 'אלמוני'}</div>` : ''}
+                        <p class="text-sm">${msg.text}</p>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1 ${isSent ? 'text-right' : 'text-left'}">${time}</p>
+                </div>
+            `;
+            listEl.appendChild(msgEl);
+            scrollToBottom();
+        };
+
+        const scrollToBottom = () => {
+            const listEl = document.getElementById('message-list');
+            if (listEl) {
+                listEl.scrollTop = listEl.scrollHeight;
+            }
+        };
+        
+        // --- Authentication Logic ---
+        
+        async function handleLogin(event) {
+            event.preventDefault();
+            const email = document.getElementById('email-input').value;
+            const password = document.getElementById('password-input').value;
+            const loginBtn = document.getElementById('login-btn');
+            
+            showLoginError('');
+            loginBtn.disabled = true;
+            loginBtn.textContent = 'מתחבר...';
+            
+            try {
+                await signInWithEmailAndPassword(auth, email, password);
+                // ההמשך יקרה ב-onAuthStateChanged
+            } catch (error) {
+                SmartLog('Login.Error', error.message, 'error');
+                if (error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
+                    showLoginError('אימייל או סיסמה לא נכונים.');
+                } else {
+                    showLoginError('שגיאת התחברות. נסה שוב מאוחר יותר.');
+                }
+                loginBtn.disabled = false;
+                loginBtn.textContent = 'התחבר';
+            }
+        }
+        
+        async function loadUserProfile(uid) {
+            try {
+                const userRef = doc(db, 'users', uid);
+                const userSnap = await getDoc(userRef);
+                if (userSnap.exists()) {
+                    currentUser.uid = uid;
+                    currentUser.name = userSnap.data().name || 'משתמש';
+                    document.getElementById('welcome-name').textContent = currentUser.name;
+                } else {
+                    throw new Error("User profile not found in Firestore.");
+                }
+            } catch (error) {
+                SmartLog('Profile.Error', error.message, 'error');
+                showView('login'); // החזר למסך לוגין אם אין פרופיל
+            }
+        }
+        
+        // --- Chat Logic ---
+
+        async function loadChatRoom(roomName) {
+            const collectionPath = `artifacts/${appId}/public/data/chat_rooms`;
+            SmartLog('Chat.Load', `Querying for room: ${roomName}`);
+            try {
+                const q = query(collection(db, collectionPath), where("name", "==", roomName));
+                const querySnapshot = await getDocs(q);
+                
+                if (querySnapshot.empty) {
+                    throw new Error(`Chat room "${roomName}" not found.`);
+                }
+                
+                const roomDoc = querySnapshot.docs[0]; // קח את התוצאה הראשונה
+                currentRoom.id = roomDoc.id;
+                currentRoom.name = roomDoc.data().name;
+                
+                document.getElementById('chat-header-name').textContent = currentRoom.name;
+                listenToMessages(currentRoom.id);
+                document.getElementById('chat-input').disabled = false;
+
+            } catch (error) {
+                SmartLog('Chat.Load.Error', error.message, 'error');
+                document.getElementById('chat-header-name').textContent = 'שגיאה בטעינת חדר';
+            }
+        }
+
+        function listenToMessages(roomId) {
+            unsubscribeMessages(); // נקה מאזין קודם
+            
+            const collectionPath = `artifacts/${appId}/public/data/messages`;
+            const q = query(
+                collection(db, collectionPath), 
+                where('roomId', '==', roomId),
+                orderBy('createdAt', 'asc')
+            );
+
+            unsubscribeMessages = onSnapshot(q, (snapshot) => {
+                const listEl = document.getElementById('message-list');
+                listEl.innerHTML = ''; // נקה רשימה
+                if (snapshot.empty) {
+                    listEl.innerHTML = `<div class="p-4 text-center text-gray-500">עדיין אין הודעות בחדר זה.</div>`;
+                }
+                snapshot.docs.forEach(doc => renderChatMessage(doc.data()));
+            }, (error) => {
+                SmartLog('Messages.Listener', error.message, 'error');
+            });
+        }
+        
+        async function handleSendMessage() {
+            const inputEl = document.getElementById('chat-input');
+            const text = inputEl.value.trim();
+            
+            if (!text || !currentRoom.id || !currentUser.uid) return;
+            
+            inputEl.disabled = true;
+            
+            const collectionPath = `artifacts/${appId}/public/data/messages`;
+            const messageData = {
+                text,
+                roomId: currentRoom.id,
+                senderId: currentUser.uid,
+                senderName: currentUser.name, // <-- השם מהפרופיל!
+                createdAt: serverTimestamp() 
+            };
+            
+            try {
+                await addDoc(collection(db, collectionPath), messageData);
+                inputEl.value = '';
+                // עדכון "הודעה אחרונה" בחדר
+                const roomRef = doc(db, `artifacts/${appId}/public/data/chat_rooms`, currentRoom.id);
+                await updateDoc(roomRef, { lastMessage: text, lastMessageAt: serverTimestamp() });
+
+            } catch (e) {
+                SmartLog('Chat.Send.Error', e.message, 'error');
+            } finally {
+                inputEl.disabled = false;
+                inputEl.focus();
+            }
+        }
+
+        // --- Main ---
+        function main() {
+            SmartLog('Init', 'Warehouse App Initializing...');
+            
+            try {
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+            } catch (error) {
+                SmartLog('Firebase.Init.Error', error.message, 'error');
+                showView('login');
+                showLoginError('שגיאה קריטית באתחול Firebase.');
+                return;
+            }
+
+            // מאזין לשינויי התחברות
+            onAuthStateChanged(auth, async (user) => {
+                if (user) {
+                    // משתמש מחובר
+                    SmartLog('Auth', `User signed in: ${user.uid}`);
+                    showView('loading');
+                    await loadUserProfile(user.uid);
+                    await loadChatRoom('סידור'); // <-- טוען אוטומטית את חדר "סידור"
+                    showView('chat');
+                } else {
+                    // משתמש מנותק
+                    SmartLog('Auth', 'User signed out.');
+                    currentUser.uid = null;
+                    currentUser.name = "אלמוני";
+                    unsubscribeMessages();
+                    showView('login');
+                }
+            });
+
+            // חיבור כפתורים
+            document.getElementById('login-form').addEventListener('submit', handleLogin);
+            document.getElementById('chat-input').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') handleSendMessage();
+            });
+            document.getElementById('logout-btn').addEventListener('click', () => signOut(auth));
+            
+            feather.replace();
+        }
+
+        document.addEventListener('DOMContentLoaded', main);
     </script>
+
+    <!-- 5. Custom Styles -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6; /* gray-100 */
+        }
+        .chat-bubble-sent { /* שלי (אורן) */
+            background-color: #ffffff;
+            color: #1f2937; /* gray-800 */
+            border: 1px solid #e5e7eb; /* gray-200 */
+            border-bottom-right-radius: 0;
+        }
+        .chat-bubble-received { /* של אחרים (מנהל) */
+            background-color: #3b82f6; /* blue-500 */
+            color: white;
+            border-bottom-left-radius: 0;
+        }
+        #message-list::-webkit-scrollbar { width: 6px; }
+        #message-list::-webkit-scrollbar-track { background: transparent; }
+        #message-list::-webkit-scrollbar-thumb {
+            background-color: rgba(150, 150, 150, 0.3);
+            border-radius: 20px;
+        }
+    </style>
+</head>
+<body class="antialiased">
+
+    <!-- Loading View -->
+    <div id="loading-view" class="flex flex-col h-screen w-screen items-center justify-center bg-gray-100">
+        <svg class="animate-spin h-8 w-8 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        <p class="mt-4 text-gray-600">טוען נתונים...</p>
+    </div>
+
+    <!-- Login View -->
+    <div id="login-view" class="hidden flex-col h-screen w-screen items-center justify-center bg-gray-100 p-4">
+        <div class="w-full max-w-sm bg-white p-8 rounded-lg shadow-md">
+            <h2 class="text-2xl font-bold text-center text-gray-800 mb-6">התחברות למערכת</h2>
+            <form id="login-form" class="space-y-4">
+                <div>
+                    <label for="email-input" class="block text-sm font-medium text-gray-700">אימייל</label>
+                    <input type="email" id="email-input" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500" required>
+                </div>
+                <div>
+                    <label for="password-input" class="block text-sm font-medium text-gray-700">סיסמה</label>
+                    <input type="password" id="password-input" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500" required>
+                </div>
+                <p id="login-error" class="text-sm text-red-600" style="display: none;"></p>
+                <button type="submit" id="login-btn" class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                    התחבר
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Chat View -->
+    <div id="chat-view" class="hidden flex-col h-screen w-screen max-w-lg mx-auto bg-white shadow-lg">
+        <main class="flex-1 min-w-0 flex flex-col">
+            <!-- Chat Header -->
+            <div id="chat-header" class="p-4 flex-shrink-0 border-b border-gray-200 flex justify-between items-center">
+                <div class="flex items-center space-x-2 space-x-reverse">
+                    <i data-feather="message-square" class="w-6 h-6 text-blue-500"></i>
+                    <h2 id="chat-header-name" class="text-lg font-semibold text-gray-800">טוען חדר...</h2>
+                </div>
+                <div class="flex items-center space-x-2 space-x-reverse">
+                    <span class="text-sm text-gray-600">שלום, <span id="welcome-name" class="font-semibold">...</span></span>
+                    <button id="logout-btn" title="התנתק" class="text-gray-500 hover:text-red-500">
+                        <i data-feather="log-out" class="w-5 h-5"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Message List -->
+            <div id="message-list" class="flex-grow p-4 overflow-y-auto space-y-4 bg-gray-50">
+                <!-- Messages injected by JS -->
+            </div>
+
+            <!-- Message Input -->
+            <div class="p-3 flex-shrink-0 border-t border-gray-200 bg-gray-100">
+                <input type="text" id="chat-input" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="כתוב הודעה..." disabled>
+            </div>
+        </main>
+    </div>
+
 </body>
 </html>
