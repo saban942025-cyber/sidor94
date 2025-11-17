@@ -2235,7 +2235,7 @@
 
         function listenToChatRooms() {
             const roomsEl = document.getElementById('chat-rooms-list');
-            const collectionPath = `artifacts/${appId}/public/data/chat_rooms`;
+            const collectionPath = `chat_rooms`; // *** תיקון: הנתיב הוא ב-root ***
             SmartLog.info('Firestore', `Listening to rooms: ${collectionPath}`, "Chat"); 
             
             try {
@@ -2293,7 +2293,7 @@
         function listenToMessages(roomId) {
             state.unsubscribeMessages();
             
-            const collectionPath = `artifacts/${appId}/public/data/messages`;
+            const collectionPath = `messages`; // *** תיקון: הנתיב הוא ב-root ***
             SmartLog.info('Firestore', `Listening to messages where roomId == ${roomId}`, "Chat");
             
             try {
@@ -2353,7 +2353,7 @@
 
             inputEl.disabled = true;
 
-            const collectionPath = `artifacts/${appId}/public/data/messages`;
+            const collectionPath = `messages`; // *** תיקון: הנתיב הוא ב-root ***
             const messageData = {
                 text,
                 roomId: state.currentRoomId,
@@ -2365,7 +2365,7 @@
             try {
                 await addDoc(collection(db, collectionPath), messageData);
                 inputEl.value = '';
-                const roomRef = doc(db, `artifacts/${appId}/public/data/chat_rooms`, state.currentRoomId);
+                const roomRef = doc(db, `chat_rooms`, state.currentRoomId); // *** תיקון: הנתיב הוא ב-root ***
                 await updateDoc(roomRef, { lastMessage: text, lastMessageAt: serverTimestamp() });
 
             } catch (e) {
@@ -2381,7 +2381,7 @@
         function shareRoom(roomId, roomName) {
             if (!roomId) return;
             // בונה את הלינק המלא לקובץ החדש, כולל ה-appId וה-roomId
-            const url = new URL(`./chat_viewer.html?appId=${appId}&room=${roomId}`, window.location.href).href;
+            const url = new URL(`./chat_viewer.html?room=${roomId}`, window.location.href).href; // *** תיקון: הסרתי את appId מה-URL, הוא לא נחוץ יותר כאן ***
             copyToClipboard(url);
             showToast(`לינק לחדר "${roomName}" הועתק`, 'success');
             SmartLog.info(`Chat room link copied`, "Chat.Share", { roomId, url });
