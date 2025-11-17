@@ -5,10 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sidor | ניהול צ'אט</title>
 
-    <!-- 1. Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
 
-    <!-- 2. OneSignal SDK -->
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script>
       window.OneSignalDeferred = window.OneSignalDeferred || [];
@@ -19,7 +17,14 @@
         OneSignal.User.addTag("app_name", "chat_manager");
       });
     </script>
-          const firebaseConfig = {
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, query, onSnapshot, addDoc, setLogLevel, orderBy, where, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- Config & Init (UPDATED) ---
+        const firebaseConfig = {
           apiKey: "AIzaSyDq0oVwS6zbEfsgrYBRkeBq80dDUKMedzo", 
           authDomain: "saban94-78949.firebaseapp.com", 
           projectId: "saban94-78949",
@@ -28,14 +33,10 @@
           appId: "1:41553157903:web:cc33d252cff023be97a87a",
           measurementId: "G-XV6RZDESSB"
         };
-    <!-- 3. Firebase SDK (Modern Modular v11+) -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, query, onSnapshot, addDoc, setLogLevel, orderBy, where, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // --- Config & Init ---
-        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        // הערה: משתנה זה קובע מאיזו תיקייה ב-DB יימשכו הנתונים.
+        // הנתיב הוא: artifacts/{appId}/public/data/messages
+        // אם הנתונים לא מופיעים, שנה את 'default-app-id' לערך הנכון (למשל 'sidor' או 'chat-manager').
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         
         // --- Global State ---
@@ -276,7 +277,6 @@
         document.addEventListener('DOMContentLoaded', main);
     </script>
 
-    <!-- 5. Custom Styles -->
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
         :root {
@@ -360,9 +360,7 @@
 
     <div class="flex h-screen w-screen p-4 gap-4">
 
-        <!-- Sidebar (Chat Rooms) -->
         <aside class="w-full md:w-80 glass-card flex-shrink-0 flex flex-col">
-            <!-- Header -->
             <div class="p-4 flex-shrink-0 flex justify-between items-center border-b border-gray-500/20">
                 <h1 class="text-xl font-bold text-gray-800 dark:text-white">צ'אטים</h1>
                 <div class="flex items-center gap-2">
@@ -374,25 +372,18 @@
                     </button>
                 </div>
             </div>
-            <!-- Room List -->
             <div id="chat-room-list" class="flex-grow p-2 space-y-1 overflow-y-auto">
-                <!-- Chat rooms injected by JS -->
-            </div>
+                </div>
         </aside>
 
-        <!-- Main Content (Chat Window) -->
         <main class="flex-1 glass-card min-w-0 flex flex-col">
-            <!-- Chat Header -->
             <div id="chat-header" class="p-4 flex-shrink-0 border-b border-gray-500/20">
                 <h2 id="chat-header-name" class="text-lg font-semibold">טוען...</h2>
             </div>
             
-            <!-- Message List -->
             <div id="message-list" class="flex-grow p-4 overflow-y-auto space-y-4">
-                <!-- Messages injected by JS -->
-            </div>
+                </div>
 
-            <!-- Message Input -->
             <div class="p-4 flex-shrink-0 border-t border-gray-500/20">
                 <div class="flex gap-2">
                     <input type="text" id="message-input" class="flex-grow bg-gray-500/10 dark:bg-gray-900/30 border border-gray-500/20 dark:border-gray-700/50 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-800 dark:text-white" placeholder="כתוב הודעה...">
@@ -404,7 +395,6 @@
         </main>
     </div>
 
-    <!-- Error Modal -->
     <div id="error-modal" class="modal-backdrop hidden">
         <div class="glass-card max-w-sm w-full p-6 rounded-lg shadow-lg">
             <div class="flex items-center gap-3">
