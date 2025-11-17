@@ -276,7 +276,7 @@
         // --- Chat Logic (מתוך warehouse_app.html) ---
 
         async function loadChatRoom(roomName) {
-            const collectionPath = `artifacts/${appId}/public/data/chat_rooms`;
+            const collectionPath = `chat_rooms`; // *** תיקון: הנתיב הוא ב-root ***
             SmartLog('Chat.Load', `Querying for room: ${roomName}`);
             try {
                 const q = query(collection(db, collectionPath), where("name", "==", roomName));
@@ -302,7 +302,7 @@
 
         function listenToMessages(roomId) {
             unsubscribeMessages();
-            const collectionPath = `artifacts/${appId}/public/data/messages`;
+            const collectionPath = `messages`; // *** תיקון: הנתיב הוא ב-root ***
             const q = query(
                 collection(db, collectionPath), 
                 where('roomId', '==', roomId),
@@ -356,7 +356,7 @@
             if (!text || !currentRoom.id || !currentUser.uid) return;
             
             inputEl.disabled = true;
-            const collectionPath = `artifacts/${appId}/public/data/messages`;
+            const collectionPath = `messages`; // *** תיקון: הנתיב הוא ב-root ***
             const messageData = {
                 text,
                 roomId: currentRoom.id,
@@ -368,7 +368,7 @@
             try {
                 await addDoc(collection(db, collectionPath), messageData);
                 inputEl.value = '';
-                const roomRef = doc(db, `artifacts/${appId}/public/data/chat_rooms`, currentRoom.id);
+                const roomRef = doc(db, `chat_rooms`, currentRoom.id); // *** תיקון: הנתיב הוא ב-root ***
                 await updateDoc(roomRef, { lastMessage: text, lastMessageAt: serverTimestamp() });
             } catch (e) {
                 SmartLog('Chat.Send.Error', e.message, 'error');
