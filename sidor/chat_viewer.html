@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sidor | חדר צ'אט</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .chat-bubble { max-width: 80%; padding: 0.5rem 0.75rem; border-radius: 12px; font-size: 0.9rem; }
+        .chat-bubble-sent { background-color: #3b82f6; color: white; align-self: flex-start; border-bottom-left-radius: 0; }
+        .chat-bubble-received { background-color: #e5e7eb; color: #1f2937; align-self: flex-end; border-bottom-right-radius: 0; }
+        .modal-backdrop { background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(4px); }
+    </style>
+</head>
+<body class="bg-gray-100">
+
+    <!-- Login Modal -->
+    <div id="login-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-sm">
+            <h2 class="text-lg font-semibold mb-4">כניסה לצ'אט</h2>
+            <label for="name-input" class="block text-sm font-medium text-gray-700">הזן את שמך:</label>
+            <input type="text" id="name-input" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500" placeholder="לדוגמה: יוסי הנהג">
+            <button id="login-btn" class="mt-4 w-full bg-blue-600 text-white py-2 px-4 rounded-md font-semibold hover:bg-blue-700">כניסה</button>
+        </div>
+    </div>
+
+    <!-- Chat View -->
+    <div id="chat-view" class="flex flex-col h-screen max-w-2xl mx-auto bg-white shadow-lg hidden">
+        <!-- Header -->
+        <header id="chat-header" class="bg-gray-50 p-4 border-b border-gray-200">
+            <h1 id="chat-header-name" class="text-xl font-bold text-center text-gray-800">טוען...</h1>
+        </header>
+
+        <!-- Message List -->
+        <main id="message-list" class="flex-1 p-4 overflow-y-auto space-y-3">
+            <!-- Messages will be injected here -->
+            <div id="loader" class="text-center text-gray-500">טוען הודעות...</div>
+        </main>
+
+        <!-- Input Box -->
+        <footer id="chat-input-box" class="p-4 bg-gray-50 border-t border-gray-200">
+            <div class="flex gap-2">
+                <input type="text" id="message-input" class="flex-grow bg-white border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="כתוב הודעה...">
+                <button id="send-btn" class="bg-blue-600 text-white p-2 rounded-lg flex-shrink-0">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.875L6 12z" /></svg>
+                </button>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Error View -->
+    <div id="error-view" class="hidden text-center p-10">
+        <h1 class="text-2xl font-bold text-red-600">שגיאה</h1>
+        <p id="error-text" class="text-gray-700 mt-2">טוען...</p>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+        import { getFirestore, collection, doc, onSnapshot, query, orderBy, addDoc, updateDoc, serverTimestamp, where, getDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+
+        // --- Firebase Config (זהה לקובץ הניהול) ---
+        const firebaseConfig = {
+          apiKey: "AIzaSyDq0oVwS6zbEfsgrYBRkeBq80dDUKMedzo", authDomain: "saban94-78949.firebaseapp.com", projectId: "saban94-78949",
+          storageBucket: "saban94-78949.firebasestorage.app", messagingSenderId: "41553157903", appId: "1:41553157903:web:cc33d252cff023be97a87a", measurementId: "G-XV6RZDESSB"
+        };
+        const appId = 'sidor'; // חיבור לאותו האפליקציה
+
+        // --- Global State ---
+        let db, auth, userId, userName, currentRoomId;
+        let unsubscribeMessages = () => {};
+        
+        // --- DOM Elements ---
+        const loginModal = document.getElementById('login-modal');
+        const chatView = document.getElementById('chat-view');
+        const errorView = document.getElementById('error-view');
+        const messageList = document.getElementById('message-list');
+        const messageInput = document.getElementById('message-input');
+
+        // --- Helper Functions ---
+        const showError = (message) => {
+            chatView.classList.add('hidden');
+            loginModal.classList.add('hidden');
+            errorView.classList.remove('hidden');
+            document.getElementById('error-text').textContent = message;
+        };
+
+        const scrollToBottom = () => {
+            messageList.scrollTop = messageList.scrollHeight;
+        };
+
+        // --- Chat Functions ---
+        const renderMessage = (msg) => {
+            document.getElementById('loader')?.remove(); // Remove loader on first message
+            const isSent = msg.senderId === userId; // Is it my message?
+            
+            const bubbleClass = isSent ? 'chat-bubble-sent' : 'chat-bubble-received';
+            const senderName = isSent ? '' : `<div class="font-semibold text-xs mb-1">${msg.senderName || 'אלמוני'}</div>`;
+
+            const msgEl = document.createElement('div');
+            msgEl.className = `chat-bubble ${bubbleClass}`;
+            
+            const time = msg.createdAt ? new Date(msg.createdAt.seconds * 1000).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' }) : '';
+
+            msgEl.innerHTML = `
+                ${senderName}
+                <p>${msg.text}</p>
+                <div class="text-xs opacity-70 mt-1 text-left">${time}</div>
+            `;
+            messageList.appendChild(msgEl);
+        };
+
+        const listenToMessages = (roomId) => {
+            unsubscribeMessages(); // Stop old listener
+            const collectionPath = `artifacts/${appId}/public/data/messages`;
+            
+            const q = query(
+                collection(db, collectionPath), 
+                where('roomId', '==', roomId),
+                orderBy('createdAt', 'asc')
+            );
+
+            unsubscribeMessages = onSnapshot(q, (snapshot) => {
+                messageList.innerHTML = '<div id="loader" class="text-center text-gray-500">טוען הודעות...</div>'; // Clear list
+                if (snapshot.empty) {
+                     document.getElementById('loader').textContent = 'אין עדיין הודעות בחדר זה.';
+                }
+                snapshot.docs.forEach(doc => renderMessage(doc.data()));
+                scrollToBottom();
+            }, (error) => {
+                console.error("Error listening to messages: ", error);
+                showError("שגיאה בטעינת הודעות.");
+            });
+        };
+
+        const fetchRoomDetails = async (roomId) => {
+            try {
+                const roomRef = doc(db, `artifacts/${appId}/public/data/chat_rooms`, roomId);
+                const docSnap = await getDoc(roomRef);
+                if (docSnap.exists()) {
+                    const roomName = docSnap.data().name || 'חדר צ\'אט';
+                    document.getElementById('chat-header-name').textContent = roomName;
+                } else {
+                    showError("חדר הצ'אט לא נמצא.");
+                }
+            } catch (error) {
+                console.error("Error fetching room details: ", error);
+                showError("שגיאה בטעינת פרטי החדר.");
+            }
+        };
+
+        const handleSendMessage = async () => {
+            const text = messageInput.value.trim();
+            if (!text || !currentRoomId || !userId || !userName) return;
+
+            messageInput.disabled = true;
+            const collectionPath = `artifacts/${appId}/public/data/messages`;
+            
+            const messageData = {
+                text,
+                roomId: currentRoomId,
+                senderId: userId,
+                senderName: userName, // This is the key difference!
+                createdAt: serverTimestamp() 
+            };
+            
+            try {
+                await addDoc(collection(db, collectionPath), messageData);
+                messageInput.value = ''; // Clear input
+                // Update last message in room
+                const roomRef = doc(db, `artifacts/${appId}/public/data/chat_rooms`, currentRoomId);
+                await updateDoc(roomRef, { lastMessage: `${userName}: ${text}`, lastMessageAt: serverTimestamp() });
+            } catch (e) {
+                console.error("Error sending message: ", e);
+                // (Don't show modal, just log it)
+            } finally {
+                messageInput.disabled = false;
+                messageInput.focus();
+            }
+        };
+
+        const joinChat = (roomId, name) => {
+            userName = name;
+            currentRoomId = roomId;
+            loginModal.classList.add('hidden');
+            chatView.classList.remove('hidden');
+            fetchRoomDetails(roomId);
+            listenToMessages(roomId);
+        };
+
+        // --- Main Execution ---
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+                
+                const userCredential = await signInAnonymously(auth);
+                userId = userCredential.user.uid;
+
+                const urlParams = new URLSearchParams(window.location.search);
+                const roomId = urlParams.get('room');
+
+                if (!roomId) {
+                    showError("שגיאה: לא סופק מזהה חדר בכתובת (חסר ?room=ID).");
+                    return;
+                }
+                
+                const savedName = localStorage.getItem('chatUserName');
+                
+                if (savedName) {
+                    joinChat(roomId, savedName);
+                } else {
+                    loginModal.classList.remove('hidden');
+                }
+
+                // --- Event Listeners ---
+                document.getElementById('login-btn').addEventListener('click', () => {
+                    const nameInput = document.getElementById('name-input').value.trim();
+                    if (nameInput) {
+                        localStorage.setItem('chatUserName', nameInput);
+                        joinChat(roomId, nameInput);
+                    }
+                });
+                
+                document.getElementById('name-input').addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') document.getElementById('login-btn').click();
+                });
+
+                document.getElementById('send-btn').addEventListener('click', handleSendMessage);
+                document.getElementById('message-input').addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') handleSendMessage();
+                });
+
+            } catch (error) {
+                console.error("Initialization Error: ", error);
+                showError(`שגיאת אתחול: ${error.message}`);
+            }
+        });
+
+    </script>
+</body>
+</html>
