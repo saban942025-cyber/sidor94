@@ -2,52 +2,775 @@
 <html lang="he" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>אפליקציית צפייה</title>
-    <!-- טעינת Tailwind CSS לעיצוב מהיר ומודרני -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Sidor | אפליקציית עובד v2.0</title>
+    <!-- 
+      Sidor Worker App v2.0 (הזמנות + צ'אט)
+      - שילוב מסך התחברות (מבוסס Email/Password)
+      - טעינת פרופיל משתמש (e.g., "אורן")
+      - שילוב צ'אט חדר "סידור" בחלון Modal
+      - מיזוג הלוגיקה של index2 (הזמנות) ו-warehouse_app (אימות וצ'אט)
+    -->
+    
+    <!-- 1. Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- 2. Icons (Feather) -->
+    <script src="https://unpkg.com/feather-icons"></script>
+    
+    <!-- 3. Google Font: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    
+    <!-- 4. Firebase SDK (Modern Modular v9+) -->
+    <script type="module">
+        // --- ייבוא מלא משתי האפליקציות ---
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+        import { getFirestore, collection, doc, onSnapshot, query, orderBy, where, getDoc, getDocs, addDoc, serverTimestamp, updateDoc, writeBatch } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
+
+        // --- Config & Init ---
+        const firebaseConfig = {
+          apiKey: "AIzaSyDq0oVwS6zbEfsgrYBRkeBq80dDUKMedzo", authDomain: "saban94-78949.firebaseapp.com", projectId: "saban94-78949",
+          storageBucket: "saban94-78949.firebasestorage.app", messagingSenderId: "41553157903", appId: "1:41553157903:web:cc33d252cff023be97a87a", measurementId: "G-XV6RZDESSB"
+        };
+        
+        const appId = 'sidor';
+        let db, auth, functions;
+        
+        // --- Global State ---
+        let currentUser = {
+            uid: null,
+            name: "אלמוני"
+        };
+        let currentRoom = {
+            id: null,
+            name: "טוען..."
+        };
+        let unsubscribeMessages = () => {};
+
+        // --- UI & Utility ---
+        const SmartLog = (module, message, level = 'info') => {
+            console[level](`[${module}] ${level.toUpperCase()}:`, message);
+        };
+        
+        const showView = (viewName) => {
+            document.getElementById('login-view').style.display = 'none';
+            document.getElementById('app-view').style.display = 'none'; // זה ה-main#app הישן
+            document.getElementById('loading-view').style.display = 'none';
+            
+            if (viewName === 'login') {
+                document.getElementById('login-view').style.display = 'flex';
+            } else if (viewName === 'app') {
+                document.getElementById('app-view').style.display = 'block';
+            } else {
+                document.getElementById('loading-view').style.display = 'flex';
+            }
+        };
+
+        const showLoginError = (message) => {
+            const errorEl = document.getElementById('login-error');
+            errorEl.textContent = message;
+            errorEl.style.display = 'block';
+        };
+
+        const showToast = (message, type = 'info') => {
+            let container = document.getElementById('loader')?.parentNode || document.body;
+            const toast = document.createElement('div');
+            toast.style = "position:fixed; top:20px; left:50%; transform:translateX(-50%); z-index:9999; padding: 10px 20px; border-radius: 8px; font-weight: 500; color: white;";
+            toast.style.backgroundColor = type === 'error' ? 'var(--danger)' : (type === 'success' ? 'var(--secondary)' : 'var(--primary)');
+            toast.innerText = message;
+            
+            container.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transition = 'opacity 0.5s ease';
+                setTimeout(() => toast.remove(), 500);
+            }, 3000);
+        }
+
+        // --- Authentication Logic ---
+        
+        async function handleLogin(event) {
+            event.preventDefault();
+            const email = document.getElementById('email-input').value;
+            const password = document.getElementById('password-input').value;
+            const loginBtn = document.getElementById('login-btn');
+            
+            showLoginError('');
+            loginBtn.disabled = true;
+            loginBtn.textContent = 'מתחבר...';
+            
+            try {
+                await signInWithEmailAndPassword(auth, email, password);
+                // onAuthStateChanged יטפל בהמשך
+            } catch (error) {
+                SmartLog('Login.Error', error.message, 'error');
+                if (error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
+                    showLoginError('אימייל או סיסמה לא נכונים.');
+                } else {
+                    showLoginError('שגיאת התחברות. נסה שוב מאוחר יותר.');
+                }
+                loginBtn.disabled = false;
+                loginBtn.textContent = 'התחבר';
+            }
+        }
+        
+        async function loadUserProfile(uid) {
+            try {
+                const userRef = doc(db, 'users', uid);
+                const userSnap = await getDoc(userRef);
+                if (userSnap.exists()) {
+                    const userData = userSnap.data();
+                    return {
+                        uid: uid,
+                        name: userData.name || 'משתמש'
+                    };
+                } else {
+                    throw new Error("User profile not found in Firestore.");
+                }
+            } catch (error) {
+                SmartLog('Profile.Error', error.message, 'error');
+                return null; // החזר null כדי שנוכל לטפל בזה
+            }
+        }
+
+        // --- Order App Logic (מתוך index2.html) ---
+        const app = {
+            state: {
+                orders: [],
+                unsubscribe: null,
+                driverName: null // נשמור את שם הנהג
+            },
+            
+            // --- נקודת כניסה חדשה לאפליקציית ההזמנות ---
+            init: async function(uid, name) {
+                SmartLog('App.Init', `Initializing for user: ${name}`);
+                app.state.driverName = name;
+                document.getElementById('user-name').textContent = name; // הצג שם בכותרת
+                
+                app.elements.loader.style.display = 'flex';
+                app.elements.list.innerHTML = '';
+                
+                if (app.state.unsubscribe) {
+                    app.state.unsubscribe(); // נתק מאזין קודם אם קיים
+                }
+                
+                // *** חשוב: שינוי השאילתה ***
+                // השאילתה המקורית משכה הכל. השאילתה החדשה מושכת רק
+                // הזמנות שמשויכות לשם הנהג שהתחבר.
+                const q = query(
+                    collection(db, "orders"),
+                    where("driver.name", "==", name),
+                    where("status", "in", ["שויך", "בדרך"])
+                );
+                
+                app.state.unsubscribe = onSnapshot(q, app.handleSnapshot, app.handleError);
+            },
+
+            elements: {
+                list: document.getElementById('order-list'),
+                loader: document.getElementById('loader'),
+                header: document.querySelector('header h1')
+            },
+
+            handleSnapshot: function(snapshot) {
+                SmartLog('App.Snapshot', `Received ${snapshot.docs.length} orders.`);
+                app.state.orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                app.render();
+                app.elements.loader.style.display = 'none';
+            },
+
+            handleError: function(error) {
+                SmartLog('App.Error', error.message, 'error');
+                app.elements.loader.style.display = 'none';
+                app.elements.list.innerHTML = `<div class="card error">שגיאה בטעינת נתונים: ${error.message}</div>`;
+            },
+
+            render: function() {
+                if (app.state.orders.length === 0) {
+                    app.elements.list.innerHTML = `<div class="card empty">אין לך הזמנות פעילות כרגע, ${app.state.driverName}.</div>`;
+                    return;
+                }
+                
+                // מיון לפי מחסן
+                const sortedOrders = [...app.state.orders].sort((a, b) => (a.warehouse || '').localeCompare(b.warehouse || ''));
+                
+                app.elements.list.innerHTML = sortedOrders.map(doc => {
+                    const data = doc.data ? doc.data() : doc; // Handle both snapshot docs and plain objects
+                    const orderId = doc.id;
+                    const address = data.address || 'לא צוינה כתובת';
+                    const customer = data.customer?.name || 'לקוח לא ידוע';
+                    const warehouse = data.warehouse || 'מחסן לא ידוע';
+                    const notes = data.notes || '';
+                    const phone = data.customer?.phone || '';
+                    const orderTime = data.orderTime ? `| ${data.orderTime}` : '';
+
+                    // לוגיקת GPS מ-index2.html המקורי
+                    let coords = { lat: 32.0853, lon: 34.7818 }; // Default (Tel Aviv)
+                    if (data.latitude && data.longitude) {
+                        coords.lat = data.latitude;
+                        coords.lon = data.longitude;
+                    }
+
+                    const gmapsLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
+                    const wazeLink = `https://waze.com/ul?q=${encodeURIComponent(address)}&ll=${coords.lat},${coords.lon}&navigate=yes`;
+                    const telLink = `tel:${phone}`;
+                    
+                    return `
+                        <div class="card warehouse-${warehouse.toLowerCase().replace(' ', '-')}">
+                            <div class="card-header">
+                                <h3>${customer}</h3>
+                                <div class="warehouse-pill">${warehouse} ${orderTime}</div>
+                            </div>
+                            <p class="address">${address}</p>
+                            ${notes ? `<p class="notes"><strong>הערות:</strong> ${notes}</p>` : ''}
+                            
+                            <div class="actions">
+                                <a href="${wazeLink}" class="btn-waze"><i data-feather="navigation"></i> Waze</a>
+                                <a href="${gmapsLink}" class="btn-gmaps"><i data-feather="map"></i> Google</a>
+                                ${phone ? `<a href="${telLink}" class="btn-tel"><i data-feather="phone"></i> ${phone}</a>` : ''}
+                            </div>
+                            
+                            <div class="status-actions">
+                                <button onclick="app.updateStatus('${orderId}', 'בדרך', this)">בדרך</button>
+                                <button onclick="app.updateStatus('${orderId}', 'הושלם', this)">הושלם</button>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+                
+                feather.replace();
+            },
+
+            updateStatus: async function(orderId, status, button) {
+                SmartLog('App.UpdateStatus', `Updating ${orderId} to ${status}`);
+                button.disabled = true;
+                button.textContent = 'מעדכן...';
+                
+                const orderRef = doc(db, "orders", orderId);
+                try {
+                    await updateDoc(orderRef, {
+                        status: status,
+                        lastModified: serverTimestamp()
+                    });
+                    showToast(`הזמנה עודכנה ל: ${status}`, 'success');
+                    // אין צורך לרענן ידנית, onSnapshot יטפל בזה
+                } catch (error) {
+                    SmartLog('App.UpdateStatus.Error', error.message, 'error');
+                    showToast('שגיאה בעדכון סטטוס', 'error');
+                    button.disabled = false;
+                    button.textContent = status === 'בדרך' ? 'בדרך' : 'הושלם';
+                }
+            },
+            
+            // פונקציות ישנות מ-index2.html שלא בשימוש כרגע
+            // parseGPS: function(gpsString) { ... },
+            // findLocationInDB: function(address) { ... },
+            // resolveLocation: async function(doc, type) { ... }
+        };
+
+        // --- Chat Logic (מתוך warehouse_app.html) ---
+
+        async function loadChatRoom(roomName) {
+            const collectionPath = `artifacts/${appId}/public/data/chat_rooms`;
+            SmartLog('Chat.Load', `Querying for room: ${roomName}`);
+            try {
+                const q = query(collection(db, collectionPath), where("name", "==", roomName));
+                const querySnapshot = await getDocs(q);
+                
+                if (querySnapshot.empty) {
+                    throw new Error(`Chat room "${roomName}" not found.`);
+                }
+                
+                const roomDoc = querySnapshot.docs[0];
+                currentRoom.id = roomDoc.id;
+                currentRoom.name = roomDoc.data().name;
+                
+                document.getElementById('chat-modal-title').textContent = currentRoom.name;
+                listenToMessages(currentRoom.id);
+                document.getElementById('chat-input').disabled = false;
+
+            } catch (error) {
+                SmartLog('Chat.Load.Error', error.message, 'error');
+                document.getElementById('chat-modal-title').textContent = 'שגיאה בטעינת חדר';
+            }
+        }
+
+        function listenToMessages(roomId) {
+            unsubscribeMessages();
+            const collectionPath = `artifacts/${appId}/public/data/messages`;
+            const q = query(
+                collection(db, collectionPath), 
+                where('roomId', '==', roomId),
+                orderBy('createdAt', 'asc')
+            );
+            unsubscribeMessages = onSnapshot(q, (snapshot) => {
+                const listEl = document.getElementById('chat-message-list');
+                listEl.innerHTML = '';
+                if (snapshot.empty) {
+                    listEl.innerHTML = `<div class="p-4 text-center text-gray-500">עדיין אין הודעות בחדר זה.</div>`;
+                }
+                snapshot.docs.forEach(doc => renderChatMessage(doc.data()));
+                scrollToBottom(); // גלול לתחתית אחרי רינדור
+            }, (error) => {
+                SmartLog('Messages.Listener', error.message, 'error');
+            });
+        }
+        
+        function renderChatMessage(msg) {
+            const listEl = document.getElementById('chat-message-list');
+            if (!listEl) return;
+            const isSent = msg.senderId === currentUser.uid;
+            const alignClass = isSent ? 'justify-end' : 'justify-start';
+            const bubbleClass = isSent ? 'chat-bubble-sent' : 'chat-bubble-received';
+            const time = msg.createdAt ? new Date(msg.createdAt.seconds * 1000).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' }) : '';
+            
+            const msgEl = document.createElement('div');
+            msgEl.className = `flex ${alignClass} mb-3`;
+            msgEl.innerHTML = `
+                <div class="max-w-xs lg:max-w-md">
+                    <div class="${bubbleClass} rounded-lg py-2 px-4 shadow-sm">
+                        ${!isSent ? `<div class="font-semibold text-xs mb-1">${msg.senderName || 'אלמוני'}</div>` : ''}
+                        <p class="text-sm">${msg.text}</p>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1 ${isSent ? 'text-right' : 'text-left'}">${time}</p>
+                </div>
+            `;
+            listEl.appendChild(msgEl);
+        }
+
+        const scrollToBottom = () => {
+            const listEl = document.getElementById('chat-message-list');
+            if (listEl) {
+                listEl.scrollTop = listEl.scrollHeight;
+            }
+        };
+        
+        async function handleSendMessage() {
+            const inputEl = document.getElementById('chat-input');
+            const text = inputEl.value.trim();
+            if (!text || !currentRoom.id || !currentUser.uid) return;
+            
+            inputEl.disabled = true;
+            const collectionPath = `artifacts/${appId}/public/data/messages`;
+            const messageData = {
+                text,
+                roomId: currentRoom.id,
+                senderId: currentUser.uid,
+                senderName: currentUser.name, // <-- השם מהפרופיל
+                createdAt: serverTimestamp() 
+            };
+            
+            try {
+                await addDoc(collection(db, collectionPath), messageData);
+                inputEl.value = '';
+                const roomRef = doc(db, `artifacts/${appId}/public/data/chat_rooms`, currentRoom.id);
+                await updateDoc(roomRef, { lastMessage: text, lastMessageAt: serverTimestamp() });
+            } catch (e) {
+                SmartLog('Chat.Send.Error', e.message, 'error');
+            } finally {
+                inputEl.disabled = false;
+                inputEl.focus();
+            }
+        }
+
+        // --- Main Controller ---
+        function main() {
+            SmartLog('Init', 'Worker App Merged Initializing...');
+            
+            try {
+                const appInstance = initializeApp(firebaseConfig);
+                db = getFirestore(appInstance);
+                auth = getAuth(appInstance);
+                functions = getFunctions(appInstance);
+            } catch (error) {
+                SmartLog('Firebase.Init.Error', error.message, 'error');
+                showView('login');
+                showLoginError('שגיאה קריטית באתחול Firebase.');
+                return;
+            }
+
+            // מאזין לשינויי התחברות
+            onAuthStateChanged(auth, async (user) => {
+                if (user) {
+                    // משתמש מחובר
+                    showView('loading');
+                    const profile = await loadUserProfile(user.uid);
+                    
+                    if (profile) {
+                        currentUser = profile;
+                        // אתחול שתי האפליקציות הפנימיות
+                        await app.init(profile.uid, profile.name); // אתחול רשימת הזמנות
+                        await loadChatRoom('סידור'); // טעינת חדר צ'אט "סידור"
+                        showView('app'); // הצג אפליקציה ראשית
+                    } else {
+                        // משתמש קיים ב-Auth אבל אין לו פרופיל ב-Firestore
+                        SmartLog('Auth.Error', 'User profile not found in Firestore.', 'error');
+                        showLoginError("פרופיל המשתמש שלך לא הוגדר. פנה למנהל.");
+                        await signOut(auth); // נתק אותו
+                    }
+                } else {
+                    // משתמש מנותק
+                    showView('login');
+                    currentUser.uid = null;
+                    currentUser.name = "אלמוני";
+                    unsubscribeMessages();
+                    if(app.state.unsubscribe) app.state.unsubscribe();
+                }
+            });
+
+            // חיבור כפתורים
+            document.getElementById('login-form').addEventListener('submit', handleLogin);
+            document.getElementById('logout-btn').addEventListener('click', () => signOut(auth));
+            
+            // כפתורי צ'אט
+            document.getElementById('show-chat-btn').addEventListener('click', () => {
+                document.getElementById('chat-modal').style.display = 'flex';
+                scrollToBottom();
+            });
+            document.getElementById('close-chat-btn').addEventListener('click', () => {
+                document.getElementById('chat-modal').style.display = 'none';
+            });
+            document.getElementById('chat-send-btn').addEventListener('click', handleSendMessage);
+            document.getElementById('chat-input').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendMessage();
+                }
+            });
+            
+            // חשיפת פונקציות גלובליות עבור כפתורי ה-HTML
+            window.app = app;
+            
+            feather.replace();
+        }
+
+        document.addEventListener('DOMContentLoaded', main);
+    </script>
+
+    <!-- 5. Custom Styles (מיזוג של שני הקבצים) -->
     <style>
-        /* שימוש בגופן Inter נקי וקריא */
+        :root {
+            --primary: #3b82f6; --secondary: #10b981; --danger: #ef4444;
+            --bg-light: #f3f4f6; --text-dark: #1f2937; --text-light: #6b7280;
+        }
         body {
             font-family: 'Inter', sans-serif;
+            background-color: var(--bg-light);
+            color: var(--text-dark);
+            margin: 0;
+            padding: 0;
         }
+        
+        /* --- סגנונות מסך התחברות וטעינה --- */
+        #loading-view, #login-view {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            width: 100vw;
+            align-items: center;
+            justify-content: center;
+            background-color: var(--bg-light);
+            padding: 1rem;
+        }
+        .hidden { display: none; }
+        
+        /* --- סגנונות אפליקציה ראשית (מ-index2) --- */
+        header {
+            background-color: white;
+            padding: 1rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        header h1 {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+        }
+        #user-name {
+            font-weight: 500;
+            color: var(--text-dark);
+            margin-right: 0.5rem; /* מימין ל"שלום," */
+        }
+        .header-actions button {
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: var(--text-light);
+            padding: 0.5rem;
+        }
+        .header-actions button:hover {
+            color: var(--primary);
+        }
+
+        main#app-view {
+            padding: 1rem;
+            padding-bottom: 80px; /* ריווח מהתפריט התחתון אם יתווסף */
+        }
+        #loader {
+            display: flex;
+            justify-content: center;
+            padding: 2rem;
+            font-weight: 500;
+            color: var(--text-light);
+        }
+        .card {
+            background-color: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            margin-bottom: 1rem;
+            overflow: hidden;
+            border: 1px solid #e5e7eb;
+        }
+        .card.empty, .card.error {
+            padding: 2rem;
+            text-align: center;
+            font-weight: 500;
+            color: var(--text-light);
+        }
+        .card.error { color: var(--danger); }
+        .card-header {
+            padding: 1rem 1.25rem;
+            border-bottom: 1px solid #f3f4f6;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .card-header h3 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--text-dark);
+        }
+        .warehouse-pill {
+            font-size: 0.8rem;
+            font-weight: 500;
+            padding: 0.25rem 0.75rem;
+            border-radius: 99px;
+            background-color: #e0e7ff;
+            color: #3730a3;
+        }
+        .card p {
+            padding: 0 1.25rem;
+            margin: 0.75rem 0;
+            color: var(--text-light);
+            font-size: 0.95rem;
+        }
+        .card p.notes {
+            background-color: #fefce8;
+            color: #713f12;
+            padding: 0.75rem 1.25rem;
+            margin: 0;
+            border-top: 1px solid #f3f4f6;
+        }
+        .actions {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+            gap: 0.5rem;
+            padding: 1rem 1.25rem;
+        }
+        .actions a {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.6rem;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: white;
+            transition: transform 0.2s;
+        }
+        .actions a:hover { transform: scale(1.03); }
+        .actions a svg { width: 16px; height: 16px; margin-left: 0.5rem; }
+        .btn-waze { background-color: #33ccff; }
+        .btn-gmaps { background-color: #4285F4; }
+        .btn-tel { background-color: #34d399; }
+
+        .status-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            border-top: 1px solid #f3f4f6;
+        }
+        .status-actions button {
+            padding: 1rem;
+            border: none;
+            background-color: #f9fafb;
+            color: var(--text-light);
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .status-actions button:first-child { border-left: 1px solid #f3f4f6; }
+        .status-actions button:hover { background-color: #f3f4f6; }
+        .status-actions button:disabled { background-color: #e5e7eb; color: #9ca3af; }
+        
+        /* --- סגנונות מודאל צ'אט --- */
+        #chat-modal {
+            display: none; /* מוסתר כברירת מחדל */
+            position: fixed;
+            inset: 0;
+            z-index: 200;
+            background-color: rgba(0,0,0,0.5);
+            backdrop-filter: blur(4px);
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+        #chat-window {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            max-width: 500px;
+            height: 70vh;
+            max-height: 600px;
+            background-color: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        #chat-modal-header {
+            padding: 1rem;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        #chat-modal-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+        #close-chat-btn {
+            background: none; border: none; cursor: pointer; color: var(--text-light);
+        }
+        #chat-message-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem;
+            background-color: var(--bg-light);
+        }
+        #chat-input-area {
+            padding: 0.75rem;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            gap: 0.5rem;
+        }
+        #chat-input {
+            flex: 1;
+            padding: 0.75rem;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 0.9rem;
+        }
+        #chat-send-btn {
+            padding: 0 1rem;
+            border: none;
+            background-color: var(--primary);
+            color: white;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+        #chat-send-btn:hover { background-color: var(--primary-dark); }
+        
+        .chat-bubble-sent { /* שלי (העובד) */
+            background-color: #ffffff;
+            color: #1f2937;
+            border: 1px solid #e5e7eb;
+            border-bottom-right-radius: 0;
+            align-self: flex-end;
+        }
+        .chat-bubble-received { /* של אחרים (מנהל) */
+            background-color: #3b82f6;
+            color: white;
+            border-bottom-left-radius: 0;
+            align-self: flex-start;
+        }
+        .chat-bubble {
+            max-width: 80%;
+            padding: 0.5rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.9rem;
+        }
+        
     </style>
 </head>
-<body class="bg-gray-900 text-white min-h-screen flex flex-col items-center justify-center p-4">
+<body class="antialiased">
 
-    <div class="w-full max-w-4xl bg-gray-800 rounded-2xl shadow-2xl overflow-hidden">
-        <!-- כותרת האפליקציה -->
-        <header class="p-6 border-b border-gray-700">
-            <h1 class="text-3xl font-bold text-center text-indigo-400">אפליקציית צפייה</h1>
-            <p class="text-center text-gray-400 mt-2">נגן וידאו מודרני</p>
+    <!-- Loading View -->
+    <div id="loading-view" class="hidden flex-col h-screen w-screen items-center justify-center bg-gray-100">
+        <svg class="animate-spin h-8 w-8 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        <p class="mt-4 text-gray-600">טוען נתונים...</p>
+    </div>
+
+    <!-- Login View -->
+    <div id="login-view" class="flex flex-col h-screen w-screen items-center justify-center bg-gray-100 p-4">
+        <div class="w-full max-w-sm bg-white p-8 rounded-lg shadow-md">
+            <h2 class="text-2xl font-bold text-center text-gray-800 mb-6">Sidor | כניסת עובדים</h2>
+            <form id="login-form" class="space-y-4">
+                <div>
+                    <label for="email-input" class="block text-sm font-medium text-gray-700">אימייל</label>
+                    <input type="email" id="email-input" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500" required>
+                </div>
+                <div>
+                    <label for="password-input" class="block text-sm font-medium text-gray-700">סיסמה</label>
+                    <input type="password" id="password-input" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500" required>
+                </div>
+                <p id="login-error" class="text-sm text-red-600" style="display: none;"></p>
+                <button type="submit" id="login-btn" class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                    התחבר
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Main App View (הזמנות) -->
+    <main id="app-view" class="hidden">
+        <header>
+            <h1><i data-feather="truck" class="ml-2"></i>שלום, <span id="user-name">...</span></h1>
+            <div class="header-actions">
+                <button id="show-chat-btn" title="פתח צ'אט">
+                    <i data-feather="message-square"></i>
+                </button>
+                <button id="logout-btn" title="התנתק">
+                    <i data-feather="log-out"></i>
+                </button>
+            </div>
         </header>
 
-        <!-- אזור נגן הוידאו -->
-        <main class="p-6">
-            <!-- 
-                אלמנט ה- <video> הוא הליבה של האפליקציה.
-                - 'controls': מוסיף אוטומטית פקדי הפעלה (פליי, עצור, ווליום, מסך מלא).
-                - 'w-full': גורם לנגן להתאים לרוחב המלא של המיכל שלו.
-                - 'rounded-lg': מעגל פינות.
-                - 'aspect-video': שומר על יחס גובה-רוחב של 16:9.
-            -->
-            <video class="w-full rounded-lg aspect-video shadow-lg" controls poster="https://placehold.co/1280x720/1a202c/7f9cf5?text=%D7%98%D7%95%D7%A2%D7%9F+%D7%95%D7%99%D7%93%D7%90%D7%95...">
-                <!-- 
-                    כאן אנו מגדירים את מקור הוידאו.
-                    אני משתמש בסרטון הדגמה חינמי (Big Buck Bunny).
-                    בעולם האמיתי, תחליף את ה-src הזה בקישור לקובץ ה-MP4 שלך.
-                -->
-                <source src="http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4" type="video/mp4">
-                
-                <!-- הודעת גיבוי למקרה שהדפדפן לא תומך בוידאו -->
-                הדפדפן שלך אינו תומך בהצגת וידאו.
-            </video>
-        </main>
-
-        <!-- כתובית תחתונה -->
-        <footer class="p-4 bg-gray-850 border-t border-gray-700 text-center">
-            <p class="text-sm text-gray-500">&copy; 2025 אפליקציית צפייה. כל הזכויות שמורות.</p>
-        </footer>
+        <div id="loader">טוען הזמנות...</div>
+        <div id="order-list">
+            <!-- הזמנות ירונדרו לכאן -->
+        </div>
+    </main>
+    
+    <!-- Chat Modal -->
+    <div id="chat-modal" class="hidden">
+        <div id="chat-window">
+            <div id="chat-modal-header">
+                <h3 id="chat-modal-title">טוען צ'אט...</h3>
+                <button id="close-chat-btn"><i data-feather="x"></i></button>
+            </div>
+            <div id="chat-message-list">
+                <!-- הודעות צ'אט ירונדרו לכאן -->
+            </div>
+            <div id="chat-input-area">
+                <input type="text" id="chat-input" placeholder="כתוב הודעה..." disabled>
+                <button id="chat-send-btn"><i data-feather="send"></i></button>
+            </div>
+        </div>
     </div>
 
 </body>
