@@ -20,7 +20,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
-        import { getFirestore, collection, doc, onSnapshot, query, orderBy, where, getDoc, addDoc, serverTimestamp, updateDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, doc, onSnapshot, query, orderBy, where, getDoc, getDocs, addDoc, serverTimestamp, updateDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
         // --- Config & Init ---
         const firebaseConfig = {
@@ -149,7 +149,7 @@
         // --- Chat Logic ---
 
         async function loadChatRoom(roomName) {
-            const collectionPath = `artifacts/${appId}/public/data/chat_rooms`;
+            const collectionPath = `chat_rooms`; // *** תיקון: הנתיב הוא ב-root ***
             SmartLog('Chat.Load', `Querying for room: ${roomName}`);
             try {
                 const q = query(collection(db, collectionPath), where("name", "==", roomName));
@@ -176,7 +176,7 @@
         function listenToMessages(roomId) {
             unsubscribeMessages(); // נקה מאזין קודם
             
-            const collectionPath = `artifacts/${appId}/public/data/messages`;
+            const collectionPath = `messages`; // *** תיקון: הנתיב הוא ב-root ***
             const q = query(
                 collection(db, collectionPath), 
                 where('roomId', '==', roomId),
@@ -203,7 +203,7 @@
             
             inputEl.disabled = true;
             
-            const collectionPath = `artifacts/${appId}/public/data/messages`;
+            const collectionPath = `messages`; // *** תיקון: הנתיב הוא ב-root ***
             const messageData = {
                 text,
                 roomId: currentRoom.id,
@@ -216,7 +216,7 @@
                 await addDoc(collection(db, collectionPath), messageData);
                 inputEl.value = '';
                 // עדכון "הודעה אחרונה" בחדר
-                const roomRef = doc(db, `artifacts/${appId}/public/data/chat_rooms`, currentRoom.id);
+                const roomRef = doc(db, `chat_rooms`, currentRoom.id); // *** תיקון: הנתיב הוא ב-root ***
                 await updateDoc(roomRef, { lastMessage: text, lastMessageAt: serverTimestamp() });
 
             } catch (e) {
