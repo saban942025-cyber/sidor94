@@ -187,6 +187,10 @@
             font-weight: 600;
             border-bottom: 1px solid var(--border-color);
             background-color: #f9fafb;
+            /* Added for share button alignment */
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
         #chat-message-list {
             flex: 1;
@@ -486,7 +490,10 @@
 
                     <!-- *** NEW CHAT WINDOW PANEL *** -->
                     <div id="chat-window-panel">
-                        <div id="chat-window-header">בחר חדר צ'אט</div>
+                        <div id="chat-window-header" class="flex justify-between items-center">
+                            <span>בחר חדר צ'אט</span>
+                            <!-- כפתור השיתוף יופיע כאן כשהחדר פעיל -->
+                        </div>
                         <div id="chat-message-list">
                             <!-- הודעות יטענו לכאן -->
                         </div>
@@ -2229,7 +2236,6 @@
         function listenToChatRooms() {
             const roomsEl = document.getElementById('chat-rooms-list');
             const collectionPath = `artifacts/${appId}/public/data/chat_rooms`;
-            // *** BUG FIX HERE ***
             SmartLog.info('Firestore', `Listening to rooms: ${collectionPath}`, "Chat"); 
             
             try {
@@ -2255,6 +2261,10 @@
             } catch (e) { SmartLog.error(e, "Chat.Rooms.Init"); }
         }
 
+        // *** FIXED: REMOVED DUPLICATE FUNCTION ***
+        // The first, simpler declaration of switchRoom was removed.
+        // This is now the only declaration.
+
         function switchRoom(roomId, roomName) {
             if (state.currentRoomId === roomId) return;
             
@@ -2263,7 +2273,17 @@
             document.querySelectorAll('.chat-room-item').forEach(i => i.classList.remove('active'));
             document.getElementById(`chat-room-${roomId}`).classList.add('active');
             
-            document.getElementById('chat-window-header').textContent = roomName;
+            // --- UPDATED: הוספת כפתור שיתוף לכותרת ---
+            const headerEl = document.getElementById('chat-window-header');
+            headerEl.innerHTML = `
+                <span>${roomName}</span>
+                <button class="text-gray-500 hover:text-blue-500" onclick="shareRoom('${roomId}', '${roomName}')" title="העתק לינק לחדר">
+                    <i data-feather="share-2" class="w-5 h-5"></i>
+                </button>
+            `;
+            feather.replace({ width: '20px', height: '20px' }); // רענון האייקון
+            // --- END UPDATE ---
+
             document.getElementById('chat-message-list').innerHTML = '';
             document.getElementById('chat-input').disabled = false;
             
@@ -2274,7 +2294,6 @@
             state.unsubscribeMessages();
             
             const collectionPath = `artifacts/${appId}/public/data/messages`;
-            // *** BUG FIX HERE ***
             SmartLog.info('Firestore', `Listening to messages where roomId == ${roomId}`, "Chat");
             
             try {
@@ -2358,6 +2377,16 @@
             }
         }
 
+        // *** NEW: פונקציית שיתוף חדר ***
+        function shareRoom(roomId, roomName) {
+            if (!roomId) return;
+            // בונה את הלינק המלא לקובץ החדש, כולל ה-appId וה-roomId
+            const url = new URL(`./chat_viewer.html?appId=${appId}&room=${roomId}`, window.location.href).href;
+            copyToClipboard(url);
+            showToast(`לינק לחדר "${roomName}" הועתק`, 'success');
+            SmartLog.info(`Chat room link copied`, "Chat.Share", { roomId, url });
+        }
+
         // *** BUG FIX v32.2: Make ALL inline event handlers globally accessible ***
         // Make functions globally accessible for inline event handlers
         window.showView = showView;
@@ -2378,9 +2407,9 @@
         window.openCustomerEditModal = openCustomerEditModal;
         window.showAssignDriverModal = showAssignDriverModal;
         window.closeDetailsPanel = closeDetailsPanel;
+        window.shareRoom = shareRoom; // *** ADDED shareRoom to global ***
         // fetchAndDrawDriverRoute ו- renderHistoryTable מופעלים על ידי EventListener,
         // אז הם לא צריכים להיות גלובליים
-
     </script>
 </body>
 </html>
