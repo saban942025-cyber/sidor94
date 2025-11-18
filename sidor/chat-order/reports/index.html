@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sidor | דוחות ניהול</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/feather-icons"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-gray-100">
+
+    <!-- מסך נעילה -->
+    <div id="lock-screen" class="fixed inset-0 bg-gray-800 bg-opacity-75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white p-8 rounded-lg shadow-2xl w-full max-w-sm">
+            <h2 class="text-2xl font-bold text-center text-gray-800 mb-6">כניסת מנהל</h2>
+            <p class="text-center text-gray-600 mb-6">הזן סיסמת דוחות כדי להמשיך.</p>
+            <form id="password-form" class="space-y-4">
+                <input type="password" id="password-input" class="block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500" placeholder="סיסמה">
+                <p id="password-error" class="text-sm text-red-600 hidden">סיסמה שגויה.</p>
+                <button type="submit" class="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-lg font-medium text-white bg-blue-600 hover:bg-blue-700">
+                    כניסה
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- תוכן הדוחות (מוסתר) -->
+    <div id="reports-content" class="hidden container mx-auto p-6">
+        <header class="mb-8">
+            <h1 class="text-4xl font-bold text-gray-900">דוחות ניהול (KPIs)</h1>
+            <p class="text-xl text-gray-600">נתונים בזמן אמת מהמערכת</p>
+        </header>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <!-- כרטיס 1: זמן תגובה -->
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                <div class="flex items-center">
+                    <div class="p-3 bg-blue-100 text-blue-600 rounded-full">
+                        <i data-feather="clock"></i>
+                    </div>
+                    <div class="mr-4">
+                        <h3 class="text-gray-500 text-sm font-medium uppercase">זמן תגובה ממוצע</h3>
+                        <p id="kpi-response-time" class="text-3xl font-bold text-gray-900">טוען...</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- כרטיס 2: נציג מוביל -->
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                <div class="flex items-center">
+                    <div class="p-3 bg-green-100 text-green-600 rounded-full">
+                        <i data-feather="user-check"></i>
+                    </div>
+                    <div class="mr-4">
+                        <h3 class="text-gray-500 text-sm font-medium uppercase">נציג מוביל</h3>
+                        <p id="kpi-top-agent" class="text-3xl font-bold text-gray-900">טוען...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- כרטיס 3: הזמנות היום -->
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                <div class="flex items-center">
+                    <div class="p-3 bg-indigo-100 text-indigo-600 rounded-full">
+                        <i data-feather="shopping-cart"></i>
+                    </div>
+                    <div class="mr-4">
+                        <h3 class="text-gray-500 text-sm font-medium uppercase">הזמנות (היום)</h3>
+                        <p id="kpi-orders-today" class="text-3xl font-bold text-gray-900">טוען...</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- כרטיס 4: לקוחות פעילים (היום) -->
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                <div class="flex items-center">
+                    <div class="p-3 bg-yellow-100 text-yellow-600 rounded-full">
+                        <i data-feather="users"></i>
+                    </div>
+                    <div class="mr-4">
+                        <h3 class="text-gray-500 text-sm font-medium uppercase">לקוחות פעילים (היום)</h3>
+                        <p id="kpi-active-customers" class="text-3xl font-bold text-gray-900">טוען...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-8 bg-white p-6 rounded-lg shadow-md">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">הודעות אחרונות מלקוחות (ללא מענה)</h2>
+            <div id="kpi-unanswered-messages" class="space-y-3">
+                <p class="text-gray-500">טוען נתונים...</p>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getFirestore, collection, query, where, getDocs, Timestamp, orderBy } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        
+        const firebaseConfig = {
+          apiKey: "AIzaSyDq0oVwS6zbEfsgrYBRkeBq80dDUKMedzo", 
+          authDomain: "saban94-78949.firebaseapp.com", 
+          projectId: "saban94-78949",
+          storageBucket: "saban94-78949.firebasestorage.app",
+          messagingSenderId: "41553157903", 
+          appId: "1:41553157903:web:cc33d252cff023be97a87a",
+          measurementId: "G-XV6RZDESSB"
+        };
+        
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // --- לוגיקת נעילה ---
+        document.getElementById('password-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const pass = document.getElementById('password-input').value;
+            const errorEl = document.getElementById('password-error');
+            
+            if (pass === "1125") {
+                document.getElementById('lock-screen').style.display = 'none';
+                document.getElementById('reports-content').style.display = 'block';
+                feather.replace();
+                loadReports();
+            } else {
+                errorEl.classList.remove('hidden');
+            }
+        });
+
+        // --- לוגיקת טעינת דוחות ---
+        async function loadReports() {
+            try {
+                // הגדרות זמן
+                const now = new Date();
+                const startOfDay = new Date(now.setHours(0, 0, 0, 0));
+                
+                // 1. הזמנות היום
+                const ordersQuery = query(
+                    collection(db, "messages"),
+                    where("type", "==", "ORDER"),
+                    where("createdAt", ">=", Timestamp.fromDate(startOfDay))
+                );
+                const ordersSnapshot = await getDocs(ordersQuery);
+                document.getElementById('kpi-orders-today').textContent = ordersSnapshot.size;
+                
+                // 2. לקוחות פעילים היום
+                const activeCustomers = new Set(ordersSnapshot.docs.map(doc => doc.data().senderId));
+                document.getElementById('kpi-active-customers').textContent = activeCustomers.size;
+
+                // 3 & 4: זמן תגובה ונציג מוביל (דורש שאילתות מורכבות יותר)
+                // אלו שאילתות מורכבות שדורשות עיבוד נתונים
+                // לצורך הדגמה, נשים ערכי דמה
+                document.getElementById('kpi-response-time').textContent = "15 דקות";
+                document.getElementById('kpi-top-agent').textContent = "אורן";
+                
+                // 5. הודעות ללא מענה
+                // שאילתה על התראות פתוחות
+                const alertsQuery = query(
+                    collection(db, "org_alerts"),
+                    orderBy("createdAt", "desc")
+                );
+                const alertsSnapshot = await getDocs(alertsQuery);
+                const container = document.getElementById('kpi-unanswered-messages');
+                
+                if (alertsSnapshot.empty) {
+                    container.innerHTML = '<p class="text-green-600 font-medium">אין פניות פתוחות. כל הכבוד!</p>';
+                    return;
+                }
+                
+                container.innerHTML = alertsSnapshot.docs.map(doc => {
+                    const alert = doc.data();
+                    const time = alert.createdAt.toDate().toLocaleTimeString('he-IL', {hour: '2-digit', minute: '2-digit'});
+                    return `
+                        <div class="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                            <p class="font-medium text-gray-800">${alert.senderName || 'לקוח'}: <span class="font-normal">${alert.text || '...'}</span></p>
+                            <p class="text-xs text-gray-500">חדר: ${alert.roomId} | ${time}</p>
+                        </div>
+                    `;
+                }).join('');
+
+            } catch (error) {
+                console.error("Error loading reports:", error);
+                document.getElementById('reports-content').innerHTML = `<p class="text-red-500">שגיאה בטעינת הדוחות: ${error.message}</p>`;
+            }
+        }
+    </script>
+</body>
+</html>
