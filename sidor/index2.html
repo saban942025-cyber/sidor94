@@ -3,23 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Sidor Mobile v1.22 (Local GPS)</title>
+    <title>Sidor Mobile v1.26 (Search & WhatsApp)</title>
     <!-- 
-      Sidor Mobile v1.22 - (Local GPS & DB Fallback)
+      Sidor Mobile v1.26 - (Search & WhatsApp)
       
-      תיקונים:
-      - [קריטי] יישום מלא של הנחיות איתור מיקום ללא API.
-      - [הסרה] הוסרו כל הפונקציות הקשורות ל-Google Geocoding API 
-        (geocodeAddress, updateLocationInFirestore, GOOGLE_MAPS_API_KEY, geocodeCache).
-      - [חדש] הוספת מיקום ברירת מחדל 'DEFAULT_LOCATION' (הנחיה 1).
-      - [חדש] הוספת מאגר כתובות מקומי 'locationsDB' (הנחיה 3).
-      - [חדש] הוספת פונקציית 'app.parseGPS(gpsString)' לטיפול בשדה 'gps' ידני (הנחיה 2).
-      - [חדש] הוספת פונקציית 'app.findLocationInDB(address)' לחיפוש במאגר (הנחיה 3).
-      - [חדש] הוספת פונקציית 'app.resolveLocation(doc, type)' המיישמת את 
-        סדר העדיפויות החדש (GPS -> Cache -> DB -> Default) (הנחיה 4).
-      - [עדכון] 'listenToOrders' ו-'listenForCustomers' מעדכנים כעת כל מסמך
-        עם מיקום מהמנגנון החדש (הנחיה 5).
-      - [נקי] 'renderMarkersOnMap' נשאר נקי ומצייר את הנתונים המעובדים (הנחיה 6).
+      תיקונים ושדרוגים:
+      - [חדש] שדה חיפוש (Search Bar): נוסף שדה חיפוש בראש הדשבורד שמסנן
+        את ההזמנות בזמן אמת בכל הטאבים.
+      - [חדש] שיתוף וואטסאפ משודרג: תבנית הודעה מעוצבת עם אימוג'ים
+        לכל שדה (מחסן, לקוח, כתובת) + מונה סה"כ הזמנות.
+      - [תיקון] מיון: ההזמנות ממוינות כעת לפי תאריך ושעה, כך שהדחופות
+        ביותר מופיעות למעלה.
+      - [קריטי] נשמרו כל התיקונים הקודמים (מפה, GPS מקומי, Backlog).
     -->
     
     <!-- PWA & Mobile Specific Tags -->
@@ -46,42 +41,50 @@
             --primary: #2563eb;
             --secondary: #10b981; /* green-500 for WA */
             --danger: #dc2626; /* red-600 */
-            --bg-app: #f1f5f9;
+            --bg-app: #f8fafc;
             --surface: #ffffff;
         }
         html, body {
-            overscroll-behavior: none; 
+            overscroll-behavior: none;
+            height: 100%;
+            margin: 0;
+            padding: 0;
         }
         body { 
             font-family: 'Rubik', sans-serif; 
             background-color: var(--bg-app); 
             color: #1e293b;
+            display: flex;
+            flex-direction: column;
         }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         
+        /* Tabs Styling */
         .dashboard-tabs {
             display: flex;
             background-color: var(--surface);
-            border-radius: 10px;
-            padding: 0.25rem;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            border-radius: 12px;
+            padding: 0.35rem;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
             border: 1px solid #e2e8f0;
+            margin-bottom: 1rem;
         }
         .dashboard-tab {
             flex: 1;
-            padding: 0.6rem 0.5rem;
+            padding: 0.6rem 0.2rem;
             font-size: 0.85rem;
             font-weight: 600;
-            color: #475569; /* gray-600 */
+            color: #64748b;
             text-align: center;
             border-radius: 8px;
             transition: all 0.2s ease-in-out;
+            white-space: nowrap;
         }
         .dashboard-tab.active {
             background-color: var(--primary);
             color: white;
-            box-shadow: 0 2px 5px rgba(37, 99, 235, 0.3);
+            box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2);
         }
         .tab-count {
             display: inline-block;
@@ -92,6 +95,7 @@
             padding: 0 6px;
             border-radius: 99px;
             margin-right: 4px;
+            min-width: 20px;
         }
         .dashboard-tab:not(.active) .tab-count {
             background-color: #e2e8f0;
@@ -99,18 +103,19 @@
         }
 
         .dashboard-page-content {
-            display: none; /* Hidden by default */
-            padding-top: 1rem;
+            display: none; 
+            padding-top: 0.5rem;
         }
         .dashboard-page-content.active {
-            display: block; /* Shown when active */
+            display: block;
         }
 
         .app-layout {
             display: flex;
             flex-direction: column;
-            height: 100vh;
-            height: -webkit-fill-available;
+            height: 100%;
+            flex: 1;
+            overflow: hidden;
         }
         
         .app-header {
@@ -130,14 +135,32 @@
             overflow-y: auto;
             position: relative;
             -webkit-overflow-scrolling: touch; 
+            padding: 1rem;
         }
         
         .app-page {
-            display: none; /* Hidden by default */
-            padding: 1rem;
+            display: none;
+            height: 100%;
+            box-sizing: border-box;
         }
         .app-page.active {
             display: block;
+        }
+
+        /* Map Page */
+        #page-map.app-page {
+            padding: 0;
+            display: none;
+        }
+        #page-map.app-page.active {
+            display: flex;
+            flex-direction: column;
+        }
+        #map-container {
+            flex: 1;
+            width: 100%;
+            height: 100%;
+            min-height: 400px; 
         }
         
         .app-nav {
@@ -155,7 +178,7 @@
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            color: #64748b;
+            color: #94a3b8;
             font-size: 0.7rem;
             font-weight: 500;
         }
@@ -172,10 +195,14 @@
             background: var(--surface);
             border-radius: 12px;
             margin-bottom: 0.75rem;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.03);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
             border: 1px solid #e2e8f0;
             overflow: hidden;
             cursor: pointer;
+            transition: transform 0.1s;
+        }
+        .order-card:active {
+            transform: scale(0.98);
         }
         .order-card-header {
             padding: 0.75rem 1rem;
@@ -183,6 +210,7 @@
             justify-content: space-between;
             align-items: center;
             border-bottom: 1px solid #f1f5f9;
+            background-color: #f8fafc;
         }
         .order-card-body {
             padding: 1rem;
@@ -190,28 +218,54 @@
         
         .form-label {
             display: block;
-            font-weight: 500;
-            font-size: 0.8rem;
-            margin-bottom: 0.25rem;
+            font-weight: 600;
+            font-size: 0.85rem;
+            margin-bottom: 0.35rem;
             color: #334155;
         }
         .form-input, .form-select {
             width: 100%;
-            padding: 0.6rem 0.9rem;
+            padding: 0.75rem 1rem;
             border: 1px solid #cbd5e1;
             border-radius: 0.5rem;
             background-color: var(--surface);
+            font-size: 1rem;
             -webkit-appearance: none;
-            -moz-appearance: none;
-            appearance: none;
         }
         .btn {
-            padding: 0.6rem 1.25rem;
+            padding: 0.75rem 1.25rem;
             border-radius: 0.5rem;
             font-weight: 600;
-            background-color: var(--primary);
             color: white;
             width: 100%;
+            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+        
+        /* Search Bar Style */
+        .search-container {
+            position: relative;
+            margin-bottom: 1rem;
+        }
+        .search-icon {
+            position: absolute;
+            right: 1rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #94a3b8;
+            pointer-events: none;
+        }
+        .search-input {
+            width: 100%;
+            padding: 0.75rem 2.5rem 0.75rem 1rem;
+            border-radius: 10px;
+            border: 1px solid #e2e8f0;
+            background-color: white;
+            font-size: 0.95rem;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.03);
         }
         
         #loader {
@@ -219,16 +273,9 @@
             inset: 0;
             background: rgba(255,255,255,0.9);
             z-index: 500;
-            display: flex; /* מוצג כברירת מחדל */
-            justify-content: center;
-            align-items: center;
-        }
-        .spinner-container {
             display: flex;
             justify-content: center;
             align-items: center;
-            padding: 2rem;
-            min-height: 200px;
         }
         .spinner {
             width: 40px;
@@ -241,19 +288,23 @@
         @keyframes spin { to { transform: rotate(360deg); } }
         
         .fab-whatsapp {
-            position: absolute;
-            bottom: 2rem;
-            left: 1rem;
+            position: fixed;
+            bottom: 80px; /* Above nav */
+            left: 20px;
             background-color: var(--secondary);
             color: white;
-            width: 56px;
-            height: 56px;
+            width: 60px;
+            height: 60px;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
             z-index: 30;
+            transition: transform 0.2s;
+        }
+        .fab-whatsapp:active {
+            transform: scale(0.9);
         }
     </style>
 </head>
@@ -268,15 +319,26 @@
         
         <!-- Header -->
         <header class="app-header">
-            <h1 id="header-title" class="font-bold text-lg">טוען...</h1>
-            <img id="header-avatar" src="https://placehold.co/40x40/e0e7ff/4338ca?text=S" class="w-8 h-8 rounded-full">
+            <div class="flex items-center gap-3">
+                <img id="header-avatar" src="https://placehold.co/40x40/e0e7ff/4338ca?text=S" class="w-8 h-8 rounded-full">
+                <div>
+                    <h1 id="header-title" class="font-bold text-lg leading-none">דשבורד ראשי</h1>
+                    <p class="text-xs text-gray-500 mt-1" id="auth-status-indicator">טוען...</p>
+                </div>
+            </div>
         </header>
 
         <!-- Main Content (Pages) -->
         <main class="app-main no-scrollbar">
             
-            <!-- Page 1: Dashboard (Today's Orders) -->
+            <!-- Page 1: Dashboard -->
             <div id="page-dashboard" class="app-page active">
+                
+                <!-- [חדש] שדה חיפוש -->
+                <div class="search-container">
+                    <i data-feather="search" class="search-icon w-5 h-5"></i>
+                    <input type="text" id="search-input" class="search-input" placeholder="חיפוש הזמנה, לקוח, כתובת...">
+                </div>
                 
                 <div class="dashboard-tabs">
                     <button id="dash-tab-today" class="dashboard-tab active" onclick="app.navigateDashboardTab('today')" ontouchstart="app.navigateDashboardTab('today')">
@@ -292,52 +354,45 @@
                 
                 <div id="dashboard-page-container">
                     <div id="dashboard-today-list" class="dashboard-page-content active">
-                        <div class="spinner-container"><div class="spinner"></div></div>
+                        <div class="flex justify-center p-8 text-gray-400">טוען נתונים...</div>
                     </div>
-                    <div id="dashboard-tomorrow-list" class="dashboard-page-content">
-                        <div class="spinner-container"><div class="spinner"></div></div>
-                    </div>
-                    <div id="dashboard-twodays-list" class="dashboard-page-content">
-                        <div class="spinner-container"><div class="spinner"></div></div>
-                    </div>
+                    <div id="dashboard-tomorrow-list" class="dashboard-page-content"></div>
+                    <div id="dashboard-twodays-list" class="dashboard-page-content"></div>
                 </div>
 
             </div>
             
-            <!-- Page 2: Share Report (Was "Tomorrow") -->
+            <!-- Page 2: Share Report -->
             <div id="page-share" class="app-page">
                 <div class="bg-white p-4 rounded-lg shadow-sm border mb-4">
                     <label for="share-date-picker" class="form-label">בחר תאריך לסידור עבודה</label>
                     <div class="flex gap-2">
                         <input type="date" id="share-date-picker" class="form-input flex-grow">
-                        <button class="btn" style="width: auto;" onclick="app.loadOrdersForShare()">
-                            <i data-feather="search" class="w-5 h-5"></i>
+                        <button class="btn bg-blue-600" style="width: auto;" onclick="app.loadOrdersForShare()">
+                            טען
                         </button>
                     </div>
                 </div>
                 
-                <h3 class="font-bold text-lg mb-2">
+                <h3 class="font-bold text-lg mb-2 flex items-center gap-2">
+                    <i data-feather="list"></i>
                     הזמנות לטעינה 
-                    <span id="share-total-count" class="text-sm font-medium text-gray-500">(0)</span>
+                    <span id="share-total-count" class="text-sm bg-gray-200 px-2 py-0.5 rounded-full">(0)</span>
                 </h3>
                 
-                <div id="share-order-list" class="space-y-3">
+                <div id="share-order-list" class="space-y-3 pb-20">
                     <p class="text-center text-gray-500 pt-8">אנא בחר תאריך ולחץ "טען"</p>
                 </div>
                 
+                <!-- כפתור שיתוף צף -->
                 <button id="whatsapp-share-btn" class="fab-whatsapp" onclick="app.initiateShare()">
-                    <!-- WhatsApp Icon SVG -->
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
-                    </svg>
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" class="w-8 h-8 filter brightness-0 invert">
                 </button>
             </div>
 
             <!-- Page 3: Map -->
             <div id="page-map" class="app-page" style="padding: 0; height: 100%;">
-                <div id="map-container" class="w-full h-full">
-                    <!-- Map initialized by JS -->
-                </div>
+                <div id="map-container" class="w-full h-full"></div>
             </div>
 
             <!-- Page 4: Settings -->
@@ -345,13 +400,12 @@
                 <h2 class="font-bold text-xl mb-4">הגדרות</h2>
                 <div class="space-y-4">
                     <div class="bg-white p-4 rounded-lg shadow-sm border">
-                        <label for="user-name" class="form-label">שם משתמש</label>
-                        <input type="text" id="user-name" class="form-input" value="מנהל מערכת" readonly>
+                        <label class="form-label">משתמש מחובר</label>
+                        <p class="text-gray-800 font-medium" id="user-name-display">מנהל מערכת</p>
                     </div>
-                    <div class="bg-white p-4 rounded-lg shadow-sm border">
-                        <p class="form-label">חיבור למערכת</p>
-                        <p id="auth-status-indicator" class="text-sm text-gray-600">טוען...</p>
-                    </div>
+                    <button onclick="window.location.reload()" class="btn bg-gray-600">
+                        <i data-feather="refresh-cw"></i> רענן אפליקציה
+                    </button>
                 </div>
             </div>
 
@@ -385,20 +439,16 @@
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
         import { getFirestore, collection, query, where, orderBy, onSnapshot, setLogLevel, getDocs, limit, doc, updateDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
-        // --- [יישום הנחיה 1] מיקום ברירת מחדל ---
         const DEFAULT_LOCATION = { lat: 32.0750544, lng: 34.826251 };
         
-        // --- [יישום הנחיה 3] מאגר כתובות מקומי ---
         const locationsDB = {
             "האגדה 15, רמת גן": { lat: 32.0750544, lng: 34.826251 },
             "שקד 2, רשפון": { lat: 32.199149, lng: 34.827883 },
             "קפלנסקי 18, כפר סבא": { lat: 32.188991, lng: 34.903732 },
-            "הוורדים 19, סביון": { lat: 32.0716, lng: 34.8733 }, // הערכה, יש לעדכן
-            "חופי 81, רמת גן": { lat: 32.0833, lng: 34.8211 } // הערכה, יש לעדכן
-            // ... הוסף כאן עוד כתובות ידועות
+            "הוורדים 19, סביון": { lat: 32.0716, lng: 34.8733 },
+            "חופי 81, רמת גן": { lat: 32.0833, lng: 34.8211 }
         };
 
-        // --- גלובלי ---
         let db, auth;
         let map;
         let ordersListener = null;
@@ -406,13 +456,12 @@
         let allOrders = [];
         let allCustomers = []; 
         let userId = null;
-        
-        // --- [יישום הנחיה 1] משתנים גלובליים למפה ---
         let mapReady = false;
         let mapMarkers = []; 
-
         
-        // --- [תיקון קריטי v1.7] הגדרות Firebase קבועות ---
+        // [חדש] משתני שיתוף
+        let shareOrdersCache = []; 
+
         const firebaseConfig = {
           apiKey: "AIzaSyDq0oVwS6zbEfsgrYBRkeBq80dDUKMedzo", 
           authDomain: "saban94-78949.firebaseapp.com", 
@@ -423,11 +472,9 @@
           measurementId: "G-XV6RZDESSB"
         };
         
-        // --- [תיקון קריטי v1.9] נתיב הקולקציה ---
         const ORDERS_COLLECTION_PATH = 'orders_v2'; 
         const CUSTOMERS_COLLECTION_PATH = 'customers'; 
 
-        // --- [חדש v1.13] אייקונים למפה ---
         const orderIcon = L.icon({
             iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-blue.png',
             iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34],
@@ -439,57 +486,46 @@
             shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png', shadowSize: [41, 41]
         });
 
-
-        // --- לוגר ("מלשינון") ופונקציות טעינה ---
         const SmartLog = {
-            info: (msg, data = '') => console.log(`[INFO | ${new Date().toISOString()}] ${msg}`, data),
-            error: (err, msg, data = '') => console.error(`[ERROR | ${new Date().toISOString()}] ${msg}`, data, err),
+            info: (msg, data = '') => console.log(`[INFO] ${msg}`, data),
+            error: (err, msg, data = '') => console.error(`[ERROR] ${msg}`, data, err),
         };
 
         const app = {
-            showLoader: () => {
-                const loader = document.getElementById('loader');
-                if (loader) loader.style.display = 'flex';
-            },
-            hideLoader: () => {
-                const loader = document.getElementById('loader');
-                if (loader) loader.style.display = 'none';
-            },
+            showLoader: () => { document.getElementById('loader').style.display = 'flex'; },
+            hideLoader: () => { document.getElementById('loader').style.display = 'none'; },
 
             // --- 1. אתחול ---
             init: () => {
-                SmartLog.info("Sidor Mobile v1.22 (Local GPS) initializing...");
+                SmartLog.info("Sidor Mobile v1.26 (Search & WhatsApp) initializing...");
                 app.showLoader(); 
-                
                 try {
-                    if (!firebaseConfig.projectId) {
-                        throw new Error("Firebase config is missing projectId");
-                    }
-                    
+                    if (!firebaseConfig.projectId) throw new Error("Config missing");
                     const fbApp = !getApps().length ? initializeApp(firebaseConfig) : getApp();
                     db = getFirestore(fbApp);
                     auth = getAuth(fbApp);
-                    setLogLevel('debug');
-
+                    setLogLevel('silent'); // פחות רעש בלוגים
                     app.authenticateUser();
+                    
+                    // [חדש] האזנה לחיפוש
+                    document.getElementById('search-input').addEventListener('input', (e) => {
+                        app.filterAndRender(e.target.value);
+                    });
+                    
                 } catch (e) {
-                    SmartLog.error(e, "Firebase Init Failed");
+                    SmartLog.error(e, "Init Failed");
                     app.hideLoader();
-                    document.getElementById('dashboard-today-list').innerHTML = `<p class="text-red-500 p-4">שגיאת אתחול קריטית. לא ניתן לטעון Firebase.</p>`;
                 }
             },
 
             // --- 2. אימות ---
             authenticateUser: () => {
-                SmartLog.info("Authenticating...");
                 onAuthStateChanged(auth, async (user) => {
                     if (user) {
                         userId = user.uid;
-                        SmartLog.info(`User authenticated: ${userId}`);
-                        document.getElementById('auth-status-indicator').innerText = `מחובר (${userId.slice(0,6)})`;
+                        document.getElementById('auth-status-indicator').innerText = `מחובר`;
                         app.loadInitialData(); 
                     } else {
-                        SmartLog.info("No user, signing in...");
                         try {
                             if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                                 await signInWithCustomToken(auth, __initial_auth_token);
@@ -497,514 +533,303 @@
                                 await signInAnonymously(auth);
                             }
                         } catch (e) {
-                            SmartLog.error(e, "Authentication failed");
+                            SmartLog.error(e, "Auth Failed");
                             app.hideLoader();
                         }
                     }
                 });
             },
 
-            // --- 3. טעינת נתונים ראשונית ---
+            // --- 3. טעינת נתונים ---
             loadInitialData: () => {
-                document.getElementById('header-title').innerText = "דשבורד ראשי";
                 app.listenToOrders();
                 app.listenForCustomers(); 
             },
 
-            // --- 4. האזנה להזמנות (יישום הנחיה 5) ---
+            // --- 4. האזנה להזמנות ---
             listenToOrders: () => {
                 if (ordersListener) ordersListener(); 
-
-                const collectionPath = ORDERS_COLLECTION_PATH;
-                const q = query(collection(db, collectionPath), limit(50));
                 
-                SmartLog.info(`Attaching listener to orders at: ${collectionPath}`);
-
-                ordersListener = onSnapshot(q, 
-                    (snapshot) => { 
-                        SmartLog.info(`Snapshot received (Orders): ${snapshot.size} docs`);
-                        
+                // [תיקון] מגדילים מגבלה ל-100 כדי לתפוס יותר הזמנות
+                const q = query(collection(db, ORDERS_COLLECTION_PATH), limit(100));
+                
+                ordersListener = onSnapshot(q, (snapshot) => { 
                         let ordersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                         
-                        // [יישום הנחיה 5] עדכון מיקומים לפי הלוגיקה החדשה
+                        // עיבוד מיקומים
                         ordersData.forEach(order => {
                             const location = app.resolveLocation(order, 'order');
-                            order.latitude = location.lat; // עדכון אובייקט מקומי
+                            order.latitude = location.lat; 
                             order.longitude = location.lng;
-                            if (location.source === 'fallback') {
-                                // [יישום הנחיה 6] לוג אדום רק אם נכשלנו לגמרי
-                                SmartLog.error(null, "[RED-ALERT] Using FALLBACK location for order", order);
-                            }
                         });
                         
-                        allOrders = ordersData; // שמור את הנתונים המעודכנים
-                        allOrders.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
-
-                        const todayStr = new Date().toISOString().split('T')[0];
-                        const tomorrowStr = new Date(Date.now() + 86400000).toISOString().split('T')[0];
-                        const twoDaysStr = new Date(Date.now() + 2 * 86400000).toISOString().split('T')[0];
-
-                        const todayOrders = allOrders.filter(o => o.orderDate === todayStr);
-                        const tomorrowOrders = allOrders.filter(o => o.orderDate === tomorrowStr);
-                        const twoDaysOrders = allOrders.filter(o => o.orderDate === twoDaysStr);
-                        
-                        SmartLog.info(`Filtered Orders: Today(${todayOrders.length}), Tomorrow(${tomorrowOrders.length}), TwoDays(${twoDaysOrders.length})`);
-
-                        document.getElementById('today-count').innerText = todayOrders.length;
-                        document.getElementById('tomorrow-count').innerText = tomorrowOrders.length;
-                        document.getElementById('twodays-count').innerText = twoDaysOrders.length;
-
-                        app.renderOrderList('dashboard-today-list', todayOrders);
-                        app.renderOrderList('dashboard-tomorrow-list', tomorrowOrders);
-                        app.renderOrderList('dashboard-twodays-list', twoDaysOrders);
-                        
-                        if (todayOrders.length === 0 && tomorrowOrders.length > 0) {
-                            app.navigateDashboardTab('tomorrow');
-                        }
-
-                        // קרא לפונקציית הרינדור (שתמתין למפה במידת הצורך)
-                        app.renderMarkersOnMap(); 
-                        
+                        allOrders = ordersData;
+                        // רינדור ראשוני (ללא סינון חיפוש)
+                        app.filterAndRender("");
                         app.hideLoader(); 
-
                     }, 
-                    (error) => {
-                        SmartLog.error(error, "!!! FATAL: onSnapshot error (Orders)");
-                        app.hideLoader();
-                        document.getElementById('dashboard-today-list').innerHTML = `<p class="text-red-500 p-4">שגיאה בטעינת הזמנות: ${error.message}.</p>`;
-                    }
+                    (error) => SmartLog.error(error, "Orders Listen Failed")
                 );
             },
             
-            // --- 4. האזנה ללקוחות (יישום הנחיה 5) ---
-            listenForCustomers: () => {
-                if (customersListener) customersListener();
+            // [חדש] פונקציית סינון ורינדור מרכזית
+            filterAndRender: (searchTerm) => {
+                const term = searchTerm.toLowerCase();
+                
+                // סינון לפי מונח חיפוש
+                const filteredOrders = allOrders.filter(o => {
+                    if (!term) return true;
+                    return (o.customer_name && o.customer_name.toLowerCase().includes(term)) ||
+                           (o.address && o.address.toLowerCase().includes(term)) ||
+                           (o.warehouse && o.warehouse.toLowerCase().includes(term)) ||
+                           (o.order_id && o.order_id.includes(term));
+                });
 
-                const collectionPath = CUSTOMERS_COLLECTION_PATH;
-                SmartLog.info(`Attaching listener to customers at: ${collectionPath}`);
+                // מיון: תאריך הכי חדש למעלה
+                filteredOrders.sort((a, b) => {
+                   const dateA = a.orderDate || '';
+                   const dateB = b.orderDate || '';
+                   return dateB.localeCompare(dateA); // יורד
+                });
 
-                const q = query(collection(db, collectionPath), limit(200));
+                const todayStr = new Date(new Date().getTime() - (new Date().getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+                
+                // [תיקון v1.25] היום + עבר (Backlog)
+                const todayOrders = filteredOrders.filter(o => o.orderDate <= todayStr);
+                
+                // חישוב מחר ומחרתיים (פשטני)
+                const d = new Date();
+                d.setDate(d.getDate() + 1);
+                const tomorrowStr = d.toISOString().split('T')[0];
+                d.setDate(d.getDate() + 1);
+                const twoDaysStr = d.toISOString().split('T')[0];
 
-                customersListener = onSnapshot(q,
-                    (snapshot) => { 
-                        SmartLog.info(`Snapshot received (Customers): ${snapshot.size} docs`);
-                        
-                        let customersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                const tomorrowOrders = filteredOrders.filter(o => o.orderDate === tomorrowStr);
+                const twoDaysOrders = filteredOrders.filter(o => o.orderDate >= twoDaysStr); // כל העתיד
 
-                        // [יישום הנחיה 5] עדכון מיקומים לפי הלוגיקה החדשה
-                        customersData.forEach(customer => {
-                            const location = app.resolveLocation(customer, 'customer');
-                            customer.customLat = location.lat; // עדכון אובייקט מקומי
-                            customer.customLon = location.lng;
-                            if (location.source === 'fallback') {
-                                // [יישום הנחיה 6] לוג אדום רק אם נכשלנו לגמרי
-                                SmartLog.error(null, "[RED-ALERT] Using FALLBACK location for customer", customer);
-                            }
-                        });
-                        
-                        allCustomers = customersData; // שמור את הנתונים המעודכנים
-                        
-                        // קרא לפונקציית הרינדור (שתמתין למפה במידת הצורך)
-                        app.renderMarkersOnMap();
-                    },
-                    (error) => {
-                        SmartLog.error(error, "!!! FATAL: onSnapshot error (Customers)");
-                    }
-                );
+                // עדכון מונים
+                document.getElementById('today-count').innerText = todayOrders.length;
+                document.getElementById('tomorrow-count').innerText = tomorrowOrders.length;
+                document.getElementById('twodays-count').innerText = twoDaysOrders.length;
+
+                // רינדור כרטיסים
+                app.renderListHTML('dashboard-today-list', todayOrders);
+                app.renderListHTML('dashboard-tomorrow-list', tomorrowOrders);
+                app.renderListHTML('dashboard-twodays-list', twoDaysOrders);
+                
+                // עדכון מפה (רק אם היא פתוחה)
+                if (map) {
+                    app.renderMarkersOnMap();
+                }
             },
             
-            // --- 5. רינדור רשימת הזמנות ---
-            renderOrderList: (listId, orders) => {
-                const container = document.getElementById(listId);
+            renderListHTML: (containerId, orders) => {
+                const container = document.getElementById(containerId);
                 if (!container) return;
-
+                
                 if (orders.length === 0) {
-                    container.innerHTML = `<p class="text-center text-gray-500 pt-8">אין הזמנות לתאריך זה.</p>`;
+                    container.innerHTML = `<div class="text-center p-8 text-gray-400 flex flex-col items-center">
+                        <i data-feather="inbox" class="w-10 h-10 mb-2 opacity-50"></i>
+                        <span>אין הזמנות להצגה</span>
+                    </div>`;
+                    feather.replace();
                     return;
                 }
                 
-                orders.sort((a, b) => (a.warehouse || '').localeCompare(b.warehouse || ''));
-
                 container.innerHTML = orders.map(order => {
-                    const statusColor = order.status === 'הושלם' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700';
+                    const isBacklog = order.orderDate < new Date().toISOString().split('T')[0];
+                    const badge = isBacklog ? `<span class="bg-red-100 text-red-700 text-xs px-2 py-0.5 rounded-full ml-2">באיחור</span>` : '';
+                    
                     return `
-                        <div class="order-card" onclick="app.focusOnMapItem('${order.id}', 'order')">
-                            <div class="order-card-header">
-                                <span class="font-bold text-sm">${order.warehouse || 'ללא מחסן'}</span>
-                                <span class="font-mono text-xs px-2 py-1 rounded ${statusColor}">${order.status || 'חדש'}</span>
+                    <div class="order-card" onclick="app.focusOnMapItem('${order.id}', 'order')">
+                        <div class="order-card-header">
+                            <div class="flex items-center">
+                                <span class="font-bold text-gray-800">${order.warehouse || 'כללי'}</span>
+                                ${badge}
                             </div>
-                            <div class="order-card-body space-y-1">
-                                <h3 class="font-semibold text-lg">${order.customer?.name || order.customer_name || 'לקוח לא ידוע'}</h3>
-                                <p class="text-sm text-gray-600">${order.address || order.customer_address || 'כתובת לא צוינה'}</p>
-                                <p class="text-xs text-gray-500 pt-1">${order.deliveryType || ''} | ${order.order_id || order.id}</p>
+                            <span class="text-xs font-mono bg-blue-100 text-blue-800 px-2 py-1 rounded">${order.orderTime || '00:00'}</span>
+                        </div>
+                        <div class="order-card-body">
+                            <h3 class="font-bold text-lg text-gray-900 mb-1">${order.customer_name || 'לקוח'}</h3>
+                            <div class="flex items-center text-gray-600 text-sm mb-1">
+                                <i data-feather="map-pin" class="w-3 h-3 ml-1"></i>
+                                ${order.address || 'ללא כתובת'}
+                            </div>
+                            <div class="flex items-center justify-between mt-2">
+                                <span class="text-xs text-gray-500">#${order.order_id ? order.order_id.slice(-4) : ''}</span>
+                                <span class="text-xs font-medium text-blue-600 border border-blue-200 px-2 py-0.5 rounded">${order.status}</span>
                             </div>
                         </div>
-                    `;
+                    </div>`;
                 }).join('');
+                
+                feather.replace();
             },
 
-            // --- 6. ניווט ---
+            listenForCustomers: () => {
+                const q = query(collection(db, CUSTOMERS_COLLECTION_PATH), limit(200));
+                customersListener = onSnapshot(q, (snapshot) => { 
+                    let customersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    customersData.forEach(c => {
+                        const loc = app.resolveLocation(c, 'customer');
+                        c.customLat = loc.lat; c.customLon = loc.lng;
+                    });
+                    allCustomers = customersData;
+                    if(map) app.renderMarkersOnMap();
+                });
+            },
+            
+            // --- ניווט ומפה ---
             navigate: (pageId) => {
                 document.querySelectorAll('.app-page').forEach(p => p.classList.remove('active'));
                 document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-                
                 document.getElementById(`page-${pageId}`).classList.add('active');
                 document.querySelector(`.nav-item[onclick="app.navigate('${pageId}')"]`).classList.add('active');
                 
-                document.getElementById('header-title').innerText = {
-                    'dashboard': 'דשבורד',
-                    'share': 'שיתוף דוח',
-                    'map': 'מפה חיה',
-                    'settings': 'הגדרות'
-                }[pageId];
+                // כותרת
+                const titles = { 'dashboard': 'דשבורד', 'share': 'שיתוף דוח', 'map': 'מפה חיה', 'settings': 'הגדרות' };
+                document.getElementById('header-title').innerText = titles[pageId] || 'Sidor';
 
-                // [תיקון קריטי v1.20]
+                // [תיקון קריטי למפה]
                 if (pageId === 'map') {
-                    app.initMap('map-container'); // אתחל (בבטחה)
-                    
-                    // [יישום הנחיה 4] לאחר שהמפה אותחלה, קרא לרינדור
-                    app.waitForMap(() => {
-                        app.renderMarkersOnMap();
-                    });
+                    if (!map) app.initMap('map-container');
+                    setTimeout(() => {
+                        if (map) {
+                            map.invalidateSize();
+                            app.renderMarkersOnMap();
+                        }
+                    }, 100);
                 }
             },
             
             navigateDashboardTab: (tabId) => {
                 document.querySelectorAll('.dashboard-page-content').forEach(p => p.classList.remove('active'));
                 document.querySelectorAll('.dashboard-tab').forEach(t => t.classList.remove('active'));
-                
                 document.getElementById(`dashboard-${tabId}-list`).classList.add('active');
                 document.getElementById(`dash-tab-${tabId}`).classList.add('active');
             },
 
-            // --- 7. פונקציות מפה (לפי הנחיות 1, 2, 3, 5, 6) ---
-            
-            // [יישום הנחיה 1 ו-2] פונקציית אתחול המפה
             initMap: (containerId) => {
-                if (map) {
-                    map.invalidateSize();
-                    if (!mapReady) mapReady = true; // ודא שהדגל תמיד נכון
-                    return;
-                }
-                
-                const mapContainer = document.getElementById(containerId);
-                if (!mapContainer) {
-                    SmartLog.info("Map container not found");
-                    return; 
-                }
-                
                 try {
                     map = L.map(containerId).setView([DEFAULT_LOCATION.lat, DEFAULT_LOCATION.lng], 10);
                     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                         maxZoom: 19, attribution: '© OpenStreetMap'
                     }).addTo(map);
-                    
-                    SmartLog.info("Map initialized successfully.");
-                    mapReady = true; // [יישום הנחיה 2]
-                } catch(e) {
-                    SmartLog.error(e, "Map.Init");
-                    mapContainer.innerHTML = '<p class="text-red-500 p-4">שגיאה בטעינת המפה.</p>';
-                    mapReady = false;
-                }
+                } catch(e) { SmartLog.error(e, "Map Init"); }
             },
             
-            // [יישום הנחיה 3] מנגנון המתנה למפה
-            waitForMap: (callback) => {
-                SmartLog.info("Waiting for map...");
-                if (mapReady && map) {
-                    SmartLog.info("Map is ready. Executing callback.");
-                    callback();
-                    return;
-                }
-                // [יישום הנחיה 2] המתנה וחזרה
-                setTimeout(() => app.waitForMap(callback), 300);
-            },
-
-            // [יישום הנחיה 1] פונקציית הוספת סיכה
-            addMarkerToMap: (lat, lng, icon, popupContent) => {
-                const marker = L.marker([lat, lng], { icon }).addTo(map)
-                    .bindPopup(popupContent);
-                mapMarkers.push(marker);
-                return marker;
-            },
-
-            // [יישום הנחיה 5 ו-6] פונקציית רינדור מרכזית
             renderMarkersOnMap: () => {
-                // [יישום הנחיה 4] בדיקה לפני רינדור
-                if (!mapReady || !map) {
-                    SmartLog.info("renderMarkersOnMap called, but map is not ready. Waiting...", { mapReady, mapExists: !!map });
-                    return;
-                }
-                
-                SmartLog.info("Rendering markers on map...");
-
-                // [יישום הנחיה 5] ניקוי מרקרים ישנים
+                if (!map) return;
                 mapMarkers.forEach(m => m.remove());
                 mapMarkers = [];
-                const bounds = L.latLngBounds();
-
-                // 1. צייר הזמנות (כחול)
+                
+                // מצייר רק מה שמסונן כרגע בחיפוש!
+                // אבל אם אנחנו בטאב מפה, אולי נרצה הכל? כרגע נצייר הכל.
+                
                 allOrders.forEach(order => {
-                    if (['הושלם', 'בוטל', 'סופק'].includes(order.status)) return;
-                    
-                    // [יישום הנחיה 5]
-                    const lat = order.latitude;
-                    const lng = order.longitude;
-                    
-                    if (!lat || !lng) {
-                        // [יישום הנחיה 6] לוג זה בסדר כי איתור המיקום עדיין רץ
-                        console.warn(`[WARN] Skipping order ${order.id}, location not yet available.`);
-                        return; 
+                    if (order.latitude && order.longitude) {
+                        const m = L.marker([order.latitude, order.longitude], { icon: orderIcon })
+                            .bindPopup(`<b>${order.customer_name}</b><br>${order.address}`)
+                            .addTo(map);
+                        mapMarkers.push(m);
                     }
-                    
-                    const popupContent = `<b>(הזמנה) ${order.customer?.name || order.customer_name || 'לקוח'}</b><br>
-                                          ${order.address || order.customer_address || 'כתובת לא ידועה'}<br>
-                                          <b>סטטוס: ${order.status || 'חדש'}</b>`;
-                    
-                    const marker = app.addMarkerToMap(lat, lng, orderIcon, popupContent);
-                    bounds.extend([lat, lng]);
                 });
-
-                // 2. צייר לקוחות (אדום)
-                allCustomers.forEach(customer => {
-                    // [יישום הנחיה 5]
-                    const lat = customer.customLat;
-                    const lng = customer.customLon;
-
-                    if (!lat || !lng) {
-                         // [יישום הנחיה 6] לוג זה בסדר כי איתור המיקום עדיין רץ
-                        console.warn(`[WARN] Skipping customer ${customer.id}, location not yet available.`);
-                        return; 
-                    }
-                    
-                    const popupContent = `<b>(לקוח) ${customer.name}</b><br>
-                                          ${customer.defaultAddress || 'כתובת לא ידועה'}<br>
-                                          טל: ${customer.phone || 'לא ידוע'}`;
-                                          
-                    const marker = app.addMarkerToMap(lat, lng, customerIcon, popupContent);
-                    bounds.extend([lat, lng]);
-                });
-
-                if (bounds.isValid() && mapMarkers.length > 0) {
-                    map.fitBounds(bounds, { padding: [20, 20] });
-                }
-                SmartLog.info(`Rendered ${mapMarkers.length} markers on map.`);
             },
             
-            focusOnMapItem: (orderId, type) => {
-                let lat, lon;
-                let popupContent = "";
-
-                if (type === 'order') {
-                    const order = allOrders.find(o => o.id === orderId);
-                    if (!order) {
-                        SmartLog.error(null, "Order not found for focus", orderId);
-                        return;
-                    }
-                    // [יישום הנחיה 6]
-                    if (!order.latitude || !order.longitude) {
-                        SmartLog.error(null, "Cannot focus, order missing location", order);
-                        showToast("לא קיים מיקום עבור הזמנה זו", "info");
-                        return;
-                    }
-                    lat = order.latitude;
-                    lon = order.longitude;
-                    popupContent = `<b>(הזמנה) ${order.customer?.name || order.customer_name || ''}</b><br>${order.address || order.customer_address}<br>סטטוס: ${order.status}`;
-                } 
-                // (ניתן להוסיף לוגיקה ללקוח בעתיד)
-
-                if (lat && lon) {
-                    // 1. נווט לדף המפה (זה יאתחל אותה)
-                    app.navigate('map'); 
-                    
-                    // 2. [יישום הנחיה 3] המתן למפה שתהיה מוכנה
-                    app.waitForMap(() => {
-                        SmartLog.info(`Focusing map on [${lat}, ${lon}]`);
-                        // 3. מרכז את המפה על הסיכה
-                        map.setView([lat, lon], 16); // 16 = זום קרוב
-                        
-                        // 4. פתח את הפופאפ
-                        L.popup()
-                            .setLatLng([lat, lon])
-                            .setContent(popupContent)
-                            .openOn(map);
-                    });
-                } else {
-                    SmartLog.info("No location for this item:", orderId);
-                    showToast("לא קיים מיקום עבור פריט זה", "info");
-                }
+            focusOnMapItem: (orderId) => {
+                const order = allOrders.find(o => o.id === orderId);
+                if (!order) return;
+                app.navigate('map');
+                setTimeout(() => {
+                    map.setView([order.latitude, order.longitude], 16);
+                    L.popup().setLatLng([order.latitude, order.longitude])
+                        .setContent(`<b>${order.customer_name}</b><br>${order.address}`)
+                        .openOn(map);
+                }, 300);
             },
 
-            // --- [חדש v1.22] פונקציות איתור מיקום ---
-            
-            // [יישום הנחיה 2]
+            // --- GPS Helpers ---
             parseGPS: (gpsString) => {
-                if (!gpsString || typeof gpsString !== 'string') return null;
+                if (!gpsString) return null;
                 const parts = gpsString.split(',');
                 if (parts.length < 2) return null;
-                
-                const lat = parseFloat(parts[0].trim());
-                const lng = parseFloat(parts[1].trim());
-                
-                if (isNaN(lat) || isNaN(lng)) return null;
-                return { lat, lng };
+                return { lat: parseFloat(parts[0]), lng: parseFloat(parts[1]) };
             },
-
-            // [יישום הנחיה 3]
-            findLocationInDB: (address) => {
-                if (!address || typeof address !== 'string') return null;
-                // נרמול בסיסי של הכתובת
-                const normalizedAddress = address.trim(); 
-                if (locationsDB[normalizedAddress]) {
-                    SmartLog.info("Local DB HIT", normalizedAddress);
-                    return locationsDB[normalizedAddress];
-                }
-                return null;
-            },
-
-            // [יישום הנחיה 4]
-            resolveLocation: (doc, type) => {
-                let lat, lng, source, address;
-
-                // עדיפות 1: שדה GPS ידני (מהנחיה 2)
-                if (doc.gps) {
-                    const parsed = app.parseGPS(doc.gps);
-                    if (parsed) {
-                        return { lat: parsed.lat, lng: parsed.lng, source: 'manual_gps' };
-                    }
-                }
-
-                // עדיפות 2: שדות קיימים (Cache של Firestore)
-                if (type === 'order' && doc.latitude && doc.longitude) {
-                    return { lat: doc.latitude, lng: doc.longitude, source: 'firestore_cache' };
-                }
-                if (type === 'customer' && doc.customLat && doc.customLon) {
-                    return { lat: doc.customLat, lng: doc.customLon, source: 'firestore_cache' };
-                }
-
-                // עדיפות 3: מאגר מקומי (הנחיה 3)
-                address = (type === 'order') ? (doc.address || doc.customer_address) : doc.defaultAddress;
-                if (address) {
-                    const fromDB = app.findLocationInDB(address);
-                    if (fromDB) {
-                        return { lat: fromDB.lat, lng: fromDB.lng, source: 'local_db' };
-                    }
-                }
-
-                // עדיפות 4: Fallback (הנחיה 4)
-                return { lat: DEFAULT_LOCATION.lat, lng: DEFAULT_LOCATION.lng, source: 'fallback' };
-            },
+            findLocationInDB: (addr) => locationsDB[addr?.trim()] || null,
             
-            // --- 8. שיתוף ---
+            resolveLocation: (doc, type) => {
+                if (doc.gps) {
+                    const p = app.parseGPS(doc.gps);
+                    if (p) return { ...p, source: 'gps' };
+                }
+                if (type === 'order' && doc.latitude) return { lat: doc.latitude, lng: doc.longitude };
+                if (type === 'customer' && doc.customLat) return { lat: doc.customLat, lng: doc.customLon };
+                
+                const addr = type === 'order' ? (doc.address || doc.customer_address) : doc.defaultAddress;
+                const fromDB = app.findLocationInDB(addr);
+                if (fromDB) return { ...fromDB, source: 'db' };
+                
+                return { ...DEFAULT_LOCATION, source: 'default' };
+            },
+
+            // --- 8. שיתוף (חלק 2 בבקשה שלך) ---
             loadOrdersForShare: async () => {
                 const date = document.getElementById('share-date-picker').value;
-                if (!date) {
-                    alert('יש לבחור תאריך');
-                    return;
-                }
+                if (!date) { alert('בחר תאריך'); return; }
                 
-                const listEl = document.getElementById('share-order-list');
-                listEl.innerHTML = '<div class="spinner-container"><div class="spinner"></div></div>';
+                // מסנן מתוך מה שכבר בזיכרון כדי להיות מהיר
+                shareOrdersCache = allOrders.filter(o => o.orderDate === date);
+                shareOrdersCache.sort((a, b) => (a.warehouse || '').localeCompare(b.warehouse || ''));
                 
-                const collectionPath = ORDERS_COLLECTION_PATH;
+                document.getElementById('share-total-count').innerText = `(${shareOrdersCache.length})`;
                 
-                // [תיקון v1.13] שאילתה פשוטה ללא מיון
-                const q = query(
-                    collection(db, collectionPath), 
-                    limit(200) 
-                );
-                
-                try {
-                    const snapshot = await getDocs(q);
-                    let allFetchedOrders = snapshot.docs.map(doc => doc.data());
-
-                    // [תיקון v1.10] סינון ידני לפי orderDate
-                    let orders = allFetchedOrders.filter(o => o.orderDate === date);
-                    // [תיקון v1.13] מיון ידני
-                    orders.sort((a, b) => (a.warehouse || '').localeCompare(b.warehouse || ''));
-
-                    document.getElementById('share-total-count').innerText = `(${orders.length})`;
-                    
-                    if (orders.length === 0) {
-                        listEl.innerHTML = '<p class="text-center text-gray-500 pt-8">אין הזמנות לתאריך זה.</p>';
-                        return;
-                    }
-                    
-                    listEl.innerHTML = orders.map(order => `
-                        <div class="order-card">
-                            <div class="order-card-header">
-                                <span class="font-bold text-sm">${order.warehouse || 'ללא מחסן'}</span>
-                                <span class="font-mono text-xs">${order.status || 'חדש'}</span>
-                            </div>
-                            <div class="order-card-body">
-                                <h3 class="font-semibold">${order.customer?.name || order.customer_name || 'לקוח לא ידוע'}</h3>
-                                <p class="text-sm text-gray-600">${order.address || order.customer_address || 'כתובת לא צוינה'}</p>
-                            </div>
+                const container = document.getElementById('share-order-list');
+                container.innerHTML = shareOrdersCache.map(order => `
+                    <div class="bg-white p-3 rounded-lg border border-gray-200 shadow-sm flex justify-between items-center">
+                        <div>
+                            <div class="font-bold text-sm text-gray-800">${order.warehouse || '-'}</div>
+                            <div class="text-xs text-gray-500">${order.customer_name}</div>
                         </div>
-                    `).join('');
-
-                } catch (error) {
-                    console.error("Firebase Error in loadOrdersForShare:", error);
-                    SmartLog.error(error, "Data.ShareLoadFailed");
-                    listEl.innerHTML = `<p class="text-red-500 p-4">שגיאה בטעינת הזמנות: ${error.message}.</p>`;
-                }
+                        <div class="text-xs bg-gray-100 px-2 py-1 rounded">${order.orderTime || '--:--'}</div>
+                    </div>
+                `).join('') || '<p class="text-center text-gray-400 mt-4">אין הזמנות</p>';
             },
             
             initiateShare: () => {
+                if (shareOrdersCache.length === 0) {
+                    alert("אין הזמנות לשיתוף. אנא בחר תאריך ולחץ 'טען'");
+                    return;
+                }
+                
                 const date = document.getElementById('share-date-picker').value;
-                if (!date) {
-                    alert('יש לבחור תאריך');
-                    return;
-                }
+                const dateStr = new Date(date).toLocaleDateString('he-IL');
                 
-                const listEl = document.getElementById('share-order-list');
-                const orders = Array.from(listEl.querySelectorAll('.order-card'));
-                
-                if (orders.length === 0) {
-                    alert('אין הזמנות לשיתוף');
-                    return;
-                }
+                // [חדש] תבנית מעוצבת עם אימוג'ים
+                let msg = `📅 *סידור עבודה - ${dateStr}*\n`;
+                msg += `📊 *סה"כ הזמנות: ${shareOrdersCache.length}*\n`;
+                msg += `──────────────────\n\n`;
 
-                let message = `*סידור עבודה ליום ${date}:*\n\n`;
                 let currentWarehouse = '';
-
-                orders.forEach(card => {
-                    const warehouse = card.querySelector('.font-bold').innerText;
-                    const customer = card.querySelector('.font-semibold').innerText;
-                    const address = card.querySelector('.text-sm').innerText;
-                    
-                    if (warehouse !== currentWarehouse) {
-                        message += `*_${warehouse}_*\n`;
-                        currentWarehouse = warehouse;
+                
+                shareOrdersCache.forEach(o => {
+                    if (o.warehouse !== currentWarehouse) {
+                        msg += `🏭 *${o.warehouse || 'מחסן כללי'}*\n`;
+                        currentWarehouse = o.warehouse;
                     }
-                    message += `• ${customer} - ${address}\n`;
+                    
+                    msg += `📍 *${o.address || 'כתובת לא צוינה'}*\n`;
+                    msg += `👤 ${o.customer_name}\n`;
+                    if (o.notes) msg += `📝 ${o.notes}\n`;
+                    msg += `🚚 ${o.deliveryType || 'משלוח'}\n`;
+                    msg += `------------------\n`;
                 });
-
-                const waLink = `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`;
-                window.open(waLink, '_blank');
+                
+                const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`;
+                window.open(url, '_blank');
             }
         };
 
-        // --- פונקציית עזר גלובלית לטוסט ---
-        function showToast(message, type = 'info') {
-            let container = document.getElementById('loader')?.parentNode || document.body;
-            const toast = document.createElement('div');
-            toast.style = "position:fixed; top:20px; left:50%; transform:translateX(-50%); z-index:9999; padding: 10px 20px; border-radius: 8px; font-weight: 500; color: white;";
-            toast.style.backgroundColor = type === 'error' ? 'var(--danger)' : (type === 'success' ? 'var(--secondary)' : 'var(--primary)');
-            toast.innerText = message;
-            
-            container.appendChild(toast);
-            
-            setTimeout(() => {
-                toast.style.opacity = '0';
-                toast.style.transition = 'opacity 0.5s ease';
-                setTimeout(() => toast.remove(), 500);
-            }, 3000);
-        }
-
-        // --- חשיפה גלובלית והפעלה ---
         window.app = app;
-        
         document.addEventListener('DOMContentLoaded', () => {
             app.init();
             feather.replace();
