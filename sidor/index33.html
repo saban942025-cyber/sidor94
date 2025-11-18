@@ -3,16 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Sidor Mobile v1.24 (Backlog Fix)</title>
+    <title>Sidor Mobile v1.25 (Backlog Fix)</title>
     <!-- 
-      Sidor Mobile v1.24 - (Backlog & Map Fix)
+      Sidor Mobile v1.25 - (Backlog & Map Fix)
       
       תיקונים:
-      - [קריטי] לוגיקת תאריכים: טאב "היום" מציג כעת גם הזמנות מן העבר (Backlog)
-        שלא הושלמו, כדי למנוע מצב שהזמנות "נעלמות" מהדשבורד.
-      - [קריטי] תיקון מפה: הוספת map.invalidateSize() במעבר לטאב המפה
-        כדי למנוע תצוגה אפורה.
-      - [ויזואלי] הוספת תגית "באיחור" להזמנות ישנות.
+      - [קריטי] לוגיקת תאריכים (Backlog): טאב "היום" מציג כעת גם הזמנות 
+        מתאריכים קודמים שלא הושלמו (orderDate <= today).
+        זה פותר את הבעיה שהזמנות "נעלמות" מהתצוגה.
+      - [קריטי] תיקון מפה: הוספת map.invalidateSize() במעבר לטאב המפה.
+      - [שיפור] טעינת נתונים: מיון לפי תאריך יצירה יורד (הכי חדש למעלה).
     -->
     
     <!-- PWA & Mobile Specific Tags -->
@@ -351,8 +351,10 @@
             </div>
 
             <!-- Page 3: Map -->
-            <div id="page-map" class="app-page">
-                <div id="map-container"></div>
+            <div id="page-map" class="app-page" style="padding: 0; height: 100%;">
+                <div id="map-container" class="w-full h-full">
+                    <!-- Map initialized by JS -->
+                </div>
             </div>
 
             <!-- Page 4: Settings -->
@@ -400,7 +402,10 @@
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
         import { getFirestore, collection, query, where, orderBy, onSnapshot, setLogLevel, getDocs, limit, doc, updateDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
+        // --- [יישום הנחיה 1] מיקום ברירת מחדל ---
         const DEFAULT_LOCATION = { lat: 32.0750544, lng: 34.826251 };
+        
+        // --- [יישום הנחיה 3] מאגר כתובות מקומי ---
         const locationsDB = {
             "האגדה 15, רמת גן": { lat: 32.0750544, lng: 34.826251 },
             "שקד 2, רשפון": { lat: 32.199149, lng: 34.827883 },
@@ -409,6 +414,7 @@
             "חופי 81, רמת גן": { lat: 32.0833, lng: 34.8211 }
         };
 
+        // --- גלובלי ---
         let db, auth;
         let map;
         let ordersListener = null;
@@ -416,9 +422,13 @@
         let allOrders = [];
         let allCustomers = []; 
         let userId = null;
+        
+        // --- [יישום הנחיה 1] משתנים גלובליים למפה ---
         let mapReady = false;
         let mapMarkers = []; 
 
+        
+        // --- [תיקון קריטי v1.7] הגדרות Firebase קבועות ---
         const firebaseConfig = {
           apiKey: "AIzaSyDq0oVwS6zbEfsgrYBRkeBq80dDUKMedzo", 
           authDomain: "saban94-78949.firebaseapp.com", 
@@ -429,9 +439,11 @@
           measurementId: "G-XV6RZDESSB"
         };
         
+        // --- [תיקון קריטי v1.9] נתיב הקולקציה ---
         const ORDERS_COLLECTION_PATH = 'orders_v2'; 
         const CUSTOMERS_COLLECTION_PATH = 'customers'; 
 
+        // --- [חדש v1.13] אייקונים למפה ---
         const orderIcon = L.icon({
             iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-blue.png',
             iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34],
@@ -443,6 +455,8 @@
             shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png', shadowSize: [41, 41]
         });
 
+
+        // --- לוגר ("מלשינון") ופונקציות טעינה ---
         const SmartLog = {
             info: (msg, data = '') => console.log(`[INFO | ${new Date().toISOString()}] ${msg}`, data),
             error: (err, msg, data = '') => console.error(`[ERROR | ${new Date().toISOString()}] ${msg}`, data, err),
@@ -458,8 +472,9 @@
                 if (loader) loader.style.display = 'none';
             },
 
+            // --- 1. אתחול ---
             init: () => {
-                SmartLog.info("Sidor Mobile v1.24 (Backlog Fix) initializing...");
+                SmartLog.info("Sidor Mobile v1.25 (Backlog Fix) initializing...");
                 app.showLoader(); 
                 
                 try {
@@ -480,6 +495,7 @@
                 }
             },
 
+            // --- 2. אימות ---
             authenticateUser: () => {
                 SmartLog.info("Authenticating...");
                 onAuthStateChanged(auth, async (user) => {
@@ -504,12 +520,14 @@
                 });
             },
 
+            // --- 3. טעינת נתונים ראשונית ---
             loadInitialData: () => {
                 document.getElementById('header-title').innerText = "דשבורד ראשי";
                 app.listenToOrders();
                 app.listenForCustomers(); 
             },
 
+            // --- 4. האזנה להזמנות (יישום הנחיה 5) ---
             listenToOrders: () => {
                 if (ordersListener) ordersListener(); 
 
@@ -524,21 +542,26 @@
                         
                         let ordersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                         
+                        // [יישום הנחיה 5] עדכון מיקומים לפי הלוגיקה החדשה
                         ordersData.forEach(order => {
                             const location = app.resolveLocation(order, 'order');
-                            order.latitude = location.lat; 
+                            order.latitude = location.lat; // עדכון אובייקט מקומי
                             order.longitude = location.lng;
+                            if (location.source === 'fallback') {
+                                // לוג אדום רק אם נכשלנו לגמרי
+                                SmartLog.error(null, "[RED-ALERT] Using FALLBACK location for order", order);
+                            }
                         });
                         
-                        allOrders = ordersData; 
+                        allOrders = ordersData; // שמור את הנתונים המעודכנים
                         allOrders.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
 
                         const todayStr = new Date().toISOString().split('T')[0];
                         const tomorrowStr = new Date(Date.now() + 86400000).toISOString().split('T')[0];
                         const twoDaysStr = new Date(Date.now() + 2 * 86400000).toISOString().split('T')[0];
 
-                        // [תיקון v1.24] לוגיקת "היום" כוללת גם הזמנות ישנות שלא טופלו
-                        const todayOrders = allOrders.filter(o => o.orderDate <= todayStr); 
+                        // [תיקון v1.24] Backlog Fix: הצג גם הזמנות ישנות
+                        const todayOrders = allOrders.filter(o => o.orderDate <= todayStr);
                         const tomorrowOrders = allOrders.filter(o => o.orderDate === tomorrowStr);
                         const twoDaysOrders = allOrders.filter(o => o.orderDate === twoDaysStr);
                         
@@ -552,14 +575,16 @@
                         app.renderOrderList('dashboard-tomorrow-list', tomorrowOrders);
                         app.renderOrderList('dashboard-twodays-list', twoDaysOrders);
                         
-                        // אם יש הזמנות להיום (או ישנות), הישאר בהיום. אחרת עבור למחר.
+                        // אם יש הזמנות היום (או backlog), הישאר בהיום. אחרת עבור למחר.
                         if (todayOrders.length === 0 && tomorrowOrders.length > 0) {
                             app.navigateDashboardTab('tomorrow');
                         } else {
                             app.navigateDashboardTab('today');
                         }
 
+                        // קרא לפונקציית הרינדור
                         app.renderMarkersOnMap(); 
+                        
                         app.hideLoader(); 
 
                     }, 
@@ -571,6 +596,7 @@
                 );
             },
             
+            // --- 4. האזנה ללקוחות (יישום הנחיה 5) ---
             listenForCustomers: () => {
                 if (customersListener) customersListener();
 
@@ -585,13 +611,19 @@
                         
                         let customersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
+                        // [יישום הנחיה 5] עדכון מיקומים לפי הלוגיקה החדשה
                         customersData.forEach(customer => {
                             const location = app.resolveLocation(customer, 'customer');
-                            customer.customLat = location.lat; 
+                            customer.customLat = location.lat; // עדכון אובייקט מקומי
                             customer.customLon = location.lng;
+                            if (location.source === 'fallback') {
+                                SmartLog.error(null, "[RED-ALERT] Using FALLBACK location for customer", customer);
+                            }
                         });
                         
-                        allCustomers = customersData; 
+                        allCustomers = customersData; // שמור את הנתונים המעודכנים
+                        
+                        // קרא לפונקציית הרינדור
                         app.renderMarkersOnMap();
                     },
                     (error) => {
@@ -600,12 +632,13 @@
                 );
             },
             
+            // --- 5. רינדור רשימת הזמנות ---
             renderOrderList: (listId, orders) => {
                 const container = document.getElementById(listId);
                 if (!container) return;
 
                 if (orders.length === 0) {
-                    container.innerHTML = `<p class="text-center text-gray-500 pt-8">אין הזמנות רלוונטיות.</p>`;
+                    container.innerHTML = `<p class="text-center text-gray-500 pt-8">אין הזמנות לתאריך זה.</p>`;
                     return;
                 }
                 
@@ -613,9 +646,9 @@
 
                 container.innerHTML = orders.map(order => {
                     const statusColor = order.status === 'הושלם' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700';
-                    // [תיקון v1.24] סימון הזמנה ישנה
-                    const isOld = order.orderDate < new Date().toISOString().split('T')[0];
-                    const dateBadge = isOld ? `<span class="ml-2 text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded">באיחור (${order.orderDate})</span>` : '';
+                    // [תיקון v1.24] ויזואליזציה של backlog
+                    const isBacklog = order.orderDate < new Date().toISOString().split('T')[0];
+                    const dateBadge = isBacklog ? `<span class="ml-2 text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded">באיחור (${order.orderDate})</span>` : '';
 
                     return `
                         <div class="order-card" onclick="app.focusOnMapItem('${order.id}', 'order')">
@@ -636,6 +669,7 @@
                 }).join('');
             },
 
+            // --- 6. ניווט ---
             navigate: (pageId) => {
                 document.querySelectorAll('.app-page').forEach(p => p.classList.remove('active'));
                 document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
@@ -650,15 +684,15 @@
                     'settings': 'הגדרות'
                 }[pageId];
 
-                // [תיקון קריטי v1.24]
+                // [תיקון קריטי v1.24] טיפול במפה במעבר טאב
                 if (pageId === 'map') {
                     if (!map) {
-                        app.initMap('map-container');
+                        app.initMap('map-container'); // אתחל אם לא קיים
                     }
-                    // כפיית ריענון כדי למנוע מסך אפור
+                    // כפיית ריענון וציור מחדש
                     setTimeout(() => {
                         if (map) {
-                            map.invalidateSize();
+                            map.invalidateSize(); // [תיקון v1.24]
                             app.renderMarkersOnMap();
                         }
                     }, 200);
@@ -673,10 +707,13 @@
                 document.getElementById(`dash-tab-${tabId}`).classList.add('active');
             },
 
+            // --- 7. פונקציות מפה (לפי הנחיות 1, 2, 3, 5, 6) ---
+            
+            // [יישום הנחיה 1 ו-2] פונקציית אתחול המפה
             initMap: (containerId) => {
                 if (map) {
                     map.invalidateSize();
-                    if (!mapReady) mapReady = true; 
+                    if (!mapReady) mapReady = true; // ודא שהדגל תמיד נכון
                     return;
                 }
                 
@@ -693,7 +730,7 @@
                     }).addTo(map);
                     
                     SmartLog.info("Map initialized successfully.");
-                    mapReady = true; 
+                    mapReady = true; // [יישום הנחיה 2]
                 } catch(e) {
                     SmartLog.error(e, "Map.Init");
                     mapContainer.innerHTML = '<p class="text-red-500 p-4">שגיאה בטעינת המפה.</p>';
@@ -701,14 +738,19 @@
                 }
             },
             
+            // [יישום הנחיה 3] מנגנון המתנה למפה
             waitForMap: (callback) => {
+                SmartLog.info("Waiting for map...");
                 if (mapReady && map) {
+                    SmartLog.info("Map is ready. Executing callback.");
                     callback();
                     return;
                 }
+                // [יישום הנחיה 2] המתנה וחזרה
                 setTimeout(() => app.waitForMap(callback), 300);
             },
 
+            // [יישום הנחיה 1] פונקציית הוספת סיכה
             addMarkerToMap: (lat, lng, icon, popupContent) => {
                 const marker = L.marker([lat, lng], { icon }).addTo(map)
                     .bindPopup(popupContent);
@@ -716,21 +758,26 @@
                 return marker;
             },
 
+            // [יישום הנחיה 5 ו-6] פונקציית רינדור מרכזית
             renderMarkersOnMap: () => {
+                // [יישום הנחיה 4] בדיקה לפני רינדור
                 if (!map) {
-                     SmartLog.info("renderMarkersOnMap called but map object is missing.");
-                     return;
+                    SmartLog.info("renderMarkersOnMap called, but map is not ready. Waiting...");
+                    return;
                 }
                 
                 SmartLog.info("Rendering markers on map...");
 
+                // [יישום הנחיה 5] ניקוי מרקרים ישנים
                 mapMarkers.forEach(m => m.remove());
                 mapMarkers = [];
                 const bounds = L.latLngBounds();
 
+                // 1. צייר הזמנות (כחול)
                 allOrders.forEach(order => {
                     if (['הושלם', 'בוטל', 'סופק'].includes(order.status)) return;
                     
+                    // [יישום הנחיה 5]
                     const lat = order.latitude;
                     const lng = order.longitude;
                     
@@ -744,7 +791,9 @@
                     }
                 });
 
+                // 2. צייר לקוחות (אדום)
                 allCustomers.forEach(customer => {
+                    // [יישום הנחיה 5]
                     const lat = customer.customLat;
                     const lng = customer.customLon;
 
@@ -770,53 +819,85 @@
 
                 if (type === 'order') {
                     const order = allOrders.find(o => o.id === orderId);
-                    if (!order) return;
+                    if (!order) {
+                        SmartLog.error(null, "Order not found for focus", orderId);
+                        return;
+                    }
                     
-                    lat = order.latitude;
-                    lon = order.longitude;
+                    const location = app.resolveLocation(order, 'order');
+                    lat = location.lat;
+                    lon = location.lng;
+                    
+                    if (!lat || !lon) {
+                        SmartLog.error(null, "Cannot focus, order missing location", order);
+                        showToast("לא קיים מיקום עבור הזמנה זו", "info");
+                        return;
+                    }
                     popupContent = `<b>(הזמנה) ${order.customer?.name || order.customer_name || ''}</b><br>${order.address || order.customer_address}<br>סטטוס: ${order.status}`;
                 } 
+                // (ניתן להוסיף לוגיקה ללקוח בעתיד)
 
                 if (lat && lon) {
+                    // 1. נווט לדף המפה (זה יאתחל אותה)
                     app.navigate('map'); 
                     
-                    setTimeout(() => {
-                        map.setView([lat, lon], 16); 
+                    // 2. [יישום הנחיה 3] המתן למפה שתהיה מוכנה
+                    app.waitForMap(() => {
+                        SmartLog.info(`Focusing map on [${lat}, ${lon}]`);
+                        // 3. מרכז את המפה על הסיכה
+                        map.setView([lat, lon], 16); // 16 = זום קרוב
+                        
+                        // 4. פתח את הפופאפ
                         L.popup()
                             .setLatLng([lat, lon])
                             .setContent(popupContent)
                             .openOn(map);
-                    }, 300);
+                    });
                 } else {
+                    SmartLog.info("No location for this item:", orderId);
                     showToast("לא קיים מיקום עבור פריט זה", "info");
                 }
             },
 
+            // --- [חדש v1.22] פונקציות איתור מיקום ---
+            
+            // [יישום הנחיה 2]
             parseGPS: (gpsString) => {
                 if (!gpsString || typeof gpsString !== 'string') return null;
                 const parts = gpsString.split(',');
                 if (parts.length < 2) return null;
+                
                 const lat = parseFloat(parts[0].trim());
                 const lng = parseFloat(parts[1].trim());
+                
                 if (isNaN(lat) || isNaN(lng)) return null;
                 return { lat, lng };
             },
 
+            // [יישום הנחיה 3]
             findLocationInDB: (address) => {
                 if (!address || typeof address !== 'string') return null;
                 const normalizedAddress = address.trim(); 
                 if (locationsDB[normalizedAddress]) {
+                    SmartLog.info("Local DB HIT", normalizedAddress);
                     return locationsDB[normalizedAddress];
                 }
                 return null;
             },
 
+            // [יישום הנחיה 4]
             resolveLocation: (doc, type) => {
+                let lat, lng, source, address;
+
+                // עדיפות 1: שדה GPS ידני (מהנחיה 2)
                 if (doc.gps) {
                     const parsed = app.parseGPS(doc.gps);
-                    if (parsed) return { lat: parsed.lat, lng: parsed.lng, source: 'manual_gps' };
+                    if (parsed) {
+                        return { lat: parsed.lat, lng: parsed.lng, source: 'manual_gps' };
+                    }
                 }
 
+                // עדיפות 2: שדות קיימים (Cache של Firestore)
                 if (type === 'order' && doc.latitude && doc.longitude) {
                     return { lat: doc.latitude, lng: doc.longitude, source: 'firestore_cache' };
                 }
@@ -824,15 +905,20 @@
                     return { lat: doc.customLat, lng: doc.customLon, source: 'firestore_cache' };
                 }
 
-                const address = (type === 'order') ? (doc.address || doc.customer_address) : doc.defaultAddress;
+                // עדיפות 3: מאגר מקומי (הנחיה 3)
+                address = (type === 'order') ? (doc.address || doc.customer_address) : doc.defaultAddress;
                 if (address) {
                     const fromDB = app.findLocationInDB(address);
-                    if (fromDB) return { lat: fromDB.lat, lng: fromDB.lng, source: 'local_db' };
+                    if (fromDB) {
+                        return { lat: fromDB.lat, lng: fromDB.lng, source: 'local_db' };
+                    }
                 }
 
+                // עדיפות 4: Fallback (הנחיה 4)
                 return { lat: DEFAULT_LOCATION.lat, lng: DEFAULT_LOCATION.lng, source: 'fallback' };
             },
             
+            // --- 8. שיתוף ---
             loadOrdersForShare: async () => {
                 const date = document.getElementById('share-date-picker').value;
                 if (!date) {
@@ -844,13 +930,20 @@
                 listEl.innerHTML = '<div class="spinner-container"><div class="spinner"></div></div>';
                 
                 const collectionPath = ORDERS_COLLECTION_PATH;
-                const q = query(collection(db, collectionPath), limit(200));
+                
+                // [תיקון v1.13] שאילתה פשוטה ללא מיון
+                const q = query(
+                    collection(db, collectionPath), 
+                    limit(200) 
+                );
                 
                 try {
                     const snapshot = await getDocs(q);
                     let allFetchedOrders = snapshot.docs.map(doc => doc.data());
 
+                    // [תיקון v1.10] סינון ידני לפי orderDate
                     let orders = allFetchedOrders.filter(o => o.orderDate === date);
+                    // [תיקון v1.13] מיון ידני
                     orders.sort((a, b) => (a.warehouse || '').localeCompare(b.warehouse || ''));
 
                     document.getElementById('share-total-count').innerText = `(${orders.length})`;
@@ -875,6 +968,7 @@
 
                 } catch (error) {
                     console.error("Firebase Error in loadOrdersForShare:", error);
+                    SmartLog.error(error, "Data.ShareLoadFailed");
                     listEl.innerHTML = `<p class="text-red-500 p-4">שגיאה בטעינת הזמנות: ${error.message}.</p>`;
                 }
             },
@@ -885,6 +979,7 @@
                     alert('יש לבחור תאריך');
                     return;
                 }
+                
                 const listEl = document.getElementById('share-order-list');
                 const orders = Array.from(listEl.querySelectorAll('.order-card'));
                 
@@ -913,6 +1008,7 @@
             }
         };
 
+        // --- פונקציית עזר גלובלית לטוסט ---
         function showToast(message, type = 'info') {
             let container = document.getElementById('loader')?.parentNode || document.body;
             const toast = document.createElement('div');
@@ -929,6 +1025,7 @@
             }, 3000);
         }
 
+        // --- חשיפה גלובלית והפעלה ---
         window.app = app;
         
         document.addEventListener('DOMContentLoaded', () => {
