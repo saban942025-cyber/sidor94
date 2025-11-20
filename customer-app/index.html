@@ -2,59 +2,47 @@
 <html lang="he" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ח. סבן | הזמנות וצ'אט</title>
-    <link rel="manifest" href="manifest.json">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>ח. סבן | פורטל לקוחות</title>
     
-    <!-- OneSignal -->
-    <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
-    <script>
-      window.OneSignalDeferred = window.OneSignalDeferred || [];
-      OneSignalDeferred.push(async function(OneSignal) {
-        try {
-            await OneSignal.init({
-              appId: "de3834d3-1e11-40af-96d2-b25eda821c8f",
-              safari_web_id: "web.onesignal.auto.00000000-0000-0000-0000-000000000000",
-              notifyButton: { enable: false },
-              allowLocalhostAsSecureOrigin: true 
-            });
-        } catch (e) { console.warn("Push Init:", e); }
-      });
-    </script>
-
-    <!-- Libraries -->
+    <!-- טעינת ספריות -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700&display=swap" rel="stylesheet">
-    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- Manifest -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#2563eb">
+    <meta name="apple-mobile-web-app-capable" content="yes">
     
     <style>
-        body { font-family: 'Heebo', sans-serif; background-color: #e5ded8; overflow: hidden; touch-action: manipulation; }
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        .wa-header { background-color: #008069; color: white; }
-        .wa-bg { background-image: url("https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png"); background-repeat: repeat; background-attachment: fixed; }
-        .wa-bubble-out { background-color: #d9fdd3; border-radius: 7.5px; border-top-left-radius: 0; box-shadow: 0 1px 0.5px rgba(0,0,0,0.13); }
-        .wa-bubble-in { background-color: #ffffff; border-radius: 7.5px; border-top-right-radius: 0; box-shadow: 0 1px 0.5px rgba(0,0,0,0.13); }
-        .slide-up { animation: slideUp 0.3s ease-out forwards; }
-        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
-        .hit-area { min-height: 44px; min-width: 44px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
-        input:focus { outline: none; }
+        body { font-family: system-ui, -apple-system, sans-serif; background-color: #f0f2f5; overscroll-behavior: none; }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        
+        /* אנימציות */
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
+        
+        /* הקלטה פועמת */
+        @keyframes pulse-red { 0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); } 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); } }
+        .recording-pulse { animation: pulse-red 1.5s infinite; background-color: #ef4444 !important; }
     </style>
 </head>
 <body>
     <div id="root"></div>
-    <audio id="msg-sound" src="https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3" preload="auto"></audio>
 
     <script type="text/babel" data-type="module">
-        const { useState, useEffect, useRef } = React;
+        const { useState, useEffect, useRef, useMemo } = React;
         const { createRoot } = ReactDOM;
         
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
         import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
-        import { getFirestore, collection, doc, onSnapshot, query, orderBy, where, addDoc, serverTimestamp, updateDoc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
-        import { getStorage, ref, uploadString, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-storage.js";
+        import { getFirestore, collection, doc, onSnapshot, query, orderBy, where, getDoc, addDoc, serverTimestamp, limit, updateDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+        import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-storage.js";
+
+        // *** ה-URL של הסקריפט שלך (להעלאת קבצים) ***
+        const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycby7qKICvRYStFkcDPLtGhGPaNqyYt-G8dZqBJfGm7vpmOG6Kf_n3f29V8oyUW9PjBUj7A/exec";
 
         const firebaseConfig = {
           apiKey: "AIzaSyDq0oVwS6zbEfsgrYBRkeBq80dDUKMedzo", 
@@ -62,7 +50,8 @@
           projectId: "saban94-78949", 
           storageBucket: "saban94-78949.firebasestorage.app", 
           messagingSenderId: "41553157903", 
-          appId: "1:41553157903:web:cc33d252cff023be97a87a"
+          appId: "1:41553157903:web:cc33d252cff023be97a87a",
+          measurementId: "G-XV6RZDESSB"
         };
 
         const app = initializeApp(firebaseConfig);
@@ -71,251 +60,304 @@
         const storage = getStorage(app);
 
         // --- Icons ---
-        function Icon({ name, size=20, color="currentColor", className }) {
-            useEffect(() => lucide.createIcons(), [name]);
-            return <i data-lucide={name} width={size} height={size} stroke={color} className={className}></i>;
+        const Icon = ({ name, className, size=24 }) => {
+            const icons = {
+                MessageSquare: <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>,
+                BookOpen: <><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></>,
+                User: <><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></>,
+                LogOut: <><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></>,
+                ArrowRight: <><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></>,
+                Send: <><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></>,
+                Search: <><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></>,
+                Bell: <><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></>,
+                Check: <polyline points="20 6 9 17 4 12"/>,
+                Loader: <><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></>,
+                Plus: <><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></>,
+                Mic: <><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></>,
+                MapPin: <><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></>,
+                Camera: <><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></>,
+                FileText: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></>,
+                X: <><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>,
+                StopCircle: <><circle cx="12" cy="12" r="10"/><rect x="9" y="9" width="6" height="6"/></>
+            };
+            return <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{icons[name]}</svg>;
+        };
+
+        // --- קטלוג מוצרים (Hardcoded + Live) ---
+        const DEFAULT_PRODUCTS = [
+            { id: "p-101", sku: "10-101", name: "לוח גבס לבן (סטנדרטי)", image: "https://placehold.co/400x300/e0e7ff/3730a3?text=Gypsum", spec: "120x260 ס\"מ | 12.5 מ\"מ", description: "לוח גבס איכותי לקירות פנים.", price: "₪38.00" },
+            { id: "p-102", sku: "10-102", name: "ניצב 70 מ\"מ", image: "https://placehold.co/400x300/e0e7ff/3730a3?text=Stud", spec: "300 ס\"מ | פח מגולוון", description: "פרופיל אנכי לקונסטרוקציה.", price: "₪18.50" },
+            { id: "p-103", sku: "10-103", name: "מסלול 70 מ\"מ", image: "https://placehold.co/400x300/e0e7ff/3730a3?text=Track", spec: "300 ס\"מ | פח מגולוון", description: "מסילה לרצפה/תקרה.", price: "₪16.90" },
+            { id: "p-201", sku: "20-201", name: "שפכטל אמריקאי", image: "https://placehold.co/400x300/e0e7ff/3730a3?text=Putty", spec: "28 ק\"ג | דלי", description: "חומר להחלקת קירות.", price: "₪65.00" }
+        ];
+
+        const KnowledgeBase = {
+            search: function(term, liveProducts) {
+                const allProducts = [...DEFAULT_PRODUCTS, ...liveProducts];
+                if (!term) return allProducts;
+                return allProducts.filter(p => p.name.includes(term) || p.sku?.includes(term));
+            }
+        };
+
+        // --- Toast ---
+        function Toast({ message, visible, onHide }) {
+            useEffect(() => { if (visible) { const t = setTimeout(onHide, 3000); return () => clearTimeout(t); } }, [visible, onHide]);
+            if (!visible) return null;
+            return <div className="fixed top-24 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-6 py-3 rounded-full shadow-2xl z-50 flex items-center space-x-3 space-x-reverse animate-fade-in"><Icon name="Loader" className="animate-spin w-5 h-5 text-blue-400" /><span className="font-medium text-sm">{message}</span></div>;
         }
 
-        // --- Login Screen ---
-        function AuthScreen({ onLogin }) {
+        // --- Auth Screen ---
+        function AuthScreen() {
             const [email, setEmail] = useState('');
-            const [pass, setPass] = useState('');
+            const [password, setPassword] = useState('');
+            const [loading, setLoading] = useState(false);
+            const [error, setError] = useState('');
+
+            const handleLogin = async (e) => {
+                e.preventDefault(); setLoading(true); setError('');
+                try { await setPersistence(auth, browserLocalPersistence); await signInWithEmailAndPassword(auth, email, password); } 
+                catch (err) { setError("פרטי התחברות שגויים."); }
+                setLoading(false);
+            };
             return (
-                <div className="flex h-screen items-center justify-center bg-[#111b21] p-4">
-                    <div className="bg-white p-8 rounded-2xl w-full max-w-sm text-center shadow-xl">
-                        <div className="w-20 h-20 bg-[#00a884] rounded-full mx-auto mb-6 flex items-center justify-center"><i data-lucide="message-circle" className="text-white w-10 h-10"></i></div>
-                        <h2 className="text-2xl font-bold mb-6 text-gray-800">כניסת לקוחות</h2>
-                        <form onSubmit={(e)=>{e.preventDefault(); onLogin(email,pass)}} className="space-y-4">
-                            <input type="email" placeholder="אימייל" className="w-full p-3 border rounded-lg bg-gray-50" value={email} onChange={e=>setEmail(e.target.value)} required/>
-                            <input type="password" placeholder="סיסמה" className="w-full p-3 border rounded-lg bg-gray-50" value={pass} onChange={e=>setPass(e.target.value)} required/>
-                            <button className="w-full p-3 bg-[#00a884] text-white rounded-lg font-bold hover:bg-[#008f6f]">התחבר</button>
+                <div className="flex items-center justify-center min-h-screen bg-gray-100 p-4">
+                    <div className="w-full max-w-md bg-white p-8 rounded-3xl shadow-xl border border-gray-100 text-center">
+                        <div className="w-20 h-20 bg-white rounded-2xl mx-auto flex items-center justify-center shadow-lg mb-4 overflow-hidden border border-gray-100"><img src="https://i.postimg.cc/ryPT3r29/hwrdh.png" className="w-full h-full object-contain p-2" /></div>
+                        <h2 className="text-2xl font-bold text-gray-800">ח. סבן חומרי בניין</h2>
+                        <p className="text-gray-500 text-sm mt-1 mb-6">פורטל הזמנות מתקדם</p>
+                        <form onSubmit={handleLogin} className="space-y-4">
+                            <input type="email" placeholder="אימייל" value={email} onChange={e=>setEmail(e.target.value)} className="w-full p-3 border rounded-xl" required />
+                            <input type="password" placeholder="סיסמה" value={password} onChange={e=>setPassword(e.target.value)} className="w-full p-3 border rounded-xl" required />
+                            {error && <p className="text-red-500 text-sm">{error}</p>}
+                            <button disabled={loading} className="w-full p-4 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700">{loading ? "מתחבר..." : "כניסה"}</button>
                         </form>
                     </div>
                 </div>
             );
         }
 
-        // --- Catalog ---
-        function CatalogModal({ onClose, onSendOrder }) {
-            const [cart, setCart] = useState([]);
-            const products = [
-                { id: 1, name: "לוח גבס לבן", price: 38, unit: "יח'", img: "https://placehold.co/100?text=Gevs" },
-                { id: 2, name: "מלט שחור", price: 28, unit: "שק", img: "https://placehold.co/100?text=Cement" },
-                { id: 3, name: "חול ים", price: 150, unit: "בלה", img: "https://placehold.co/100?text=Sand" },
-                { id: 4, name: "טיט מוכן", price: 25, unit: "שק", img: "https://placehold.co/100?text=Tit" },
-            ];
-
-            const addToCart = (p) => {
-                setCart(prev => {
-                    const existing = prev.find(i => i.id === p.id);
-                    if(existing) return prev.map(i => i.id === p.id ? {...i, qty: i.qty + 1} : i);
-                    return [...prev, {...p, qty: 1}];
-                });
-            };
-
-            return (
-                <div className="fixed inset-0 bg-white z-50 flex flex-col slide-up">
-                    <div className="bg-[#008069] p-4 text-white flex justify-between items-center shadow-md">
-                        <h2 className="text-lg font-bold">קטלוג והזמנה</h2>
-                        <button onClick={onClose}><Icon name="x" /></button>
-                    </div>
-                    <div className="flex-1 overflow-y-auto p-4 bg-gray-50 pb-24">
-                        <div className="grid grid-cols-2 gap-3 mb-6">
-                            {products.map(p => (
-                                <div key={p.id} className="bg-white p-3 rounded-xl shadow-sm flex flex-col items-center text-center border border-gray-100 active:scale-95 transition-transform" onClick={()=>addToCart(p)}>
-                                    <img src={p.img} className="rounded-lg mb-2 w-full h-20 object-cover"/>
-                                    <h4 className="font-bold text-sm line-clamp-1">{p.name}</h4>
-                                    <p className="text-xs text-blue-600 font-bold">₪{p.price} / {p.unit}</p>
-                                    <button className="mt-2 bg-blue-50 text-blue-600 text-xs px-4 py-1 rounded-full font-bold">+ הוסף</button>
-                                </div>
-                            ))}
-                        </div>
-                        {cart.length > 0 && (
-                            <div className="bg-white p-4 rounded-xl shadow-lg border border-blue-100 mb-20">
-                                <h3 className="font-bold text-lg mb-3 border-b pb-2">העגלה שלך ({cart.length})</h3>
-                                <button onClick={() => onSendOrder(cart)} className="w-full bg-[#008069] text-white py-3 rounded-xl font-bold shadow flex justify-center gap-2">שלח הזמנה <Icon name="send"/></button>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            );
-        }
-
-        // --- Chat ---
-        function ChatScreen({ user, profile, room }) {
+        // --- Chat Room ---
+        function ChatRoom({ project, user, onBack, showToast }) {
             const [messages, setMessages] = useState([]);
-            const [input, setInput] = useState('');
-            const [menuOpen, setMenuOpen] = useState(false);
-            const [showCatalog, setShowCatalog] = useState(false);
-            const bottomRef = useRef(null);
-            const fileInput = useRef(null);
+            const [text, setText] = useState('');
+            const [showMenu, setShowMenu] = useState(false);
+            const [isRecording, setIsRecording] = useState(false);
+            const [mediaRecorder, setMediaRecorder] = useState(null);
+            
+            const endRef = useRef(null);
+            const fileInputRef = useRef(null);
 
             useEffect(() => {
-                const q = query(collection(db, 'messages'), where('roomId', '==', room.projectId), orderBy('createdAt', 'asc'));
-                const unsub = onSnapshot(q, snap => {
-                    setMessages(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-                    // Play sound on new message
-                });
+                const q = query(collection(db, 'messages'), where('roomId', '==', project.projectId), orderBy('createdAt', 'asc'));
+                const unsub = onSnapshot(q, snap => setMessages(snap.docs.map(d => ({id: d.id, ...d.data()}))));
                 return () => unsub();
-            }, [room]);
+            }, [project.projectId]);
 
-            useEffect(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), [messages]);
+            useEffect(() => endRef.current?.scrollIntoView({ behavior: 'smooth' }), [messages]);
 
-            const sendMessage = async (type = 'TEXT', payload = null) => {
-                const msg = {
-                    roomId: room.projectId,
-                    senderId: user.uid,
-                    senderName: profile.name || 'לקוח',
-                    senderAvatar: profile.avatarUrl || '',
-                    type,
-                    createdAt: serverTimestamp(),
-                    readByWorker: false,
-                    status: 'sent'
-                };
-
-                if (type === 'TEXT') { if(!input.trim()) return; msg.text = input; setInput(''); }
-                else if (type === 'ORDER') { 
-                    msg.text = 'הזמנה חדשה מהקטלוג'; 
-                    msg.orderPayload = { items: payload, total: payload.length }; 
-                    msg.orderStatus = 'new'; 
-                }
-                else if (type === 'IMAGE') { msg.text = 'תמונה'; msg.mediaUrl = payload; }
-
-                setShowCatalog(false);
-                setMenuOpen(false);
-                
-                try { await addDoc(collection(db, 'messages'), msg); } catch(e) { alert("שגיאה בשליחה"); }
-            };
-
-            const handleFile = (e) => {
+            const handleFileUpload = async (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
+                showToast("מעלה...");
                 const reader = new FileReader();
-                reader.onload = (ev) => sendMessage('IMAGE', ev.target.result); 
                 reader.readAsDataURL(file);
+                reader.onload = async () => {
+                    const base64 = reader.result.split(',')[1];
+                    // Send to Drive Script (Async)
+                    fetch(GOOGLE_SCRIPT_URL, {
+                        method: 'POST', mode: 'no-cors', 
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ fileData: base64, fileName: file.name, mimeType: file.type, customerId: user.uid })
+                    }).catch(err => console.error(err));
+
+                    // Send to Chat (Directly with DataURL for immediate view)
+                    const type = file.type.startsWith('image/') ? 'IMAGE' : 'FILE';
+                    await sendMessage(type, { url: reader.result, name: file.name });
+                    showToast("נשלח!");
+                    setShowMenu(false);
+                };
+            };
+
+            const sendMessage = async (type = 'TEXT', payload = null) => {
+                let msg = {
+                    roomId: project.projectId, senderId: user.uid, senderName: user.displayName || 'לקוח',
+                    type: type, createdAt: serverTimestamp(), replyTo: null
+                };
+                if (type === 'TEXT') { if (!text.trim()) return; msg.text = text.trim(); setText(''); }
+                else if (['IMAGE','FILE','AUDIO'].includes(type)) { msg.mediaUrl = payload.url; msg.text = payload.name; }
+                else if (type === 'LOCATION') { msg.location = payload; msg.text = '📍 מיקום שיתופי'; }
+
+                await addDoc(collection(db, 'messages'), msg);
+                setShowMenu(false);
+            };
+
+            const handleLocation = () => {
+                if (navigator.geolocation) {
+                    showToast("מאתר...");
+                    navigator.geolocation.getCurrentPosition(pos => {
+                        sendMessage('LOCATION', { lat: pos.coords.latitude, lon: pos.coords.longitude });
+                        setShowMenu(false);
+                    });
+                }
+            };
+
+            const toggleRecording = async () => {
+                if (isRecording) { mediaRecorder.stop(); setIsRecording(false); } 
+                else {
+                    try {
+                        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                        const recorder = new MediaRecorder(stream);
+                        const chunks = [];
+                        recorder.ondataavailable = e => chunks.push(e.data);
+                        recorder.onstop = async () => {
+                            const blob = new Blob(chunks, { type: 'audio/webm' });
+                            const url = URL.createObjectURL(blob);
+                            await sendMessage('AUDIO', { url: url, name: 'הודעה קולית' });
+                            // Upload logic here if needed
+                        };
+                        recorder.start(); setMediaRecorder(recorder); setIsRecording(true);
+                    } catch(err) { showToast("אין גישה למיקרופון"); }
+                }
             };
 
             return (
-                <div className="flex flex-col h-full wa-bg">
-                    <div className="wa-header p-3 flex items-center shadow-sm z-10">
-                        <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center mr-3 text-white font-bold text-lg">
-                            {room.name ? room.name[0] : 'S'}
-                        </div>
-                        <div className="flex-1">
-                            <div className="font-bold text-sm">{room.name}</div>
-                            <div className="text-xs opacity-80">מחובר כעת</div>
-                        </div>
-                    </div>
-
-                    <div className="flex-1 overflow-y-auto p-4 relative space-y-2">
-                        {messages.map(m => {
-                            const isMe = m.senderId === user.uid;
-                            let content = <span className="text-sm whitespace-pre-wrap">{m.text}</span>;
-                            
-                            if(m.type === 'ORDER') {
-                                content = (
-                                    <div className="bg-green-50 p-2 rounded border border-green-100 -mx-1 -mt-1 mb-1">
-                                        <div className="font-bold text-xs text-green-800 flex items-center gap-1 mb-2 border-b border-green-200 pb-1">
-                                            <i data-lucide="shopping-cart" width="12"></i> הזמנה #{m.id.slice(-4)}
-                                        </div>
-                                        <ul className="space-y-1">
-                                            {m.orderPayload.items.map((item, i) => (
-                                                <li key={i} className="flex justify-between text-xs">
-                                                    <span>{item.name}</span>
-                                                    <span className="font-bold">x{item.qty}</span>
-                                                </li>
-                                            ))}
-                                        </ul>
-                                        <div class="mt-2 text-[10px] font-bold text-green-600 bg-white px-2 rounded w-fit">{m.orderStatus || 'חדש'}</div>
-                                    </div>
-                                );
-                            }
-                            if(m.type === 'IMAGE') content = <img src={m.mediaUrl} className="rounded-lg max-w-[200px]" />;
-
-                            return (
-                                <div key={m.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-                                    <div className={`max-w-[80%] p-2 px-3 shadow-sm relative ${isMe ? 'wa-bubble-out rounded-tr-none' : 'wa-bubble-in rounded-tl-none'}`}>
-                                        {content}
-                                        <div className="text-[10px] text-gray-400 text-end mt-1 flex justify-end gap-1">
-                                            {m.createdAt?.toDate ? m.createdAt.toDate().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : '...'}
-                                            {isMe && <i data-lucide="check-check" width="12"></i>}
-                                        </div>
-                                    </div>
+                <div className="flex flex-col h-full bg-[#e5ded8]">
+                    <header className="bg-white p-3 flex items-center shadow-sm sticky top-0 z-20">
+                        <button onClick={onBack} className="p-2 text-gray-600"><Icon name="ArrowRight" /></button>
+                        <img src={project.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(project.name)}`} className="w-10 h-10 rounded-full object-cover ml-2 mr-1 bg-white" />
+                        <div className="flex-1"><div className="font-bold text-gray-800 text-sm">{project.name}</div></div>
+                    </header>
+                    <div className="flex-1 overflow-y-auto p-4 space-y-3" style={{backgroundImage: "url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png')"}}>
+                        {messages.map(m => (
+                            <div key={m.id} className={`flex ${m.senderId === user.uid ? 'justify-end' : 'justify-start'}`}>
+                                <div className={`max-w-[80%] p-2 rounded-xl text-sm shadow-sm ${m.senderId === user.uid ? 'bg-[#d9fdd3] text-gray-800 rounded-br-none' : 'bg-white text-gray-800 rounded-bl-none'}`}>
+                                    {m.type === 'IMAGE' && <img src={m.mediaUrl} className="rounded-lg mb-1 max-w-full" />}
+                                    {m.type === 'FILE' && <a href={m.mediaUrl} download={m.text} className="flex items-center gap-2 text-blue-600 underline"><Icon name="FileText" size={16}/> {m.text}</a>}
+                                    {m.type === 'LOCATION' && <a href={`https://waze.com/ul?ll=${m.location.lat},${m.location.lon}&navigate=yes`} target="_blank" className="flex items-center gap-2 text-blue-600"><Icon name="MapPin" size={16}/> ניווט</a>}
+                                    {m.type === 'AUDIO' && <audio controls src={m.mediaUrl} className="w-48 h-8 mt-1" />}
+                                    {m.type === 'TEXT' && <div>{m.text}</div>}
+                                    <div className="text-[10px] text-gray-400 text-left mt-1">{m.createdAt?.toDate().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</div>
                                 </div>
-                            );
-                        })}
-                        <div ref={bottomRef}></div>
+                            </div>
+                        ))}
+                        <div ref={endRef} />
                     </div>
-
-                    {menuOpen && (
-                        <div className="absolute bottom-16 left-4 right-4 bg-white rounded-xl shadow-xl p-4 grid grid-cols-3 gap-4 z-20 slide-up">
-                            <div onClick={()=>setShowCatalog(true)} className="flex flex-col items-center gap-1 hit-area"><div className="p-3 bg-purple-100 rounded-full text-purple-600"><i data-lucide="shopping-bag"></i></div><span className="text-xs font-bold">קטלוג</span></div>
-                            <div onClick={()=>fileInput.current.click()} className="flex flex-col items-center gap-1 hit-area"><div className="p-3 bg-pink-100 rounded-full text-pink-600"><i data-lucide="image"></i></div><span className="text-xs font-bold">גלריה</span></div>
+                    <div className="p-2 bg-[#f0f2f5] flex items-center gap-2 pb-4 relative">
+                        {showMenu && (
+                            <div className="absolute bottom-16 right-4 bg-white rounded-xl shadow-xl p-3 flex flex-col gap-3 animate-fade-in z-30">
+                                <button onClick={() => fileInputRef.current.click()} className="flex items-center gap-3 text-gray-700"><div className="bg-purple-500 p-2 rounded-full text-white"><Icon name="FileText" size={20}/></div> מסמך/תמונה</button>
+                                <button onClick={handleLocation} className="flex items-center gap-3 text-gray-700"><div className="bg-green-500 p-2 rounded-full text-white"><Icon name="MapPin" size={20}/></div> מיקום</button>
+                            </div>
+                        )}
+                        <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" />
+                        <button onClick={() => setShowMenu(!showMenu)} className="p-2 text-gray-500"><Icon name="Plus" /></button>
+                        <div className="flex-1 bg-white rounded-full flex items-center px-4 shadow-sm">
+                            <input className="flex-1 py-3 bg-transparent border-none focus:ring-0 outline-none text-sm" placeholder="הודעה" value={text} onChange={e=>setText(e.target.value)} />
                         </div>
-                    )}
-
-                    <div className="bg-[#f0f2f5] p-2 flex items-center gap-2 z-20">
-                        <button onClick={()=>setMenuOpen(!menuOpen)} className={`p-2 rounded-full transition ${menuOpen?'rotate-45 bg-gray-300':''}`}><i data-lucide="plus" className="text-gray-500"></i></button>
-                        <input type="file" ref={fileInput} className="hidden" accept="image/*" onChange={handleFile}/>
-                        
-                        <div className="flex-1 bg-white rounded-2xl px-4 py-2 shadow-sm flex items-center">
-                            <input className="w-full bg-transparent text-sm" placeholder="הודעה" value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==='Enter'&&sendMessage('TEXT')}/>
-                        </div>
-                        
-                        <button onClick={()=>sendMessage('TEXT')} className="p-3 bg-[#008069] text-white rounded-full shadow-md hit-area"><i data-lucide="send" width="18"></i></button>
+                        {text ? <button onClick={() => sendMessage('TEXT')} className="p-3 bg-[#00a884] text-white rounded-full shadow-md"><Icon name="Send" size={20} /></button> : <button onClick={toggleRecording} className={`p-3 text-white rounded-full shadow-md ${isRecording ? 'bg-red-500 recording-pulse' : 'bg-[#00a884]'}`}><Icon name={isRecording ? "StopCircle" : "Mic"} size={20} /></button>}
                     </div>
-                    
-                    {showCatalog && <CatalogModal onClose={()=>setShowCatalog(false)} onSendOrder={(cart)=>sendMessage('ORDER', cart)} />}
                 </div>
             );
         }
 
-        // --- App Main ---
+        // --- Knowledge Page (Live Catalog) ---
+        function KnowledgePage({ showToast }) {
+            const [term, setTerm] = useState('');
+            const [products, setProducts] = useState([]);
+
+            useEffect(() => {
+                return onSnapshot(collection(db, "products"), snap => setProducts(snap.docs.map(d => ({id: d.id, ...d.data()}))));
+            }, []);
+
+            const filtered = KnowledgeBase.search(term, products);
+
+            return (
+                <div className="flex flex-col h-full">
+                    <div className="bg-white p-4 shadow-sm sticky top-0 z-10 rounded-b-2xl">
+                        <h2 className="text-2xl font-bold text-gray-800 mb-4">קטלוג מוצרים</h2>
+                        <div className="relative"><input className="w-full p-3 pr-10 bg-gray-100 border-none rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" placeholder="חפש..." value={term} onChange={e=>setTerm(e.target.value)} /><div className="absolute top-3 right-3 text-gray-400"><Icon name="Search" /></div></div>
+                    </div>
+                    <div className="p-4 grid grid-cols-2 gap-4 pb-24 overflow-y-auto bg-gray-50">
+                        {filtered.length === 0 && <p className="col-span-2 text-center text-gray-500 mt-10">טוען מוצרים...</p>}
+                        {filtered.map(p => (
+                            <div key={p.id} onClick={() => showToast(`נשלח בירור על ${p.name}`)} className="bg-white rounded-2xl shadow-sm overflow-hidden flex flex-col cursor-pointer active:scale-95 transition-transform">
+                                <div className="h-32 bg-gray-200 relative"><img src={p.image} className="w-full h-full object-cover" /><span className="absolute bottom-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded-md font-bold">{p.price}</span></div>
+                                <div className="p-3 flex-1 flex flex-col"><h3 className="font-bold text-gray-800 text-sm mb-1 line-clamp-2">{p.name}</h3><p className="text-xs text-gray-500 mb-3 flex-1">{p.sku}</p><button className="w-full py-2 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold">שלח לשיחה</button></div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        }
+
         function App() {
             const [user, setUser] = useState(null);
             const [profile, setProfile] = useState(null);
-            const [project, setProject] = useState(null);
+            const [loading, setLoading] = useState(true);
+            const [page, setPage] = useState('chats'); 
+            const [activeProject, setActiveProject] = useState(null);
+            const [toast, setToast] = useState({ visible: false, message: '' });
 
             useEffect(() => {
-                onAuthStateChanged(auth, async (u) => {
+                return onAuthStateChanged(auth, async (u) => {
                     if (u) {
-                        if(window.OneSignalDeferred) window.OneSignalDeferred.push(OS => OS.login(u.uid));
                         const snap = await getDoc(doc(db, 'customers', u.uid));
-                        if (snap.exists()) {
-                            const data = snap.data();
-                            setProfile(data);
-                            setProject(data.projects?.[0] || { projectId: 'room_'+u.uid, name: 'פרויקט ראשי' });
-                        } else {
-                            const def = { name: u.displayName || 'אורח', projects: [{ projectId: 'room_'+u.uid, name: 'פרויקט ראשי' }] };
-                            await setDoc(doc(db, 'customers', u.uid), def);
-                            setProfile(def);
-                            setProject(def.projects[0]);
-                        }
-                        setUser(u);
-                    } else {
-                        setUser(null);
-                    }
+                        if (snap.exists()) { setUser(u); setProfile({uid: u.uid, ...snap.data()}); } 
+                        else { signOut(auth); }
+                    } else { setUser(null); setProfile(null); }
+                    setLoading(false);
                 });
             }, []);
 
-            const handleLogin = async (email, password) => {
-                try {
-                    await setPersistence(auth, browserLocalPersistence);
-                    await signInWithEmailAndPassword(auth, email, password);
-                } catch (e) { alert("שגיאה: " + e.message); }
-            };
+            if (loading) return <div className="flex h-screen items-center justify-center text-blue-600 font-bold">טוען...</div>;
+            if (!user) return <AuthScreen />;
 
-            if (!user) return <AuthScreen onLogin={handleLogin} />;
-            if (!project) return <div className="text-center mt-20">טוען נתונים...</div>;
+            return (
+                <div className="flex flex-col h-screen bg-white max-w-md mx-auto shadow-2xl overflow-hidden border-x border-gray-200 relative">
+                    <Toast message={toast.message} visible={toast.visible} onHide={() => setToast({ ...toast, visible: false })} />
+                    
+                    {activeProject ? (
+                        <ChatRoom project={activeProject} user={user} onBack={() => setActiveProject(null)} showToast={(msg) => setToast({visible: true, message: msg})} />
+                    ) : (
+                        <>
+                            <div className="flex-1 overflow-y-auto pb-20 scrollbar-hide">
+                                {page === 'chats' && (
+                                    <>
+                                        <div className="bg-white p-4 border-b flex justify-between items-center sticky top-0 z-10"><h1 className="text-xl font-bold text-[#008069]">Sidor</h1><div className="flex gap-3"><Icon name="Search" className="text-gray-600"/><Icon name="LogOut" onClick={()=>signOut(auth)} className="text-gray-600"/></div></div>
+                                        <div className="p-2">
+                                            <ChatList profile={profile} onSelect={setActiveProject} />
+                                        </div>
+                                    </>
+                                )}
+                                {page === 'knowledge' && <KnowledgePage showToast={(msg) => setToast({visible: true, message: msg})} />}
+                            </div>
+                            <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-around p-2 pb-5 text-gray-500 z-20 max-w-md mx-auto">
+                                <button onClick={()=>setPage('chats')} className={`flex flex-col items-center ${page==='chats'?'text-[#008069]':''}`}><Icon name="MessageSquare" className="mb-1"/><span className="text-[10px]">שיחות</span></button>
+                                <button onClick={()=>setPage('knowledge')} className={`flex flex-col items-center ${page==='knowledge'?'text-[#008069]':''}`}><Icon name="BookOpen" className="mb-1"/><span className="text-[10px]">קטלוג</span></button>
+                            </nav>
+                        </>
+                    )}
+                </div>
+            );
+        }
 
-            return <ChatScreen user={user} profile={profile} room={project} />;
+        // --- ChatList ---
+        function ChatList({ profile, onSelect }) {
+            const projects = (profile && profile.projects) ? profile.projects : [];
+            if (projects.length === 0) return <div className="text-center p-10 text-gray-500">אין פרויקטים.</div>;
+            return <div className="space-y-1">{projects.map(p => (
+                <div key={p.projectId} onClick={() => onSelect(p)} className="flex items-center p-3 bg-white cursor-pointer hover:bg-gray-50">
+                    <img src={p.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name)}`} className="w-12 h-12 rounded-full object-cover ml-3" />
+                    <div className="flex-1 border-b border-gray-100 pb-3">
+                        <div className="flex justify-between"><h3 className="font-bold text-gray-900">{p.name}</h3><span className="text-xs text-gray-400">12:00</span></div>
+                        <p className="text-sm text-gray-500 truncate">{p.address}</p>
+                    </div>
+                </div>
+            ))}</div>;
         }
 
         const root = createRoot(document.getElementById('root'));
         root.render(<App />);
-        
-        // Icon Init
-        setInterval(() => { if(window.lucide) window.lucide.createIcons(); }, 1000);
     </script>
 </body>
 </html>
