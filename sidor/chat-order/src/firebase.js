@@ -1,9 +1,10 @@
 import { initializeApp } from "firebase/app";
-import { getAuth, signInWithCustomToken, signInAnonymously } from "firebase/auth";
-import { getFirestore, doc, setDoc, getDoc, collection, query, onSnapshot, addDoc, updateDoc, deleteDoc } from "firebase/firestore";
+import { getAuth, signInAnonymously } from "firebase/auth";
+import { getFirestore, doc, getDoc } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
-// הקונפיגורציה של Firebase
+// הגדרות החיבור ל-Firebase
+// ודא שהפרטים כאן תואמים לפרויקט שלך ב-Console
 const firebaseConfig = {
   apiKey: "AIzaSyDq0oVwS6zbEfsgrYBRkeBq80dDUKMedzo", 
   authDomain: "saban94-78949.firebaseapp.com", 
@@ -13,27 +14,11 @@ const firebaseConfig = {
   appId: "1:41553157903:web:cc33d252cff023be97a87a"
 };
 
-// אתחול האפליקציה
 const app = initializeApp(firebaseConfig);
 
-// ייצוא השירותים
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
-
-// ייצוא פונקציות עזר
-export { 
-    signInWithCustomToken, 
-    signInAnonymously,
-    doc, 
-    setDoc, 
-    getDoc, 
-    collection, 
-    query, 
-    onSnapshot, 
-    addDoc, 
-    updateDoc, 
-    deleteDoc 
-};
+export { signInAnonymously, doc, getDoc };
 
 export default app;
