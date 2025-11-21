@@ -1,19 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { onAuthStateChanged, signInAnonymously } from 'firebase/auth';
-// Fix: Import directly from the firebase config file we created in the same structure
-// Assuming lib/firebase.js exists in src/lib/firebase.js relative to src/App.jsx
-import { auth, db } from './lib/firebase'; 
+// תיקון: הפנייה לקובץ באותה תיקייה
+import { auth, db } from './firebase'; 
 import { doc, getDoc } from 'firebase/firestore';
 import { Loader2 } from 'lucide-react';
 
-// ייבוא קומפוננטות (דמי, נחליף בהמשך בקוד האמיתי מהקבצים הישנים)
-const WorkerDashboard = () => <div className="p-10 text-center"><h1 className="text-2xl font-bold text-blue-600">מסך נהג/עובד</h1><p>כאן יכנס התוכן של worker_app.html</p></div>;
-const CustomerDashboard = () => <div className="p-10 text-center"><h1 className="text-2xl font-bold text-green-600">מסך לקוח</h1><p>כאן יכנס התוכן של customer_app.html</p></div>;
-const AdminDashboard = () => <div className="p-10 text-center"><h1 className="text-2xl font-bold text-purple-600">מסך מנהל</h1><p>כאן יכנס התוכן של admin_master.html</p></div>;
+// קומפוננטות זמניות (Placeholders)
+const WorkerDashboard = () => <div className="p-10 text-center"><h1 className="text-2xl font-bold text-blue-600">מסך נהג/עובד</h1><p>מערכת הנהגים בטעינה...</p></div>;
+const CustomerDashboard = () => <div className="p-10 text-center"><h1 className="text-2xl font-bold text-green-600">מסך לקוח</h1><p>מערכת הלקוחות בטעינה...</p></div>;
+const AdminDashboard = () => <div className="p-10 text-center"><h1 className="text-2xl font-bold text-purple-600">מסך מנהל</h1><p>מערכת הניהול בטעינה...</p></div>;
+
 const LoginScreen = ({ onLogin }) => (
-  <div className="flex h-screen items-center justify-center bg-slate-100">
-    <button onClick={onLogin} className="bg-blue-600 text-white px-6 py-3 rounded-lg font-bold shadow-lg hover:bg-blue-700 transition">
-      כניסה למערכת (דמו)
+  <div className="flex h-screen items-center justify-center bg-slate-100 flex-col gap-4">
+    <div className="text-4xl font-bold text-blue-600 mb-2">Saban Pro</div>
+    <p className="text-gray-500 mb-4">מערכת לוגיסטיקה מתקדמת</p>
+    <button onClick={onLogin} className="bg-blue-600 text-white px-8 py-3 rounded-full font-bold shadow-lg hover:bg-blue-700 transition flex items-center gap-2">
+      כניסה למערכת
     </button>
   </div>
 );
@@ -26,19 +28,16 @@ function App() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
-        // בדיקת תפקיד המשתמש ב-Firestore
         try {
-          // ננסה לבדוק אם הוא עובד
+          // בדיקת תפקיד המשתמש ב-Firestore
           const workerDoc = await getDoc(doc(db, 'users', currentUser.uid));
           if (workerDoc.exists()) {
             setRole(workerDoc.data().role || 'worker');
           } else {
-            // אם לא עובד, נבדוק אם הוא לקוח
             const customerDoc = await getDoc(doc(db, 'customers', currentUser.uid));
             if (customerDoc.exists()) {
               setRole('customer');
             } else {
-              // משתמש לא מזוהה - ברירת מחדל (למשל אורח או הרשמה)
               setRole('guest'); 
             }
           }
@@ -58,7 +57,6 @@ function App() {
   }, []);
 
   const handleLogin = () => {
-    // לצורך הדמו - כניסה אנונימית
     signInAnonymously(auth).catch((error) => alert(error.message));
   };
 
@@ -74,17 +72,20 @@ function App() {
     return <LoginScreen onLogin={handleLogin} />;
   }
 
-  // ניתוב חכם לפי תפקיד
   return (
-    <div className="app-container dir-rtl">
+    <div className="app-container dir-rtl min-h-screen bg-gray-50">
       {role === 'admin' && <AdminDashboard />}
       {role === 'worker' && <WorkerDashboard />}
       {role === 'customer' && <CustomerDashboard />}
       {role === 'guest' && (
-        <div className="text-center p-10">
-          <h2 className="text-xl">ברוך הבא! החשבון שלך ממתין לאישור.</h2>
-          <p className="text-gray-500">User ID: {user.uid}</p>
-          <button onClick={() => auth.signOut()} className="mt-4 text-red-500 underline">התנתק</button>
+        <div className="flex flex-col items-center justify-center h-screen p-4 text-center">
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">ברוך הבא!</h2>
+          <p className="text-gray-600 mb-6">החשבון שלך נוצר וממתין לאישור מנהל.</p>
+          <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-6">
+            <p className="text-xs text-gray-400 uppercase font-bold mb-1">מזהה משתמש (UID)</p>
+            <code className="text-sm bg-gray-100 p-1 rounded select-all">{user.uid}</code>
+          </div>
+          <button onClick={() => auth.signOut()} className="text-red-500 hover:text-red-700 font-medium underline">התנתק</button>
         </div>
       )}
     </div>
