@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { collection, query, orderBy, limit, onSnapshot, addDoc, serverTimestamp, updateDoc, doc, where } from 'firebase/firestore';
+// שים לב: ה-import הזה מניח ש-firebase.js נמצא בתיקיית src (רמה אחת למעלה)
 import { db, auth } from '../firebase'; 
 import { 
   LayoutGrid, MessageCircle, LogOut, Clock, Send, MapPin, 
@@ -121,8 +122,6 @@ export default function WorkerDashboard() {
       alert('שגיאה בשליחה: ' + err.message);
     }
   };
-
-  // ... המשך הקוד (UI) יהיה כאן בהמשך ...
   
   return (
     <div className="flex h-screen bg-gray-100 font-sans overflow-hidden dir-rtl">
