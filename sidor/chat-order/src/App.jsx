@@ -1,19 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { onAuthStateChanged, signInAnonymously } from 'firebase/auth';
-// ייבוא ישיר מקובץ באותה תיקייה (firebase.js)
 import { auth, db, doc, getDoc } from './firebase'; 
 import { Loader2 } from 'lucide-react';
 
-// ייבוא הקומפוננטה החדשה (נמצאת ב-components/WorkerDashboard.jsx)
+// ייבוא הקומפוננטות
 import WorkerDashboard from './components/WorkerDashboard';
+import CustomerDashboard from './components/CustomerDashboard';
 
-// קומפוננטות זמניות (עדיין לא הוחלפו)
-const CustomerDashboard = () => (
-  <div className="p-10 text-center bg-green-50 min-h-screen">
-    <h1 className="text-3xl font-bold text-green-700">לקוח</h1>
-  </div>
-);
-
+// Placeholder לאדמין
 const AdminDashboard = () => (
   <div className="p-10 text-center bg-purple-50 min-h-screen">
     <h1 className="text-3xl font-bold text-purple-700">מנהל</h1>
@@ -78,7 +72,7 @@ function App() {
   return (
     <div className="dir-rtl">
       {role === 'admin' && <AdminDashboard />}
-      {role === 'worker' && <WorkerDashboard />} {/* כאן נכנסת הקומפוננטה החדשה */}
+      {role === 'worker' && <WorkerDashboard />}
       {role === 'customer' && <CustomerDashboard />}
       {role === 'guest' && (
         <div className="text-center p-10">
