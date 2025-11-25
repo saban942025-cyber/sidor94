@@ -2,293 +2,471 @@
 <html lang="he" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Saban Pro - מערכת מאוחדת</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Saban Pro System</title>
+    
+    <!-- טעינת עיצוב Tailwind -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- ייבוא אייקונים של Lucide -->
+    
+    <!-- טעינת אייקונים -->
     <script src="https://unpkg.com/lucide@latest"></script>
-    <script type="module">
-        // --- חיבור ל-Firebase ---
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
-        import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc, updateDoc, serverTimestamp, query, orderBy, where, getDoc } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
-        import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
 
-        // TODO: החלף את זה ב-Config האמיתי שלך מהפרויקט saban94-78949
+    <style>
+        /* התאמות ספציפיות למובייל ולצ'אט */
+        body { overscroll-behavior-y: none; }
+        .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .chat-bg { background-image: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png'); background-repeat: repeat; }
+    </style>
+
+    <script type="module">
+        // ==========================================
+        // 1. הגדרות וחיבורים (Firebase)
+        // ==========================================
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        import { getFirestore, collection, doc, getDoc, getDocs, addDoc, updateDoc, setDoc, onSnapshot, query, where, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        // --- !!! כאן עליך להדביק את הנתונים האמיתיים שלך !!! ---
         const firebaseConfig = {
             apiKey: "YOUR_API_KEY",
-            authDomain: "YOUR_AUTH_DOMAIN",
-            projectId: "YOUR_PROJECT_ID",
-            storageBucket: "YOUR_STORAGE_BUCKET",
-            messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+            authDomain: "saban94-78949.firebaseapp.com",
+            projectId: "saban94-78949",
+            storageBucket: "saban94-78949.appspot.com",
+            messagingSenderId: "YOUR_SENDER_ID",
             appId: "YOUR_APP_ID"
         };
 
-        // אתחול המערכת
-        let app, db, auth;
+        // אתחול
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // משתנים גלובליים
         let currentUser = null;
-        let currentRole = 'guest';
+        let currentRole = null;
+        let activeChatId = null; // עבור הנהג
 
-        try {
-            app = initializeApp(firebaseConfig);
-            db = getFirestore(app);
-            auth = getAuth(app);
-            console.log("Firebase connected successfully");
-        } catch (e) {
-            console.error("Firebase init error:", e);
-        }
+        // ==========================================
+        // 2. לוגיקת ליבה (Auth & Routing)
+        // ==========================================
 
-        // --- ניהול מצב (State) ---
-        const state = {
-            currentTab: 'login', // login, admin, worker, customer
-            users: [],
-            products: [],
-            orders: [],
-            messages: []
-        };
-
-        // --- פונקציות עזר ---
-        
-        // בדיקת התחברות
+        // מאזין למצב התחברות
         onAuthStateChanged(auth, async (user) => {
             if (user) {
                 currentUser = user;
-                // בדיקת תפקיד במסד הנתונים (כמו ב-App.jsx שלך)
-                const userDoc = await getDoc(doc(db, "users", user.uid));
-                if (userDoc.exists()) {
-                    currentRole = userDoc.data().role || 'customer';
-                    console.log("Logged in as:", currentRole);
-                    switchTab(currentRole === 'admin' ? 'admin' : currentRole === 'worker' ? 'worker' : 'customer');
-                } else {
-                    currentRole = 'guest';
-                    switchTab('guest_wait');
+                showScreen('loading');
+                try {
+                    const userDoc = await getDoc(doc(db, "users", user.uid));
+                    if (userDoc.exists()) {
+                        currentRole = userDoc.data().role || 'customer';
+                        routeUser(currentRole);
+                    } else {
+                        currentRole = 'guest';
+                        showScreen('guest-screen');
+                    }
+                } catch (e) {
+                    console.error("Login error:", e);
+                    alert("שגיאה בטעינת נתונים");
                 }
             } else {
                 currentUser = null;
-                currentRole = 'guest';
-                switchTab('login');
+                showScreen('login-screen');
             }
         });
 
-        window.login = async () => {
+        // נתב מסכים
+        function routeUser(role) {
+            hideAllScreens();
+            if (role === 'admin') {
+                document.getElementById('admin-dashboard').classList.remove('hidden');
+                initAdmin();
+            } else if (role === 'worker') {
+                document.getElementById('worker-dashboard').classList.remove('hidden');
+                initWorker();
+            } else if (role === 'customer') {
+                document.getElementById('customer-dashboard').classList.remove('hidden');
+                initCustomer();
+            } else {
+                document.getElementById('guest-screen').classList.remove('hidden');
+            }
+        }
+
+        function hideAllScreens() {
+            document.querySelectorAll('.screen').forEach(el => el.classList.add('hidden'));
+        }
+
+        function showScreen(id) {
+            hideAllScreens();
+            document.getElementById(id).classList.remove('hidden');
+        }
+
+        // ==========================================
+        // 3. פונקציות לוגיקה (Business Logic)
+        // ==========================================
+
+        // --- כניסה ויציאה ---
+        window.handleLogin = async (e) => {
+            e.preventDefault();
             const email = document.getElementById('email').value;
-            const pass = document.getElementById('password').value;
+            const password = document.getElementById('password').value;
             try {
-                await signInWithEmailAndPassword(auth, email, pass);
+                await signInWithEmailAndPassword(auth, email, password);
             } catch (e) {
-                alert("שגיאה בהתחברות: " + e.message);
+                alert("שגיאה: " + e.message);
             }
         };
 
-        window.logout = () => {
-            signOut(auth);
-        };
+        window.handleLogout = () => signOut(auth);
 
-        window.switchTab = (tabName) => {
-            document.querySelectorAll('.page').forEach(el => el.classList.add('hidden'));
-            const target = document.getElementById(`${tabName}-page`);
-            if(target) target.classList.remove('hidden');
+        // --- לקוח: צ'אט והזמנות ---
+        function initCustomer() {
+            const chatContainer = document.getElementById('customer-messages');
+            // האזנה להודעות
+            const q = query(collection(db, `chats/${currentUser.uid}/messages`), orderBy('createdAt', 'asc'));
             
-            // טעינת נתונים רלוונטיים לטאב
-            if (tabName === 'admin') loadAdminData();
-            if (tabName === 'worker') loadWorkerData();
-            if (tabName === 'customer') loadCustomerData();
-        };
-
-        // --- נתוני אדמין ---
-        const loadAdminData = () => {
-            // טעינת משתמשים (כמו ב-AdminDashboard.jsx)
-            onSnapshot(collection(db, "users"), (snap) => {
-                const list = document.getElementById('admin-users-list');
-                list.innerHTML = "";
-                snap.forEach(doc => {
-                    const u = doc.data();
-                    list.innerHTML += `
-                        <div class="flex justify-between items-center p-3 bg-white rounded shadow border-r-4 border-blue-500 mb-2">
-                            <div>
-                                <div class="font-bold">${u.name || 'ללא שם'}</div>
-                                <div class="text-xs text-gray-500">${u.email} - <span class="font-bold">${u.role}</span></div>
-                            </div>
-                            <button onclick="updateRole('${doc.id}', 'customer')" class="text-xs bg-gray-200 px-2 py-1 rounded">הפוך ללקוח</button>
-                        </div>`;
-                });
-            });
-
-            // טעינת מוצרים (כמו ב-AdminDashboard.jsx)
-            onSnapshot(collection(db, "products"), (snap) => {
-                const list = document.getElementById('admin-products-list');
-                list.innerHTML = "";
-                snap.forEach(doc => {
-                    const p = doc.data();
-                    list.innerHTML += `
-                        <div class="p-3 bg-white rounded shadow flex justify-between">
-                            <span>${p.name}</span>
-                            <span class="text-gray-500">${p.sku || '-'}</span>
-                        </div>`;
-                });
-            });
-        };
-
-        // --- נתוני לקוח (צ'אט והזמנות) ---
-        const loadCustomerData = () => {
-            if (!currentUser) return;
-            
-            // טעינת צ'אט אישי (כמו ב-CustomerDashboard.jsx)
-            const chatQuery = query(collection(db, `chats/${currentUser.uid}/messages`), orderBy("createdAt", "asc"));
-            onSnapshot(chatQuery, (snap) => {
-                const container = document.getElementById('customer-chat');
-                container.innerHTML = "";
-                snap.forEach(doc => {
+            onSnapshot(q, (snapshot) => {
+                chatContainer.innerHTML = '';
+                snapshot.forEach(doc => {
                     const msg = doc.data();
-                    const isMe = msg.sender === 'customer';
-                    container.innerHTML += `
-                        <div class="flex w-full ${isMe ? 'justify-end' : 'justify-start'} mb-2">
-                            <div class="${isMe ? 'bg-green-100' : 'bg-white'} p-2 rounded-lg shadow max-w-[80%] text-sm">
-                                ${msg.type === 'image' ? `<img src="${msg.url}" class="max-h-32 rounded">` : `<p>${msg.text}</p>`}
-                                <div class="text-[10px] text-gray-400 text-left mt-1">${msg.createdAt ? new Date(msg.createdAt.seconds*1000).toLocaleTimeString() : '...'}</div>
-                            </div>
-                        </div>`;
+                    // לקוח לא רואה הודעות פנימיות!
+                    if (!msg.isInternal) {
+                        renderMessage(chatContainer, msg, 'customer');
+                    }
                 });
-                container.scrollTop = container.scrollHeight;
+                chatContainer.scrollTop = chatContainer.scrollHeight;
             });
 
-            // טעינת קטלוג להזמנה
-            onSnapshot(collection(db, "products"), (snap) => {
-                const grid = document.getElementById('customer-catalog');
-                grid.innerHTML = "";
-                snap.forEach(doc => {
-                    const p = doc.data();
-                    grid.innerHTML += `
-                        <div class="bg-white p-2 rounded shadow text-center cursor-pointer hover:bg-blue-50" onclick="addToCart('${p.name}')">
-                            <div class="font-bold">${p.name}</div>
-                            <div class="text-xs text-gray-500">${p.specs || ''}</div>
-                        </div>`;
-                });
-            });
-        };
+            // טעינת קטלוג
+            loadCatalogForCustomer();
+        }
 
-        // שליחת הודעה (כמו ב-CustomerDashboard)
-        window.sendCustomerMessage = async () => {
-            const input = document.getElementById('customer-msg-input');
-            const text = input.value;
-            if (!text.trim()) return;
-            
+        window.sendCustomerMessage = async (e) => {
+            e.preventDefault();
+            const input = document.getElementById('customer-input');
+            const text = input.value.trim();
+            if (!text) return;
+
             await addDoc(collection(db, `chats/${currentUser.uid}/messages`), {
                 text: text,
                 sender: 'customer',
+                senderName: currentUser.displayName || 'לקוח',
                 createdAt: serverTimestamp(),
                 type: 'text',
                 read: false
             });
-            input.value = "";
             
-            // עדכון זמן פעילות אחרון (חשוב לסנכרון עם הנציג)
-            await updateDoc(doc(db, "users", currentUser.uid), { 
-                lastActive: serverTimestamp(), 
+            // עדכון זמן פעילות להקפצה אצל הנהג
+            await setDoc(doc(db, "users", currentUser.uid), { 
+                lastActive: serverTimestamp(),
                 hasUnreadMessages: true 
-            });
+            }, { merge: true });
+
+            input.value = '';
         };
 
-        // הוספת מוצר לצ'אט (סימולציה של הזמנה)
-        window.addToCart = async (productName) => {
+        async function loadCatalogForCustomer() {
+            const container = document.getElementById('customer-catalog-grid');
+            const snap = await getDocs(collection(db, 'products'));
+            container.innerHTML = '';
+            snap.forEach(doc => {
+                const p = doc.data();
+                const el = document.createElement('div');
+                el.className = 'bg-white p-3 rounded-lg shadow border text-center';
+                el.innerHTML = `
+                    <div class="font-bold text-gray-800">${p.name}</div>
+                    <div class="text-xs text-gray-500 mb-2">${p.specs || 'יחידה'}</div>
+                    <button onclick="orderProduct('${p.name}')" class="bg-green-600 text-white text-xs px-3 py-1 rounded-full w-full">הוסף להזמנה</button>
+                `;
+                container.appendChild(el);
+            });
+        }
+
+        window.orderProduct = async (productName) => {
             await addDoc(collection(db, `chats/${currentUser.uid}/messages`), {
-                text: `מבקש להזמין: ${productName}`,
+                text: `ביקשתי להזמין: ${productName}`,
                 sender: 'customer',
                 type: 'order_request',
                 createdAt: serverTimestamp(),
                 read: false
             });
-            await updateDoc(doc(db, "users", currentUser.uid), { 
-                lastActive: serverTimestamp(), 
-                hasUnreadMessages: true 
+            alert('הבקשה נשלחה לצ\'אט');
+            // חזרה לצ'אט
+            document.getElementById('tab-chat').click();
+        };
+
+        // --- נהג: מוקד הזמנות ---
+        function initWorker() {
+            const listContainer = document.getElementById('worker-users-list');
+            // שליפת לקוחות ממוינים לפי פעילות אחרונה
+            const q = query(collection(db, 'users'), where('role', '==', 'customer'), orderBy('lastActive', 'desc'));
+            
+            onSnapshot(q, (snapshot) => {
+                listContainer.innerHTML = '';
+                snapshot.forEach(doc => {
+                    const user = doc.data();
+                    const el = document.createElement('div');
+                    el.className = `p-4 border-b cursor-pointer hover:bg-gray-50 ${user.hasUnreadMessages ? 'bg-yellow-50' : ''}`;
+                    el.onclick = () => openChatForWorker(doc.id, user.name);
+                    el.innerHTML = `
+                        <div class="font-bold flex justify-between">
+                            ${user.name || 'לקוח'}
+                            ${user.hasUnreadMessages ? '<span class="text-xs bg-red-500 text-white px-2 rounded-full">חדש</span>' : ''}
+                        </div>
+                        <div class="text-xs text-gray-500">${user.email}</div>
+                    `;
+                    listContainer.appendChild(el);
+                });
             });
+        }
+
+        function openChatForWorker(userId, userName) {
+            activeChatId = userId;
+            document.getElementById('worker-chat-placeholder').classList.add('hidden');
+            document.getElementById('worker-chat-area').classList.remove('hidden');
+            document.getElementById('chat-user-name').innerText = userName;
+
+            const chatContainer = document.getElementById('worker-messages');
+            
+            // איפוס נוטיפיקציה
+            updateDoc(doc(db, 'users', userId), { hasUnreadMessages: false });
+
+            // האזנה להודעות
+            const q = query(collection(db, `chats/${userId}/messages`), orderBy('createdAt', 'asc'));
+            onSnapshot(q, (snapshot) => {
+                chatContainer.innerHTML = '';
+                snapshot.forEach(doc => {
+                    renderMessage(chatContainer, doc.data(), 'worker');
+                });
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+            });
+        }
+
+        window.sendWorkerMessage = async (e) => {
+            e.preventDefault();
+            if (!activeChatId) return;
+            const input = document.getElementById('worker-input');
+            const text = input.value.trim();
+            const isInternal = document.getElementById('internal-mode').checked;
+
+            if (!text) return;
+
+            await addDoc(collection(db, `chats/${activeChatId}/messages`), {
+                text: text,
+                sender: 'worker',
+                senderName: 'נציג',
+                createdAt: serverTimestamp(),
+                type: 'text',
+                isInternal: isInternal // האם זה פנימי?
+            });
+            input.value = '';
         };
 
-        // שיתוף ל-WhatsApp (הדרישה שלך)
-        window.shareToWhatsapp = () => {
-            const text = document.getElementById('customer-msg-input').value;
-            if(text) window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+        // --- מנהל: ניהול ---
+        function initAdmin() {
+            // טעינת משתמשים
+            const usersList = document.getElementById('admin-users-list');
+            onSnapshot(collection(db, 'users'), (snap) => {
+                usersList.innerHTML = '';
+                snap.forEach(docSnap => {
+                    const u = docSnap.data();
+                    usersList.innerHTML += `
+                        <div class="flex justify-between items-center p-2 border-b">
+                            <span>${u.name} (${u.role})</span>
+                            <button onclick="changeRole('${docSnap.id}', 'customer')" class="text-xs bg-blue-100 px-2 py-1 rounded">הפוך ללקוח</button>
+                        </div>
+                    `;
+                });
+            });
+        }
+
+        window.changeRole = async (uid, newRole) => {
+            await updateDoc(doc(db, 'users', uid), { role: newRole });
         };
 
-        // אתחול אייקונים
-        window.addEventListener('load', () => {
-            lucide.createIcons();
-        });
+        window.addAdminProduct = async (e) => {
+            e.preventDefault();
+            const name = document.getElementById('prod-name').value;
+            const specs = document.getElementById('prod-specs').value;
+            await addDoc(collection(db, 'products'), { name, specs });
+            e.target.reset();
+            alert('מוצר נוסף');
+        };
 
+        // --- Render Message (משותף) ---
+        function renderMessage(container, msg, viewType) {
+            const isMe = (viewType === 'customer' && msg.sender === 'customer') || (viewType === 'worker' && msg.sender === 'worker');
+            const align = isMe ? 'justify-end' : 'justify-start';
+            const bg = isMe ? 'bg-[#d9fdd3]' : 'bg-white';
+            const internalStyle = msg.isInternal ? 'border-2 border-yellow-400 bg-yellow-50' : '';
+            
+            // במבט לקוח - לא מציגים פנימי (הגנה כפולה)
+            if (viewType === 'customer' && msg.isInternal) return;
+
+            let content = `<p>${msg.text}</p>`;
+            if (msg.type === 'order_request') {
+                content = `<div class="bg-yellow-100 p-2 rounded border-r-4 border-yellow-500 text-xs">
+                    <strong>🛒 בקשת הזמנה:</strong><br>${msg.text.replace('ביקשתי להזמין:', '')}
+                </div>`;
+            }
+
+            const div = document.createElement('div');
+            div.className = `flex w-full ${align} mb-2`;
+            div.innerHTML = `
+                <div class="${bg} ${internalStyle} p-2 rounded-lg shadow max-w-[80%] text-sm relative">
+                    ${msg.isInternal ? '<span class="text-[10px] text-yellow-600 font-bold block">🔒 הערה פנימית</span>' : ''}
+                    ${content}
+                    <div class="text-[10px] text-gray-400 text-left mt-1">
+                        ${msg.createdAt ? new Date(msg.createdAt.seconds * 1000).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '...'}
+                    </div>
+                </div>
+            `;
+            container.appendChild(div);
+        }
+
+        // UI Tabs Logic for Customer
+        window.openCustomerTab = (tab) => {
+            document.querySelectorAll('.cust-tab').forEach(el => el.classList.add('hidden'));
+            document.getElementById(`cust-${tab}`).classList.remove('hidden');
+        };
+
+        // הפעלת אייקונים
+        lucide.createIcons();
     </script>
 </head>
-<body class="bg-gray-100 font-sans text-gray-800 h-screen flex flex-col overflow-hidden">
+<body class="bg-gray-100 h-screen flex flex-col font-sans overflow-hidden">
 
-    <!-- מסך כניסה -->
-    <div id="login-page" class="page flex h-full items-center justify-center bg-blue-50 p-4">
+    <!-- 1. מסך טעינה -->
+    <div id="loading" class="screen fixed inset-0 bg-white z-50 flex items-center justify-center">
+        <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+    </div>
+
+    <!-- 2. מסך כניסה -->
+    <div id="login-screen" class="screen hidden h-full flex flex-col items-center justify-center bg-slate-100 p-6">
         <div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md text-center">
-            <h1 class="text-3xl font-bold text-blue-600 mb-6">Saban Pro</h1>
-            <input id="email" type="email" placeholder="אימייל" class="w-full p-3 mb-3 border rounded-lg bg-gray-50" dir="ltr">
-            <input id="password" type="password" placeholder="סיסמה" class="w-full p-3 mb-6 border rounded-lg bg-gray-50" dir="ltr">
-            <button onclick="login()" class="w-full bg-blue-600 text-white p-3 rounded-lg font-bold shadow hover:bg-blue-700">כניסה</button>
+            <h1 class="text-4xl font-bold text-blue-600 mb-2">Saban Pro</h1>
+            <p class="text-gray-500 mb-6">מערכת לוגיסטיקה מתקדמת</p>
+            <form onsubmit="handleLogin(event)" class="space-y-4">
+                <input id="email" type="email" placeholder="אימייל" class="w-full p-3 border rounded-xl" required>
+                <input id="password" type="password" placeholder="סיסמה" class="w-full p-3 border rounded-xl" required>
+                <button type="submit" class="w-full bg-blue-600 text-white py-3 rounded-xl font-bold shadow-lg">כניסה</button>
+            </form>
         </div>
     </div>
 
-    <!-- מסך המתנה -->
-    <div id="guest_wait-page" class="page hidden h-full flex flex-col items-center justify-center p-10 text-center">
-        <h2 class="text-2xl font-bold">ממתין לאישור</h2>
-        <p class="text-gray-500">החשבון נוצר. המתן לאישור מנהל.</p>
-        <button onclick="logout()" class="text-red-500 mt-4 font-bold">יציאה</button>
+    <!-- 3. מסך אורח -->
+    <div id="guest-screen" class="screen hidden h-full flex flex-col items-center justify-center p-6 text-center">
+        <i data-lucide="clock" class="w-16 h-16 text-yellow-500 mb-4"></i>
+        <h2 class="text-2xl font-bold">חשבון בהמתנה</h2>
+        <p class="text-gray-600 mb-6">המתן לאישור מנהל המערכת.</p>
+        <button onclick="handleLogout()" class="text-red-500 font-bold">יציאה</button>
     </div>
 
-    <!-- ממשק לקוח (Customer Dashboard) -->
-    <div id="customer-page" class="page hidden h-full flex flex-col bg-[#efeae2]">
+    <!-- 4. דשבורד לקוח (Customer) -->
+    <div id="customer-dashboard" class="screen hidden h-full flex flex-col bg-[#efeae2]">
         <!-- Header -->
-        <div class="bg-[#075e54] text-white p-3 flex justify-between items-center shadow-md sticky top-0 z-10">
-            <div class="flex items-center gap-2">
-                <div class="w-8 h-8 rounded-full bg-white flex items-center justify-center text-[#075e54] font-bold text-xs">ח.ס</div>
+        <div class="bg-[#075e54] text-white p-3 flex items-center justify-between shadow-md sticky top-0 z-10">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-full bg-white flex items-center justify-center text-[#075e54] font-bold">ח.ס</div>
                 <div>
-                    <h3 class="font-bold text-sm">מחלקת הזמנות</h3>
-                    <p class="text-[10px] opacity-80">מחובר כעת</p>
+                    <div class="font-bold">מחלקת הזמנות</div>
+                    <div class="text-xs opacity-80">מחובר כעת</div>
                 </div>
             </div>
-            <button onclick="logout()" class="text-xs bg-white/20 px-2 py-1 rounded">יציאה</button>
+            <button onclick="handleLogout()" class="p-2"><i data-lucide="log-out"></i></button>
+        </div>
+
+        <!-- Main Content Area -->
+        <div class="flex-1 overflow-hidden relative">
+            <!-- Tab: Chat -->
+            <div id="cust-chat" class="cust-tab h-full flex flex-col">
+                <div id="customer-messages" class="flex-1 overflow-y-auto p-4 chat-bg"></div>
+                <form onsubmit="sendCustomerMessage(event)" class="p-2 bg-gray-100 flex gap-2 items-center">
+                    <button type="button" onclick="openCustomerTab('catalog')" class="p-2 text-gray-600"><i data-lucide="plus"></i></button>
+                    <input id="customer-input" type="text" placeholder="הקלד הודעה..." class="flex-1 p-3 rounded-full border-none bg-white shadow-sm" autocomplete="off">
+                    <button type="submit" class="p-3 bg-[#075e54] text-white rounded-full shadow"><i data-lucide="send"></i></button>
+                </form>
+            </div>
+
+            <!-- Tab: Catalog -->
+            <div id="cust-catalog" class="cust-tab hidden h-full bg-gray-50 p-4 overflow-y-auto">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-bold">קטלוג מוצרים</h2>
+                    <button id="tab-chat" onclick="openCustomerTab('chat')" class="text-blue-600 font-bold">חזרה לצ'אט</button>
+                </div>
+                <div id="customer-catalog-grid" class="grid grid-cols-2 gap-4">
+                    <!-- מוצרים יטענו כאן -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 5. דשבורד נהג/מוקד (Worker) -->
+    <div id="worker-dashboard" class="screen hidden h-full flex flex-col md:flex-row bg-gray-100">
+        <!-- Sidebar List -->
+        <div class="w-full md:w-1/3 bg-white border-l flex flex-col h-1/3 md:h-full">
+            <div class="p-4 bg-gray-50 border-b flex justify-between items-center">
+                <h2 class="font-bold text-gray-700">לקוח ממתינים</h2>
+                <button onclick="handleLogout()" class="text-red-500"><i data-lucide="log-out"></i></button>
+            </div>
+            <div id="worker-users-list" class="flex-1 overflow-y-auto"></div>
         </div>
 
         <!-- Chat Area -->
-        <div id="customer-chat" class="flex-1 overflow-y-auto p-3 space-y-2 bg-[url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png')]">
-            <!-- הודעות ייטענו כאן דינמית -->
-        </div>
-
-        <!-- Catalog Slider -->
-        <div class="bg-gray-100 p-2 overflow-x-auto whitespace-nowrap border-t border-gray-200">
-            <div id="customer-catalog" class="flex gap-2">
-                <!-- מוצרים ייטענו כאן -->
+        <div class="w-full md:w-2/3 flex flex-col h-2/3 md:h-full bg-[#efeae2] relative border-t md:border-t-0">
+            <div id="worker-chat-placeholder" class="absolute inset-0 flex items-center justify-center bg-gray-50 z-0">
+                <div class="text-gray-400">בחר שיחה מהרשימה</div>
+            </div>
+            
+            <div id="worker-chat-area" class="hidden flex flex-col h-full z-10">
+                <div class="bg-white p-3 border-b shadow-sm flex justify-between">
+                    <span id="chat-user-name" class="font-bold">שם לקוח</span>
+                </div>
+                <div id="worker-messages" class="flex-1 overflow-y-auto p-4 chat-bg"></div>
+                
+                <!-- Input Area -->
+                <div class="p-3 bg-gray-100 border-t">
+                    <div class="flex items-center gap-2 mb-2">
+                        <label class="flex items-center gap-2 cursor-pointer select-none">
+                            <input type="checkbox" id="internal-mode" class="w-4 h-4">
+                            <span class="text-xs font-bold text-yellow-700 flex gap-1 items-center"><i data-lucide="lock" class="w-3"></i> מצב פנימי (מוסתר)</span>
+                        </label>
+                    </div>
+                    <form onsubmit="sendWorkerMessage(event)" class="flex gap-2">
+                        <input id="worker-input" type="text" placeholder="הקלד..." class="flex-1 p-2 rounded border">
+                        <button type="submit" class="bg-blue-600 text-white px-4 rounded"><i data-lucide="send"></i></button>
+                    </form>
+                </div>
             </div>
         </div>
-
-        <!-- Input Area -->
-        <div class="bg-white p-2 flex items-center gap-2 border-t pb-safe">
-            <button onclick="shareToWhatsapp()" class="p-2 text-green-600"><i data-lucide="share-2"></i></button>
-            <input id="customer-msg-input" type="text" placeholder="הקלד הודעה..." class="flex-1 bg-gray-100 p-2 rounded-full border-none outline-none text-sm">
-            <button onclick="sendCustomerMessage()" class="p-2 bg-[#075e54] text-white rounded-full"><i data-lucide="send"></i></button>
-        </div>
     </div>
 
-    <!-- ממשק מנהל (Admin Dashboard) -->
-    <div id="admin-page" class="page hidden h-full flex flex-col bg-gray-50">
+    <!-- 6. דשבורד מנהל (Admin) -->
+    <div id="admin-dashboard" class="screen hidden h-full flex flex-col bg-gray-50">
         <header class="bg-white p-4 shadow flex justify-between items-center">
-            <h1 class="font-bold text-blue-700">ממשק ניהול</h1>
-            <button onclick="logout()" class="text-red-500 text-sm">יציאה</button>
+            <h1 class="text-2xl font-bold text-blue-800">ממשק מנהל</h1>
+            <button onclick="handleLogout()" class="text-red-500 font-bold">יציאה</button>
         </header>
-        <main class="p-4 overflow-y-auto flex-1">
-            <h2 class="font-bold mb-2 text-gray-600">משתמשים</h2>
-            <div id="admin-users-list" class="mb-6"></div>
-            
-            <h2 class="font-bold mb-2 text-gray-600">מוצרים בקטלוג</h2>
-            <div id="admin-products-list" class="grid grid-cols-2 gap-2"></div>
-        </main>
-    </div>
+        <main class="flex-1 p-6 overflow-y-auto">
+            <div class="grid md:grid-cols-2 gap-6">
+                <!-- ניהול משתמשים -->
+                <div class="bg-white p-4 rounded-xl shadow">
+                    <h2 class="font-bold mb-4 border-b pb-2">משתמשים</h2>
+                    <div id="admin-users-list" class="space-y-2 max-h-60 overflow-y-auto"></div>
+                </div>
 
-    <!-- ממשק עובד/מוקד (Worker Dashboard) -->
-    <div id="worker-page" class="page hidden h-full flex flex-col items-center justify-center bg-blue-50">
-        <h1 class="text-2xl text-blue-800 font-bold">מוקד הזמנות פעיל</h1>
-        <p class="text-gray-600">כאן תופיע רשימת הלקוחות והצ'אט (בפיתוח)</p>
-        <button onclick="logout()" class="mt-4 bg-blue-600 text-white px-4 py-2 rounded">יציאה</button>
+                <!-- הוספת מוצר -->
+                <div class="bg-white p-4 rounded-xl shadow">
+                    <h2 class="font-bold mb-4 border-b pb-2">הוספת מוצר</h2>
+                    <form onsubmit="addAdminProduct(event)" class="space-y-3">
+                        <input id="prod-name" placeholder="שם מוצר" class="w-full p-2 border rounded" required>
+                        <input id="prod-specs" placeholder="מפרט" class="w-full p-2 border rounded">
+                        <button type="submit" class="w-full bg-green-600 text-white p-2 rounded font-bold">הוסף לקטלוג</button>
+                    </form>
+                </div>
+            </div>
+        </main>
     </div>
 
 </body>
